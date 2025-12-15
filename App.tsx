@@ -468,13 +468,16 @@ const App: React.FC = () => {
 
         <div className="p-4 border-t border-gray-100 space-y-4">
           <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 mb-1">Tool Status</p>
+            <div className="flex justify-between items-center mb-1">
+                <p className="text-xs font-semibold text-gray-500">Tool Status</p>
+                <span className="text-[10px] text-gray-400">v1.0.1</span>
+            </div>
             <div className="flex items-center gap-2 text-sm text-green-600">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                 </span>
-                Ready
+                System Online
             </div>
           </div>
         </div>
