@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { Product } from '../types';
-import { Upload, X, FileText, Check, AlertCircle, Download, ArrowRight, RefreshCw, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Upload, X, FileText, Check, AlertCircle, Download, ArrowRight, RefreshCw, ChevronLeft, ChevronRight, Loader2, Database } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface BatchUploadModalProps {
@@ -12,16 +12,25 @@ interface BatchUploadModalProps {
 
 export interface BatchUpdateItem {
   sku: string;
-  price?: number;
+  name?: string;
+  brand?: string;
+  category?: string;
+  subcategory?: string;
+  price?: number; // Not in inventory report usually, but kept for compatibility
   stock?: number;
-  leadTime?: number;
+  cost?: number; // COGS
+  cartonDimensions?: {
+      length: number;
+      width: number;
+      height: number;
+      weight: number;
+  };
 }
 
 interface ParsedItem extends BatchUpdateItem {
-  productName?: string;
-  oldPrice?: number;
   oldStock?: number;
-  oldLeadTime?: number;
+  oldCost?: number;
+  isNewProduct: boolean;
   status: 'valid' | 'error';
   message?: string;
 }
@@ -59,7 +68,6 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
     if (e.target.files && e.target.files[0]) {
       processFile(e.target.files[0]);
     }
-    // Reset input to allow selecting the same file again if needed
     if (fileInputRef.current) {
         fileInputRef.current.value = '';
     }
@@ -72,42 +80,61 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
     setTimeout(() => {
         const reader = new FileReader();
 
-        if (file.name.endsWith('.xlsx')) {
+        const handleData = (data: any) => {
+             const workbook = XLSX.read(data, { type: 'array' });
+             const firstSheetName = workbook.SheetNames[0];
+             const worksheet = workbook.Sheets[firstSheetName];
+             // Get raw headers from first row
+             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+             processRows(rows);
+        };
+
+        if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
             reader.onload = (e) => {
                 try {
-                    const data = e.target?.result;
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-                    processRows(rows);
+                    handleData(e.target?.result);
                 } catch (err) {
-                    console.error("Excel parse error:", err);
-                    setError("Failed to parse Excel file. Ensure it is a valid .xlsx file.");
+                    console.error(err);
+                    setError("Failed to parse Excel file.");
                 } finally {
                     setIsProcessing(false);
                 }
             };
             reader.readAsArrayBuffer(file);
         } else {
-            reader.onload = (event) => {
+            // For CSV, we can still use XLSX lib
+            reader.onload = (e) => {
                 try {
-                    const text = event.target?.result as string;
-                    const rows = text.split('\n').map(line => line.split(','));
+                    const text = e.target?.result;
+                    const workbook = XLSX.read(text, { type: 'string' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
                     processRows(rows);
                 } catch (err) {
-                     setError("Failed to parse CSV file.");
+                    setError("Failed to parse CSV file.");
                 } finally {
-                     setIsProcessing(false);
+                    setIsProcessing(false);
                 }
-            };
-            reader.onerror = () => {
-                setError("Error reading file.");
-                setIsProcessing(false);
             };
             reader.readAsText(file);
         }
     }, 100);
+  };
+
+  // ERP Column Mapping
+  const COL_MAP = {
+      SKU: "Product SKU/SKU编码",
+      NAME: "Product Name/SKU名称",
+      BRAND: "Brand/品牌",
+      MAIN_CAT: "Main Category/主分类",
+      SUB_CAT: "Subcategory/子分类",
+      STOCK: "Total Inventory Qty/库存总量",
+      COGS: "COGS/成本价",
+      // Dimensions
+      C_LEN: "Carton Length/外箱长度",
+      C_WID: "Carton Width/外箱宽度",
+      C_HEI: "Carton Height/外箱高度",
+      C_WGT: "Carton Weight/外箱重量"
   };
 
   const processRows = (rows: any[][]) => {
@@ -117,16 +144,27 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
             return;
         }
 
-        // Headers are in the first row
-        const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/_/g, ' '));
+        // 1. Map Headers to Index
+        const headerRow = rows[0].map(h => String(h).trim());
         
-        const skuIndex = headers.findIndex(h => h.includes('sku'));
-        const priceIndex = headers.findIndex(h => h.includes('price'));
-        const stockIndex = headers.findIndex(h => h.includes('stock') || h.includes('qty'));
-        const leadTimeIndex = headers.findIndex(h => h.includes('lead time') || h.includes('leadtime') || h.includes('days'));
+        const getIdx = (key: string) => headerRow.indexOf(key);
 
-        if (skuIndex === -1) {
-          setError("File must contain a 'sku' column.");
+        const skuIdx = getIdx(COL_MAP.SKU);
+        const stockIdx = getIdx(COL_MAP.STOCK);
+        const cogsIdx = getIdx(COL_MAP.COGS);
+        const nameIdx = getIdx(COL_MAP.NAME);
+        const brandIdx = getIdx(COL_MAP.BRAND);
+        const mainCatIdx = getIdx(COL_MAP.MAIN_CAT);
+        const subCatIdx = getIdx(COL_MAP.SUB_CAT);
+        
+        // Dimensions
+        const lenIdx = getIdx(COL_MAP.C_LEN);
+        const widIdx = getIdx(COL_MAP.C_WID);
+        const heiIdx = getIdx(COL_MAP.C_HEI);
+        const wgtIdx = getIdx(COL_MAP.C_WGT);
+
+        if (skuIdx === -1) {
+          setError(`Invalid Template. Could not find column: "${COL_MAP.SKU}"`);
           return;
         }
 
@@ -134,52 +172,58 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
 
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
-          // Skip empty rows
-          if (!row || row.length === 0 || (row.length === 1 && !row[0])) continue;
+          if (!row || row.length === 0) continue;
           
-          const rawSku = row[skuIndex];
+          const rawSku = row[skuIdx];
           const sku = rawSku ? String(rawSku).trim() : '';
           
           if (!sku) continue;
 
-          const priceValRaw = priceIndex !== -1 ? row[priceIndex] : undefined;
-          const stockValRaw = stockIndex !== -1 ? row[stockIndex] : undefined;
-          const leadTimeValRaw = leadTimeIndex !== -1 ? row[leadTimeIndex] : undefined;
+          // Parse Numbers
+          const parseNum = (idx: number) => {
+              if (idx === -1) return undefined;
+              const val = row[idx];
+              if (val === undefined || val === null || val === '') return undefined;
+              const num = parseFloat(String(val));
+              return isNaN(num) ? 0 : num;
+          };
 
-          const priceVal = priceValRaw !== undefined && priceValRaw !== null && String(priceValRaw).trim() !== '' 
-              ? parseFloat(String(priceValRaw)) 
-              : undefined;
+          const parseStr = (idx: number) => {
+              if (idx === -1) return undefined;
+              const val = row[idx];
+              return val ? String(val).trim() : undefined;
+          };
+
+          const stock = parseNum(stockIdx);
+          const cost = parseNum(cogsIdx);
           
-          const stockVal = stockValRaw !== undefined && stockValRaw !== null && String(stockValRaw).trim() !== ''
-              ? parseInt(String(stockValRaw)) 
-              : undefined;
+          // Dimensions
+          const cLen = parseNum(lenIdx) || 0;
+          const cWid = parseNum(widIdx) || 0;
+          const cHei = parseNum(heiIdx) || 0;
+          const cWgt = parseNum(wgtIdx) || 0;
 
-          const leadTimeVal = leadTimeValRaw !== undefined && leadTimeValRaw !== null && String(leadTimeValRaw).trim() !== ''
-              ? parseInt(String(leadTimeValRaw))
-              : undefined;
-
-          // Find existing product
+          // Find existing product to compare
           const existing = products.find(p => p.sku === sku);
 
-          if (existing) {
-            results.push({
-              sku,
-              price: priceVal !== undefined && !isNaN(priceVal) ? priceVal : undefined,
-              stock: stockVal !== undefined && !isNaN(stockVal) ? stockVal : undefined,
-              leadTime: leadTimeVal !== undefined && !isNaN(leadTimeVal) ? leadTimeVal : undefined,
-              productName: existing.name,
-              oldPrice: existing.currentPrice,
-              oldStock: existing.stockLevel,
-              oldLeadTime: existing.leadTimeDays,
-              status: 'valid'
-            });
-          } else {
-            results.push({
-              sku,
-              status: 'error',
-              message: 'SKU not found'
-            });
-          }
+          results.push({
+            sku,
+            name: parseStr(nameIdx),
+            brand: parseStr(brandIdx),
+            category: parseStr(mainCatIdx),
+            subcategory: parseStr(subCatIdx),
+            stock: stock,
+            cost: cost,
+            cartonDimensions: {
+                length: cLen, width: cWid, height: cHei, weight: cWgt
+            },
+            
+            // Comparison Data
+            oldStock: existing?.stockLevel,
+            oldCost: existing?.costPrice,
+            isNewProduct: !existing,
+            status: 'valid'
+          });
         }
         setParsedItems(results);
         setCurrentPage(1);
@@ -189,18 +233,8 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
     }
   };
 
-  const downloadTemplate = () => {
-    const headers = "sku,price,stock,lead_time";
-    const blob = new Blob([headers], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = "inventory_template.csv";
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
-
   const validCount = parsedItems?.filter(i => i.status === 'valid').length || 0;
+  const newProductCount = parsedItems?.filter(i => i.status === 'valid' && i.isNewProduct).length || 0;
 
   // Pagination Logic
   const paginatedItems = useMemo(() => {
@@ -213,12 +247,15 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Batch Inventory Update</h2>
-            <p className="text-sm text-gray-500 mt-1">Upload CSV or XLSX to update prices, stock levels, and lead times.</p>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Database className="w-5 h-5 text-indigo-600" />
+                Import ERP Inventory Report
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">Upload the standard 28-column ERP export to update stock, COGS, and product details.</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
             <X className="w-5 h-5 text-gray-500" />
@@ -230,8 +267,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
           {isProcessing ? (
              <div className="flex flex-col items-center justify-center h-64 space-y-4">
                 <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-                <p className="text-gray-600 font-medium">Processing file...</p>
-                <p className="text-sm text-gray-400">This may take a moment for large files.</p>
+                <p className="text-gray-600 font-medium">Processing ERP Report...</p>
              </div>
           ) : !parsedItems ? (
             <div className="space-y-6">
@@ -247,15 +283,15 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 <input 
                   ref={fileInputRef}
                   type="file" 
-                  accept=".csv, .xlsx" 
+                  accept=".csv, .xlsx, .xls" 
                   className="hidden" 
                   onChange={handleFileChange}
                 />
                 <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-4 pointer-events-none">
                   <Upload className="w-8 h-8" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 pointer-events-none">Drag and drop your file here</h3>
-                <p className="text-gray-500 mt-1 mb-4 pointer-events-none">CSV or XLSX files only</p>
+                <h3 className="text-lg font-semibold text-gray-900 pointer-events-none">Drag & Drop Inventory Report</h3>
+                <p className="text-gray-500 mt-1 mb-4 pointer-events-none">Supports .xlsx or .csv from ERP</p>
                 
                 <button 
                     onClick={() => fileInputRef.current?.click()}
@@ -272,21 +308,15 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 </div>
               )}
 
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-start gap-3">
-                <FileText className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-blue-900">File Format Guide</h4>
-                  <p className="text-sm text-blue-700 mt-1">
-                    Required column: <code className="bg-blue-100 px-1 rounded">sku</code><br/>
-                    Optional columns: <code className="bg-blue-100 px-1 rounded">price</code>, <code className="bg-blue-100 px-1 rounded">stock</code>, <code className="bg-blue-100 px-1 rounded">lead_time</code>
-                  </p>
-                  <button 
-                    onClick={downloadTemplate}
-                    className="mt-3 text-sm font-medium text-blue-700 hover:text-blue-800 flex items-center gap-1"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download CSV Template
-                  </button>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-blue-900 mb-2">Required Column Headers (Bilingual)</h4>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs text-blue-800 font-mono">
+                    <div>Product SKU/SKU编码</div>
+                    <div>Product Name/SKU名称</div>
+                    <div>Total Inventory Qty/库存总量</div>
+                    <div>COGS/成本价</div>
+                    <div>Main Category/主分类</div>
+                    <div>Brand/品牌</div>
                 </div>
               </div>
             </div>
@@ -295,11 +325,13 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
               <div className="flex items-center justify-between">
                 <div className="flex gap-4">
                     <div className="text-sm">
-                        <span className="font-semibold text-green-600">{validCount}</span> Valid
+                        <span className="font-semibold text-green-600">{validCount}</span> Valid Items
                     </div>
-                    <div className="text-sm">
-                        <span className="font-semibold text-red-600">{parsedItems.length - validCount}</span> Errors
-                    </div>
+                    {newProductCount > 0 && (
+                        <div className="text-sm">
+                            <span className="font-semibold text-indigo-600">{newProductCount}</span> New Products
+                        </div>
+                    )}
                 </div>
                 <button 
                   onClick={() => setParsedItems(null)}
@@ -315,60 +347,56 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                   <thead className="bg-gray-50 text-gray-500 font-medium">
                     <tr>
                       <th className="p-3">SKU</th>
-                      <th className="p-3">Price</th>
-                      <th className="p-3">Stock</th>
-                      <th className="p-3">Lead Time</th>
+                      <th className="p-3">Info</th>
+                      <th className="p-3 text-right">Stock</th>
+                      <th className="p-3 text-right">COGS</th>
                       <th className="p-3">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {paginatedItems.map((item, idx) => (
-                      <tr key={idx} className={item.status === 'error' ? 'bg-red-50' : ''}>
+                      <tr key={idx} className={item.isNewProduct ? 'bg-indigo-50/30' : ''}>
                         <td className="p-3 font-mono text-xs">
                             <div className="font-medium text-gray-900">{item.sku}</div>
-                            {item.productName && <div className="text-gray-500 truncate max-w-[120px]">{item.productName}</div>}
+                            {item.isNewProduct && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1 rounded">NEW</span>}
                         </td>
                         <td className="p-3">
-                          {item.price !== undefined && item.oldPrice !== undefined ? (
-                             <div className="flex items-center gap-1 text-xs">
-                                <span className="text-gray-400 line-through">${item.oldPrice}</span>
-                                <ArrowRight className="w-3 h-3 text-gray-400" />
-                                <span className="font-semibold text-gray-900">${item.price}</span>
-                             </div>
-                          ) : (
-                            <span className="text-gray-300">-</span>
-                          )}
+                            <div className="text-xs text-gray-900 font-medium truncate max-w-[200px]">{item.name || '-'}</div>
+                            <div className="text-[10px] text-gray-500">{item.brand} • {item.category}</div>
                         </td>
-                        <td className="p-3">
-                          {item.stock !== undefined && item.oldStock !== undefined ? (
-                             <div className="flex items-center gap-1 text-xs">
-                                <span className="text-gray-400 line-through">{item.oldStock}</span>
-                                <ArrowRight className="w-3 h-3 text-gray-400" />
-                                <span className="font-semibold text-gray-900">{item.stock}</span>
+                        <td className="p-3 text-right">
+                          {item.stock !== undefined ? (
+                             <div className="flex items-center justify-end gap-1 text-xs">
+                                {item.oldStock !== undefined && item.stock !== item.oldStock && (
+                                    <>
+                                        <span className="text-gray-400 line-through">{item.oldStock}</span>
+                                        <ArrowRight className="w-3 h-3 text-gray-400" />
+                                    </>
+                                )}
+                                <span className={`font-semibold ${item.stock === 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                    {item.stock}
+                                </span>
                              </div>
-                          ) : (
-                            <span className="text-gray-300">-</span>
-                          )}
+                          ) : '-'}
                         </td>
-                         <td className="p-3">
-                          {item.leadTime !== undefined && item.oldLeadTime !== undefined ? (
-                             <div className="flex items-center gap-1 text-xs">
-                                <span className="text-gray-400 line-through">{item.oldLeadTime}d</span>
-                                <ArrowRight className="w-3 h-3 text-gray-400" />
-                                <span className="font-semibold text-gray-900">{item.leadTime}d</span>
+                        <td className="p-3 text-right">
+                          {item.cost !== undefined ? (
+                             <div className="flex items-center justify-end gap-1 text-xs">
+                                {item.oldCost !== undefined && Math.abs(item.cost - item.oldCost) > 0.01 && (
+                                    <>
+                                        <span className="text-gray-400 line-through">${item.oldCost.toFixed(2)}</span>
+                                        <ArrowRight className="w-3 h-3 text-gray-400" />
+                                    </>
+                                )}
+                                <span className="font-semibold text-gray-900">${item.cost.toFixed(2)}</span>
                              </div>
-                          ) : (
-                            <span className="text-gray-300">-</span>
-                          )}
+                          ) : '-'}
                         </td>
                         <td className="p-3">
                             {item.status === 'valid' ? (
                                 <Check className="w-5 h-5 text-green-500" />
                             ) : (
-                                <span className="flex items-center gap-1 text-red-600 text-xs">
-                                    <AlertCircle className="w-4 h-4" />
-                                    {item.message}
-                                </span>
+                                <AlertCircle className="w-5 h-5 text-red-500" />
                             )}
                         </td>
                       </tr>
@@ -418,7 +446,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
               onClick={() => onConfirm(parsedItems.filter(i => i.status === 'valid'))}
               className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md shadow-indigo-200 transition-all flex items-center gap-2"
             >
-              Update {validCount} Products
+              Confirm Update
             </button>
           )}
         </div>

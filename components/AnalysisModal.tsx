@@ -10,9 +10,10 @@ interface AnalysisModalProps {
   isLoading: boolean;
   onClose: () => void;
   onApplyPrice: (productId: string, newPrice: number) => void;
+  themeColor: string;
 }
 
-const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoading, onClose, onApplyPrice }) => {
+const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoading, onClose, onApplyPrice, themeColor }) => {
   if (!product) return null;
 
   return (
@@ -38,7 +39,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
         <div className="p-6 flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: themeColor }}></div>
               <p className="text-gray-500 animate-pulse">Consulting Gemini AI...</p>
             </div>
           ) : analysis ? (
@@ -77,11 +78,11 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
                   </div>
                 </div>
 
-                <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 flex flex-col justify-between">
-                  <p className="text-sm text-indigo-600 font-medium">Recommended Action</p>
+                <div className="p-4 rounded-xl border flex flex-col justify-between" style={{ backgroundColor: `${themeColor}10`, borderColor: `${themeColor}20` }}>
+                  <p className="text-sm font-medium" style={{ color: themeColor }}>Recommended Action</p>
                   <div className="flex items-center gap-3 mt-1">
                     <div>
-                      <span className="text-2xl font-bold text-indigo-900">${analysis.recommendedPrice.toFixed(2)}</span>
+                      <span className="text-2xl font-bold text-gray-900">${analysis.recommendedPrice.toFixed(2)}</span>
                       <span className="text-xs text-gray-500 ml-2">Currently ${product.currentPrice}</span>
                     </div>
                   </div>
@@ -97,7 +98,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
               {/* Reasoning */}
               <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
                 <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: themeColor }}></span>
                   AI Strategy Reasoning
                 </h3>
                 <p className="text-gray-600 leading-relaxed">{analysis.reasoning}</p>
@@ -134,7 +135,8 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
           {analysis && (
             <button 
               onClick={() => onApplyPrice(product.id, analysis.recommendedPrice)}
-              className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md shadow-indigo-200 transition-all flex items-center gap-2"
+              className="px-6 py-2 text-white font-medium rounded-lg shadow-md transition-all flex items-center gap-2"
+              style={{ backgroundColor: themeColor, boxShadow: `0 4px 6px -1px ${themeColor}40` }}
             >
               <Check className="w-4 h-4" />
               Apply New Price

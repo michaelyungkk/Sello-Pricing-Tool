@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS } from './constants';
-import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent } from './types';
+import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES } from './constants';
+import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData } from './types';
 import ProductList from './components/ProductList';
 import AnalysisModal from './components/AnalysisModal';
 import BatchUploadModal, { BatchUpdateItem } from './components/BatchUploadModal';
@@ -11,21 +11,10 @@ import CostManagementPage from './components/CostManagementPage';
 import CostUploadModal from './components/CostUploadModal';
 import DefinitionsPage from './components/DefinitionsPage';
 import PromotionPage from './components/PromotionPage';
+import UserProfile from './components/UserProfile';
+import MappingUploadModal, { SkuMapping } from './components/MappingUploadModal';
 import { analyzePriceAdjustment } from './services/geminiService';
-import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, MonitorPlay, DollarSign, BookOpen, Tag, Wifi, WifiOff } from 'lucide-react';
-
-const DEFAULT_PRICING_RULES: PricingRules = {
-  'Amazon(UK)': { markup: 2.0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900' },
-  'eBay': { markup: 0, commission: 10.0, manager: 'Sophie Nie', color: '#E53238' },
-  'The Range': { markup: 0, commission: 12.0, manager: 'Queenie Wong', color: '#2C3E50' },
-  'ManoMano': { markup: 0, commission: 18.0, manager: 'Queenie Wong', color: '#00D09C' },
-  'Wayfair': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#7F187F' },
-  'Onbuy': { markup: 0, commission: 9.0, manager: 'Queenie Wong', color: '#3B82F6' },
-  'Groupon(UK)': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#53A318' },
-  'Temu(UK)': { markup: 0, commission: 5.0, manager: 'Elaine Wang', color: '#FB7701' },
-  'Tesco': { markup: 0, commission: 10.0, manager: 'Queenie Wong', color: '#00539F' },
-  'Debenhams': { markup: 0, commission: 26.0, manager: 'Queenie Wong', color: '#1B4D3E' }
-};
+import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight } from 'lucide-react';
 
 // --- LOGIC HELPERS ---
 
@@ -52,16 +41,11 @@ const calculateOptimalPrice = (sku: string, currentHistory: PriceLog[]): number 
     
     const logs = currentHistory.filter(l => l.sku === sku);
     if (logs.length === 0) return undefined;
-
-    // Find the "Sweet Spot": Maximize Total Daily Profit
-    // Profit per unit = Price * (Margin%/100)
-    // Total Daily Profit = Profit per unit * Velocity
     
     let bestPrice = 0;
     let maxDailyProfit = -Infinity;
 
     logs.forEach(log => {
-        // Approximate profit per unit based on the log's margin and price
         const profitPerUnit = log.price * (log.margin / 100);
         const dailyProfit = profitPerUnit * log.velocity;
         
@@ -80,11 +64,10 @@ const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const saved = localStorage.getItem('ecompulse_products');
-      const parsed = saved ? JSON.parse(saved) : null;
-      return Array.isArray(parsed) ? parsed : INITIAL_PRODUCTS;
+      return saved ? JSON.parse(saved) : []; 
     } catch (e) {
       console.error("Failed to load products from storage", e);
-      return INITIAL_PRODUCTS;
+      return [];
     }
   });
 
@@ -101,11 +84,9 @@ const App: React.FC = () => {
   const [priceHistory, setPriceHistory] = useState<PriceLog[]>(() => {
       try {
           const saved = localStorage.getItem('ecompulse_price_history');
-          const parsed = saved ? JSON.parse(saved) : null;
-          // Ensure it's an array
-          return Array.isArray(parsed) ? parsed : MOCK_PRICE_HISTORY;
+          return saved ? JSON.parse(saved) : [];
       } catch (e) {
-          return MOCK_PRICE_HISTORY;
+          return [];
       }
   });
 
@@ -122,10 +103,24 @@ const App: React.FC = () => {
   const [promotions, setPromotions] = useState<PromotionEvent[]>(() => {
       try {
           const saved = localStorage.getItem('ecompulse_promotions');
-          const parsed = saved ? JSON.parse(saved) : null;
-          return Array.isArray(parsed) ? parsed : MOCK_PROMOTIONS;
+          return saved ? JSON.parse(saved) : [];
       } catch (e) {
-          return MOCK_PROMOTIONS;
+          return [];
+      }
+  });
+
+  // User Profile State
+  const [userProfile, setUserProfile] = useState<UserProfileType>(() => {
+      try {
+          const saved = localStorage.getItem('ecompulse_user_profile');
+          return saved ? JSON.parse(saved) : { 
+              name: '', 
+              themeColor: '#4f46e5', 
+              backgroundImage: '', 
+              backgroundColor: '#f3f4f6' 
+          };
+      } catch(e) {
+          return { name: '', themeColor: '#4f46e5', backgroundImage: '', backgroundColor: '#f3f4f6' };
       }
   });
 
@@ -136,6 +131,8 @@ const App: React.FC = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isSalesImportModalOpen, setIsSalesImportModalOpen] = useState(false);
   const [isCostUploadModalOpen, setIsCostUploadModalOpen] = useState(false);
+  const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+  
   const [currentView, setCurrentView] = useState<'dashboard' | 'settings' | 'costs' | 'definitions' | 'promotions'>('dashboard');
   
   // Connectivity State
@@ -154,59 +151,41 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // --- EFFECT: Calculate Optimal Prices on Init ---
-  useEffect(() => {
-     // Safety check
-     if (!Array.isArray(products) || !Array.isArray(priceHistory)) return;
-
-     // If products exist but don't have optimal prices, try to calculate them from history
-     const needsUpdate = products.some(p => p.optimalPrice === undefined);
-     if (needsUpdate && priceHistory.length > 0) {
-         setProducts(prev => prev.map(p => ({
-             ...p,
-             optimalPrice: calculateOptimalPrice(p.sku, priceHistory) || p.optimalPrice
-         })));
-     }
-  }, []); // Run once on mount
-
-  // --- PERSISTENCE ---
-  useEffect(() => {
-    localStorage.setItem('ecompulse_products', JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem('ecompulse_rules', JSON.stringify(pricingRules));
-  }, [pricingRules]);
-
-  useEffect(() => {
-      localStorage.setItem('ecompulse_date_labels', JSON.stringify(priceDateLabels));
-  }, [priceDateLabels]);
+  // --- DATA PERSISTENCE (Local Storage) ---
   
-  useEffect(() => {
-      localStorage.setItem('ecompulse_price_history', JSON.stringify(priceHistory));
-  }, [priceHistory]);
-  
-  useEffect(() => {
-      localStorage.setItem('ecompulse_promotions', JSON.stringify(promotions));
-  }, [promotions]);
+  useEffect(() => { localStorage.setItem('ecompulse_products', JSON.stringify(products)); }, [products]);
+  useEffect(() => { localStorage.setItem('ecompulse_rules', JSON.stringify(pricingRules)); }, [pricingRules]);
+  useEffect(() => { localStorage.setItem('ecompulse_date_labels', JSON.stringify(priceDateLabels)); }, [priceDateLabels]);
+  useEffect(() => { localStorage.setItem('ecompulse_price_history', JSON.stringify(priceHistory)); }, [priceHistory]);
+  useEffect(() => { localStorage.setItem('ecompulse_promotions', JSON.stringify(promotions)); }, [promotions]);
+  useEffect(() => { localStorage.setItem('ecompulse_user_profile', JSON.stringify(userProfile)); }, [userProfile]);
 
 
   // --- HANDLERS ---
 
   const handleRestoreData = (data: { products: Product[], rules: PricingRules, history?: PriceLog[], promotions?: PromotionEvent[] }) => {
-    const restoredHistory = data.history || [];
-    
-    // Recalculate optimal prices for the restored products using the restored history immediately
-    const enrichedProducts = data.products.map(p => ({
-        ...p,
-        optimalPrice: calculateOptimalPrice(p.sku, restoredHistory)
-    }));
+    try {
+        console.log("Restoring data...", { productCount: data.products?.length });
+        
+        const safeProducts = data.products ? JSON.parse(JSON.stringify(data.products)) : [];
+        const safeRules = data.rules ? JSON.parse(JSON.stringify(data.rules)) : JSON.parse(JSON.stringify(DEFAULT_PRICING_RULES));
+        const safeHistory = data.history ? JSON.parse(JSON.stringify(data.history)) : [];
+        const safePromotions = data.promotions ? JSON.parse(JSON.stringify(data.promotions)) : [];
 
-    setProducts(enrichedProducts);
-    setPricingRules(data.rules);
-    setPriceHistory(restoredHistory);
-    // Explicitly restore promotions, defaulting to empty array if missing in backup to avoid stale state
-    setPromotions(data.promotions || []);
+        const enrichedProducts = safeProducts.map((p: Product) => ({
+            ...p,
+            optimalPrice: calculateOptimalPrice(p.sku, safeHistory)
+        }));
+
+        setProducts(enrichedProducts);
+        setPricingRules(safeRules);
+        setPriceHistory(safeHistory);
+        setPromotions(safePromotions);
+        
+    } catch (e) {
+        console.error("Failed to restore data", e);
+        alert("An error occurred while loading data. Please try again.");
+    }
   };
 
   const handleAnalyze = async (product: Product) => {
@@ -226,7 +205,6 @@ const App: React.FC = () => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
-    // Create Log Entry
     const newLog: PriceLog = {
         id: Math.random().toString(36).substr(2, 9),
         sku: product.sku,
@@ -239,7 +217,6 @@ const App: React.FC = () => {
     const updatedHistory = [...priceHistory, newLog];
     setPriceHistory(updatedHistory);
     
-    // Calculate new optimal price based on updated history
     const optimal = calculateOptimalPrice(product.sku, updatedHistory);
 
     setProducts(prev => prev.map(p => 
@@ -255,7 +232,6 @@ const App: React.FC = () => {
     setAnalysis(null);
   };
 
-  // Bulk Adjustment Handler
   const handleApplyBatchChanges = (updates: { productId: string; newPrice: number }[]) => {
       const newLogs: PriceLog[] = [];
       const now = new Date().toISOString();
@@ -263,7 +239,6 @@ const App: React.FC = () => {
       const updatedProducts = products.map(p => {
           const update = updates.find(u => u.productId === p.id);
           if (update && Math.abs(update.newPrice - p.currentPrice) > 0.001) {
-              // Log the change
               newLogs.push({
                   id: Math.random().toString(36).substr(2, 9),
                   sku: p.sku,
@@ -286,7 +261,6 @@ const App: React.FC = () => {
       const updatedHistory = [...priceHistory, ...newLogs];
       setPriceHistory(updatedHistory);
 
-      // Recalculate optimal prices for affected products
       const finalProducts = updatedProducts.map(p => {
           if (updates.find(u => u.productId === p.id)) {
              return { ...p, optimalPrice: calculateOptimalPrice(p.sku, updatedHistory) };
@@ -297,55 +271,65 @@ const App: React.FC = () => {
       setProducts(finalProducts);
   };
 
+  // INVENTORY REPORT HANDLER (Updated to support ERP Columns)
   const handleBatchUpdate = (updates: BatchUpdateItem[]) => {
-    setProducts(prev => prev.map(p => {
-      const update = updates.find(u => u.sku === p.sku);
-      if (update) {
-        const newStock = update.stock !== undefined ? update.stock : p.stockLevel;
-        const newPrice = update.price !== undefined ? update.price : p.currentPrice;
-        const newLeadTime = update.leadTime !== undefined ? update.leadTime : p.leadTimeDays;
+    // 1. Process New Products
+    const newProducts: Product[] = [];
+    
+    const existingSkuSet = new Set(products.map(p => p.sku));
 
-        const dailyVelocity = p.averageDailySales;
-        const daysRemaining = dailyVelocity > 0 ? newStock / dailyVelocity : 999;
-        
-        let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
-        let recommendation = 'Maintain';
-        const leadTime = newLeadTime || 30;
-
-        if (daysRemaining < leadTime) {
-            status = 'Critical';
-            recommendation = 'Increase Price';
-        } else if (daysRemaining > leadTime * 4) {
-            status = 'Overstock';
-            recommendation = 'Decrease Price';
-        } else if (daysRemaining < leadTime * 1.5) {
-            status = 'Warning';
-            recommendation = 'Maintain';
+    updates.forEach(item => {
+        if (!existingSkuSet.has(item.sku)) {
+            newProducts.push({
+                id: `p-${item.sku}-${Date.now()}`,
+                sku: item.sku,
+                name: item.name || item.sku,
+                brand: item.brand,
+                category: item.category || 'Uncategorized',
+                subcategory: item.subcategory,
+                stockLevel: item.stock || 0,
+                costPrice: item.cost || 0,
+                cartonDimensions: item.cartonDimensions,
+                currentPrice: 0,
+                averageDailySales: 0,
+                channels: [],
+                leadTimeDays: 30, // Default
+                status: 'Healthy',
+                recommendation: 'Maintain',
+                daysRemaining: 999,
+                lastUpdated: new Date().toISOString().split('T')[0]
+            });
         }
+    });
 
-        return {
-          ...p,
-          oldPrice: newPrice !== p.currentPrice ? p.currentPrice : p.oldPrice,
-          currentPrice: newPrice,
-          stockLevel: newStock,
-          leadTimeDays: leadTime,
-          lastUpdated: new Date().toISOString().split('T')[0],
-          daysRemaining: Math.floor(daysRemaining),
-          status,
-          recommendation
-        };
-      }
-      return p;
-    }));
+    // 2. Update Existing Products
+    const updatedExisting = products.map(p => {
+        const update = updates.find(u => u.sku === p.sku);
+        if (update) {
+            // Update fields from ERP Report
+            return {
+                ...p,
+                name: update.name || p.name,
+                brand: update.brand || p.brand,
+                category: update.category || p.category,
+                subcategory: update.subcategory || p.subcategory,
+                stockLevel: update.stock !== undefined ? update.stock : p.stockLevel,
+                costPrice: update.cost !== undefined ? update.cost : p.costPrice,
+                cartonDimensions: update.cartonDimensions || p.cartonDimensions,
+                lastUpdated: new Date().toISOString().split('T')[0]
+            };
+        }
+        return p;
+    });
+
+    setProducts([...updatedExisting, ...newProducts]);
     setIsUploadModalOpen(false);
   };
   
   const handleSalesImport = (updatedProducts: Product[], dateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[]) => {
-      // 1. Convert historyPayload to PriceLog[]
       const newLogs: PriceLog[] = [];
       if (historyPayload) {
           historyPayload.forEach(item => {
-              // Find the product context to calculate margin if not provided
               const product = updatedProducts.find(p => p.sku === item.sku);
               if (product) {
                   newLogs.push({
@@ -354,17 +338,14 @@ const App: React.FC = () => {
                       price: item.price,
                       velocity: item.velocity,
                       date: item.date,
-                      // Use pre-calculated actual margin from import if available, else theoretical current margin
                       margin: item.margin !== undefined ? item.margin : calculateMargin(product, item.price)
                   });
               }
           });
       }
 
-      // 2. Update History State
       let updatedHistory = [...priceHistory];
       if (newLogs.length > 0) {
-          // Filter out existing logs for same dates to avoid duplicates if re-importing
           const newDates = new Set(newLogs.map(l => l.sku + l.date));
           updatedHistory = priceHistory.filter(l => !newDates.has(l.sku + l.date));
           updatedHistory = [...updatedHistory, ...newLogs];
@@ -372,17 +353,18 @@ const App: React.FC = () => {
           setPriceHistory(updatedHistory);
       }
 
-      // 3. Update Products & Recalculate Optimal Price
       setProducts(prev => {
           return updatedProducts.map(newP => {
               const existing = prev.find(p => p.sku === newP.sku);
               return {
                   ...newP,
+                  // Preserve static data from ERP Inventory if not present in Sales
+                  brand: existing?.brand,
+                  cartonDimensions: existing?.cartonDimensions,
                   // Preserve manual settings if not in import
                   costPrice: newP.costPrice || existing?.costPrice,
                   floorPrice: existing?.floorPrice,
                   ceilingPrice: existing?.ceilingPrice,
-                  // Recalculate optimal price based on the NEW merged history
                   optimalPrice: calculateOptimalPrice(newP.sku, updatedHistory) 
               };
           });
@@ -410,6 +392,40 @@ const App: React.FC = () => {
       setIsCostUploadModalOpen(false);
   };
 
+  const handleUpdateMappings = (mappings: SkuMapping[]) => {
+      setProducts(prev => prev.map(p => {
+          // Check if this product has a mapping update
+          const myMappings = mappings.filter(m => m.masterSku === p.sku);
+          if (myMappings.length === 0) return p;
+
+          // Clone channels to update
+          const updatedChannels = [...p.channels];
+
+          myMappings.forEach(map => {
+              const existingChannelIndex = updatedChannels.findIndex(c => c.platform === map.platform);
+              
+              if (existingChannelIndex !== -1) {
+                  // Update existing channel
+                  updatedChannels[existingChannelIndex] = {
+                      ...updatedChannels[existingChannelIndex],
+                      skuAlias: map.alias
+                  };
+              } else {
+                  // Add new channel entry just for mapping (velocity 0)
+                  updatedChannels.push({
+                      platform: map.platform,
+                      manager: 'Unassigned',
+                      velocity: 0,
+                      skuAlias: map.alias
+                  });
+              }
+          });
+
+          return { ...p, channels: updatedChannels };
+      }));
+      setIsMappingModalOpen(false);
+  };
+
   const handleAddPromotion = (promo: PromotionEvent) => {
       setPromotions(prev => [promo, ...prev]);
   };
@@ -418,75 +434,79 @@ const App: React.FC = () => {
       setPromotions(prev => prev.map(p => p.id === updatedPromo.id ? updatedPromo : p));
   };
 
+  // Dynamic Styles
+  const isUrl = userProfile.backgroundImage && (userProfile.backgroundImage.startsWith('http') || userProfile.backgroundImage.startsWith('data:') || userProfile.backgroundImage.startsWith('/'));
+  
+  const bgStyle: React.CSSProperties = userProfile.backgroundImage && userProfile.backgroundImage !== 'none'
+      ? isUrl 
+        ? { backgroundImage: `url(${userProfile.backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }
+        : { backgroundImage: userProfile.backgroundImage, backgroundAttachment: 'fixed', backgroundSize: 'cover' }
+      : { backgroundColor: userProfile.backgroundColor || '#f3f4f6' };
+
+  // Determine if we should show the full dashboard or the onboarding
+  const hasInventory = products.length > 0;
+  // History or velocity presence implies transaction report was loaded
+  const hasSalesData = priceHistory.length > 0 || products.some(p => p.averageDailySales > 0);
+  
+  const showDashboard = hasInventory && hasSalesData;
+
+  // Header Color Logic
+  const headerTextColor = userProfile.textColor || '#111827';
+  const headerSubColor = userProfile.textColor ? `${userProfile.textColor}CC` : '#6b7280'; // Add transparency for subtext if colored, else gray
+  
+  // Readability Shadow
+  const textShadowStyle = userProfile.backgroundImage ? { textShadow: '0 2px 4px rgba(0,0,0,0.5)' } : {};
+  const headerStyle = { color: headerTextColor, ...textShadowStyle };
+
   return (
-    <div className="min-h-screen bg-gray-50 flex font-sans text-gray-900">
-      
+    <div className="min-h-screen flex font-sans text-gray-900 transition-colors duration-500" style={bgStyle}>
+      {/* Background Overlay for readability if image is present */}
+      {userProfile.backgroundImage && <div className="fixed inset-0 bg-white/90 backdrop-blur-sm -z-10"></div>}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col fixed h-full z-50">
+      <aside className="w-64 bg-white/95 backdrop-blur border-r border-gray-200 hidden md:flex flex-col fixed h-full z-40 shadow-sm">
         <div className="p-6 flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">
+          <div 
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold transition-colors duration-300"
+            style={{ backgroundColor: userProfile.themeColor }}
+          >
             E
           </div>
           <span className="font-bold text-xl tracking-tight text-gray-900">EcomPulse</span>
         </div>
         
         <nav className="flex-1 px-4 py-4 space-y-1">
-          <button 
-            onClick={() => setCurrentView('dashboard')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-              currentView === 'dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            Pricing Tool
-          </button>
-          
-          <button 
-            onClick={() => setCurrentView('costs')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-              currentView === 'costs' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <DollarSign className="w-5 h-5" />
-            Cost Management
-          </button>
-
-          <button 
-            onClick={() => setCurrentView('promotions')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-              currentView === 'promotions' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <Tag className="w-5 h-5" />
-            Promotions
-          </button>
-
-          <button 
-            onClick={() => setCurrentView('settings')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-              currentView === 'settings' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <Settings className="w-5 h-5" />
-            Configuration
-          </button>
-          
-          <button 
-            onClick={() => setCurrentView('definitions')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-              currentView === 'definitions' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <BookOpen className="w-5 h-5" />
-            Definitions
-          </button>
+          {[
+              { id: 'dashboard', icon: LayoutDashboard, label: 'Pricing Tool' },
+              { id: 'costs', icon: DollarSign, label: 'Cost Management' },
+              { id: 'promotions', icon: Tag, label: 'Promotions' },
+              { id: 'settings', icon: Settings, label: 'Configuration' },
+              { id: 'definitions', icon: BookOpen, label: 'Definitions' }
+          ].map((item) => {
+             const isActive = currentView === item.id;
+             return (
+                <button 
+                    key={item.id}
+                    onClick={() => setCurrentView(item.id as any)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
+                        isActive 
+                        ? 'bg-opacity-10' 
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                    style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
+                >
+                    <item.icon className="w-5 h-5" style={isActive ? { color: userProfile.themeColor } : {}} />
+                    {item.label}
+                </button>
+             );
+          })}
         </nav>
 
         <div className="p-4 border-t border-gray-100 space-y-4">
-          <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+          <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100 backdrop-blur-sm">
             <div className="flex justify-between items-center mb-1">
                 <p className="text-xs font-semibold text-gray-500">Tool Status</p>
-                <span className="text-[10px] text-gray-400">v1.0.1</span>
+                <span className="text-[10px] text-gray-400">v1.2.2</span>
             </div>
             <div className={`flex items-center gap-2 text-sm ${isOnline ? 'text-green-600' : 'text-gray-500'}`}>
                 {isOnline ? (
@@ -509,18 +529,18 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 p-8">
+      <main className="flex-1 md:ml-64 p-8 min-w-0">
         {/* Top Bar */}
         <header className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold transition-colors" style={headerStyle}>
                 {currentView === 'dashboard' ? 'Pricing & Inventory Analysis' : 
                  currentView === 'costs' ? 'Product Costs & Limits' : 
                  currentView === 'definitions' ? 'Definitions & Formulas' : 
                  currentView === 'promotions' ? 'Promotion Management' :
                  'Settings'}
             </h1>
-            <p className="text-gray-500 text-sm mt-1">
+            <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
                 {currentView === 'dashboard' ? 'Manage SKUs, review velocities, and calculate strategies.' : 
                  currentView === 'costs' ? 'Set cost prices, and define minimum/maximum price guardrails.' : 
                  currentView === 'definitions' ? 'Reference guide for calculations and logic.' :
@@ -529,47 +549,128 @@ const App: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
+            {userProfile.name && (
+                <span className="text-sm font-semibold animate-in fade-in slide-in-from-top-2" style={headerStyle}>
+                    Hello, {userProfile.name}!
+                </span>
+            )}
+            <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}>
               <Bell className="w-6 h-6" />
             </button>
-            <div className="h-10 w-10 rounded-full bg-gray-200 border-2 border-white shadow-sm overflow-hidden">
-              <img src="https://picsum.photos/100/100" alt="User" className="w-full h-full object-cover" />
-            </div>
+            <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
+            <UserProfile profile={userProfile} onUpdate={setUserProfile} />
           </div>
         </header>
 
         {/* Content Area */}
         {currentView === 'dashboard' ? (
             <>
-                <div className="mb-6 flex justify-end items-center gap-3">
-                    <button 
-                      onClick={() => setIsSalesImportModalOpen(true)}
-                      className="px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors flex items-center gap-2"
-                    >
-                      <FileBarChart className="w-4 h-4" />
-                      Import Transaction Report
-                    </button>
-                    <button 
-                      onClick={() => setIsUploadModalOpen(true)}
-                      className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Batch Update Stock
-                    </button>
-                </div>
-                
-                <ProductList 
-                    products={products} 
-                    onAnalyze={handleAnalyze} 
-                    onApplyChanges={handleApplyBatchChanges}
-                    dateLabels={priceDateLabels}
-                />
+                {!showDashboard ? (
+                    // --- ONBOARDING FLOW ---
+                    <div className="flex flex-col items-center justify-center min-h-[500px] bg-white/90 backdrop-blur rounded-2xl border-2 border-dashed border-gray-200 text-center p-12 animate-in fade-in zoom-in duration-300">
+                         <div 
+                             className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
+                             style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}
+                         >
+                             <Database className="w-10 h-10" />
+                         </div>
+                         <h3 className="text-2xl font-bold text-gray-900">Welcome to EcomPulse</h3>
+                         <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">
+                             Let's get your dashboard set up. Please upload your company reports in the order below to initialize the system.
+                         </p>
+                         
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative">
+                            {/* Step 1: Inventory */}
+                            <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200 hover:border-indigo-300'}`}>
+                                <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'bg-white text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                    {hasInventory ? 'Completed' : 'Step 1'}
+                                </div>
+                                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                    {hasInventory ? <CheckCircle className="w-8 h-8 text-green-600"/> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}
+                                </div>
+                                <h4 className="font-bold text-gray-900 text-lg">ERP Inventory Report</h4>
+                                <p className="text-sm text-gray-500 mt-2 text-center">
+                                    Upload the 28-column ERP file to initialize Products, Stock Levels, COGS, and Categories.
+                                </p>
+                                <button 
+                                    onClick={() => setIsUploadModalOpen(true)}
+                                    className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300 hover:bg-opacity-5'}`}
+                                    style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}
+                                >
+                                    {hasInventory ? 'Re-upload Inventory' : 'Upload Inventory'}
+                                </button>
+                            </div>
+
+                            {/* Step 2: Sales History (Locked until Step 1 done) */}
+                             <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${
+                                 !hasInventory ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-white border-indigo-200 shadow-lg scale-105 z-10'
+                             }`}>
+                                <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                    Step 2
+                                </div>
+                                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                    <FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} />
+                                </div>
+                                <h4 className="font-bold text-gray-900 text-lg">Sales Transaction Report</h4>
+                                <p className="text-sm text-gray-500 mt-2 text-center">
+                                    Once products are loaded, upload sales history to calculate Velocity, Fees, and Margins.
+                                </p>
+                                <button 
+                                    onClick={() => hasInventory && setIsSalesImportModalOpen(true)}
+                                    disabled={!hasInventory}
+                                    style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}
+                                    className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}
+                                >
+                                    <Upload className="w-5 h-5" />
+                                    Upload Sales
+                                </button>
+                                
+                                {hasInventory && (
+                                    <div className="absolute -right-4 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 shadow-lg animate-pulse hidden md:block">
+                                        <ArrowRight className="w-6 h-6" style={{ color: userProfile.themeColor }} />
+                                    </div>
+                                )}
+                            </div>
+                         </div>
+                    </div>
+                ) : (
+                    <>
+                        {/* NORMAL DASHBOARD VIEW */}
+                        <div className="mb-6 flex justify-end items-center gap-3">
+                            <button 
+                            onClick={() => setIsSalesImportModalOpen(true)}
+                            style={{ color: userProfile.themeColor, borderColor: `${userProfile.themeColor}40`, backgroundColor: `${userProfile.themeColor}10` }}
+                            className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-opacity-20 transition-colors flex items-center gap-2"
+                            >
+                            <FileBarChart className="w-4 h-4" />
+                            Import Transaction Report
+                            </button>
+                            <button 
+                            onClick={() => setIsUploadModalOpen(true)}
+                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2"
+                            >
+                            <Database className="w-4 h-4" />
+                            Update Inventory (ERP)
+                            </button>
+                        </div>
+                        
+                        <ProductList 
+                            products={products} 
+                            onAnalyze={handleAnalyze} 
+                            onApplyChanges={handleApplyBatchChanges}
+                            dateLabels={priceDateLabels}
+                            themeColor={userProfile.themeColor}
+                        />
+                    </>
+                )}
             </>
         ) : currentView === 'costs' ? (
             <CostManagementPage 
                 products={products}
                 onUpdateCosts={handleUpdateCosts}
                 onOpenUpload={() => setIsCostUploadModalOpen(true)}
+                themeColor={userProfile.themeColor}
+                headerStyle={headerStyle}
             />
         ) : currentView === 'promotions' ? (
             <PromotionPage 
@@ -578,9 +679,11 @@ const App: React.FC = () => {
                 promotions={promotions}
                 onAddPromotion={handleAddPromotion}
                 onUpdatePromotion={handleUpdatePromotion}
+                themeColor={userProfile.themeColor}
+                headerStyle={headerStyle}
             />
         ) : currentView === 'definitions' ? (
-            <DefinitionsPage />
+            <DefinitionsPage headerStyle={headerStyle} />
         ) : (
             <SettingsPage 
                 currentRules={pricingRules} 
@@ -589,11 +692,13 @@ const App: React.FC = () => {
                 }} 
                 products={products}
                 onRestore={handleRestoreData}
-                // Pass extra data for full backup
                 extraData={{
                     priceHistory,
                     promotions
                 }}
+                themeColor={userProfile.themeColor}
+                headerStyle={headerStyle}
+                onOpenMappingModal={() => setIsMappingModalOpen(true)}
             />
         )}
 
@@ -607,6 +712,7 @@ const App: React.FC = () => {
           isLoading={isAnalyzing}
           onClose={() => setSelectedProduct(null)}
           onApplyPrice={handleApplyPrice}
+          themeColor={userProfile.themeColor}
         />
       )}
 
@@ -632,6 +738,15 @@ const App: React.FC = () => {
         <CostUploadModal
             onClose={() => setIsCostUploadModalOpen(false)}
             onConfirm={handleUpdateCosts}
+        />
+      )}
+
+      {isMappingModalOpen && (
+        <MappingUploadModal
+            products={products}
+            platforms={Object.keys(pricingRules)}
+            onClose={() => setIsMappingModalOpen(false)}
+            onConfirm={handleUpdateMappings}
         />
       )}
 

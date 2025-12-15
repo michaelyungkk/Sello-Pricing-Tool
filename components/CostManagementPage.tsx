@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, FeeBounds } from '../types';
-import { Search, Save, Upload, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Info, Download, X, CheckSquare, Square } from 'lucide-react';
+import { Search, Save, Upload, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Info, Download, X, Eye, EyeOff } from 'lucide-react';
 
 interface CostUpdate {
   sku: string;
@@ -15,21 +15,22 @@ interface CostManagementPageProps {
   products: Product[];
   onUpdateCosts: (updates: CostUpdate[]) => void;
   onOpenUpload: () => void;
+  themeColor: string;
+  headerStyle: React.CSSProperties;
 }
 
 type SortKey = keyof Product | 'margin';
 
-const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpdateCosts, onOpenUpload }) => {
+const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpdateCosts, onOpenUpload, themeColor, headerStyle }) => {
   const [search, setSearch] = useState('');
   const [editedCosts, setEditedCosts] = useState<Record<string, Partial<CostUpdate>>>({});
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
-  
+  const [showInactive, setShowInactive] = useState(false); // Toggle for Ghost products
+
   // Tooltip State
   const [hoveredFee, setHoveredFee] = useState<{ 
       rect: DOMRect; 
-      value: number; 
       bounds: FeeBounds; 
-      isOutlier: boolean 
   } | null>(null);
 
   // Modal State
@@ -58,7 +59,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
           const changeObj = changes ?? {};
           return {
             sku,
-            ...changeObj
+            ...(changeObj as Partial<CostUpdate>)
           };
       });
       onUpdateCosts(updates as CostUpdate[]);
@@ -98,10 +99,14 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
   };
 
   const filteredAndSorted = useMemo(() => {
-    let result = products.filter(p => 
-        p.sku.toLowerCase().includes(search.toLowerCase()) || 
-        p.name.toLowerCase().includes(search.toLowerCase())
-    );
+    let result = products.filter(p => {
+        // --- VISIBILITY LOGIC ---
+        if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) {
+            return false;
+        }
+        return p.sku.toLowerCase().includes(search.toLowerCase()) || 
+               p.name.toLowerCase().includes(search.toLowerCase());
+    });
 
     if (sortConfig) {
         result.sort((a, b) => {
@@ -123,12 +128,12 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
     }
 
     return result;
-  }, [products, search, sortConfig]);
+  }, [products, search, sortConfig, showInactive]);
 
   // Reset pagination when search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+  }, [search, showInactive]);
 
   // Calculate Pagination
   const totalPages = Math.ceil(filteredAndSorted.length / itemsPerPage);
@@ -148,7 +153,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
           {label}
           <div className="flex flex-col">
              {isActive ? (
-               sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3 text-indigo-600" /> : <ChevronDown className="w-3 h-3 text-indigo-600" />
+               sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" style={{ color: themeColor }} /> : <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />
              ) : (
                <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />
              )}
@@ -170,9 +175,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
           if (bounds && (bounds.min > 0 || bounds.max > 0)) {
               setHoveredFee({
                   rect: e.currentTarget.getBoundingClientRect(),
-                  value: val,
-                  bounds,
-                  isOutlier: !!isOutlier
+                  bounds
               });
           }
       };
@@ -188,8 +191,8 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
             onMouseLeave={handleMouseLeave}
           >
               <div className="flex items-center justify-end gap-1">
-                  {isOutlier && <Info className="w-3 h-3 text-indigo-400" />}
-                  <span className={`font-mono ${isOutlier ? 'text-indigo-700 font-semibold' : 'text-gray-700'}`}>
+                  {isOutlier && <Info className="w-3 h-3" style={{ color: themeColor }} />}
+                  <span className={`font-mono ${isOutlier ? 'font-semibold' : 'text-gray-700'}`} style={isOutlier ? { color: themeColor } : {}}>
                       {val.toFixed(2)}
                   </span>
               </div>
@@ -202,8 +205,8 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
        {/* Page Header */}
        <div className="flex justify-between items-center mb-2">
            <div>
-               <h2 className="text-2xl font-bold text-gray-900">Cost & Fees Management</h2>
-               <p className="text-gray-500 mt-1">Track comprehensive costs and set minimum/maximum price guardrails per SKU.</p>
+               <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Cost & Fees Management</h2>
+               <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Track comprehensive costs and set minimum/maximum price guardrails per SKU.</p>
            </div>
            <div className="flex items-center gap-3">
                <button 
@@ -215,7 +218,8 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                </button>
                <button 
                  onClick={onOpenUpload}
-                 className="px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center gap-2 transition-colors"
+                 className="px-4 py-2 border rounded-lg hover:bg-opacity-10 flex items-center gap-2 transition-colors"
+                 style={{ backgroundColor: `${themeColor}10`, color: themeColor, borderColor: `${themeColor}40` }}
                >
                    <Upload className="w-4 h-4" />
                    Import Manual Costs (CSV)
@@ -232,9 +236,23 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                     placeholder="Search SKU..." 
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50"
+                    style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                />
            </div>
+           
+           <div className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 min-w-[180px]">
+                <span className="text-xs font-bold text-gray-500 uppercase mr-2">Show Inactive</span>
+                <button 
+                    onClick={() => setShowInactive(!showInactive)}
+                    className="text-gray-500 hover:text-indigo-600 focus:outline-none"
+                    style={showInactive ? { color: themeColor } : {}}
+                    title="Toggle products with 0 stock and 0 sales"
+                >
+                    {showInactive ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                </button>
+           </div>
+
            {Object.keys(editedCosts).length > 0 && (
                <button 
                 onClick={handleSave}
@@ -260,7 +278,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                <div className="flex items-center gap-1">
                                   Product
                                   {sortConfig?.key === 'sku' ? (
-                                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3 text-indigo-600" /> : <ChevronDown className="w-3 h-3 text-indigo-600" />
+                                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" style={{ color: themeColor }} /> : <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />
                                   ) : <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />}
                                </div>
                            </th>
@@ -287,7 +305,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                <div className="flex items-center justify-end gap-1">
                                   Net Margin
                                   {sortConfig?.key === 'margin' ? (
-                                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3 text-indigo-600" /> : <ChevronDown className="w-3 h-3 text-indigo-600" />
+                                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" style={{ color: themeColor }} /> : <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />
                                   ) : <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />}
                                </div>
                            </th>
@@ -316,9 +334,10 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                     value={value === 0 ? '' : value}
                                     placeholder={placeholder}
                                     onChange={(e) => handleInputChange(product.sku, field, e.target.value)}
-                                    className={`w-16 text-right border rounded px-1.5 py-1 focus:ring-2 focus:ring-indigo-500 text-xs ${
-                                        edits[field] !== undefined ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'
+                                    className={`w-16 text-right border rounded px-1.5 py-1 focus:ring-2 focus:ring-opacity-50 text-xs ${
+                                        edits[field] !== undefined ? 'bg-opacity-10' : 'border-gray-200'
                                     }`}
+                                    style={edits[field] !== undefined ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, '--tw-ring-color': themeColor } as React.CSSProperties : { '--tw-ring-color': themeColor } as React.CSSProperties}
                                />
                            );
 
@@ -432,19 +451,19 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
 
        </div>
 
-       {/* Portal Tooltip - Minimal Version */}
+       {/* Portal Tooltip - Minimal Version (Min/Max Only) */}
        {hoveredFee && <FeeTooltip data={hoveredFee} />}
 
        {/* Export Modal */}
        {isExportModalOpen && (
-           <CostExportModal products={products} onClose={() => setIsExportModalOpen(false)} />
+           <CostExportModal products={products} onClose={() => setIsExportModalOpen(false)} themeColor={themeColor} />
        )}
     </div>
   );
 };
 
-const FeeTooltip = ({ data }: { data: { rect: DOMRect; value: number; bounds: FeeBounds; isOutlier: boolean } }) => {
-    const { rect, value, bounds, isOutlier } = data;
+const FeeTooltip = ({ data }: { data: { rect: DOMRect; bounds: FeeBounds } }) => {
+    const { rect, bounds } = data;
     
     const style: React.CSSProperties = {
         position: 'fixed',
@@ -455,41 +474,23 @@ const FeeTooltip = ({ data }: { data: { rect: DOMRect; value: number; bounds: Fe
         pointerEvents: 'none'
     };
   
+    // Only show if we actually have bounds
+    if (!bounds || (bounds.min === 0 && bounds.max === 0)) return null;
+
     return createPortal(
         <div style={style}>
-            <div className="bg-slate-900 text-white p-3 rounded-lg shadow-xl text-xs w-48 animate-in fade-in zoom-in duration-200 border border-slate-700">
-                <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
-                    <span className="font-semibold text-slate-300">Fee Analysis</span>
-                    {isOutlier && <span className="bg-red-500 text-white px-1 rounded text-[10px] font-bold">High</span>}
-                </div>
-                <div className="space-y-1">
-                    <div className="flex justify-between">
-                        <span className="text-slate-400">Current:</span>
-                        <span className="font-mono font-bold">${value.toFixed(2)}</span>
-                    </div>
-                    {bounds && (
-                        <>
-                            <div className="flex justify-between text-[10px] text-slate-500">
-                                <span>Historical Min:</span>
-                                <span>${bounds.min.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-[10px] text-slate-500">
-                                <span>Historical Max:</span>
-                                <span>${bounds.max.toFixed(2)}</span>
-                            </div>
-                        </>
-                    )}
-                </div>
-                
-                {/* Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-slate-900"></div>
+            <div className="bg-gray-900 text-white px-3 py-2 rounded shadow-lg text-xs whitespace-nowrap">
+                <div className="font-mono">Min: ${bounds.min.toFixed(2)}</div>
+                <div className="font-mono">Max: ${bounds.max.toFixed(2)}</div>
             </div>
+            {/* Small Arrow */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
         </div>,
         document.body
     );
 };
 
-const CostExportModal = ({ products, onClose }: { products: Product[], onClose: () => void }) => {
+const CostExportModal = ({ products, onClose, themeColor }: { products: Product[], onClose: () => void, themeColor: string }) => {
     const handleDownload = () => {
         const headers = ['SKU', 'Product Name', 'Cost Price (COGS)', 'Min Price', 'Max Price', 'Current Price', 'Net Margin %'];
         const rows = products.map(p => {
@@ -533,7 +534,7 @@ const CostExportModal = ({ products, onClose }: { products: Product[], onClose: 
                 </div>
                 <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
                     <button onClick={onClose} className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
-                    <button onClick={handleDownload} className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 flex items-center gap-2 transition-colors">
+                    <button onClick={handleDownload} className="px-4 py-2 text-white font-medium rounded-lg flex items-center gap-2 transition-colors" style={{ backgroundColor: themeColor }}>
                         <Download className="w-4 h-4" />
                         Download CSV
                     </button>

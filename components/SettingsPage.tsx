@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { PricingRules, Platform, Product, PriceLog, PromotionEvent } from '../types';
-import { Save, Percent, Coins, Info, Plus, Trash2, User, Download, Upload, Database, AlertCircle, Palette, CheckCircle } from 'lucide-react';
+import { Save, Percent, Coins, Info, Plus, Trash2, User, Download, Upload, Database, AlertCircle, Palette, CheckCircle, RefreshCcw, Trash, Link as LinkIcon } from 'lucide-react';
+import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES } from '../constants';
 
 interface SettingsPageProps {
   currentRules: PricingRules;
@@ -12,9 +13,12 @@ interface SettingsPageProps {
       priceHistory: PriceLog[];
       promotions: PromotionEvent[];
   };
+  themeColor: string;
+  headerStyle: React.CSSProperties;
+  onOpenMappingModal?: () => void; // New Prop
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, products, onRestore, extraData }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, products, onRestore, extraData, themeColor, headerStyle, onOpenMappingModal }) => {
   const [rules, setRules] = useState<PricingRules>(JSON.parse(JSON.stringify(currentRules)));
   const [newPlatformName, setNewPlatformName] = useState('');
   const [isSaved, setIsSaved] = useState(false);
@@ -142,7 +146,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
             history: json.priceHistory, // Restore history
             promotions: json.promotions // Restore promotions
         });
-        setRules(json.rules); 
+        // We do NOT setRules here because onRestore will trigger a prop update which useEffect handles
         setRestoreStatus('success');
         
       } catch (err: any) {
@@ -176,20 +180,20 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
   const platformKeys = Object.keys(rules).sort();
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-8 pb-10">
       
       {/* Platform Settings Section */}
       <div>
         <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Platform Configuration</h2>
-            <p className="text-gray-500 mt-1">Configure commission fees, strategic markups, and default managers for each marketplace.</p>
+            <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Platform Configuration</h2>
+            <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Configure commission fees, strategic markups, and default managers for each marketplace.</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             {/* Helper Banner */}
-            <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex items-start gap-3">
-            <Info className="w-5 h-5 text-indigo-600 mt-0.5" />
-            <div className="text-sm text-indigo-800">
+            <div className="border-b p-4 flex items-start gap-3" style={{ backgroundColor: `${themeColor}08`, borderColor: `${themeColor}20` }}>
+            <Info className="w-5 h-5 mt-0.5" style={{ color: themeColor }} />
+            <div className="text-sm" style={{ color: themeColor }}>
                 <p className="font-semibold">How these settings affect analysis:</p>
                 <p className="mt-1">
                     <strong>Commission Fee:</strong> Deducted from the selling price during AI analysis.<br/>
@@ -235,7 +239,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
 
                                     {/* Edit indicator */}
                                     <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow border border-gray-100 opacity-0 group-hover/icon:opacity-100 transition-opacity z-0 pointer-events-none">
-                                        <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: themeColor }}></div>
                                     </div>
                                 </div>
                                 <div className="flex flex-col">
@@ -253,7 +257,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
                                 step="0.1"
                                 value={rules[platform].commission}
                                 onChange={(e) => handleCommissionChange(platform, e.target.value)}
-                                className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-gray-900 transition-colors text-sm"
+                                className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 font-mono text-gray-900 transition-colors text-sm"
+                                style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                 />
                                 <Coins className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-3" />
                             </div>
@@ -267,7 +272,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
                                 step="0.1"
                                 value={rules[platform].markup}
                                 onChange={(e) => handleMarkupChange(platform, e.target.value)}
-                                className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-gray-900 transition-colors text-sm"
+                                className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 font-mono text-gray-900 transition-colors text-sm"
+                                style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                 />
                                 <Percent className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-3" />
                             </div>
@@ -281,7 +287,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
                                 placeholder="Unassigned"
                                 value={rules[platform].manager || ''}
                                 onChange={(e) => handleManagerChange(platform, e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 transition-colors text-sm"
+                                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-gray-900 transition-colors text-sm"
+                                style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                 />
                                 <User className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                             </div>
@@ -312,7 +319,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
                         placeholder="Enter platform name (e.g. Shopify)" 
                         value={newPlatformName}
                         onChange={(e) => setNewPlatformName(e.target.value)}
-                        className="flex-1 max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        className="flex-1 max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50"
+                        style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                     />
                     <button 
                         onClick={handleAddPlatform}
@@ -332,11 +340,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
             <button 
                 onClick={handleSave}
                 disabled={isSaved}
-                className={`px-8 py-3 rounded-lg font-medium shadow-md transition-all flex items-center gap-2 ${
-                    isSaved 
-                    ? 'bg-green-600 text-white shadow-green-200' 
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
-                }`}
+                className={`px-8 py-3 rounded-lg font-medium shadow-md transition-all flex items-center gap-2 text-white`}
+                style={{ backgroundColor: isSaved ? '#16a34a' : themeColor }}
             >
                 {isSaved ? (
                     <>Saved Successfully</>
@@ -351,48 +356,79 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
         </div>
       </div>
 
+      {/* SKU Mappings Section */}
+      <div>
+         <div className="mb-6">
+            <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>SKU Mappings</h2>
+            <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Map your Master Inventory SKUs to platform-specific aliases for accurate export.</p>
+         </div>
+
+         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+             <div className="flex items-start gap-4">
+                 <div className="p-3 bg-indigo-50 rounded-full text-indigo-600">
+                     <LinkIcon className="w-6 h-6" />
+                 </div>
+                 <div>
+                     <h3 className="font-bold text-gray-900">Manage Aliases</h3>
+                     <p className="text-sm text-gray-500 max-w-lg mt-1">
+                         Upload a CSV file containing <code>Master SKU</code>, <code>Platform</code>, and <code>Platform SKU</code> columns. 
+                         This ensures that when you export pricing, the correct alias is used for each marketplace.
+                     </p>
+                 </div>
+             </div>
+             
+             <button 
+                onClick={onOpenMappingModal}
+                className="px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg shadow hover:bg-indigo-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+             >
+                 <Upload className="w-4 h-4" />
+                 Import Mappings
+             </button>
+         </div>
+      </div>
+
       {/* Data Backup Section */}
       <div>
          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Data Management</h2>
-            <p className="text-gray-500 mt-1">Backup your inventory and settings to prevent data loss when the application updates.</p>
+            <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Database Management</h2>
+            <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Backup your work or restore previous states.</p>
          </div>
 
          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-             <div className="grid md:grid-cols-2 gap-8">
-                
+             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide border-b border-gray-100 pb-4 mb-4">Backup & Restore</h3>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Export */}
-                <div className="flex flex-col">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                           <Download className="w-5 h-5" />
-                        </div>
-                        <h3 className="font-semibold text-gray-900">Backup Data</h3>
+                <div className="flex flex-col gap-3 p-5 rounded-lg border border-gray-200 bg-gray-50 hover:border-gray-300 transition-colors items-center text-center">
+                    <div className="p-3 bg-blue-100 rounded-full text-blue-600">
+                       <Download className="w-6 h-6" />
                     </div>
-                    <p className="text-sm text-gray-500 mb-4 flex-1">
-                        Download a JSON file containing all your products, costs, sales history, promotions, and pricing rules. Use this to save your progress.
-                    </p>
+                    <div>
+                        <h4 className="font-bold text-gray-900 mb-1">Backup Data</h4>
+                        <p className="text-xs text-gray-500">
+                            Save all products, history, promotions, and settings to a JSON file.
+                        </p>
+                    </div>
                     <button 
                         onClick={handleExportBackup}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2"
+                        className="w-full mt-2 px-3 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 flex items-center justify-center gap-2"
                     >
-                        <Download className="w-4 h-4" />
-                        Export to JSON
+                        Export JSON
                     </button>
                 </div>
 
                 {/* Import */}
-                <div className="flex flex-col border-t md:border-t-0 md:border-l border-gray-100 pt-6 md:pt-0 md:pl-8">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
-                           <Upload className="w-5 h-5" />
-                        </div>
-                        <h3 className="font-semibold text-gray-900">Restore Data</h3>
+                <div className="flex flex-col gap-3 p-5 rounded-lg border border-gray-200 bg-gray-50 hover:border-gray-300 transition-colors items-center text-center">
+                    <div className="p-3 bg-purple-100 rounded-full text-purple-600">
+                       <Upload className="w-6 h-6" />
                     </div>
-                    <p className="text-sm text-gray-500 mb-4 flex-1">
-                        Restore your system state from a previously exported backup file. This will overwrite current data.
-                    </p>
-                    <div className="relative">
+                    <div>
+                        <h4 className="font-bold text-gray-900 mb-1">Restore Data</h4>
+                        <p className="text-xs text-gray-500">
+                            Overwrite current data with a previously saved backup file.
+                        </p>
+                    </div>
+                    <div className="relative w-full mt-2">
                         <input 
                             ref={fileInputRef}
                             type="file" 
@@ -403,32 +439,17 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
                         <button 
                             onClick={() => fileInputRef.current?.click()}
                             disabled={restoreStatus === 'success'}
-                            className={`w-full px-4 py-2 border font-medium rounded-lg flex items-center justify-center gap-2 transition-all ${
-                                restoreStatus === 'success' 
-                                ? 'bg-green-50 border-green-200 text-green-700' 
-                                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                            }`}
+                            className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 flex items-center justify-center gap-2"
                         >
-                            {restoreStatus === 'success' ? (
-                                <>
-                                    <CheckCircle className="w-4 h-4" />
-                                    Data Restored!
-                                </>
-                            ) : (
-                                <>
-                                    <Upload className="w-4 h-4" />
-                                    Select Backup File
-                                </>
-                            )}
+                            {restoreStatus === 'success' ? 'Restored Successfully!' : 'Select File'}
                         </button>
                     </div>
                 </div>
-
              </div>
 
              <div className="mt-6 pt-4 border-t border-gray-100 flex items-center gap-2 text-xs text-amber-600 bg-amber-50 p-3 rounded-lg">
                 <AlertCircle className="w-4 h-4" />
-                <span><strong>Note:</strong> In this preview environment, data is stored in the browser but may be cleared on reload. Regular backups are recommended.</span>
+                <span><strong>Note:</strong> Data is stored in your browser's Local Storage. Clearing your browser cache will also wipe this data.</span>
              </div>
          </div>
       </div>

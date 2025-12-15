@@ -1,9 +1,11 @@
 
+
 export interface ChannelData {
   platform: string;
   manager: string;
   velocity: number;
   price?: number; // Specific average selling price for this channel (Gross)
+  skuAlias?: string; // The specific SKU used on this platform (e.g., SKU_1)
 }
 
 export interface FeeBounds {
@@ -28,7 +30,7 @@ export interface Product {
   leadTimeDays: number;
   
   // Costs & Fees
-  costPrice?: number; // Cost of Goods Sold
+  costPrice?: number; // Cost of Goods Sold (From Inventory Report)
   sellingFee?: number;
   adsFee?: number;
   postage?: number;
@@ -58,8 +60,18 @@ export interface Product {
   recommendation: string;
   daysRemaining: number;
   
-  category: string;
-  subcategory?: string; // Added subcategory field
+  category: string; // Main Category
+  subcategory?: string; // Subcategory
+  brand?: string; // Brand
+  
+  // Dimensions (Stored from ERP)
+  cartonDimensions?: {
+      length: number;
+      width: number;
+      height: number;
+      weight: number;
+  };
+
   lastUpdated: string;
 }
 
@@ -124,4 +136,19 @@ export interface PromotionEvent {
     revenue: number;
     upliftPercentage: number; // Sales uplift vs BAU
   };
+}
+
+export interface UserProfile {
+  name: string;
+  themeColor: string; // Hex
+  backgroundImage: string; // URL or 'none'
+  backgroundColor: string; // Hex fallback
+  textColor?: string; // Optional: Auto-detected optimal text color
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
 }

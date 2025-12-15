@@ -1,5 +1,18 @@
 
-import { Product, PriceLog, PromotionEvent } from './types';
+import { Product, PriceLog, PromotionEvent, PricingRules } from './types';
+
+export const DEFAULT_PRICING_RULES: PricingRules = {
+  'Amazon(UK)': { markup: 2.0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900' },
+  'eBay': { markup: 0, commission: 10.0, manager: 'Sophie Nie', color: '#E53238' },
+  'The Range': { markup: 0, commission: 12.0, manager: 'Queenie Wong', color: '#2C3E50' },
+  'ManoMano': { markup: 0, commission: 18.0, manager: 'Queenie Wong', color: '#00D09C' },
+  'Wayfair': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#7F187F' },
+  'Onbuy': { markup: 0, commission: 9.0, manager: 'Queenie Wong', color: '#3B82F6' },
+  'Groupon(UK)': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#53A318' },
+  'Temu(UK)': { markup: 0, commission: 5.0, manager: 'Elaine Wang', color: '#FB7701' },
+  'Tesco': { markup: 0, commission: 10.0, manager: 'Queenie Wong', color: '#00539F' },
+  'Debenhams': { markup: 0, commission: 26.0, manager: 'Queenie Wong', color: '#1B4D3E' }
+};
 
 export const INITIAL_PRODUCTS: Product[] = [
   {

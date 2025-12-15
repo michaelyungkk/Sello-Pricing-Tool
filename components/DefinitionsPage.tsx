@@ -2,12 +2,16 @@
 import React from 'react';
 import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone } from 'lucide-react';
 
-const DefinitionsPage: React.FC = () => {
+interface DefinitionsPageProps {
+    headerStyle?: React.CSSProperties;
+}
+
+const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-10">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">System Definitions & Formulas</h2>
-        <p className="text-gray-500 mt-1">Reference guide for calculations used in the EcomPulse dashboard.</p>
+        <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>System Definitions & Formulas</h2>
+        <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Reference guide for calculations used in the EcomPulse dashboard.</p>
       </div>
 
       {/* Date Ranges */}
