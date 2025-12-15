@@ -12,7 +12,7 @@ import CostUploadModal from './components/CostUploadModal';
 import DefinitionsPage from './components/DefinitionsPage';
 import PromotionPage from './components/PromotionPage';
 import { analyzePriceAdjustment } from './services/geminiService';
-import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, MonitorPlay, DollarSign, BookOpen, Tag } from 'lucide-react';
+import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, MonitorPlay, DollarSign, BookOpen, Tag, Wifi, WifiOff } from 'lucide-react';
 
 const DEFAULT_PRICING_RULES: PricingRules = {
   'Amazon(UK)': { markup: 2.0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900' },
@@ -137,6 +137,22 @@ const App: React.FC = () => {
   const [isSalesImportModalOpen, setIsSalesImportModalOpen] = useState(false);
   const [isCostUploadModalOpen, setIsCostUploadModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'dashboard' | 'settings' | 'costs' | 'definitions' | 'promotions'>('dashboard');
+  
+  // Connectivity State
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // --- EFFECT: Calculate Optimal Prices on Init ---
   useEffect(() => {
@@ -472,12 +488,21 @@ const App: React.FC = () => {
                 <p className="text-xs font-semibold text-gray-500">Tool Status</p>
                 <span className="text-[10px] text-gray-400">v1.0.1</span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-green-600">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                </span>
-                System Online
+            <div className={`flex items-center gap-2 text-sm ${isOnline ? 'text-green-600' : 'text-gray-500'}`}>
+                {isOnline ? (
+                    <>
+                        <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        System Online
+                    </>
+                ) : (
+                    <>
+                        <WifiOff className="w-3 h-3" />
+                        Offline Mode
+                    </>
+                )}
             </div>
           </div>
         </div>
