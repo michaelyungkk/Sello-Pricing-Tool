@@ -392,37 +392,49 @@ const App: React.FC = () => {
       setIsCostUploadModalOpen(false);
   };
 
-  const handleUpdateMappings = (mappings: SkuMapping[]) => {
-      setProducts(prev => prev.map(p => {
-          // Check if this product has a mapping update
-          const myMappings = mappings.filter(m => m.masterSku === p.sku);
-          if (myMappings.length === 0) return p;
+  const handleUpdateMappings = (mappings: SkuMapping[], mode: 'merge' | 'replace', platform: string) => {
+      setProducts(prev => {
+          let tempProducts = prev;
+          
+          // 1. If REPLACE mode, clear existing aliases for this platform first
+          if (mode === 'replace') {
+              tempProducts = tempProducts.map(p => ({
+                  ...p,
+                  channels: p.channels.map(c => c.platform === platform ? { ...c, skuAlias: undefined } : c)
+              }));
+          }
 
-          // Clone channels to update
-          const updatedChannels = [...p.channels];
+          // 2. Apply mappings
+          return tempProducts.map(p => {
+              const myMappings = mappings.filter(m => m.masterSku === p.sku);
+              if (myMappings.length === 0) return p;
 
-          myMappings.forEach(map => {
-              const existingChannelIndex = updatedChannels.findIndex(c => c.platform === map.platform);
-              
-              if (existingChannelIndex !== -1) {
-                  // Update existing channel
-                  updatedChannels[existingChannelIndex] = {
-                      ...updatedChannels[existingChannelIndex],
-                      skuAlias: map.alias
-                  };
-              } else {
-                  // Add new channel entry just for mapping (velocity 0)
-                  updatedChannels.push({
-                      platform: map.platform,
-                      manager: 'Unassigned',
-                      velocity: 0,
-                      skuAlias: map.alias
-                  });
-              }
+              // Clone channels to update
+              const updatedChannels = [...p.channels];
+
+              myMappings.forEach(map => {
+                  const existingChannelIndex = updatedChannels.findIndex(c => c.platform === map.platform);
+                  
+                  if (existingChannelIndex !== -1) {
+                      // Update existing channel
+                      updatedChannels[existingChannelIndex] = {
+                          ...updatedChannels[existingChannelIndex],
+                          skuAlias: map.alias
+                      };
+                  } else {
+                      // Add new channel entry just for mapping (velocity 0)
+                      updatedChannels.push({
+                          platform: map.platform,
+                          manager: 'Unassigned',
+                          velocity: 0,
+                          skuAlias: map.alias
+                      });
+                  }
+              });
+
+              return { ...p, channels: updatedChannels };
           });
-
-          return { ...p, channels: updatedChannels };
-      }));
+      });
       setIsMappingModalOpen(false);
   };
 
@@ -470,9 +482,9 @@ const App: React.FC = () => {
             className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold transition-colors duration-300"
             style={{ backgroundColor: userProfile.themeColor }}
           >
-            E
+            S
           </div>
-          <span className="font-bold text-xl tracking-tight text-gray-900">EcomPulse</span>
+          <span className="font-bold text-xl tracking-tight text-gray-900">Sello UK Hub</span>
         </div>
         
         <nav className="flex-1 px-4 py-4 space-y-1">
@@ -574,7 +586,7 @@ const App: React.FC = () => {
                          >
                              <Database className="w-10 h-10" />
                          </div>
-                         <h3 className="text-2xl font-bold text-gray-900">Welcome to EcomPulse</h3>
+                         <h3 className="text-2xl font-bold text-gray-900">Welcome to Sello UK Hub</h3>
                          <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">
                              Let's get your dashboard set up. Please upload your company reports in the order below to initialize the system.
                          </p>

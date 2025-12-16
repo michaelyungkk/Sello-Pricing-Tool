@@ -353,7 +353,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                        )}
                                    </td>
                                    <td className="p-3 text-right text-gray-600 font-medium">
-                                       ${product.currentPrice.toFixed(2)}
+                                       £{product.currentPrice.toFixed(2)}
                                    </td>
                                    
                                    <td className="p-3 text-right">{renderInput('costPrice', cogs)}</td>
@@ -393,7 +393,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                                 {margin.toFixed(1)}%
                                             </span>
                                             <span className="text-[10px] text-gray-400" title="Net = (Price + ExtraFreight) - TotalCosts">
-                                                Net: ${netProfit.toFixed(2)}
+                                                Net: £{netProfit.toFixed(2)}
                                             </span>
                                        </div>
                                    </td>
@@ -480,8 +480,8 @@ const FeeTooltip = ({ data }: { data: { rect: DOMRect; bounds: FeeBounds } }) =>
     return createPortal(
         <div style={style}>
             <div className="bg-gray-900 text-white px-3 py-2 rounded shadow-lg text-xs whitespace-nowrap">
-                <div className="font-mono">Min: ${bounds.min.toFixed(2)}</div>
-                <div className="font-mono">Max: ${bounds.max.toFixed(2)}</div>
+                <div className="font-mono">Min: £{bounds.min.toFixed(2)}</div>
+                <div className="font-mono">Max: £{bounds.max.toFixed(2)}</div>
             </div>
             {/* Small Arrow */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>

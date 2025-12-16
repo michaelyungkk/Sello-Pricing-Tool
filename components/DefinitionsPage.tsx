@@ -11,7 +11,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
     <div className="max-w-4xl mx-auto space-y-8 pb-10">
       <div>
         <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>System Definitions & Formulas</h2>
-        <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Reference guide for calculations used in the EcomPulse dashboard.</p>
+        <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Reference guide for calculations used in the Sello UK Hub dashboard.</p>
       </div>
 
       {/* Date Ranges */}
@@ -111,26 +111,26 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                   <div className="space-y-3 font-mono text-xs">
                       <div className="flex justify-between">
                           <span>Order A:</span>
-                          <span className="text-white">100 units sold @ $10.00 each</span>
+                          <span className="text-white">100 units sold @ £10.00 each</span>
                       </div>
                       <div className="flex justify-between">
                           <span>Order B:</span>
-                          <span className="text-white">1 unit sold @ $50.00 each</span>
+                          <span className="text-white">1 unit sold @ £50.00 each</span>
                       </div>
 
                       <div className="border-t border-slate-700 my-2"></div>
 
                       <div className="flex justify-between text-red-300 opacity-75">
                           <span>Simple Average:</span>
-                          <span>($10 + $50) / 2 = $30.00</span>
+                          <span>(£10 + £50) / 2 = £30.00</span>
                       </div>
                       <div className="text-[10px] text-red-400 mb-2">Wrong. This assumes both orders are equally important.</div>
 
                       <div className="flex justify-between text-green-400 font-bold">
                           <span>Weighted Average:</span>
-                          <span>$1050 / 101 = $10.39</span>
+                          <span>£1050 / 101 = £10.39</span>
                       </div>
-                      <div className="text-[10px] text-green-500">Correct. The price is mostly $10, slightly pulled up by the $50 sale.</div>
+                      <div className="text-[10px] text-green-500">Correct. The price is mostly £10, slightly pulled up by the £50 sale.</div>
                   </div>
               </div>
           </div>

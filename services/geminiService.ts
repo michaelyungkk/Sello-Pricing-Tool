@@ -22,7 +22,7 @@ export const analyzePriceAdjustment = async (product: Product, platformRule: Pla
     Current Scenario:
     Product: ${product.name}
     Platform: ${platformName}
-    Current Price: $${product.currentPrice}
+    Current Price: £${product.currentPrice}
     Current Stock Level: ${product.stockLevel} units
     Average Daily Sales Velocity: ${product.averageDailySales} units/day
     Replenishment Lead Time: ${product.leadTimeDays} days (when new stock arrives)

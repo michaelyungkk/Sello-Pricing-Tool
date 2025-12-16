@@ -176,9 +176,9 @@ const CostUploadModal: React.FC<CostUploadModalProps> = ({ onClose, onConfirm })
                                {validItems.slice(0, 50).map((item: any, idx) => (
                                    <tr key={idx} className="border-t">
                                        <td className="p-2">{item.sku}</td>
-                                       <td className="p-2 text-right">{item.cost !== undefined ? `$${item.cost.toFixed(2)}` : '-'}</td>
-                                       <td className="p-2 text-right text-gray-400">{item.floorPrice !== undefined ? `$${item.floorPrice}` : '-'}</td>
-                                       <td className="p-2 text-right text-gray-400">{item.ceilingPrice !== undefined ? `$${item.ceilingPrice}` : '-'}</td>
+                                       <td className="p-2 text-right">{item.cost !== undefined ? `£${item.cost.toFixed(2)}` : '-'}</td>
+                                       <td className="p-2 text-right text-gray-400">{item.floorPrice !== undefined ? `£${item.floorPrice}` : '-'}</td>
+                                       <td className="p-2 text-right text-gray-400">{item.ceilingPrice !== undefined ? `£${item.ceilingPrice}` : '-'}</td>
                                    </tr>
                                ))}
                            </tbody>

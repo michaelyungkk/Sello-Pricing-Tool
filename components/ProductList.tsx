@@ -736,7 +736,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                        {product.optimalPrice ? (
                            <div className="flex items-center justify-end gap-1 font-bold" style={{ color: themeColor }} title="Based on historical margin & velocity performance">
                                <Star className="w-3 h-3" style={{ fill: `${themeColor}20` }} />
-                               ${product.optimalPrice.toFixed(2)}
+                               £{product.optimalPrice.toFixed(2)}
                            </div>
                        ) : (
                            <span className="text-gray-300">-</span>
@@ -744,11 +744,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                     </td>
                     <td className="p-2.5 text-right">
                        <div className="text-gray-400 font-medium">
-                         {product.oldPrice ? `$${product.oldPrice.toFixed(2)}` : '-'}
+                         {product.oldPrice ? `£${product.oldPrice.toFixed(2)}` : '-'}
                        </div>
                     </td>
                     <td className="p-2.5 text-right">
-                       <div className="font-bold text-gray-900">${product.currentPrice.toFixed(2)}</div>
+                       <div className="font-bold text-gray-900">£{product.currentPrice.toFixed(2)}</div>
                     </td>
                     <td className="p-2.5 text-right">
                        <div className="flex items-center justify-end gap-2 relative">

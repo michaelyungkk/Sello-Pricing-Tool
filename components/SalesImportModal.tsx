@@ -867,8 +867,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                               </td>
                               <td className="p-3 text-indigo-600 font-semibold">{item.velocity.toFixed(2)}</td>
                               <td className="p-3 text-right">{activeWeeks}</td>
-                              <td className="p-3 text-right font-mono text-xs text-gray-500">${avgFee.toFixed(2)}</td>
-                              <td className="p-3 text-right font-mono text-xs text-gray-700">${avgCost.toFixed(2)}</td>
+                              <td className="p-3 text-right font-mono text-xs text-gray-500">£{avgFee.toFixed(2)}</td>
+                              <td className="p-3 text-right font-mono text-xs text-gray-700">£{avgCost.toFixed(2)}</td>
                             </tr>
                           );
                       })}

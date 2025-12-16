@@ -1,5 +1,5 @@
 {
-  "name": "EcomPulse Pricing Optimizer",
+  "name": "Sello UK Hub",
   "description": "A centralized inventory and pricing management dashboard that uses Gemini AI to calculate optimal price adjustments based on stock velocity and replenishment lead times.",
   "requestFramePermissions": []
 }

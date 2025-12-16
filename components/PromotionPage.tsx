@@ -303,8 +303,8 @@ const EventDetailView = ({ promo, products, onBack, onAddProducts, onDeleteItem,
                                 {promo.items.map((item: any, idx: number) => (
                                     <tr key={idx}>
                                         <td className="p-4">{item.sku}</td>
-                                        <td className="p-4 text-right">${item.basePrice}</td>
-                                        <td className="p-4 text-right font-bold" style={{ color: themeColor }}>${item.promoPrice}</td>
+                                        <td className="p-4 text-right">£{item.basePrice}</td>
+                                        <td className="p-4 text-right font-bold" style={{ color: themeColor }}>£{item.promoPrice}</td>
                                         <td className="p-4"><button onClick={() => onDeleteItem(item.sku)}><Trash2 className="w-4 h-4 text-gray-400"/></button></td>
                                     </tr>
                                 ))}
@@ -458,7 +458,7 @@ const ProductSelector = ({ products, currentPromo, onCancel, onConfirm, themeCol
                             className="border-gray-300 rounded-lg text-sm py-1.5"
                         >
                             <option value="PERCENTAGE">% Off</option>
-                            <option value="FIXED">$ Off</option>
+                            <option value="FIXED">£ Off</option>
                         </select>
                         <input 
                             type="number" 
@@ -492,8 +492,8 @@ const ProductSelector = ({ products, currentPromo, onCancel, onConfirm, themeCol
                                             <div className="font-bold text-gray-900">{p.sku}</div>
                                             <div className="text-xs text-gray-500">{p.brand} • {p.category}</div>
                                         </td>
-                                        <td className="p-4 text-right">${p.currentPrice.toFixed(2)}</td>
-                                        <td className="p-4 text-right font-bold border-l border-gray-100" style={{ color: themeColor }}>${promoPrice.toFixed(2)}</td>
+                                        <td className="p-4 text-right">£{p.currentPrice.toFixed(2)}</td>
+                                        <td className="p-4 text-right font-bold border-l border-gray-100" style={{ color: themeColor }}>£{promoPrice.toFixed(2)}</td>
                                     </tr>
                                 );
                             })}

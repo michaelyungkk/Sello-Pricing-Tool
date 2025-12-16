@@ -82,8 +82,8 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
                   <p className="text-sm font-medium" style={{ color: themeColor }}>Recommended Action</p>
                   <div className="flex items-center gap-3 mt-1">
                     <div>
-                      <span className="text-2xl font-bold text-gray-900">${analysis.recommendedPrice.toFixed(2)}</span>
-                      <span className="text-xs text-gray-500 ml-2">Currently ${product.currentPrice}</span>
+                      <span className="text-2xl font-bold text-gray-900">£{analysis.recommendedPrice.toFixed(2)}</span>
+                      <span className="text-xs text-gray-500 ml-2">Currently £{product.currentPrice}</span>
                     </div>
                   </div>
                   <div className={`text-sm mt-2 font-semibold flex items-center gap-1 ${
