@@ -578,109 +578,112 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        {/* Content Area */}
-        {currentView === 'dashboard' ? (
-            <>
-                {!showDashboard ? (
-                    // --- ONBOARDING FLOW ---
-                    <div className="flex flex-col items-center justify-center min-h-[500px] bg-white/90 backdrop-blur rounded-2xl border-2 border-dashed border-gray-200 text-center p-12 animate-in fade-in zoom-in duration-300">
-                         <div 
-                             className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
-                             style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}
-                         >
-                             <Database className="w-10 h-10" />
-                         </div>
-                         <h3 className="text-2xl font-bold text-gray-900">Welcome to Sello UK Hub</h3>
-                         <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">
-                             Let's get your dashboard set up. Please upload your company reports in the order below to initialize the system.
-                         </p>
-                         
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative">
-                            {/* Step 1: Inventory */}
-                            <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200 hover:border-indigo-300'}`}>
-                                <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'bg-white text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
-                                    {hasInventory ? 'Completed' : 'Step 1'}
-                                </div>
-                                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
-                                    {hasInventory ? <CheckCircle className="w-8 h-8 text-green-600"/> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}
-                                </div>
-                                <h4 className="font-bold text-gray-900 text-lg">ERP Inventory Report</h4>
-                                <p className="text-sm text-gray-500 mt-2 text-center">
-                                    Upload the 28-column ERP file to initialize Products, Stock Levels, COGS, and Categories.
-                                </p>
-                                <button 
-                                    onClick={() => setIsUploadModalOpen(true)}
-                                    className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300 hover:bg-opacity-5'}`}
-                                    style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}
-                                >
-                                    {hasInventory ? 'Re-upload Inventory' : 'Upload Inventory'}
-                                </button>
+        {/* Content Area - Using Display Toggling for Persistence */}
+        
+        {/* VIEW: DASHBOARD (Pricing Tool) */}
+        <div style={{ display: currentView === 'dashboard' ? 'block' : 'none' }} className="h-full">
+            {!showDashboard ? (
+                // --- ONBOARDING FLOW ---
+                <div className="flex flex-col items-center justify-center min-h-[500px] bg-white/90 backdrop-blur rounded-2xl border-2 border-dashed border-gray-200 text-center p-12 animate-in fade-in zoom-in duration-300">
+                        <div 
+                            className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
+                            style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}
+                        >
+                            <Database className="w-10 h-10" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900">Welcome to Sello UK Hub</h3>
+                        <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">
+                            Let's get your dashboard set up. Please upload your company reports in the order below to initialize the system.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative">
+                        {/* Step 1: Inventory */}
+                        <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200 hover:border-indigo-300'}`}>
+                            <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'bg-white text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                {hasInventory ? 'Completed' : 'Step 1'}
                             </div>
-
-                            {/* Step 2: Sales History (Locked until Step 1 done) */}
-                             <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${
-                                 !hasInventory ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-white border-indigo-200 shadow-lg scale-105 z-10'
-                             }`}>
-                                <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
-                                    Step 2
-                                </div>
-                                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
-                                    <FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} />
-                                </div>
-                                <h4 className="font-bold text-gray-900 text-lg">Sales Transaction Report</h4>
-                                <p className="text-sm text-gray-500 mt-2 text-center">
-                                    Once products are loaded, upload sales history to calculate Velocity, Fees, and Margins.
-                                </p>
-                                <button 
-                                    onClick={() => hasInventory && setIsSalesImportModalOpen(true)}
-                                    disabled={!hasInventory}
-                                    style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}
-                                    className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}
-                                >
-                                    <Upload className="w-5 h-5" />
-                                    Upload Sales
-                                </button>
-                                
-                                {hasInventory && (
-                                    <div className="absolute -right-4 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 shadow-lg animate-pulse hidden md:block">
-                                        <ArrowRight className="w-6 h-6" style={{ color: userProfile.themeColor }} />
-                                    </div>
-                                )}
+                            <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                {hasInventory ? <CheckCircle className="w-8 h-8 text-green-600"/> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}
                             </div>
-                         </div>
-                    </div>
-                ) : (
-                    <>
-                        {/* NORMAL DASHBOARD VIEW */}
-                        <div className="mb-6 flex justify-end items-center gap-3">
+                            <h4 className="font-bold text-gray-900 text-lg">ERP Inventory Report</h4>
+                            <p className="text-sm text-gray-500 mt-2 text-center">
+                                Upload the 28-column ERP file to initialize Products, Stock Levels, COGS, and Categories.
+                            </p>
                             <button 
-                            onClick={() => setIsSalesImportModalOpen(true)}
-                            style={{ color: userProfile.themeColor, borderColor: `${userProfile.themeColor}40`, backgroundColor: `${userProfile.themeColor}10` }}
-                            className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-opacity-20 transition-colors flex items-center gap-2"
+                                onClick={() => setIsUploadModalOpen(true)}
+                                className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300 hover:bg-opacity-5'}`}
+                                style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}
                             >
-                            <FileBarChart className="w-4 h-4" />
-                            Import Transaction Report
-                            </button>
-                            <button 
-                            onClick={() => setIsUploadModalOpen(true)}
-                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2"
-                            >
-                            <Database className="w-4 h-4" />
-                            Update Inventory (ERP)
+                                {hasInventory ? 'Re-upload Inventory' : 'Upload Inventory'}
                             </button>
                         </div>
-                        
-                        <ProductList 
-                            products={products} 
-                            onAnalyze={handleAnalyze} 
-                            onApplyChanges={handleApplyBatchChanges}
-                            dateLabels={priceDateLabels}
-                            themeColor={userProfile.themeColor}
-                        />
-                    </>
-                )}
-            </>
-        ) : currentView === 'products' ? (
+
+                        {/* Step 2: Sales History (Locked until Step 1 done) */}
+                            <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${
+                                !hasInventory ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-white border-indigo-200 shadow-lg scale-105 z-10'
+                            }`}>
+                            <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                Step 2
+                            </div>
+                            <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                <FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} />
+                            </div>
+                            <h4 className="font-bold text-gray-900 text-lg">Sales Transaction Report</h4>
+                            <p className="text-sm text-gray-500 mt-2 text-center">
+                                Once products are loaded, upload sales history to calculate Velocity, Fees, and Margins.
+                            </p>
+                            <button 
+                                onClick={() => hasInventory && setIsSalesImportModalOpen(true)}
+                                disabled={!hasInventory}
+                                style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}
+                                className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}
+                            >
+                                <Upload className="w-5 h-5" />
+                                Upload Sales
+                            </button>
+                            
+                            {hasInventory && (
+                                <div className="absolute -right-4 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 shadow-lg animate-pulse hidden md:block">
+                                    <ArrowRight className="w-6 h-6" style={{ color: userProfile.themeColor }} />
+                                </div>
+                            )}
+                        </div>
+                        </div>
+                </div>
+            ) : (
+                <>
+                    {/* NORMAL DASHBOARD VIEW */}
+                    <div className="mb-6 flex justify-end items-center gap-3">
+                        <button 
+                        onClick={() => setIsSalesImportModalOpen(true)}
+                        style={{ color: userProfile.themeColor, borderColor: `${userProfile.themeColor}40`, backgroundColor: `${userProfile.themeColor}10` }}
+                        className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-opacity-20 transition-colors flex items-center gap-2"
+                        >
+                        <FileBarChart className="w-4 h-4" />
+                        Import Transaction Report
+                        </button>
+                        <button 
+                        onClick={() => setIsUploadModalOpen(true)}
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2"
+                        >
+                        <Database className="w-4 h-4" />
+                        Update Inventory (ERP)
+                        </button>
+                    </div>
+                    
+                    <ProductList 
+                        products={products} 
+                        onAnalyze={handleAnalyze} 
+                        onApplyChanges={handleApplyBatchChanges}
+                        dateLabels={priceDateLabels}
+                        themeColor={userProfile.themeColor}
+                    />
+                </>
+            )}
+        </div>
+
+        {/* VIEW: PRODUCT MANAGEMENT */}
+        <div style={{ display: currentView === 'products' ? 'block' : 'none' }} className="h-full">
             <ProductManagementPage 
                 products={products}
                 pricingRules={pricingRules}
@@ -688,7 +691,10 @@ const App: React.FC = () => {
                 themeColor={userProfile.themeColor}
                 headerStyle={headerStyle}
             />
-        ) : currentView === 'costs' ? (
+        </div>
+
+        {/* VIEW: COST MANAGEMENT */}
+        <div style={{ display: currentView === 'costs' ? 'block' : 'none' }} className="h-full">
             <CostManagementPage 
                 products={products}
                 onUpdateCosts={handleUpdateCosts}
@@ -696,7 +702,10 @@ const App: React.FC = () => {
                 themeColor={userProfile.themeColor}
                 headerStyle={headerStyle}
             />
-        ) : currentView === 'promotions' ? (
+        </div>
+
+        {/* VIEW: PROMOTIONS */}
+        <div style={{ display: currentView === 'promotions' ? 'block' : 'none' }} className="h-full">
             <PromotionPage 
                 products={products}
                 pricingRules={pricingRules}
@@ -706,9 +715,15 @@ const App: React.FC = () => {
                 themeColor={userProfile.themeColor}
                 headerStyle={headerStyle}
             />
-        ) : currentView === 'definitions' ? (
+        </div>
+
+        {/* VIEW: DEFINITIONS */}
+        <div style={{ display: currentView === 'definitions' ? 'block' : 'none' }} className="h-full">
             <DefinitionsPage headerStyle={headerStyle} />
-        ) : (
+        </div>
+
+        {/* VIEW: SETTINGS */}
+        <div style={{ display: currentView === 'settings' ? 'block' : 'none' }} className="h-full">
             <SettingsPage 
                 currentRules={pricingRules} 
                 onSave={(newRules) => {
@@ -723,7 +738,7 @@ const App: React.FC = () => {
                 themeColor={userProfile.themeColor}
                 headerStyle={headerStyle}
             />
-        )}
+        </div>
 
       </main>
 

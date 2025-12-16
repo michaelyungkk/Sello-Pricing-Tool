@@ -32,7 +32,7 @@ const PromotionPage: React.FC<PromotionPageProps> = ({ products, pricingRules, p
       onAddPromotion(newEvent);
       setSelectedPromoId(newEvent.id);
       setViewMode('event_detail'); 
-      setActiveTab('dashboard'); // Ensure we stay on dashboard tab to see details
+      setActiveTab('dashboard'); // Ensure we switch to dashboard tab
   };
 
   const handleUpdateEventMeta = (id: string, updates: Partial<PromotionEvent>) => {
@@ -61,11 +61,7 @@ const PromotionPage: React.FC<PromotionPageProps> = ({ products, pricingRules, p
 
   const handleTabChange = (tab: Tab) => {
       setActiveTab(tab);
-      // Reset view mode when switching tabs so we don't get stuck in detail view
-      if (tab !== 'dashboard') {
-          setViewMode('dashboard'); 
-          setSelectedPromoId(null);
-      }
+      // Removed reset logic to preserve view state
   };
 
   // Tab Header Component
@@ -106,51 +102,49 @@ const PromotionPage: React.FC<PromotionPageProps> = ({ products, pricingRules, p
         
         <TabHeader />
 
-        {/* Content Area Based on Active Tab */}
+        {/* Content Area Based on Active Tab - Using CSS toggling for state persistence */}
         
-        {activeTab === 'dashboard' && (
-            <>
-                {viewMode === 'dashboard' && (
-                <PromotionDashboard 
-                    promotions={promotions} 
-                    pricingRules={pricingRules}
-                    onSelectPromo={(id: string) => { setSelectedPromoId(id); setViewMode('event_detail'); }} 
-                    onCreateEvent={handleCreateEvent}
-                    themeColor={themeColor}
-                />
-                )}
-                
-                {viewMode === 'event_detail' && selectedPromo && (
-                <EventDetailView 
-                    promo={selectedPromo} 
-                    products={products}
-                    onBack={() => setViewMode('dashboard')} 
-                    onAddProducts={() => setViewMode('add_products')}
-                    onDeleteItem={handleDeleteItem}
-                    onUpdateMeta={(updates: Partial<PromotionEvent>) => handleUpdateEventMeta(selectedPromo.id, updates)}
-                    themeColor={themeColor}
-                />
-                )}
+        <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }} className="h-full">
+            {viewMode === 'dashboard' && (
+            <PromotionDashboard 
+                promotions={promotions} 
+                pricingRules={pricingRules}
+                onSelectPromo={(id: string) => { setSelectedPromoId(id); setViewMode('event_detail'); }} 
+                onCreateEvent={handleCreateEvent}
+                themeColor={themeColor}
+            />
+            )}
+            
+            {viewMode === 'event_detail' && selectedPromo && (
+            <EventDetailView 
+                promo={selectedPromo} 
+                products={products}
+                onBack={() => setViewMode('dashboard')} 
+                onAddProducts={() => setViewMode('add_products')}
+                onDeleteItem={handleDeleteItem}
+                onUpdateMeta={(updates: Partial<PromotionEvent>) => handleUpdateEventMeta(selectedPromo.id, updates)}
+                themeColor={themeColor}
+            />
+            )}
 
-                {viewMode === 'add_products' && selectedPromo && (
-                <ProductSelector 
-                    products={products}
-                    currentPromo={selectedPromo}
-                    onCancel={() => setViewMode('event_detail')}
-                    onConfirm={handleAddItems}
-                    themeColor={themeColor}
-                />
-                )}
-            </>
-        )}
+            {viewMode === 'add_products' && selectedPromo && (
+            <ProductSelector 
+                products={products}
+                currentPromo={selectedPromo}
+                onCancel={() => setViewMode('event_detail')}
+                onConfirm={handleAddItems}
+                themeColor={themeColor}
+            />
+            )}
+        </div>
 
-        {activeTab === 'all_skus' && (
+        <div style={{ display: activeTab === 'all_skus' ? 'block' : 'none' }} className="h-full">
             <AllPromoSkusView promotions={promotions} products={products} themeColor={themeColor} />
-        )}
+        </div>
 
-        {activeTab === 'simulator' && (
+        <div style={{ display: activeTab === 'simulator' ? 'block' : 'none' }} className="h-full">
             <SimulatorView themeColor={themeColor} />
-        )}
+        </div>
 
     </div>
   );
