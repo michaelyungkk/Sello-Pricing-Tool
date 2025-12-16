@@ -236,6 +236,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
   // Phase 1: Parse Rows and Identify Mappings
   const initialScan = (rows: any[][]) => {
+      // ... (Initial Scan logic remains same)
       if (rows.length < 2) {
           setError("File is empty.");
           return;
@@ -246,7 +247,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
       const qtyIndex = headers.indexOf('sku_quantity');
       const dateIndex = headers.indexOf('order_time');
       
-      const typeIndex = headers.findIndex(h => h === 'order_type');
       const amtIndex = headers.findIndex(h => h === 'sales_amt' || h === 'revenue');
       const platformIndex = headers.findIndex(h => h === 'platform_name_level1' || h === 'platform');
       const managerIndex = headers.findIndex(h => h === 'account_manager_name' || h === 'manager');
@@ -327,26 +327,16 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
       const seenCandidates = new Set<string>();
 
       distinctSkus.forEach(importSku => {
-          if (existingSkuSet.has(importSku)) return; // Exact match, no mapping needed
-
-          // Try to find a master SKU match
-          // Logic: Does Import SKU start with a Master SKU?
-          // Common patterns: MASTER_1, MASTER-UK, MASTER_UK_2
+          if (existingSkuSet.has(importSku)) return; 
           let bestMatch: string | null = null;
-          
-          // Heuristic 1: Stripping common suffixes
           const stripped = importSku.replace(/[_ -](UK|US|DE|FR|IT|ES|[0-9]+)$/i, '');
-          
           if (existingSkuSet.has(stripped)) {
               bestMatch = stripped;
           } else {
-              // Heuristic 2: Check if Master is a strict prefix of Import
               for (const master of products) {
                   if (importSku.startsWith(master.sku) && importSku.length > master.sku.length) {
-                      // Ensure separator exists to avoid BF10 matching BF100
                       const separator = importSku[master.sku.length];
                       if (separator === '_' || separator === '-') {
-                          // Prefer longer matches (e.g. Master BF10-UK matching BF10-UK_1 vs Master BF10 matching BF10-UK_1)
                           if (!bestMatch || master.sku.length > bestMatch.length) {
                               bestMatch = master.sku;
                           }
@@ -354,9 +344,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                   }
               }
           }
-
           if (bestMatch && !seenCandidates.has(importSku)) {
-              // Find the platform context for this SKU
               const sample = points.find(p => p.sku === importSku);
               candidates.push({
                   importSku,
@@ -371,7 +359,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
           setMappingCandidates(candidates);
           setCurrentStep('review_mappings');
       } else {
-          // No aliases detected, proceed to aggregation
           aggregateData(points, {});
           setCurrentStep('confirm');
       }
@@ -381,14 +368,12 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
       if (approved) {
           setConfirmedMappings(prev => ({ ...prev, [candidate.importSku]: candidate.masterSku }));
       } else {
-          // If rejected, remove from mappings (it will be treated as new product)
           setConfirmedMappings(prev => {
               const copy = { ...prev };
               delete copy[candidate.importSku];
               return copy;
           });
       }
-      // Remove from candidate list
       setMappingCandidates(prev => prev.filter(c => c.importSku !== candidate.importSku));
   };
 
@@ -430,7 +415,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
       const skuCounts: Record<string, AggregatedSku> = {};
 
       points.forEach(pt => {
-          // Resolve Master SKU
           const masterSku = map[pt.sku] || pt.sku;
           
           if (!skuCounts[masterSku]) {
@@ -464,11 +448,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
           }
 
           const skuData = skuCounts[masterSku];
-          
-          // Record Alias if used
-          if (pt.sku !== masterSku) {
-              skuData.detectedAliases[pt.platform] = pt.sku;
-          }
+          if (pt.sku !== masterSku) skuData.detectedAliases[pt.platform] = pt.sku;
 
           skuData.totalSold += pt.quantity;
           skuData.totalRevenue += pt.revenue;
@@ -576,20 +556,29 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
       const w0 = agg.weeklyStats[0];
       const w1 = agg.weeklyStats[1];
-      const w0Fallback = existingProduct ? existingProduct.currentPrice : fileAvgPrice;
-      const w1Fallback = existingProduct ? (existingProduct.oldPrice || existingProduct.currentPrice) : fileAvgPrice;
-      const currentWeekPrice = w0 ? calcPrice(w0.revenue, w0.sold, w0Fallback) : w0Fallback;
-      const lastWeekPrice = w1 ? calcPrice(w1.revenue, w1.sold, w1Fallback) : w1Fallback;
+
+      const currentPriceFallback = (existingProduct && existingProduct.currentPrice > 0) 
+        ? existingProduct.currentPrice 
+        : fileAvgPrice;
+
+      const oldPriceFallback = (existingProduct && (existingProduct.oldPrice || existingProduct.currentPrice > 0))
+        ? (existingProduct.oldPrice || existingProduct.currentPrice)
+        : fileAvgPrice;
+
+      const currentWeekPrice = w0 ? calcPrice(w0.revenue, w0.sold, currentPriceFallback) : currentPriceFallback;
+      const lastWeekPrice = w1 ? calcPrice(w1.revenue, w1.sold, oldPriceFallback) : oldPriceFallback;
+      
+      // Calculate specific velocities for Current Week (w0) and Previous Week (w1)
+      const currentWeekVelocity = w0 ? Number((w0.sold / 7).toFixed(2)) : 0;
+      const prevWeekVelocity = w1 ? Number((w1.sold / 7).toFixed(2)) : 0;
+
       const dailyVelocity = Number(agg.velocity.toFixed(2));
       const avgFee = (total: number) => agg.totalSold > 0 ? Number((total / agg.totalSold).toFixed(2)) : 0;
 
       const totalDurationDays = Math.max(1, analysis.totalWeeksFound * 7);
       
       const finalChannels: ChannelData[] = Object.values(agg.channelStats).map(cs => {
-          // If this channel used a specific alias, capture it.
-          // Note: Aggregation grouped by Master SKU, but we stored aliases in `detectedAliases` by platform.
           const alias = agg.detectedAliases[cs.platform];
-          
           return {
             platform: cs.platform,
             manager: cs.manager,
@@ -599,7 +588,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
           };
       });
 
-      // Preserve existing aliases if no new one found for a platform
       if (existingProduct) {
           existingProduct.channels.forEach(oldC => {
               const newC = finalChannels.find(nc => nc.platform === oldC.platform && nc.manager === oldC.manager);
@@ -609,7 +597,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
           });
       }
 
-      // History Generation
       Object.values(agg.weeklyStats).forEach(stat => {
           if (stat.sold > 0) {
               const price = calcPrice(stat.revenue, stat.sold, 0);
@@ -632,7 +619,10 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
       const leadTime = existingProduct ? existingProduct.leadTimeDays : 30;
       const currentStock = existingProduct ? existingProduct.stockLevel : 0;
-      const daysRemaining = dailyVelocity > 0 ? currentStock / dailyVelocity : 999;
+      
+      // Use Current Week Velocity for Runway calculation if available, otherwise global average
+      const velocityForRunway = currentWeekVelocity > 0 ? currentWeekVelocity : dailyVelocity;
+      const daysRemaining = velocityForRunway > 0 ? currentStock / velocityForRunway : 999;
       
       let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
       let recommendation = 'Maintain';
@@ -649,7 +639,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
       }
 
       const productData = {
-          averageDailySales: dailyVelocity,
+          averageDailySales: currentWeekVelocity, // Store Week 0 velocity as primary
+          previousDailySales: prevWeekVelocity,   // Store Week 1 velocity for trend
           channels: finalChannels,
           currentPrice: currentWeekPrice > 0 ? currentWeekPrice : (existingProduct?.currentPrice || 0),
           oldPrice: lastWeekPrice > 0 ? lastWeekPrice : (existingProduct?.oldPrice || 0),
@@ -693,7 +684,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
     onConfirm([...updatedProducts, ...newProducts], analysis.weekLabels, historyPayload);
   };
-
+  
+  // ... (Rest of component remains the same)
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   };
@@ -701,6 +693,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header & Content JSX */}
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div>
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -755,6 +748,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
               )}
             </div>
           ) : currentStep === 'review_mappings' ? (
+              // Mappings Table
               <div className="space-y-4">
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800 flex items-start gap-3">
                       <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -813,6 +807,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
               </div>
           ) : analysis ? (
             <div className="space-y-6">
+              {/* Analysis Summary */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                   <div className="flex items-center gap-2 text-gray-500 mb-1">

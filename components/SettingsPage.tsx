@@ -15,10 +15,9 @@ interface SettingsPageProps {
   };
   themeColor: string;
   headerStyle: React.CSSProperties;
-  onOpenMappingModal?: () => void; // New Prop
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, products, onRestore, extraData, themeColor, headerStyle, onOpenMappingModal }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, products, onRestore, extraData, themeColor, headerStyle }) => {
   const [rules, setRules] = useState<PricingRules>(JSON.parse(JSON.stringify(currentRules)));
   const [newPlatformName, setNewPlatformName] = useState('');
   const [isSaved, setIsSaved] = useState(false);
@@ -354,37 +353,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, produ
             </button>
             </div>
         </div>
-      </div>
-
-      {/* SKU Mappings Section */}
-      <div>
-         <div className="mb-6">
-            <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>SKU Mappings</h2>
-            <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Map your Master Inventory SKUs to platform-specific aliases for accurate export.</p>
-         </div>
-
-         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-             <div className="flex items-start gap-4">
-                 <div className="p-3 bg-indigo-50 rounded-full text-indigo-600">
-                     <LinkIcon className="w-6 h-6" />
-                 </div>
-                 <div>
-                     <h3 className="font-bold text-gray-900">Manage Aliases</h3>
-                     <p className="text-sm text-gray-500 max-w-lg mt-1">
-                         Upload a CSV file containing <code>Master SKU</code>, <code>Platform</code>, and <code>Platform SKU</code> columns. 
-                         This ensures that when you export pricing, the correct alias is used for each marketplace.
-                     </p>
-                 </div>
-             </div>
-             
-             <button 
-                onClick={onOpenMappingModal}
-                className="px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg shadow hover:bg-indigo-700 transition-colors flex items-center gap-2 whitespace-nowrap"
-             >
-                 <Upload className="w-4 h-4" />
-                 Import Mappings
-             </button>
-         </div>
       </div>
 
       {/* Data Backup Section */}

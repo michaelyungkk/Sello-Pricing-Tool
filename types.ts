@@ -1,5 +1,4 @@
 
-
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -26,7 +25,8 @@ export interface Product {
   
   // Stock & Velocity
   stockLevel: number; // Total stock across warehouses
-  averageDailySales: number; // Total velocity across all platforms
+  averageDailySales: number; // Current Velocity (Week 0)
+  previousDailySales?: number; // Previous Velocity (Week 1) for trend analysis
   leadTimeDays: number;
   
   // Costs & Fees

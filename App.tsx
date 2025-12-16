@@ -12,9 +12,10 @@ import CostUploadModal from './components/CostUploadModal';
 import DefinitionsPage from './components/DefinitionsPage';
 import PromotionPage from './components/PromotionPage';
 import UserProfile from './components/UserProfile';
+import ProductManagementPage from './components/ProductManagementPage';
 import MappingUploadModal, { SkuMapping } from './components/MappingUploadModal';
 import { analyzePriceAdjustment } from './services/geminiService';
-import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight } from 'lucide-react';
+import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package } from 'lucide-react';
 
 // --- LOGIC HELPERS ---
 
@@ -133,7 +134,7 @@ const App: React.FC = () => {
   const [isCostUploadModalOpen, setIsCostUploadModalOpen] = useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
   
-  const [currentView, setCurrentView] = useState<'dashboard' | 'settings' | 'costs' | 'definitions' | 'promotions'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'settings' | 'costs' | 'definitions' | 'promotions'>('dashboard');
   
   // Connectivity State
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -490,6 +491,7 @@ const App: React.FC = () => {
         <nav className="flex-1 px-4 py-4 space-y-1">
           {[
               { id: 'dashboard', icon: LayoutDashboard, label: 'Pricing Tool' },
+              { id: 'products', icon: Package, label: 'Product Mgmt.' },
               { id: 'costs', icon: DollarSign, label: 'Cost Management' },
               { id: 'promotions', icon: Tag, label: 'Promotions' },
               { id: 'settings', icon: Settings, label: 'Configuration' },
@@ -518,7 +520,7 @@ const App: React.FC = () => {
           <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100 backdrop-blur-sm">
             <div className="flex justify-between items-center mb-1">
                 <p className="text-xs font-semibold text-gray-500">Tool Status</p>
-                <span className="text-[10px] text-gray-400">v1.2.2</span>
+                <span className="text-[10px] text-gray-400">v1.2.3</span>
             </div>
             <div className={`flex items-center gap-2 text-sm ${isOnline ? 'text-green-600' : 'text-gray-500'}`}>
                 {isOnline ? (
@@ -547,6 +549,7 @@ const App: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold transition-colors" style={headerStyle}>
                 {currentView === 'dashboard' ? 'Pricing & Inventory Analysis' : 
+                 currentView === 'products' ? 'Product Management' :
                  currentView === 'costs' ? 'Product Costs & Limits' : 
                  currentView === 'definitions' ? 'Definitions & Formulas' : 
                  currentView === 'promotions' ? 'Promotion Management' :
@@ -554,6 +557,7 @@ const App: React.FC = () => {
             </h1>
             <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
                 {currentView === 'dashboard' ? 'Manage SKUs, review velocities, and calculate strategies.' : 
+                 currentView === 'products' ? 'Manage Master SKUs and platform aliases.' :
                  currentView === 'costs' ? 'Set cost prices, and define minimum/maximum price guardrails.' : 
                  currentView === 'definitions' ? 'Reference guide for calculations and logic.' :
                  currentView === 'promotions' ? 'Plan, execute, and track sales events across platforms.' :
@@ -676,6 +680,14 @@ const App: React.FC = () => {
                     </>
                 )}
             </>
+        ) : currentView === 'products' ? (
+            <ProductManagementPage 
+                products={products}
+                pricingRules={pricingRules}
+                onOpenMappingModal={() => setIsMappingModalOpen(true)}
+                themeColor={userProfile.themeColor}
+                headerStyle={headerStyle}
+            />
         ) : currentView === 'costs' ? (
             <CostManagementPage 
                 products={products}
@@ -710,7 +722,6 @@ const App: React.FC = () => {
                 }}
                 themeColor={userProfile.themeColor}
                 headerStyle={headerStyle}
-                onOpenMappingModal={() => setIsMappingModalOpen(true)}
             />
         )}
 

@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product } from '../types';
-import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Users, Info, ShoppingBag, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, ToggleLeft, ToggleRight, Tag, Layers, EyeOff, Eye } from 'lucide-react';
+import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -82,6 +82,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
           return product.currentPrice;
       }
       let multiplier = 1;
+      // Use the *displayed* status (Trend Aware) to decide if bulk adjustment applies
       if (product.status === 'Critical') {
           multiplier = 1 + (adjustmentIntensity / 100);
       } else if (product.status === 'Overstock') {
@@ -101,7 +102,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   const filteredProducts = useMemo(() => {
     const aggregatedData = products.map(p => {
         // --- VISIBILITY LOGIC (Ghost Products) ---
-        // If showInactive is FALSE, hide products with 0 stock AND 0 sales.
         if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) {
             return { ...p, _isVisible: false };
         }
@@ -114,6 +114,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
         const isFiltering = platformFilter !== 'All' || managerFilter !== 'All';
         
+        // Base metrics (Global or Filtered)
         let displayVelocity = p.averageDailySales;
         let displayPrice = p.currentPrice;
         
@@ -144,6 +145,17 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         
         const displayRunway = stock <= 0 ? 0 : (displayVelocity > 0 ? stock / displayVelocity : 999);
         
+        // --- TREND AWARE RECOMMENDATION LOGIC ---
+        // Calculate Deltas
+        const priceChange = (p.oldPrice && p.oldPrice > 0) 
+            ? (p.currentPrice - p.oldPrice) / p.oldPrice 
+            : 0;
+            
+        const velocityChange = (p.previousDailySales && p.previousDailySales > 0)
+            ? (p.averageDailySales - p.previousDailySales) / p.previousDailySales
+            : 0;
+        
+        // Default Logic (Snapshot based)
         let displayStatus: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
         let displayRec = 'Maintain';
 
@@ -151,11 +163,25 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
             displayStatus = 'Critical';
             displayRec = 'Out of Stock';
         } else if (displayRunway < leadTime) {
-            displayStatus = 'Critical';
-            displayRec = 'Increase Price';
+            // STOCK IS CRITICAL
+            // Check Trend: Did we recently increase price (>3%) and did velocity drop (>20%)?
+            if (priceChange > 0.03 && velocityChange < -0.20) {
+                displayStatus = 'Warning'; // Downgrade from Critical
+                displayRec = 'Monitor (Trend Effective)';
+            } else {
+                displayStatus = 'Critical';
+                displayRec = 'Increase Price';
+            }
         } else if (displayRunway > leadTime * 4) {
-            displayStatus = 'Overstock';
-            displayRec = 'Decrease Price';
+            // STOCK IS HIGH
+            // Check Trend: Did we recently decrease price (<-3%) and did velocity rise (>20%)?
+            if (priceChange < -0.03 && velocityChange > 0.20) {
+                displayStatus = 'Warning'; // Downgrade from Overstock/Action needed
+                displayRec = 'Monitor (Trend Effective)';
+            } else {
+                displayStatus = 'Overstock';
+                displayRec = 'Decrease Price';
+            }
         } else if (displayRunway < leadTime * 1.5) {
             displayStatus = 'Warning';
             displayRec = 'Maintain';
@@ -170,7 +196,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
             currentPrice: displayPrice,
             daysRemaining: displayRunway,
             status: displayStatus,
-            recommendation: displayRec
+            recommendation: displayRec,
+            _trendData: {
+                priceChange,
+                velocityChange
+            }
         };
     }).filter(p => p._isVisible); 
 
@@ -283,7 +313,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
         return [
             exportSku,
-            p.sku, // Keep Master SKU reference column
+            p.sku, 
             `"${p.name.replace(/"/g, '""')}"`,
             p.brand || '',
             p.category || '',
@@ -341,6 +371,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         setIsConfirmed(true);
         setShowSuccessMessage(true);
         setTimeout(() => setShowSuccessMessage(false), 2000);
+        onApplyChanges(Object.entries(newOverrides).map(([productId, newPrice]) => ({ productId, newPrice })));
     } else {
         alert("No changes detected to confirm.");
     }
@@ -488,42 +519,59 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                   <ChevronDown className="w-3 h-3 text-gray-400" />
               </button>
 
-              {isExportMenuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setIsExportMenuOpen(false)}></div>
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-100 z-20 py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                        <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">Select Format</div>
-                        <button 
-                            onClick={() => handleExport('All')}
-                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between group"
-                        >
-                            Standard (Master SKUs)
-                            <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-600" />
-                        </button>
-                        <div className="border-t border-gray-50"></div>
-                        <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div>
-                        {uniquePlatforms.map(platform => (
-                             <button 
-                                key={platform}
-                                onClick={() => handleExport(platform)}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between"
-                             >
-                                {platform}
-                                <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Alias</span>
-                             </button>
-                        ))}
-                        {uniquePlatforms.length === 0 && (
-                            <div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>
-                        )}
+              {/* Floating Modal for Export */}
+              {isExportMenuOpen && createPortal(
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
+                    <div 
+                        className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200"
+                        onClick={e => e.stopPropagation()} // Prevent close on modal click
+                    >
+                        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <h3 className="font-bold text-gray-900">Export Options</h3>
+                            <button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200 rounded-full transition-colors">
+                                <X className="w-4 h-4 text-gray-500" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-2">
+                            <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div>
+                            <button 
+                                onClick={() => handleExport('All')}
+                                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between group rounded-lg transition-colors"
+                            >
+                                <span className="font-medium">Standard (Master SKUs)</span>
+                                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" />
+                            </button>
+                            
+                            <div className="my-2 border-t border-gray-100"></div>
+                            
+                            <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div>
+                            <div className="max-h-60 overflow-y-auto">
+                                {uniquePlatforms.map(platform => (
+                                    <button 
+                                        key={platform}
+                                        onClick={() => handleExport(platform)}
+                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between rounded-lg transition-colors"
+                                    >
+                                        <span>{platform}</span>
+                                        <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span>
+                                    </button>
+                                ))}
+                                {uniquePlatforms.length === 0 && (
+                                    <div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                  </>
+                  </div>,
+                  document.body
               )}
           </div>
       </div>
 
       {/* Filters Toolbar */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-        <div className="flex flex-col xl:flex-row gap-4 p-4">
+          <div className="flex flex-col xl:flex-row gap-4 p-4">
             <div className="flex-1 relative min-w-[250px]">
                 <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
                 <input 
@@ -584,6 +632,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         <option value="Critical">Critical</option>
                         <option value="Overstock">Overstock</option>
                         <option value="Healthy">Healthy</option>
+                        <option value="Warning">Warning</option>
                     </select>
                     <Filter className="absolute right-3 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
                 </div>
@@ -705,9 +754,12 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
             </thead>
             <tbody className="divide-y divide-gray-100">
               {paginatedProducts.map((product) => {
+                // Determine if we should be alarmed
                 const isCritical = product.status === 'Critical';
                 const isOverstock = product.status === 'Overstock';
                 const isOOS = product.recommendation === 'Out of Stock';
+                const isMonitoring = product.status === 'Warning' && product.recommendation.includes('Monitor');
+
                 const overrideValue = priceOverrides[product.id];
                 const simulatedPrice = getSimulatedPrice(product);
                 const displayValue = simulatedPrice;
@@ -718,6 +770,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                 const isViolation = violatesFloor || violatesCeiling;
                 const runwayBin = getRunwayBin(product.daysRemaining, product.stockLevel);
 
+                // --- Low Stock Tag Logic ---
+                const isLowStock = product.stockLevel <= 10 && product.stockLevel > 0;
+
                 return (
                   <tr key={product.id} className="hover:bg-gray-50 transition-colors group text-sm">
                     <td className="p-2.5">
@@ -725,7 +780,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         <div className="font-bold text-gray-900 font-mono">{product.sku}</div>
                         <div className="text-gray-900 font-medium text-xs mt-0.5 truncate max-w-[200px]" title={product.name}>{product.name}</div>
                         <div className="flex gap-2 mt-1">
-                            {/* REMOVED BRAND TAG AS REQUESTED */}
                             {product.category && (
                                 <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">{product.category}</span>
                             )}
@@ -803,9 +857,14 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded border text-xs font-bold whitespace-nowrap ${runwayBin.color}`}>
                           {runwayBin.label}
                         </span>
-                        <span className="text-xs font-semibold text-gray-700">
-                            {product.averageDailySales.toFixed(1)} / day
-                        </span>
+                        <div className="flex items-center gap-1">
+                             {/* Trend Indicator for Velocity */}
+                             {(product as any)._trendData?.velocityChange < -0.2 && <TrendingDown className="w-3 h-3 text-red-400" />}
+                             {(product as any)._trendData?.velocityChange > 0.2 && <TrendingUp className="w-3 h-3 text-green-400" />}
+                             <span className="text-xs font-semibold text-gray-700">
+                                {product.averageDailySales.toFixed(1)} / day
+                             </span>
+                        </div>
                       </div>
                     </td>
                     <td 
@@ -813,16 +872,30 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         onMouseEnter={(e) => handleMouseEnter(product.id, e)}
                         onMouseLeave={handleMouseLeave}
                     >
-                        <div className={`flex items-center gap-2 font-semibold ${
-                            isOOS ? 'text-gray-500' :
-                            product.status === 'Critical' ? 'text-red-600' :
-                            product.status === 'Overstock' ? 'text-orange-600' : 'text-green-600'
-                        }`}>
-                            {isOOS && <AlertCircle className="w-4 h-4" />}
-                            {!isOOS && product.status === 'Critical' && <TrendingUp className="w-4 h-4" />}
-                            {!isOOS && product.status === 'Overstock' && <TrendingDown className="w-4 h-4" />}
-                            {!isOOS && product.status === 'Healthy' && <CheckCircle className="w-4 h-4" />}
-                            <span className="border-b border-dashed border-current pb-0.5">{product.recommendation}</span>
+                        <div className="flex flex-col gap-1">
+                            <div className={`flex items-center gap-2 font-semibold ${
+                                isOOS ? 'text-gray-500' :
+                                isMonitoring ? 'text-blue-600' :
+                                product.status === 'Critical' ? 'text-red-600' :
+                                product.status === 'Overstock' ? 'text-orange-600' : 'text-green-600'
+                            }`}>
+                                {isOOS && <AlertCircle className="w-4 h-4" />}
+                                {isMonitoring && <Clock className="w-4 h-4" />}
+                                {!isOOS && !isMonitoring && product.status === 'Critical' && <TrendingUp className="w-4 h-4" />}
+                                {!isOOS && !isMonitoring && product.status === 'Overstock' && <TrendingDown className="w-4 h-4" />}
+                                {!isOOS && !isMonitoring && product.status === 'Healthy' && <CheckCircle className="w-4 h-4" />}
+                                
+                                <span className="border-b border-dashed border-current pb-0.5 text-xs">
+                                    {product.recommendation}
+                                </span>
+                            </div>
+                            
+                            {/* Low Stock Tag - ALIGNED TO THE RIGHT AS REQUESTED */}
+                            {isLowStock && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600 border border-red-200 self-start ml-6">
+                                    Low Stock ({product.stockLevel})
+                                </span>
+                            )}
                         </div>
                     </td>
                     <td className="p-2.5 text-right">
@@ -919,6 +992,11 @@ const RecommendationTooltip = ({ product, rect }: { product: Product; rect: DOMR
     const runway = product.averageDailySales > 0 ? product.stockLevel / product.averageDailySales : 999;
     const leadTime = product.leadTimeDays;
     
+    // Trend Data (Accessing dynamic prop added in render loop)
+    const trendData = (product as any)._trendData || { priceChange: 0, velocityChange: 0 };
+    const priceChangePct = (trendData.priceChange * 100).toFixed(1);
+    const velocityChangePct = (trendData.velocityChange * 100).toFixed(1);
+    
     let triggerFormula = "";
     let reason = "";
     let colorClass = "text-green-300";
@@ -927,6 +1005,17 @@ const RecommendationTooltip = ({ product, rect }: { product: Product; rect: DOMR
         triggerFormula = `Stock (${product.stockLevel}) <= 0`;
         reason = "Inventory is completely depleted.";
         colorClass = "text-gray-300";
+    } else if (product.recommendation.includes('Monitor')) {
+        colorClass = "text-blue-300";
+        if (product.status === 'Warning' && runway < leadTime) {
+             // Critical Stock but Monitoring
+             triggerFormula = `Runway < Lead Time BUT Trend Effective`;
+             reason = `Price increased by ${priceChangePct}% and velocity dropped by ${Math.abs(Number(velocityChangePct))}% (>20%). Strategy working.`;
+        } else {
+             // Overstock but Monitoring
+             triggerFormula = `Runway > 4x Lead Time BUT Trend Effective`;
+             reason = `Price decreased by ${Math.abs(Number(priceChangePct))}% and velocity rose by ${velocityChangePct}% (>20%). Strategy working.`;
+        }
     } else if (product.status === 'Critical') {
         triggerFormula = `Runway (${runway.toFixed(1)}d) < Lead Time (${leadTime}d)`;
         reason = "Stock will run out before replenishment arrives.";
@@ -942,7 +1031,7 @@ const RecommendationTooltip = ({ product, rect }: { product: Product; rect: DOMR
 
     return createPortal(
         <div style={style} className="pointer-events-none">
-            <div className="bg-slate-900 text-white p-4 rounded-xl shadow-2xl w-72 border border-slate-700 animate-in fade-in zoom-in duration-200">
+            <div className="bg-slate-900 text-white p-4 rounded-xl shadow-2xl w-80 border border-slate-700 animate-in fade-in zoom-in duration-200">
                 <div className="flex items-center justify-between mb-3 border-b border-slate-700 pb-2">
                     <span className="font-bold text-sm">Logic Breakdown</span>
                     <span className={`text-xs font-mono px-1.5 py-0.5 rounded bg-white/10 ${colorClass}`}>{product.recommendation === 'Out of Stock' ? 'OOS' : product.status}</span>
@@ -954,16 +1043,22 @@ const RecommendationTooltip = ({ product, rect }: { product: Product; rect: DOMR
                         <span className="text-right text-white font-mono">{product.stockLevel} units</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-slate-400">
-                        <span>Filtered Velocity:</span>
+                        <span>Current Velocity:</span>
                         <span className="text-right text-white font-mono">{product.averageDailySales.toFixed(1)} /day</span>
                     </div>
+                    {product.previousDailySales !== undefined && (
+                         <div className="grid grid-cols-2 gap-2 text-slate-400">
+                            <span>Previous Velocity:</span>
+                            <span className="text-right text-gray-400 font-mono">{product.previousDailySales.toFixed(1)} /day</span>
+                        </div>
+                    )}
                     
                     <div className="mt-2 pt-2 border-t border-slate-700">
                          <div className="flex justify-between items-center mb-1">
                             <span className="text-indigo-300 font-semibold">Calculated Runway:</span>
                             <span className="font-mono text-indigo-300">{product.recommendation === 'Out of Stock' ? '0' : runway.toFixed(1)} days</span>
                          </div>
-                         <div className="bg-slate-800 p-2 rounded border border-slate-600 font-mono text-[10px] text-center mb-2">
+                         <div className="bg-slate-800 p-2 rounded border border-slate-600 font-mono text-[10px] text-center mb-2 leading-tight">
                              {triggerFormula}
                          </div>
                          <p className="text-slate-400 italic leading-relaxed">

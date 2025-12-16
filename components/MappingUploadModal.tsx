@@ -37,6 +37,17 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
 
   // Create a set of valid master SKUs for quick validation
   const masterSkuSet = useMemo(() => new Set(products.map(p => p.sku)), [products]);
+  
+  // Create a normalized lookup map for case-insensitive matching (handles X vs x, etc.)
+  const masterSkuLookup = useMemo(() => {
+      const map: Record<string, string> = {};
+      products.forEach(p => {
+          // Normalize: Uppercase, replace special x chars
+          const normalized = p.sku.toUpperCase().replace(/×/g, 'X').replace(/\*/g, 'X');
+          map[normalized] = p.sku;
+      });
+      return map;
+  }, [products]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -147,18 +158,33 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
         let masterSku: string | null = null;
         let method: 'exact' | 'fuzzy' | 'none' = 'none';
 
+        // Helper to normalize strings for comparison
+        const normalize = (s: string) => s.toUpperCase().replace(/×/g, 'X').replace(/\*/g, 'X');
+        const normalizedFileSku = normalize(fileSku);
+
+        // 1. Exact Match (Case Sensitive)
         if (masterSkuSet.has(fileSku)) {
             masterSku = fileSku;
             method = 'exact';
-        } else {
-            // Fuzzy Match: Strip suffixes like _1, _UK, -UK, etc.
+        } 
+        // 2. Case-Insensitive / Normalized Match (Handles X vs x, × vs x)
+        else if (masterSkuLookup[normalizedFileSku]) {
+            masterSku = masterSkuLookup[normalizedFileSku];
+            method = 'exact'; // High confidence
+        }
+        else {
+            // Heuristic 1: Strip Suffix from File SKU (e.g. File: ABC-UK -> Master: ABC)
             const stripped = fileSku.replace(/[_ -](UK|US|DE|FR|IT|ES|[0-9]+)$/i, '');
+            const normalizedStripped = normalize(stripped);
             
             if (masterSkuSet.has(stripped)) {
                 masterSku = stripped;
                 method = 'fuzzy';
+            } else if (masterSkuLookup[normalizedStripped]) {
+                masterSku = masterSkuLookup[normalizedStripped];
+                method = 'fuzzy';
             } else {
-                // Try Prefix Match (Longest prefix wins)
+                // Heuristic 2: Prefix Match (File SKU starts with Master SKU) e.g. File: ABC-UK_1 -> Master: ABC-UK
                 let bestPrefixMatch = '';
                 for (const prod of products) {
                     if (fileSku.startsWith(prod.sku)) {
@@ -172,6 +198,27 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                 if (bestPrefixMatch) {
                     masterSku = bestPrefixMatch;
                     method = 'fuzzy';
+                }
+
+                // Heuristic 3: Reverse Prefix Match (Master SKU starts with File SKU) e.g. File: AI1005-BK -> Master: AI1005-BK-UK
+                // This handles cases where the platform uses the base SKU but inventory is regionalized
+                if (!masterSku) {
+                    const candidates = products.filter(p => {
+                        // Check if Master starts with File
+                        if (!p.sku.startsWith(fileSku)) return false;
+                        // Check if strictly longer
+                        if (p.sku.length <= fileSku.length) return false;
+                        // Check for separator to ensure clean segment match (avoid matching A100 to A1005)
+                        const separator = p.sku[fileSku.length];
+                        return separator === '-' || separator === '_' || separator === ' ';
+                    });
+
+                    if (candidates.length > 0) {
+                        // Prioritize UK suffix if available, otherwise take the first match
+                        const ukMatch = candidates.find(p => p.sku.toUpperCase().endsWith('-UK') || p.sku.toUpperCase().endsWith('_UK'));
+                        masterSku = ukMatch ? ukMatch.sku : candidates[0].sku;
+                        method = 'fuzzy';
+                    }
                 }
             }
         }
