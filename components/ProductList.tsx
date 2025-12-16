@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product } from '../types';
-import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info } from 'lucide-react';
+import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -23,7 +23,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   // New Filters
   const [brandFilter, setBrandFilter] = useState('All');
   const [mainCatFilter, setMainCatFilter] = useState('All');
-  const [showInactive, setShowInactive] = useState(false); // Toggle for "Ghost" products
+  const [subCatFilter, setSubCatFilter] = useState('All');
+  
+  // Visibility Toggles
+  const [showInactive, setShowInactive] = useState(false); // Toggle for "Ghost" products (0 stock, 0 sales)
+  const [showOOS, setShowOOS] = useState(false); // Toggle for Out of Stock products (stock <= 0)
 
   // Advanced Filter State
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -74,6 +78,15 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
       return Array.from(cats).sort();
   }, [products]);
 
+  const uniqueSubCats = useMemo(() => {
+      let relevantProducts = products;
+      if (mainCatFilter !== 'All') {
+          relevantProducts = products.filter(p => p.category === mainCatFilter);
+      }
+      const subs = new Set(relevantProducts.map(p => p.subcategory).filter(Boolean) as string[]);
+      return Array.from(subs).sort();
+  }, [products, mainCatFilter]);
+
   const getSimulatedPrice = (product: Product): number => {
       if (priceOverrides[product.id] !== undefined) {
           return priceOverrides[product.id];
@@ -101,9 +114,15 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
   const filteredProducts = useMemo(() => {
     const aggregatedData = products.map(p => {
-        // --- VISIBILITY LOGIC (Ghost Products) ---
+        // --- VISIBILITY LOGIC ---
+        // 1. Ghost Products (Inactive)
         if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) {
             return { ...p, _isVisible: false };
+        }
+        // 2. Out of Stock (Active but 0 stock)
+        // If showOOS is false, hide items with 0 stock (unless they are ghost items already handled above, this handles active OOS)
+        if (!showOOS && p.stockLevel <= 0) {
+             return { ...p, _isVisible: false };
         }
 
         const matchingChannels = p.channels.filter(c => {
@@ -211,6 +230,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         const matchesStatus = statusFilter === 'All' || p.status === statusFilter;
         const matchesBrand = brandFilter === 'All' || p.brand === brandFilter;
         const matchesMainCat = mainCatFilter === 'All' || p.category === mainCatFilter;
+        const matchesSubCat = subCatFilter === 'All' || p.subcategory === subCatFilter;
         
         const vel = p.averageDailySales;
         const matchesVelocityMin = velocityFilter.min === '' || vel >= parseFloat(velocityFilter.min);
@@ -220,7 +240,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         const matchesRunwayMin = runwayFilter.min === '' || runway >= parseFloat(runwayFilter.min);
         const matchesRunwayMax = runwayFilter.max === '' || runway <= parseFloat(runwayFilter.max);
 
-        return matchesSearch && matchesStatus && matchesBrand && matchesMainCat && matchesVelocityMin && matchesVelocityMax && matchesRunwayMin && matchesRunwayMax;
+        return matchesSearch && matchesStatus && matchesBrand && matchesMainCat && matchesSubCat && matchesVelocityMin && matchesVelocityMax && matchesRunwayMin && matchesRunwayMax;
     });
 
     if (sortConfig) {
@@ -249,11 +269,16 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
     }
 
     return result;
-  }, [products, searchQuery, statusFilter, managerFilter, platformFilter, brandFilter, mainCatFilter, sortConfig, priceOverrides, adjustmentIntensity, velocityFilter, runwayFilter, allowOutOfStockAdjustment, showInactive]);
+  }, [products, searchQuery, statusFilter, managerFilter, platformFilter, brandFilter, mainCatFilter, subCatFilter, sortConfig, priceOverrides, adjustmentIntensity, velocityFilter, runwayFilter, allowOutOfStockAdjustment, showInactive, showOOS]);
 
   useEffect(() => {
       setCurrentPage(1);
-  }, [searchQuery, statusFilter, managerFilter, platformFilter, brandFilter, mainCatFilter, showInactive]);
+  }, [searchQuery, statusFilter, managerFilter, platformFilter, brandFilter, mainCatFilter, subCatFilter, showInactive, showOOS]);
+
+  // Reset subcat filter if main cat changes
+  useEffect(() => {
+      setSubCatFilter('All');
+  }, [mainCatFilter]);
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const paginatedProducts = filteredProducts.slice(
@@ -424,6 +449,32 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   const isContextFiltered = platformFilter !== 'All' || managerFilter !== 'All';
   const isButtonDisabled = showSuccessMessage || (isConfirmed && changedCount > 0) || (changedCount === 0 && Object.keys(priceOverrides).length === 0);
 
+  // Helper for filter pills
+  const FilterDropdown = ({ label, icon: Icon, value, onChange, options, themeColor }: any) => (
+      <div 
+        className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-opacity-50"
+        style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+      >
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
+              {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+          </div>
+          <div className="relative flex-1 min-w-[120px]">
+            <select 
+                value={value}
+                onChange={onChange}
+                className="w-full px-3 py-2 bg-transparent text-sm text-gray-900 border-none focus:ring-0 cursor-pointer appearance-none pr-8 truncate"
+            >
+                <option value="All">All</option>
+                {options.map((opt: string) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          </div>
+      </div>
+  );
+
   return (
     <div className="space-y-4">
       
@@ -571,148 +622,153 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
       {/* Filters Toolbar */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-          <div className="flex flex-col xl:flex-row gap-4 p-4">
-            <div className="flex-1 relative min-w-[250px]">
-                <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
-                <input 
-                    type="text" 
-                    placeholder="Search SKU or Product Name..." 
-                    value={searchQuery}
-                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50"
-                    style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
-                />
-            </div>
-            
-            <div className="flex flex-wrap gap-3">
-                 {/* Brand Filter */}
-                 <div className="relative min-w-[140px]">
-                    <span className="absolute left-3 top-2.5 text-gray-500 text-xs font-bold uppercase tracking-wider z-10 pointer-events-none">Brand</span>
-                    <select 
-                        value={brandFilter}
-                        onChange={(e) => { setBrandFilter(e.target.value); setCurrentPage(1); }}
-                        className="w-full pl-16 pr-8 py-2 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-opacity-50 font-medium text-gray-900 cursor-pointer hover:bg-gray-50 text-sm"
+          <div className="p-4 space-y-4">
+            {/* Top Row: Search + Main Filters */}
+            <div className="flex flex-col lg:flex-row gap-4">
+                {/* Search - Flexible Width */}
+                <div className="flex-1 relative min-w-[250px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input 
+                        type="text" 
+                        placeholder="Search SKU or Product Name..." 
+                        value={searchQuery}
+                        onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-sm"
                         style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
-                    >
-                        <option value="All">All</option>
-                        {uniqueBrands.map(b => (
-                            <option key={b} value={b}>{b}</option>
-                        ))}
-                    </select>
-                    <Tag className="absolute right-3 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
+                    />
                 </div>
+                
+                {/* Primary Filters - Grid/Flex for neat alignment */}
+                <div className="flex flex-wrap gap-3 items-center">
+                    <FilterDropdown 
+                        label="Brand" 
+                        icon={Tag} 
+                        value={brandFilter} 
+                        onChange={(e: any) => { setBrandFilter(e.target.value); setCurrentPage(1); }} 
+                        options={uniqueBrands} 
+                        themeColor={themeColor} 
+                    />
+                    <FilterDropdown 
+                        label="Category" 
+                        icon={Layers} 
+                        value={mainCatFilter} 
+                        onChange={(e: any) => { setMainCatFilter(e.target.value); setCurrentPage(1); }} 
+                        options={uniqueMainCats} 
+                        themeColor={themeColor} 
+                    />
+                    <FilterDropdown 
+                        label="Subcat" 
+                        icon={GitMerge} 
+                        value={subCatFilter} 
+                        onChange={(e: any) => { setSubCatFilter(e.target.value); setCurrentPage(1); }} 
+                        options={uniqueSubCats} 
+                        themeColor={themeColor} 
+                    />
+                    <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-opacity-50" style={{ '--tw-ring-color': themeColor } as React.CSSProperties}>
+                        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
+                            <Filter className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</span>
+                        </div>
+                        <div className="relative min-w-[140px]">
+                            <select 
+                                value={statusFilter}
+                                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                                className="w-full px-3 py-2 bg-transparent text-sm text-gray-900 border-none focus:ring-0 cursor-pointer appearance-none pr-8"
+                            >
+                                <option value="All">All Statuses</option>
+                                <option value="Critical">Critical</option>
+                                <option value="Overstock">Overstock</option>
+                                <option value="Healthy">Healthy</option>
+                                <option value="Warning">Warning</option>
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                        </div>
+                    </div>
 
-                {/* Main Category Filter */}
-                 <div className="relative min-w-[140px]">
-                    <span className="absolute left-3 top-2.5 text-gray-500 text-xs font-bold uppercase tracking-wider z-10 pointer-events-none">Category</span>
-                    <select 
-                        value={mainCatFilter}
-                        onChange={(e) => { setMainCatFilter(e.target.value); setCurrentPage(1); }}
-                        className="w-full pl-20 pr-8 py-2 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-opacity-50 font-medium text-gray-900 cursor-pointer hover:bg-gray-50 text-sm"
-                        style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                    {/* Advanced Toggle */}
+                    <button
+                        onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                        className={`px-3 py-2.5 border rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ml-auto lg:ml-0`}
+                        style={{ 
+                            backgroundColor: showAdvancedFilters ? `${themeColor}10` : '#ffffff',
+                            borderColor: showAdvancedFilters ? themeColor : '#d1d5db',
+                            color: showAdvancedFilters ? themeColor : '#4b5563'
+                        }}
                     >
-                        <option value="All">All</option>
-                        {uniqueMainCats.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                    <Layers className="absolute right-3 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <SlidersHorizontal className="w-4 h-4" />
+                        <span className="hidden sm:inline">Filters</span>
+                    </button>
                 </div>
-
-                {/* Status Filter */}
-                <div className="relative min-w-[160px]">
-                    <span className="absolute left-3 top-2.5 text-gray-500 text-xs font-bold uppercase tracking-wider z-10 pointer-events-none">Status</span>
-                    <select 
-                        value={statusFilter}
-                        onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                        className="w-full pl-16 pr-8 py-2 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-opacity-50 font-medium text-gray-900 cursor-pointer hover:bg-gray-50 text-sm"
-                        style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
-                    >
-                        <option value="All">All</option>
-                        <option value="Critical">Critical</option>
-                        <option value="Overstock">Overstock</option>
-                        <option value="Healthy">Healthy</option>
-                        <option value="Warning">Warning</option>
-                    </select>
-                    <Filter className="absolute right-3 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
-                </div>
-
-                {/* Advanced Filter Toggle */}
-                <button
-                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                    className={`px-3 py-2 border rounded-lg flex items-center gap-2 text-sm font-medium transition-colors`}
-                    style={{ 
-                        backgroundColor: showAdvancedFilters ? `${themeColor}10` : '#ffffff',
-                        borderColor: showAdvancedFilters ? themeColor : '#d1d5db',
-                        color: showAdvancedFilters ? themeColor : '#4b5563'
-                    }}
-                >
-                    <SlidersHorizontal className="w-4 h-4" />
-                </button>
             </div>
         </div>
 
         {/* Collapsible Advanced Filters */}
         {showAdvancedFilters && (
             <div className="px-4 pb-4 border-t border-gray-100 bg-gray-50 rounded-b-xl animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
-                     {/* Platform Filter (Moved to Advanced to save space) */}
-                    <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-gray-500 text-xs font-bold uppercase tracking-wider z-10 pointer-events-none">Platform</span>
-                        <select 
-                            value={platformFilter}
-                            onChange={(e) => { setPlatformFilter(e.target.value); setCurrentPage(1); }}
-                            className="w-full pl-20 pr-8 py-2 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-1 focus:ring-indigo-500 text-sm"
-                        >
-                            <option value="All">All</option>
-                            {uniquePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                    </div>
-
-                    {/* Manager Filter */}
-                    <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-gray-500 text-xs font-bold uppercase tracking-wider z-10 pointer-events-none">Manager</span>
-                        <select 
-                            value={managerFilter}
-                            onChange={(e) => { setManagerFilter(e.target.value); setCurrentPage(1); }}
-                            className="w-full pl-20 pr-8 py-2 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-1 focus:ring-indigo-500 text-sm"
-                        >
-                            <option value="All">All</option>
-                            {uniqueManagers.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                    </div>
-
-                    {/* Velocity Filter */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-gray-500 uppercase">Velocity</span>
-                        <input
-                            type="number"
-                            min="0"
-                            placeholder="Min"
-                            value={velocityFilter.min}
-                            onChange={(e) => setVelocityFilter(prev => ({ ...prev, min: e.target.value }))}
-                            className="w-20 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                <div className="flex flex-col lg:flex-row gap-4 pt-4 items-start lg:items-center">
+                     
+                     {/* Row 2 Filters */}
+                     <div className="flex flex-wrap gap-3 flex-1">
+                        <FilterDropdown 
+                            label="Platform" 
+                            icon={Globe} 
+                            value={platformFilter} 
+                            onChange={(e: any) => { setPlatformFilter(e.target.value); setCurrentPage(1); }} 
+                            options={uniquePlatforms} 
+                            themeColor={themeColor} 
                         />
-                        <span className="text-gray-400">-</span>
-                        <input
-                            type="number"
-                            min="0"
-                            placeholder="Max"
-                            value={velocityFilter.max}
-                            onChange={(e) => setVelocityFilter(prev => ({ ...prev, max: e.target.value }))}
-                            className="w-20 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                        <FilterDropdown 
+                            label="Manager" 
+                            icon={User} 
+                            value={managerFilter} 
+                            onChange={(e: any) => { setManagerFilter(e.target.value); setCurrentPage(1); }} 
+                            options={uniqueManagers} 
+                            themeColor={themeColor} 
                         />
-                    </div>
+                        
+                        {/* Velocity Range */}
+                        <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden h-[38px]">
+                            <div className="px-3 py-2 bg-gray-50 border-r border-gray-200 text-[10px] font-bold text-gray-500 uppercase">Velocity</div>
+                            <input
+                                type="number"
+                                min="0"
+                                placeholder="Min"
+                                value={velocityFilter.min}
+                                onChange={(e) => setVelocityFilter(prev => ({ ...prev, min: e.target.value }))}
+                                className="w-16 px-2 py-1 text-sm border-none focus:ring-0 text-center"
+                            />
+                            <span className="text-gray-400 px-1">-</span>
+                            <input
+                                type="number"
+                                min="0"
+                                placeholder="Max"
+                                value={velocityFilter.max}
+                                onChange={(e) => setVelocityFilter(prev => ({ ...prev, max: e.target.value }))}
+                                className="w-16 px-2 py-1 text-sm border-none focus:ring-0 text-center"
+                            />
+                        </div>
+                     </div>
 
-                    {/* Show Inactive (Ghost) Products Toggle */}
-                    <div className="flex items-center justify-between p-2 border border-gray-200 rounded-lg bg-white">
-                        <span className="text-xs font-bold text-gray-500 uppercase">Show Inactive (No Stock/Sales)</span>
+                    {/* Toggles Container */}
+                    <div className="flex flex-wrap gap-3">
+                        {/* Show OOS Toggle */}
+                        <button 
+                            onClick={() => setShowOOS(!showOOS)}
+                            className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors bg-white hover:bg-gray-50 ${showOOS ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600'}`}
+                            style={showOOS ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
+                        >
+                            <span className="text-xs font-bold uppercase">Show Out of Stock</span>
+                            {showOOS ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+
+                        {/* Show Inactive (Ghost) Toggle */}
                         <button 
                             onClick={() => setShowInactive(!showInactive)}
-                            className="text-gray-500 hover:text-indigo-600 focus:outline-none"
-                            style={{ color: showInactive ? themeColor : undefined }}
+                            className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors bg-white hover:bg-gray-50 ${showInactive ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600'}`}
+                            style={showInactive ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
                         >
-                            {showInactive ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                            <span className="text-xs font-bold uppercase">Show Inactive</span>
+                            {showInactive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                         </button>
                     </div>
                 </div>
@@ -780,8 +836,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         <div className="font-bold text-gray-900 font-mono">{product.sku}</div>
                         <div className="text-gray-900 font-medium text-xs mt-0.5 truncate max-w-[200px]" title={product.name}>{product.name}</div>
                         <div className="flex gap-2 mt-1">
-                            {product.category && (
-                                <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">{product.category}</span>
+                            {product.subcategory && (
+                                <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">{product.subcategory}</span>
                             )}
                         </div>
                       </div>
@@ -890,7 +946,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                                 </span>
                             </div>
                             
-                            {/* Low Stock Tag - ALIGNED TO THE RIGHT AS REQUESTED */}
+                            {/* Low Stock Tag */}
                             {isLowStock && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600 border border-red-200 self-start ml-6">
                                     Low Stock ({product.stockLevel})

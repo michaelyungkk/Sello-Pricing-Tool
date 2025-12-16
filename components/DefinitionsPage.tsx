@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone } from 'lucide-react';
+import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone, Clock } from 'lucide-react';
 
 interface DefinitionsPageProps {
     headerStyle?: React.CSSProperties;
@@ -175,20 +175,27 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
           </p>
       </div>
 
-      {/* Inventory Health */}
+      {/* Inventory Health & Logic */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
                   <AlertTriangle className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">Inventory Health & Runway</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Inventory Health & Recommendation Logic</h3>
           </div>
           
           <div className="grid md:grid-cols-2 gap-6">
               {/* Strategic Status */}
               <div>
-                  <h4 className="font-semibold text-gray-900 mb-3 text-sm border-b pb-2">Strategic Status (Recommendation)</h4>
+                  <h4 className="font-semibold text-gray-900 mb-3 text-sm border-b pb-2">Status Thresholds</h4>
                   <div className="space-y-3">
+                      <div className="flex items-start gap-2">
+                          <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 font-bold text-[10px] rounded uppercase mt-0.5 whitespace-nowrap">Out of Stock</span>
+                          <div className="text-xs">
+                              <span className="font-semibold">Stock &le; 0</span>
+                              <p className="text-gray-500">Inventory depleted. Hidden by default, toggle in "Advanced Filters" to view.</p>
+                          </div>
+                      </div>
                       <div className="flex items-start gap-2">
                           <span className="px-1.5 py-0.5 bg-red-100 text-red-700 font-bold text-[10px] rounded uppercase mt-0.5">Critical</span>
                           <div className="text-xs">
@@ -220,47 +227,28 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                   </div>
               </div>
 
-              {/* Visual Bins */}
+              {/* Trend Monitoring Logic */}
               <div>
-                  <h4 className="font-semibold text-gray-900 mb-3 text-sm border-b pb-2">Visual Runway Bins (Conservative)</h4>
-                  <div className="space-y-2 text-xs">
-                       <div className="flex justify-between items-center p-2 bg-red-50 rounded border border-red-100 text-red-800">
-                           <span>2 Weeks</span>
-                           <span className="font-mono font-bold">0 - 14 Days</span>
-                       </div>
-                       <div className="flex justify-between items-center p-2 bg-amber-50 rounded border border-amber-100 text-amber-800">
-                           <span>4 Weeks</span>
-                           <span className="font-mono font-bold">15 - 28 Days</span>
-                       </div>
-                       <div className="flex justify-between items-center p-2 bg-green-50 rounded border border-green-100 text-green-800">
-                           <span>12 Weeks</span>
-                           <span className="font-mono font-bold">29 - 84 Days</span>
-                       </div>
-                       <div className="flex justify-between items-center p-2 bg-teal-50 rounded border border-teal-100 text-teal-800">
-                           <span>24 Weeks</span>
-                           <span className="font-mono font-bold">85 - 168 Days</span>
-                       </div>
-                       <div className="flex justify-between items-center p-2 bg-blue-50 rounded border border-blue-100 text-blue-800">
-                           <span>24 Weeks +</span>
-                           <span className="font-mono font-bold">169+ Days</span>
-                       </div>
+                  <h4 className="font-semibold text-gray-900 mb-3 text-sm border-b pb-2">Trend Monitoring Logic</h4>
+                  <div className="space-y-3">
+                      <div className="flex items-start gap-2">
+                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 font-bold text-[10px] rounded uppercase mt-0.5 whitespace-nowrap">Monitor (Effective)</span>
+                          <div className="text-xs">
+                              <span className="font-semibold">Trend Detected</span>
+                              <p className="text-gray-500">
+                                  If a product is technically <strong>Critical</strong> (Runway &lt; Lead Time), but a recent price increase has successfully slowed velocity by &gt;20%, the status is downgraded to <strong>Warning</strong>.
+                              </p>
+                              <div className="mt-2 bg-blue-50 p-2 rounded text-[10px] text-blue-800 border border-blue-100">
+                                  <strong>Logic:</strong> Price Change &gt; 3% AND Velocity Change &lt; -20%
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500 mt-4 italic">
+                          This prevents the system from constantly screaming "Critical" when you have already taken action to fix the problem.
+                      </div>
                   </div>
               </div>
-          </div>
-      </div>
-
-      {/* Net Margin */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                  <DollarSign className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Net Margin Formula</h3>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 space-y-2 text-sm text-gray-700">
-              <p><strong>Total Cost</strong> = COGS + Selling Fee + Ads Fee + Postage + Other + Subscription + WMS</p>
-              <p><strong>Net Profit</strong> = (Current Price + Extra Freight Income) - Total Cost</p>
-              <p><strong>Net Margin %</strong> = (Net Profit / Current Price) × 100</p>
           </div>
       </div>
 

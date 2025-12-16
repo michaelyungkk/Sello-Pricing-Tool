@@ -104,9 +104,9 @@ const App: React.FC = () => {
   const [promotions, setPromotions] = useState<PromotionEvent[]>(() => {
       try {
           const saved = localStorage.getItem('ecompulse_promotions');
-          return saved ? JSON.parse(saved) : [];
+          return saved ? JSON.parse(saved) : MOCK_PROMOTIONS;
       } catch (e) {
-          return [];
+          return MOCK_PROMOTIONS;
       }
   });
 
