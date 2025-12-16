@@ -113,7 +113,7 @@ const PromotionPage: React.FC<PromotionPageProps> = ({ products, pricingRules, p
           <PromotionDashboard 
             promotions={promotions} 
             pricingRules={pricingRules}
-            onSelectPromo={(id) => { setSelectedPromoId(id); setViewMode('event_detail'); }} 
+            onSelectPromo={(id: string) => { setSelectedPromoId(id); setViewMode('event_detail'); }} 
             onCreateEvent={handleCreateEvent}
             themeColor={themeColor}
           />
