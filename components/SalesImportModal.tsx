@@ -1,911 +1,658 @@
 
-import React, { useState, useRef } from 'react';
-import { Product, PricingRules, ChannelData, FeeBounds } from '../types';
-import { Upload, X, FileBarChart, Check, AlertCircle, Calendar, RefreshCw, TrendingUp, Loader2, Link as LinkIcon, Unlink, ArrowRight } from 'lucide-react';
+import React, { useState, useRef, useMemo } from 'react';
+import { Product, PricingRules, HistoryPayload, ShipmentLog } from '../types';
+import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck } from 'lucide-react';
 import * as XLSX from 'xlsx';
+
+export type { HistoryPayload };
 
 interface SalesImportModalProps {
   products: Product[];
-  pricingRules?: PricingRules;
+  pricingRules: PricingRules;
   onClose: () => void;
-  onConfirm: (products: Product[], dateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[]) => void;
+  onConfirm: (
+    updatedProducts: Product[],
+    dateLabels?: { current: string, last: string },
+    historyPayload?: HistoryPayload[],
+    shipmentLogs?: ShipmentLog[]
+  ) => void;
 }
 
-export interface HistoryPayload {
-    sku: string;
-    price: number;
-    velocity: number;
-    date: string;
-    margin?: number; // Pre-calculated margin based on actual fees in report
-}
-
-interface SalesDataPoint {
+interface ColumnMapping {
   sku: string;
-  quantity: number;
-  date: Date;
-  revenue: number;
-  unitCost: number; // Added Cost Field
-  platform: string;
-  manager: string;
-  subcategory?: string;
-  // Fees
-  sellingFee: number;
-  adsFee: number;
-  postage: number;
-  extraFreight: number;
-  otherFee: number;
-  subscriptionFee: number;
-  wmsFee: number;
-}
-
-interface WeeklyStat {
-    weekIndex: number;
-    startDate: Date;
-    endDate: Date;
-    revenue: number;
-    sold: number;
-    totalFees: number; // Sum of all fees for margin calc
-    totalCostVolume: number; // Sum of (cost * qty) for accurate weekly margin
-}
-
-interface TempChannelStat {
-    platform: string;
-    manager: string;
-    totalSold: number;
-    totalRevenue: number;
-}
-
-interface AggregatedSku {
-  sku: string; // The MASTER SKU
-  totalSold: number;
-  totalRevenue: number;
-  
-  // Map of Platform -> Alias (e.g. Amazon -> SKU_1)
-  detectedAliases: Record<string, string>;
-
-  // Temporary storage for channel aggregation
-  channelStats: Record<string, TempChannelStat>;
-  
-  velocity: number; // units per day (average over full period)
-  subcategory?: string;
-  
-  // Aggregated Fees (Global Average)
-  totalSellingFee: number;
-  totalAdsFee: number;
-  totalPostage: number;
-  totalExtraFreight: number;
-  totalOtherFee: number;
-  totalSubFee: number;
-  totalWmsFee: number;
-  
-  // Cost Aggregation
-  totalCostVolume: number; // (unitCost * qty)
-
-  // Fee Bounds
-  feeBounds: {
-    sellingFee: { min: number, max: number };
-    adsFee: { min: number, max: number };
-    postage: { min: number, max: number };
-    extraFreight: { min: number, max: number };
-    otherFee: { min: number, max: number };
-    subscriptionFee: { min: number, max: number };
-    wmsFee: { min: number, max: number };
-  };
-
-  // Dynamic Weekly Buckets
-  weeklyStats: Record<number, WeeklyStat>;
-}
-
-// Mapping Candidate for Review
-interface MappingCandidate {
-    importSku: string;
-    masterSku: string;
-    platform: string; // Context where this alias was found
+  qty: string;
+  revenue: string;
+  date?: string;
+  platform?: string;
+  // Extended ERP Columns
+  category?: string;
+  cogs?: string;
+  sellingFee?: string;
+  adsFee?: string;
+  postage?: string;
+  logisticsService?: string; // New field for rate calibration
+  extraFreight?: string;
+  otherFee?: string;
+  subscriptionFee?: string;
+  wmsFee?: string;
 }
 
 const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRules, onClose, onConfirm }) => {
-  const [dragActive, setDragActive] = useState(false);
+  const [step, setStep] = useState<'upload' | 'mapping' | 'preview'>('upload');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Steps: 'upload' -> 'review_mappings' -> 'confirm'
-  const [currentStep, setCurrentStep] = useState<'upload' | 'review_mappings' | 'confirm'>('upload');
+  const [rawHeaders, setRawHeaders] = useState<string[]>([]);
+  const [rawRows, setRawRows] = useState<any[][]>([]);
   
-  const [mappingCandidates, setMappingCandidates] = useState<MappingCandidate[]>([]);
-  const [confirmedMappings, setConfirmedMappings] = useState<Record<string, string>>({}); // importSku -> masterSku
+  const [mapping, setMapping] = useState<ColumnMapping>({ sku: '', qty: '', revenue: '' });
+  const [periodDays, setPeriodDays] = useState<number>(30); // Default to 30 days calculation if no dates
+  const [showAdvancedMapping, setShowAdvancedMapping] = useState(false);
   
-  // Temporary storage of raw points to re-aggregate after mapping
-  const [rawSalesPoints, setRawSalesPoints] = useState<SalesDataPoint[]>([]);
+  const [previewData, setPreviewData] = useState<any>(null);
 
-  const [analysis, setAnalysis] = useState<{
-    dateRange: { start: Date; end: Date } | null;
-    totalOrders: number;
-    skuCounts: Record<string, AggregatedSku>;
-    newProductCount: number;
-    weekLabels: { current: string; last: string };
-    totalWeeksFound: number;
-  } | null>(null);
-  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
-    }
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
-    }
-    if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-    }
-  };
-
-  const parseDate = (val: any): Date | null => {
-    if (!val) return null;
-    if (val instanceof Date) return val;
-    const dateStr = String(val).trim();
-    const parts = dateStr.split('/');
-    if (parts.length === 3) {
-      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-    }
-    const isoDate = new Date(dateStr);
-    if (!isNaN(isoDate.getTime())) return isoDate;
-    return null;
-  };
-
-  const formatDateLabel = (d1: Date, d2: Date) => {
-      const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-      return `${d1.toLocaleDateString('en-GB', opts)} - ${d2.toLocaleDateString('en-GB', opts)}`;
-  };
-
-  const getFridayPeriodStart = (date: Date) => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    const day = d.getDay();
-    const diff = (day + 2) % 7; 
-    d.setDate(d.getDate() - diff);
-    return d;
+      if (e.target.files?.[0]) processFile(e.target.files[0]);
   };
 
   const processFile = (file: File) => {
-    setIsProcessing(true);
-    setError(null);
-    setConfirmedMappings({});
-    setMappingCandidates([]);
-    setRawSalesPoints([]);
+      setIsProcessing(true);
+      setError(null);
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+              const data = e.target?.result;
+              let rows: any[][] = [];
+              if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                  const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                  rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+              } else {
+                  const text = data as string;
+                  rows = text.split('\n').map(l => l.split(','));
+              }
 
-    setTimeout(() => {
-        const reader = new FileReader();
-        
-        const handleData = (data: any) => {
-            let rows: any[][] = [];
-            if (file.name.endsWith('.xlsx')) {
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-                rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-            } else {
-                const text = data as string;
-                rows = text.split('\n').map(line => line.split(','));
-            }
-            initialScan(rows);
-        };
+              if (rows.length < 2) throw new Error("File empty or missing headers");
 
-        if (file.name.endsWith('.xlsx')) {
-            reader.onload = (e) => {
-                try {
-                    handleData(e.target?.result);
-                } catch (err) {
-                    console.error("Excel parse error:", err);
-                    setError("Failed to parse Excel file.");
-                } finally {
-                    setIsProcessing(false);
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        } else {
-            reader.onload = (e) => {
-                try {
-                    handleData(e.target?.result);
-                } catch (err) {
-                    setError("Failed to parse CSV file.");
-                } finally {
-                    setIsProcessing(false);
-                }
-            };
-            reader.readAsText(file);
-        }
-    }, 100);
+              // Clean headers
+              const headers = rows[0].map(h => String(h).trim());
+              setRawHeaders(headers);
+              setRawRows(rows.slice(1));
+
+              // --- AUTO DETECT MAPPING ---
+              const normalize = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const findExact = (candidates: string[]) => headers.find(h => candidates.includes(normalize(h))) || '';
+              const findFuzzy = (candidates: string[]) => headers.find(h => candidates.some(c => normalize(h).includes(c))) || '';
+
+              const detectedMapping: ColumnMapping = {
+                  sku: findExact(['skucode', 'sku', 'sellersku', 'itemnumber']),
+                  qty: findExact(['skuquantity', 'qty', 'quantity', 'units', 'sold']),
+                  revenue: findExact(['salesamt', 'revenue', 'totalprice', 'price', 'grosssales']),
+                  date: findExact(['ordertime', 'date', 'orderdate', 'created']),
+                  platform: findExact(['platformnamelevel1', 'platform', 'source', 'channel', 'marketplace']),
+                  
+                  // ERP Specific
+                  category: findExact(['category', 'maincategory']),
+                  cogs: findExact(['cogs', 'cost', 'unitcost']),
+                  sellingFee: findExact(['sellingfee', 'commission', 'referralfee']),
+                  adsFee: findExact(['adsfee', 'adspend', 'ppc', 'sponsored']),
+                  postage: findExact(['postage', 'shipping', 'freight', 'delivery']),
+                  logisticsService: findExact(['logisticsname', 'logistics_name', 'service', 'courier', 'shippingmethod']),
+                  extraFreight: findExact(['extrafreight', 'shippingincome', 'shippingcharge']),
+                  otherFee: findExact(['otherfee']),
+                  subscriptionFee: findExact(['subscriptionfee']),
+                  wmsFee: findExact(['wmsfee', 'fulfillment', 'pickpack'])
+              };
+
+              setMapping(detectedMapping);
+
+              // ** AUTO-SKIP LOGIC **
+              // If we found the big 3 (SKU, Qty, Revenue), skip the mapping screen!
+              if (detectedMapping.sku && detectedMapping.qty && detectedMapping.revenue) {
+                  analyzeData(headers, rows.slice(1), detectedMapping);
+              } else {
+                  setStep('mapping');
+              }
+
+          } catch (err) {
+              console.error(err);
+              setError("Failed to parse file.");
+          } finally {
+              setIsProcessing(false);
+          }
+      };
+
+      if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file);
+      else reader.readAsText(file);
   };
 
-  // Phase 1: Parse Rows and Identify Mappings
-  const initialScan = (rows: any[][]) => {
-      // ... (Initial Scan logic remains same)
-      if (rows.length < 2) {
-          setError("File is empty.");
+  const getFridayWeekStart = (date: Date) => {
+      const d = new Date(date);
+      d.setHours(0,0,0,0);
+      const day = d.getDay(); // 0 Sun, 1 Mon, 2 Tue, 3 Wed, 4 Thu, 5 Fri, 6 Sat
+      // Target: Friday (5).
+      const diff = (day + 2) % 7;
+      d.setDate(d.getDate() - diff);
+      return d.toISOString().split('T')[0];
+  };
+
+  const analyzeData = (headers: string[], rows: any[][], map: ColumnMapping) => {
+      try {
+          const getIdx = (col?: string) => col ? headers.indexOf(col) : -1;
+          
+          const skuIdx = getIdx(map.sku);
+          const qtyIdx = getIdx(map.qty);
+          const revIdx = getIdx(map.revenue);
+          const dateIdx = getIdx(map.date);
+          const platIdx = getIdx(map.platform);
+          
+          // Fee Indices
+          const cogsIdx = getIdx(map.cogs);
+          const catIdx = getIdx(map.category);
+          const sellingIdx = getIdx(map.sellingFee);
+          const adsIdx = getIdx(map.adsFee);
+          const postIdx = getIdx(map.postage);
+          const logNameIdx = getIdx(map.logisticsService); // Logistics Name Index
+          const extraIdx = getIdx(map.extraFreight);
+          const otherIdx = getIdx(map.otherFee);
+          const subIdx = getIdx(map.subscriptionFee);
+          const wmsIdx = getIdx(map.wmsFee);
+
+          // 1. Overall Aggregation (For Product Updates - Snapshot)
+          const aggregated: Record<string, { 
+              qty: number, 
+              revenue: number, 
+              count: number, 
+              dates: Set<string>,
+              fees: { selling: number, ads: number, postage: number, extra: number, other: number, sub: number, wms: number, cogs: number },
+              category: string,
+              platformStats: Record<string, { qty: number, revenue: number }> // New: Track stats per platform
+          }> = {};
+
+          // 2. Weekly Aggregation (For History Payload)
+          // Key: SKU + WeekStart
+          const weeklyAggregated: Record<string, {
+              sku: string,
+              weekStart: string,
+              qty: number,
+              revenue: number,
+              platform?: string
+          }> = {};
+
+          let minDate = new Date();
+          let maxDate = new Date(0);
+          let hasDates = false;
+
+          // Collections for Logs
+          const shipmentLogs: ShipmentLog[] = [];
+
+          // Alias Map
+          const aliasMap: Record<string, string> = {};
+          products.forEach(p => {
+              aliasMap[p.sku.toUpperCase()] = p.sku;
+              p.channels.forEach(c => {
+                  if (c.skuAlias) {
+                      c.skuAlias.split(',').forEach(a => aliasMap[a.trim().toUpperCase()] = p.sku);
+                  }
+              });
+          });
+
+          rows.forEach(row => {
+              if (!row[skuIdx]) return;
+              const rawSku = String(row[skuIdx]).trim().toUpperCase();
+              const masterSku = aliasMap[rawSku];
+              
+              if (!masterSku) return; // Skip unknown SKUs
+
+              const parseVal = (idx: number) => {
+                  if (idx === -1) return 0;
+                  const v = parseFloat(row[idx]);
+                  return isNaN(v) ? 0 : v;
+              };
+
+              const qty = parseVal(qtyIdx);
+              const rev = parseVal(revIdx);
+
+              // --- Overall Aggregation ---
+              if (!aggregated[masterSku]) aggregated[masterSku] = { 
+                  qty: 0, revenue: 0, count: 0, dates: new Set(),
+                  fees: { selling: 0, ads: 0, postage: 0, extra: 0, other: 0, sub: 0, wms: 0, cogs: 0 },
+                  category: '',
+                  platformStats: {} 
+              };
+              
+              const item = aggregated[masterSku];
+              item.qty += qty;
+              item.revenue += rev;
+              item.count++;
+
+              // Aggregating Fees
+              const postageCost = parseVal(postIdx);
+              item.fees.selling += parseVal(sellingIdx);
+              item.fees.ads += parseVal(adsIdx);
+              item.fees.postage += postageCost;
+              item.fees.extra += parseVal(extraIdx);
+              item.fees.other += parseVal(otherIdx);
+              item.fees.sub += parseVal(subIdx);
+              item.fees.wms += parseVal(wmsIdx);
+              item.fees.cogs += parseVal(cogsIdx);
+
+              // Capture Category
+              if (catIdx !== -1 && row[catIdx]) item.category = String(row[catIdx]).trim();
+              
+              // Capture Platform
+              let currentPlatform = 'Unknown';
+              if (platIdx !== -1 && row[platIdx]) {
+                  const platVal = String(row[platIdx]).trim();
+                  if(platVal) currentPlatform = platVal;
+              }
+              
+              // Aggregate Platform Stats for Channel update
+              if (!item.platformStats[currentPlatform]) {
+                  item.platformStats[currentPlatform] = { qty: 0, revenue: 0 };
+              }
+              item.platformStats[currentPlatform].qty += qty;
+              item.platformStats[currentPlatform].revenue += rev;
+
+              const d = (dateIdx !== -1 && row[dateIdx]) ? new Date(row[dateIdx]) : new Date();
+              if (dateIdx !== -1 && row[dateIdx] && !isNaN(d.getTime())) {
+                  hasDates = true;
+                  if (d < minDate) minDate = d;
+                  if (d > maxDate) maxDate = d;
+                  item.dates.add(d.toISOString().split('T')[0]);
+
+                  // --- Weekly Bucketing ---
+                  const weekStart = getFridayWeekStart(d);
+                  const weekKey = `${masterSku}|${weekStart}`;
+                  
+                  if (!weeklyAggregated[weekKey]) {
+                      weeklyAggregated[weekKey] = { sku: masterSku, weekStart, qty: 0, revenue: 0, platform: currentPlatform };
+                  }
+                  weeklyAggregated[weekKey].qty += qty;
+                  weeklyAggregated[weekKey].revenue += rev;
+              }
+
+              // --- LOGISTICS CALIBRATION LOGGING ---
+              const serviceName = (logNameIdx !== -1 && row[logNameIdx]) ? String(row[logNameIdx]).trim() : '';
+              if (qty === 1 && serviceName && postageCost > 0) {
+                  shipmentLogs.push({
+                      id: Math.random().toString(36).substr(2, 9),
+                      sku: masterSku,
+                      service: serviceName,
+                      cost: postageCost,
+                      date: d.toISOString()
+                  });
+              }
+          });
+
+          // Calculate Period
+          let calculatedPeriod = periodDays;
+          let dateLabel = "Manual Period";
+          
+          if (hasDates && maxDate > minDate) {
+              const diffTime = Math.abs(maxDate.getTime() - minDate.getTime());
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // inclusive
+              calculatedPeriod = diffDays;
+              dateLabel = `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`;
+          }
+
+          // Build Updates & History
+          const updates: Product[] = [];
+          const history: HistoryPayload[] = [];
+          const todayStr = new Date().toISOString().split('T')[0];
+
+          // 1. Generate History from Weekly Buckets
+          Object.values(weeklyAggregated).forEach(bucket => {
+              const velocity = bucket.qty / 7; // Average daily velocity for that week
+              const avgPrice = bucket.qty > 0 ? bucket.revenue / bucket.qty : 0;
+              
+              if (velocity > 0) {
+                  history.push({
+                      sku: bucket.sku,
+                      date: bucket.weekStart, // Store bucket date (Friday of that week)
+                      price: Number(avgPrice.toFixed(2)),
+                      velocity: velocity,
+                      margin: 0, 
+                      platform: bucket.platform
+                  });
+              }
+          });
+
+          // 2. Generate Product Updates (Global Stats)
+          Object.entries(aggregated).forEach(([sku, data]) => {
+              const product = products.find(p => p.sku === sku);
+              if (!product) return;
+
+              const validQty = data.qty > 0 ? data.qty : 1; 
+              const newVelocity = data.qty / calculatedPeriod;
+              const currentPrice = product.currentPrice || 0;
+              const rawAvg = data.qty > 0 ? data.revenue / data.qty : currentPrice;
+              const avgPrice = Number((rawAvg || 0).toFixed(2));
+
+              const unitFees = {
+                  selling: data.fees.selling / validQty,
+                  ads: data.fees.ads / validQty,
+                  postage: data.fees.postage / validQty,
+                  extra: data.fees.extra / validQty,
+                  other: data.fees.other / validQty,
+                  sub: data.fees.sub / validQty,
+                  wms: data.fees.wms / validQty,
+              };
+
+              // Rebuild Channels based on report data
+              const updatedChannels = [...product.channels];
+              Object.entries(data.platformStats).forEach(([platform, stats]) => {
+                  const channelIdx = updatedChannels.findIndex(c => c.platform === platform);
+                  const channelVelocity = stats.qty / calculatedPeriod;
+                  const channelPrice = stats.qty > 0 ? stats.revenue / stats.qty : 0;
+
+                  if (channelIdx >= 0) {
+                      updatedChannels[channelIdx] = {
+                          ...updatedChannels[channelIdx],
+                          velocity: channelVelocity,
+                          price: channelPrice
+                      };
+                  } else {
+                      // Add new channel if discovered
+                      const defaultManager = pricingRules[platform]?.manager || 'Unassigned';
+                      updatedChannels.push({
+                          platform,
+                          manager: defaultManager,
+                          velocity: channelVelocity,
+                          price: channelPrice,
+                          skuAlias: '' // Will be populated if aliases are imported separately
+                      });
+                  }
+              });
+
+              updates.push({
+                  ...product,
+                  averageDailySales: newVelocity,
+                  previousDailySales: product.averageDailySales, 
+                  currentPrice: avgPrice,
+                  oldPrice: currentPrice,
+                  lastUpdated: todayStr,
+                  sellingFee: unitFees.selling || product.sellingFee,
+                  adsFee: unitFees.ads || product.adsFee,
+                  postage: unitFees.postage || product.postage,
+                  extraFreight: unitFees.extra || product.extraFreight,
+                  otherFee: unitFees.other || product.otherFee,
+                  subscriptionFee: unitFees.sub || product.subscriptionFee,
+                  wmsFee: unitFees.wms || product.wmsFee,
+                  category: data.category || product.category,
+                  channels: updatedChannels // Update the channels list!
+              });
+
+              // Fallback: If no dates were found in file, push a single 'today' history entry
+              if (!hasDates) {
+                  // Find primary platform
+                  const primaryPlatform = Object.keys(data.platformStats)[0] || 'General';
+                  history.push({
+                      sku,
+                      date: todayStr,
+                      price: avgPrice,
+                      velocity: newVelocity,
+                      margin: 0,
+                      platform: primaryPlatform
+                  });
+              }
+          });
+
+          const features = {
+              ads: map.adsFee && updates.some(u => u.adsFee && u.adsFee > 0),
+              fees: map.sellingFee && updates.some(u => u.sellingFee && u.sellingFee > 0),
+              logistics: (map.postage || map.wmsFee) && updates.some(u => (u.postage || 0) + (u.wmsFee || 0) > 0),
+              category: map.category && updates.some(u => u.category !== products.find(p => p.sku === u.sku)?.category)
+          };
+
+          setPreviewData({
+              updates,
+              history,
+              shipmentLogs,
+              features,
+              stats: {
+                  matchedSkus: updates.length,
+                  totalRevenue: Object.values(aggregated).reduce((a, b) => a + b.revenue, 0),
+                  period: calculatedPeriod,
+                  dateLabel,
+                  shipmentCount: shipmentLogs.length
+              }
+          });
+          setStep('preview');
+
+      } catch (err) {
+          console.error(err);
+          setError("Analysis failed. Please check column mappings.");
+      }
+  };
+
+  // ... rest of component
+  const handleManualAnalyze = () => {
+      if (!mapping.sku || !mapping.qty || !mapping.revenue) {
+          setError("Please map at least SKU, Quantity, and Revenue.");
           return;
       }
-
-      const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/\s+/g, '_'));
-      const skuIndex = headers.indexOf('sku_code');
-      const qtyIndex = headers.indexOf('sku_quantity');
-      const dateIndex = headers.indexOf('order_time');
-      
-      const amtIndex = headers.findIndex(h => h === 'sales_amt' || h === 'revenue');
-      const platformIndex = headers.findIndex(h => h === 'platform_name_level1' || h === 'platform');
-      const managerIndex = headers.findIndex(h => h === 'account_manager_name' || h === 'manager');
-      const subcatIndex = headers.findIndex(h => h === 'subcategory' || h === 'sub_category');
-      const costIndex = headers.findIndex(h => h.includes('cost') || h.includes('cogs') || h.includes('purchase_price') || h === 'unit_cost');
-      const sellingFeeIndex = headers.findIndex(h => h.includes('selling_fee') || h.includes('commission'));
-      const adsFeeIndex = headers.findIndex(h => h.includes('ads_fee') || h.includes('ad_fee'));
-      const postageIndex = headers.findIndex(h => h.includes('postage') || h.includes('shipping_fee'));
-      const extraFreightIndex = headers.findIndex(h => h.includes('extra_freight'));
-      const otherFeeIndex = headers.findIndex(h => h.includes('other_fee'));
-      const subFeeIndex = headers.findIndex(h => h.includes('subscription_fee'));
-      const wmsFeeIndex = headers.findIndex(h => h.includes('wms_fee') || h.includes('fulfillment'));
-
-      if (skuIndex === -1 || dateIndex === -1) {
-        setError("Format not recognized. Required columns: sku_code, order_time");
-        return;
-      }
-
-      const points: SalesDataPoint[] = [];
-      const distinctSkus = new Set<string>();
-      const existingSkuSet = new Set(products.map(p => p.sku));
-
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (row.length < 2) continue; 
-        const sku = String(row[skuIndex] || '').trim();
-        if (!sku) continue;
-
-        let qty = 0;
-        const qtyRaw = row[qtyIndex];
-        if (qtyRaw !== undefined && qtyRaw !== null && String(qtyRaw).trim() !== '') {
-            const parsed = parseFloat(String(qtyRaw));
-            if (!isNaN(parsed)) qty = parsed;
-        }
-
-        const dateVal = row[dateIndex];
-        const date = parseDate(dateVal);
-
-        if (date) {
-            const getFee = (idx: number) => {
-                if (idx === -1) return 0;
-                const val = parseFloat(String(row[idx] || 0));
-                return isNaN(val) ? 0 : Math.abs(val);
-            };
-            const unitCost = costIndex !== -1 ? parseFloat(String(row[costIndex] || 0)) : 0;
-            const platform = platformIndex !== -1 ? String(row[platformIndex] || 'Unknown').trim() : 'Unknown';
-
-            points.push({ 
-                sku, 
-                quantity: qty, 
-                date, 
-                revenue: parseFloat(String(row[amtIndex] || 0)), 
-                unitCost: isNaN(unitCost) ? 0 : Math.abs(unitCost),
-                platform,
-                manager: managerIndex !== -1 ? String(row[managerIndex] || 'Unassigned').trim() : 'Unassigned',
-                subcategory: subcatIndex !== -1 ? String(row[subcatIndex] || '').trim() : undefined,
-                sellingFee: getFee(sellingFeeIndex),
-                adsFee: getFee(adsFeeIndex),
-                postage: getFee(postageIndex),
-                extraFreight: getFee(extraFreightIndex),
-                otherFee: getFee(otherFeeIndex),
-                subscriptionFee: getFee(subFeeIndex),
-                wmsFee: getFee(wmsFeeIndex)
-            });
-            distinctSkus.add(sku);
-        }
-      }
-
-      if (points.length === 0) {
-        setError("No valid data found.");
-        return;
-      }
-
-      setRawSalesPoints(points);
-
-      // Detect Mapping Candidates
-      const candidates: MappingCandidate[] = [];
-      const seenCandidates = new Set<string>();
-
-      distinctSkus.forEach(importSku => {
-          if (existingSkuSet.has(importSku)) return; 
-          let bestMatch: string | null = null;
-          const stripped = importSku.replace(/[_ -](UK|US|DE|FR|IT|ES|[0-9]+)$/i, '');
-          if (existingSkuSet.has(stripped)) {
-              bestMatch = stripped;
-          } else {
-              for (const master of products) {
-                  if (importSku.startsWith(master.sku) && importSku.length > master.sku.length) {
-                      const separator = importSku[master.sku.length];
-                      if (separator === '_' || separator === '-') {
-                          if (!bestMatch || master.sku.length > bestMatch.length) {
-                              bestMatch = master.sku;
-                          }
-                      }
-                  }
-              }
-          }
-          if (bestMatch && !seenCandidates.has(importSku)) {
-              const sample = points.find(p => p.sku === importSku);
-              candidates.push({
-                  importSku,
-                  masterSku: bestMatch,
-                  platform: sample?.platform || 'Unknown'
-              });
-              seenCandidates.add(importSku);
-          }
-      });
-
-      if (candidates.length > 0) {
-          setMappingCandidates(candidates);
-          setCurrentStep('review_mappings');
-      } else {
-          aggregateData(points, {});
-          setCurrentStep('confirm');
-      }
+      setIsProcessing(true);
+      setTimeout(() => {
+          analyzeData(rawHeaders, rawRows, mapping);
+          setIsProcessing(false);
+      }, 500);
   };
 
-  const handleMappingDecision = (candidate: MappingCandidate, approved: boolean) => {
-      if (approved) {
-          setConfirmedMappings(prev => ({ ...prev, [candidate.importSku]: candidate.masterSku }));
-      } else {
-          setConfirmedMappings(prev => {
-              const copy = { ...prev };
-              delete copy[candidate.importSku];
-              return copy;
-          });
-      }
-      setMappingCandidates(prev => prev.filter(c => c.importSku !== candidate.importSku));
-  };
-
-  const finishMappingReview = () => {
-      aggregateData(rawSalesPoints, confirmedMappings);
-      setCurrentStep('confirm');
-  };
-
-  // Phase 2: Aggregation (Merging Aliases)
-  const aggregateData = (points: SalesDataPoint[], map: Record<string, string>) => {
-      let minDate = new Date(8640000000000000);
-      let maxDate = new Date(-8640000000000000);
-
-      points.forEach(p => {
-          if (p.date < minDate) minDate = p.date;
-          if (p.date > maxDate) maxDate = p.date;
-      });
-
-      const maxPeriodStart = getFridayPeriodStart(maxDate);
-      const minPeriodStart = getFridayPeriodStart(minDate);
-      const diffTime = maxPeriodStart.getTime() - minPeriodStart.getTime();
-      const totalWeeks = Math.ceil(diffTime / (7 * 24 * 3600 * 1000)) + 1;
-
-      const getWeekIndex = (date: Date) => {
-          const periodStart = getFridayPeriodStart(date);
-          const diff = maxPeriodStart.getTime() - periodStart.getTime();
-          return Math.round(diff / (7 * 24 * 3600 * 1000)); 
-      };
-
-      const getWeekDateRange = (index: number) => {
-        const start = new Date(maxPeriodStart);
-        start.setDate(maxPeriodStart.getDate() - (index * 7));
-        const end = new Date(start);
-        end.setDate(start.getDate() + 6);
-        end.setHours(23, 59, 59, 999);
-        return { start, end };
-      };
-
-      const skuCounts: Record<string, AggregatedSku> = {};
-
-      points.forEach(pt => {
-          const masterSku = map[pt.sku] || pt.sku;
-          
-          if (!skuCounts[masterSku]) {
-              skuCounts[masterSku] = {
-                  sku: masterSku,
-                  totalSold: 0,
-                  totalRevenue: 0,
-                  detectedAliases: {},
-                  channelStats: {},
-                  velocity: 0,
-                  totalSellingFee: 0,
-                  totalAdsFee: 0,
-                  totalPostage: 0,
-                  totalExtraFreight: 0,
-                  totalOtherFee: 0,
-                  totalSubFee: 0,
-                  totalWmsFee: 0,
-                  totalCostVolume: 0,
-                  subcategory: pt.subcategory,
-                  feeBounds: {
-                    sellingFee: { min: Infinity, max: -Infinity },
-                    adsFee: { min: Infinity, max: -Infinity },
-                    postage: { min: Infinity, max: -Infinity },
-                    extraFreight: { min: Infinity, max: -Infinity },
-                    otherFee: { min: Infinity, max: -Infinity },
-                    subscriptionFee: { min: Infinity, max: -Infinity },
-                    wmsFee: { min: Infinity, max: -Infinity },
-                  },
-                  weeklyStats: {}
-              };
-          }
-
-          const skuData = skuCounts[masterSku];
-          if (pt.sku !== masterSku) skuData.detectedAliases[pt.platform] = pt.sku;
-
-          skuData.totalSold += pt.quantity;
-          skuData.totalRevenue += pt.revenue;
-          if (pt.unitCost > 0) skuData.totalCostVolume += (pt.unitCost * pt.quantity);
-          if (!skuData.subcategory && pt.subcategory) skuData.subcategory = pt.subcategory;
-
-          skuData.totalSellingFee += pt.sellingFee;
-          skuData.totalAdsFee += pt.adsFee;
-          skuData.totalPostage += pt.postage;
-          skuData.totalExtraFreight += pt.extraFreight;
-          skuData.totalOtherFee += pt.otherFee;
-          skuData.totalSubFee += pt.subscriptionFee;
-          skuData.totalWmsFee += pt.wmsFee;
-
-          const updateBounds = (key: keyof typeof skuData.feeBounds, val: number) => {
-            skuData.feeBounds[key].min = Math.min(skuData.feeBounds[key].min, val);
-            skuData.feeBounds[key].max = Math.max(skuData.feeBounds[key].max, val);
-          };
-          
-          if (pt.quantity > 0) {
-            if (pt.sellingFee > 0) updateBounds('sellingFee', pt.sellingFee / pt.quantity);
-            if (pt.adsFee > 0) updateBounds('adsFee', pt.adsFee / pt.quantity);
-            if (pt.postage > 0) updateBounds('postage', pt.postage / pt.quantity);
-          }
-
-          const chanKey = `${pt.platform}::${pt.manager}`;
-          if (!skuData.channelStats[chanKey]) {
-              skuData.channelStats[chanKey] = {
-                  platform: pt.platform,
-                  manager: pt.manager,
-                  totalSold: 0,
-                  totalRevenue: 0
-              };
-          }
-          skuData.channelStats[chanKey].totalSold += pt.quantity;
-          skuData.channelStats[chanKey].totalRevenue += pt.revenue;
-
-          const weekIdx = getWeekIndex(pt.date);
-          if (!skuData.weeklyStats[weekIdx]) {
-              const { start, end } = getWeekDateRange(weekIdx);
-              skuData.weeklyStats[weekIdx] = {
-                  weekIndex: weekIdx,
-                  startDate: start,
-                  endDate: end,
-                  revenue: 0,
-                  sold: 0,
-                  totalFees: 0,
-                  totalCostVolume: 0
-              };
-          }
-          const weekStat = skuData.weeklyStats[weekIdx];
-          weekStat.revenue += pt.revenue;
-          weekStat.sold += pt.quantity;
-          weekStat.totalFees += (pt.sellingFee + pt.adsFee + pt.postage + pt.otherFee + pt.subscriptionFee + pt.wmsFee);
-          if (pt.unitCost > 0) weekStat.totalCostVolume += (pt.unitCost * pt.quantity);
-      });
-
-      const totalDurationDays = Math.max(1, Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 3600 * 24)) + 1);
-
-      Object.values(skuCounts).forEach(item => {
-        item.velocity = item.totalSold / totalDurationDays;
-        const fixBounds = (b: FeeBounds) => {
-            if (b.min === Infinity) b.min = 0;
-            if (b.max === -Infinity) b.max = 0;
-        };
-        Object.values(item.feeBounds).forEach(fixBounds);
-      });
-
-      const existingSkus = new Set(products.map(p => p.sku));
-      const newCount = Object.keys(skuCounts).filter(s => !existingSkus.has(s)).length;
-      const w0 = getWeekDateRange(0);
-      const w1 = getWeekDateRange(1);
-
-      setAnalysis({
-          dateRange: { start: minDate, end: maxDate },
-          totalOrders: points.length,
-          skuCounts,
-          newProductCount: newCount,
-          weekLabels: {
-              current: formatDateLabel(w0.start, w0.end),
-              last: formatDateLabel(w1.start, w1.end)
-          },
-          totalWeeksFound: totalWeeks
-      });
-  };
-
-  const handleConfirmImport = () => {
-    if (!analysis) return;
-
-    const updatedProducts = [...products];
-    const newProducts: Product[] = [];
-    const historyPayload: HistoryPayload[] = [];
-    const calcPrice = (revenue: number, qty: number, fallback: number) => {
-        if (qty <= 0) return fallback;
-        const exVat = revenue / qty;
-        return Number((exVat * 1.2).toFixed(2));
-    };
-
-    Object.values(analysis.skuCounts).forEach((agg: AggregatedSku) => {
-      const existingIndex = updatedProducts.findIndex(p => p.sku === agg.sku);
-      const existingProduct = existingIndex !== -1 ? updatedProducts[existingIndex] : null;
-      
-      const fileAvgPrice = calcPrice(agg.totalRevenue, agg.totalSold, 0);
-      const fileAvgCost = agg.totalSold > 0 && agg.totalCostVolume > 0 ? agg.totalCostVolume / agg.totalSold : 0;
-
-      const w0 = agg.weeklyStats[0];
-      const w1 = agg.weeklyStats[1];
-
-      const currentPriceFallback = (existingProduct && existingProduct.currentPrice > 0) 
-        ? existingProduct.currentPrice 
-        : fileAvgPrice;
-
-      const oldPriceFallback = (existingProduct && (existingProduct.oldPrice || existingProduct.currentPrice > 0))
-        ? (existingProduct.oldPrice || existingProduct.currentPrice)
-        : fileAvgPrice;
-
-      const currentWeekPrice = w0 ? calcPrice(w0.revenue, w0.sold, currentPriceFallback) : currentPriceFallback;
-      const lastWeekPrice = w1 ? calcPrice(w1.revenue, w1.sold, oldPriceFallback) : oldPriceFallback;
-      
-      // Calculate specific velocities for Current Week (w0) and Previous Week (w1)
-      const currentWeekVelocity = w0 ? Number((w0.sold / 7).toFixed(2)) : 0;
-      const prevWeekVelocity = w1 ? Number((w1.sold / 7).toFixed(2)) : 0;
-
-      const dailyVelocity = Number(agg.velocity.toFixed(2));
-      const avgFee = (total: number) => agg.totalSold > 0 ? Number((total / agg.totalSold).toFixed(2)) : 0;
-
-      const totalDurationDays = Math.max(1, analysis.totalWeeksFound * 7);
-      
-      const finalChannels: ChannelData[] = Object.values(agg.channelStats).map(cs => {
-          const alias = agg.detectedAliases[cs.platform];
-          return {
-            platform: cs.platform,
-            manager: cs.manager,
-            velocity: Number((cs.totalSold / totalDurationDays).toFixed(2)),
-            price: calcPrice(cs.totalRevenue, cs.totalSold, fileAvgPrice),
-            skuAlias: alias
-          };
-      });
-
-      if (existingProduct) {
-          existingProduct.channels.forEach(oldC => {
-              const newC = finalChannels.find(nc => nc.platform === oldC.platform && nc.manager === oldC.manager);
-              if (newC && !newC.skuAlias && oldC.skuAlias) {
-                  newC.skuAlias = oldC.skuAlias;
-              }
-          });
-      }
-
-      Object.values(agg.weeklyStats).forEach(stat => {
-          if (stat.sold > 0) {
-              const price = calcPrice(stat.revenue, stat.sold, 0);
-              const weeklyVelocity = Number((stat.sold / 7).toFixed(2));
-              const weeklyAvgCost = stat.totalCostVolume > 0 ? stat.totalCostVolume / stat.sold : fileAvgCost;
-              const cogs = weeklyAvgCost > 0 ? weeklyAvgCost : (existingProduct?.costPrice || 0);
-              const totalCost = stat.totalFees + (cogs * stat.sold);
-              const netProfit = stat.revenue - totalCost;
-              const margin = stat.revenue > 0 ? (netProfit / stat.revenue) * 100 : 0;
-
-              historyPayload.push({
-                  sku: agg.sku,
-                  price,
-                  velocity: weeklyVelocity,
-                  date: stat.endDate.toISOString(),
-                  margin: Number(margin.toFixed(2))
-              });
-          }
-      });
-
-      const leadTime = existingProduct ? existingProduct.leadTimeDays : 30;
-      const currentStock = existingProduct ? existingProduct.stockLevel : 0;
-      
-      // Use Current Week Velocity for Runway calculation if available, otherwise global average
-      const velocityForRunway = currentWeekVelocity > 0 ? currentWeekVelocity : dailyVelocity;
-      const daysRemaining = velocityForRunway > 0 ? currentStock / velocityForRunway : 999;
-      
-      let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
-      let recommendation = 'Maintain';
-
-      if (daysRemaining < leadTime) {
-          status = 'Critical';
-          recommendation = 'Increase Price';
-      } else if (daysRemaining > leadTime * 4) {
-          status = 'Overstock';
-          recommendation = 'Decrease Price';
-      } else if (daysRemaining < leadTime * 1.5) {
-          status = 'Warning';
-          recommendation = 'Maintain';
-      }
-
-      const productData = {
-          averageDailySales: currentWeekVelocity, // Store Week 0 velocity as primary
-          previousDailySales: prevWeekVelocity,   // Store Week 1 velocity for trend
-          channels: finalChannels,
-          currentPrice: currentWeekPrice > 0 ? currentWeekPrice : (existingProduct?.currentPrice || 0),
-          oldPrice: lastWeekPrice > 0 ? lastWeekPrice : (existingProduct?.oldPrice || 0),
-          lastUpdated: new Date().toISOString().split('T')[0],
-          status,
-          recommendation,
-          daysRemaining: Math.floor(daysRemaining),
-          subcategory: agg.subcategory,
-          sellingFee: avgFee(agg.totalSellingFee),
-          adsFee: avgFee(agg.totalAdsFee),
-          postage: avgFee(agg.totalPostage),
-          extraFreight: avgFee(agg.totalExtraFreight),
-          otherFee: avgFee(agg.totalOtherFee),
-          subscriptionFee: avgFee(agg.totalSubFee),
-          wmsFee: avgFee(agg.totalWmsFee),
-          feeBounds: agg.feeBounds
-      };
-      
-      const finalCost = fileAvgCost > 0 ? Number(fileAvgCost.toFixed(2)) : undefined;
-
-      if (existingIndex !== -1) {
-        updatedProducts[existingIndex] = {
-          ...updatedProducts[existingIndex],
-          ...productData,
-          subcategory: productData.subcategory || updatedProducts[existingIndex].subcategory,
-          costPrice: finalCost !== undefined ? finalCost : updatedProducts[existingIndex].costPrice 
-        };
-      } else {
-        newProducts.push({
-          id: `new-${agg.sku}-${Math.random().toString(36).substr(2, 9)}`,
-          name: `${agg.sku}`,
-          sku: agg.sku,
-          stockLevel: 0, 
-          leadTimeDays: 30, 
-          category: 'Uncategorized',
-          costPrice: finalCost || 0,
-          ...productData,
-        });
-      }
-    });
-
-    onConfirm([...updatedProducts, ...newProducts], analysis.weekLabels, historyPayload);
-  };
-  
-  // ... (Rest of component remains the same)
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const mapField = (field: keyof ColumnMapping, value: string) => {
+      setMapping(prev => ({ ...prev, [field]: value }));
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header & Content JSX */}
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <FileBarChart className="w-5 h-5 text-indigo-600" />
-              Import Sales History & Auto-Analyze
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-                {currentStep === 'review_mappings' ? 'Review & Merge SKU Aliases' : 'Aggregates sales by SKU and builds historical weekly performance data.'}
-            </p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+           <div className="flex items-center gap-3">
+               <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                   <FileBarChart className="w-5 h-5" />
+               </div>
+               <h2 className="text-xl font-bold text-gray-900">Import Sales Transaction Report</h2>
+           </div>
+           <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
         </div>
 
         <div className="p-6 flex-1 overflow-y-auto">
-          {isProcessing ? (
-             <div className="flex flex-col items-center justify-center h-64 space-y-4">
-                <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-                <p className="text-gray-600 font-medium">Processing report...</p>
-             </div>
-          ) : currentStep === 'upload' ? (
-            <div className="space-y-6">
-              <div 
-                className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-colors ${
-                  dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-                }`}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-              >
-                <input ref={fileInputRef} type="file" accept=".csv, .xlsx" className="hidden" onChange={handleFileChange} />
-                <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-4 pointer-events-none">
-                  <Upload className="w-8 h-8" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 pointer-events-none">Upload Sales Master CSV or XLSX</h3>
-                <p className="text-sm text-gray-500 mt-1 mb-4 pointer-events-none">Drag and drop or click to select file</p>
-                
-                <button 
+            {step === 'upload' && (
+                <div 
+                    className="border-2 border-dashed border-gray-300 rounded-xl p-10 flex flex-col items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer"
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-2 bg-white border border-gray-300 shadow-sm text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                    Select File
-                </button>
-              </div>
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3 text-red-700">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                    <span className="text-sm">{error}</span>
+                    <input ref={fileInputRef} type="file" className="hidden" accept=".csv, .xlsx" onChange={handleFileChange} />
+                    {isProcessing ? (
+                        <div className="flex flex-col items-center animate-in fade-in zoom-in">
+                            <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-3" />
+                            <p className="font-medium text-indigo-600">Auto-detecting Columns...</p>
+                        </div>
+                    ) : (
+                        <>
+                            <Upload className="w-10 h-10 text-gray-400 mb-4" />
+                            <p className="font-medium text-gray-700">Click to upload Transaction Report</p>
+                            <p className="text-sm text-gray-500 mt-1">Supports CSV or Excel from ERP</p>
+                        </>
+                    )}
+                    {error && <p className="text-red-500 mt-4 text-sm flex items-center gap-1"><AlertCircle className="w-4 h-4"/> {error}</p>}
                 </div>
-              )}
-            </div>
-          ) : currentStep === 'review_mappings' ? (
-              // Mappings Table
-              <div className="space-y-4">
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800 flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                      <div>
-                          <p className="font-bold">Alias Detection</p>
-                          <p>We found {mappingCandidates.length} SKUs that look like variations of existing products. Please review the suggested mappings below.</p>
-                      </div>
-                  </div>
+            )}
 
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                      <table className="w-full text-sm text-left">
-                          <thead className="bg-gray-50 text-gray-500 font-medium">
-                              <tr>
-                                  <th className="p-3">Imported SKU (Alias)</th>
-                                  <th className="p-3">Platform</th>
-                                  <th className="p-3">Master SKU Match</th>
-                                  <th className="p-3 text-right">Action</th>
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                              {mappingCandidates.map((cand, idx) => (
-                                  <tr key={idx} className="hover:bg-gray-50">
-                                      <td className="p-3 font-mono text-gray-600">{cand.importSku}</td>
-                                      <td className="p-3">
-                                          <span className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">{cand.platform}</span>
-                                      </td>
-                                      <td className="p-3">
-                                          <div className="flex items-center gap-2 font-bold text-gray-900">
-                                              <ArrowRight className="w-4 h-4 text-gray-400" />
-                                              {cand.masterSku}
-                                          </div>
-                                      </td>
-                                      <td className="p-3 text-right">
-                                          <div className="flex justify-end gap-2">
-                                              <button 
-                                                onClick={() => handleMappingDecision(cand, true)}
-                                                className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
-                                                title="Confirm: Merge sales into Master SKU"
-                                              >
-                                                  <LinkIcon className="w-4 h-4" />
-                                              </button>
-                                              <button 
-                                                onClick={() => handleMappingDecision(cand, false)}
-                                                className="p-1.5 bg-gray-100 text-gray-500 rounded hover:bg-gray-200 transition-colors"
-                                                title="Reject: Create as separate product"
-                                              >
-                                                  <Unlink className="w-4 h-4" />
-                                              </button>
-                                          </div>
-                                      </td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  </div>
-              </div>
-          ) : analysis ? (
-            <div className="space-y-6">
-              {/* Analysis Summary */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-2 text-gray-500 mb-1">
-                    <Calendar className="w-4 h-4" />
-                    <span className="text-xs font-medium uppercase">Total Date Range</span>
-                  </div>
-                  <div className="font-semibold text-gray-900">
-                    {analysis.dateRange && `${formatDate(analysis.dateRange.start)} - ${formatDate(analysis.dateRange.end)}`}
-                  </div>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                    <div className="flex items-center gap-2 text-gray-500 mb-1">
-                        <TrendingUp className="w-4 h-4" />
-                        <span className="text-xs font-medium uppercase">Data Depth</span>
+            {step === 'mapping' && (
+                <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                    <div className="flex items-center justify-between">
+                        <p className="text-sm text-gray-600">We couldn't auto-match everything. Please confirm columns.</p>
+                        <button 
+                            onClick={() => setShowAdvancedMapping(!showAdvancedMapping)}
+                            className="text-xs text-indigo-600 font-medium flex items-center gap-1 hover:underline"
+                        >
+                            <Settings2 className="w-3 h-3" />
+                            {showAdvancedMapping ? 'Hide Advanced Fees' : 'Show Advanced Fees'}
+                        </button>
                     </div>
-                    <div className="flex items-baseline gap-2">
-                         <span className="font-bold text-2xl text-indigo-600">{analysis.totalWeeksFound}</span>
-                         <span className="text-sm text-gray-600">Weeks of history identified</span>
-                    </div>
-                </div>
-              </div>
 
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Preview Aggregated Data</h4>
-                <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 text-gray-500 font-medium sticky top-0">
-                      <tr>
-                        <th className="p-3">SKU</th>
-                        <th className="p-3">Avg Daily Sales</th>
-                        <th className="p-3 text-right">Weeks w/ Sales</th>
-                        <th className="p-3 text-right">Avg Fee/Unit</th>
-                        <th className="p-3 text-right">Avg Cost</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {Object.values(analysis.skuCounts).slice(0, 20).map((item: AggregatedSku, idx) => {
-                          const activeWeeks = Object.values(item.weeklyStats).filter(w => w.sold > 0).length;
-                          const totalFees = item.totalSellingFee + item.totalAdsFee + item.totalPostage + item.totalWmsFee + item.totalOtherFee + item.totalExtraFreight;
-                          const avgFee = item.totalSold > 0 ? totalFees / item.totalSold : 0;
-                          const avgCost = item.totalSold > 0 ? item.totalCostVolume / item.totalSold : 0;
-                          
-                          return (
-                            <tr key={idx} className="hover:bg-gray-50">
-                              <td className="p-3 font-mono text-xs font-medium">
-                                  {item.sku}
-                                  {Object.keys(item.detectedAliases).length > 0 && (
-                                      <span className="ml-2 px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px]">
-                                          {Object.keys(item.detectedAliases).length} Alias
-                                      </span>
-                                  )}
-                              </td>
-                              <td className="p-3 text-indigo-600 font-semibold">{item.velocity.toFixed(2)}</td>
-                              <td className="p-3 text-right">{activeWeeks}</td>
-                              <td className="p-3 text-right font-mono text-xs text-gray-500">£{avgFee.toFixed(2)}</td>
-                              <td className="p-3 text-right font-mono text-xs text-gray-700">£{avgCost.toFixed(2)}</td>
-                            </tr>
-                          );
-                      })}
-                    </tbody>
-                  </table>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                        <MappingSelect label="SKU (sku_code)" value={mapping.sku} onChange={(v) => mapField('sku', v)} options={rawHeaders} required />
+                        <MappingSelect label="Quantity (sku_quantity)" value={mapping.qty} onChange={(v) => mapField('qty', v)} options={rawHeaders} required />
+                        <MappingSelect label="Revenue (sales_amt)" value={mapping.revenue} onChange={(v) => mapField('revenue', v)} options={rawHeaders} required />
+                        <MappingSelect label="Date (order_time)" value={mapping.date} onChange={(v) => mapField('date', v)} options={rawHeaders} />
+                        <MappingSelect label="Platform Source" value={mapping.platform} onChange={(v) => mapField('platform', v)} options={rawHeaders} />
+                    </div>
+
+                    {showAdvancedMapping && (
+                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-4 animate-in fade-in slide-in-from-top-2">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Fees & Logistics (Optional)</h4>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                <MappingSelect label="Selling Fee" value={mapping.sellingFee} onChange={v => mapField('sellingFee', v)} options={rawHeaders} />
+                                <MappingSelect label="Ad Spend / PPC" value={mapping.adsFee} onChange={v => mapField('adsFee', v)} options={rawHeaders} />
+                                <MappingSelect label="Postage Cost" value={mapping.postage} onChange={v => mapField('postage', v)} options={rawHeaders} />
+                                <MappingSelect label="Logistics Name (Service)" value={mapping.logisticsService} onChange={v => mapField('logisticsService', v)} options={rawHeaders} />
+                                <MappingSelect label="WMS Fee" value={mapping.wmsFee} onChange={v => mapField('wmsFee', v)} options={rawHeaders} />
+                                <MappingSelect label="Extra Freight (Income)" value={mapping.extraFreight} onChange={v => mapField('extraFreight', v)} options={rawHeaders} />
+                                <MappingSelect label="Category" value={mapping.category} onChange={v => mapField('category', v)} options={rawHeaders} />
+                            </div>
+                        </div>
+                    )}
+
+                    {!mapping.date && (
+                        <div className="bg-yellow-50 p-3 rounded border border-yellow-100 flex items-center gap-3">
+                            <Calendar className="w-4 h-4 text-yellow-600" />
+                            <div className="flex-1">
+                                <label className="block text-xs font-bold text-yellow-800 uppercase mb-1">Manual Period (Days)</label>
+                                <input 
+                                    type="number" 
+                                    value={periodDays} 
+                                    onChange={e => setPeriodDays(parseInt(e.target.value) || 1)}
+                                    className="border rounded p-1 w-20 text-sm"
+                                />
+                            </div>
+                        </div>
+                    )}
+                    {error && <p className="text-red-500 text-sm">{error}</p>}
                 </div>
-              </div>
-            </div>
-          ) : null}
+            )}
+
+            {step === 'preview' && previewData && (
+                <div className="space-y-6 animate-in zoom-in duration-300">
+                    {/* Stats */}
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="p-4 bg-green-50 rounded-xl border border-green-100">
+                            <div className="text-2xl font-bold text-green-700">{previewData.stats.matchedSkus}</div>
+                            <div className="text-xs text-green-600 uppercase font-bold">Products Matched</div>
+                        </div>
+                        <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                            <div className="text-2xl font-bold text-indigo-700">£{previewData.stats.totalRevenue.toLocaleString()}</div>
+                            <div className="text-xs text-indigo-600 uppercase font-bold">Total Revenue</div>
+                        </div>
+                        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                            <div className="text-2xl font-bold text-blue-700">{previewData.stats.period} Days</div>
+                            <div className="text-xs text-blue-600 uppercase font-bold">{previewData.stats.dateLabel}</div>
+                        </div>
+                    </div>
+
+                    {/* Detected Features Badges */}
+                    <div className="flex flex-wrap gap-2 justify-center">
+                        {previewData.features?.ads && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-bold border border-purple-200">
+                                <Check className="w-3 h-3" /> Ad Data Detected
+                            </span>
+                        )}
+                        {previewData.features?.logistics && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold border border-orange-200">
+                                <Check className="w-3 h-3" /> Logistics Costs Detected
+                            </span>
+                        )}
+                        {previewData.stats.shipmentCount > 0 && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-teal-100 text-teal-700 text-xs font-bold border border-teal-200">
+                                <Truck className="w-3 h-3" /> {previewData.stats.shipmentCount} Shipments Logged
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Preview Table */}
+                    <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-500 font-bold sticky top-0">
+                                <tr>
+                                    <th className="p-3">SKU</th>
+                                    <th className="p-3 text-right">Old Vel.</th>
+                                    <th className="p-3 text-right">New Vel.</th>
+                                    <th className="p-3 text-right">Unit Price</th>
+                                    <th className="p-3 text-right">Unit Fees</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {previewData.updates.slice(0, 50).map((u: any, i: number) => {
+                                    const totalFees = (u.sellingFee || 0) + (u.adsFee || 0) + (u.postage || 0) + (u.wmsFee || 0);
+                                    return (
+                                        <tr key={i}>
+                                            <td className="p-3 font-mono text-xs">{u.sku}</td>
+                                            <td className="p-3 text-right text-gray-400">{u.previousDailySales?.toFixed(1) || '-'}</td>
+                                            <td className="p-3 text-right font-bold text-indigo-600">{u.averageDailySales.toFixed(1)}</td>
+                                            <td className="p-3 text-right">£{(u.currentPrice || 0).toFixed(2)}</td>
+                                            <td className="p-3 text-right text-xs text-gray-500">
+                                                {totalFees > 0 ? `£${totalFees.toFixed(2)}` : '-'}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
 
-        <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-           <button 
-            onClick={() => { setAnalysis(null); setDragActive(false); setError(null); setCurrentStep('upload'); }}
-            className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200 rounded-lg transition-colors"
-          >
-            Reset
-          </button>
-          
-          {currentStep === 'review_mappings' && (
-              <button 
-                onClick={finishMappingReview}
-                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md transition-all flex items-center gap-2"
-              >
-                  Continue
-                  <ArrowRight className="w-4 h-4" />
-              </button>
-          )}
-
-          {currentStep === 'confirm' && analysis && (
-            <button 
-              onClick={handleConfirmImport}
-              className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md shadow-indigo-200 transition-all flex items-center gap-2"
-            >
-              <Check className="w-4 h-4" />
-              Apply Updates
-            </button>
-          )}
+        <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button onClick={onClose} className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200 rounded-lg">Cancel</button>
+            {step === 'mapping' && (
+                <button 
+                    onClick={handleManualAnalyze} 
+                    disabled={isProcessing}
+                    className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                    {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                    Analyze Data
+                </button>
+            )}
+            {step === 'preview' && (
+                <button 
+                    onClick={() => onConfirm(previewData.updates, { current: previewData.stats.dateLabel, last: "Previous" }, previewData.history, previewData.shipmentLogs)}
+                    className="px-6 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all"
+                >
+                    <Check className="w-4 h-4" />
+                    Confirm Import
+                </button>
+            )}
         </div>
       </div>
     </div>
   );
 };
+
+const MappingSelect = ({ label, value, onChange, options, required }: any) => (
+    <div>
+        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+            {label} {required && <span className="text-red-500">*</span>}
+        </label>
+        <div className="relative">
+            <select 
+                value={value || ''} 
+                onChange={e => onChange(e.target.value)} 
+                className={`w-full border rounded-lg py-2 px-3 text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500 ${required && !value ? 'border-red-300' : 'border-gray-300'}`}
+            >
+                <option value="">-- Ignore --</option>
+                {options.map((h: string) => <option key={h} value={h}>{h}</option>)}
+            </select>
+            <div className="absolute right-3 top-2.5 pointer-events-none text-gray-400">
+                <ArrowRight className="w-4 h-4 rotate-90" />
+            </div>
+        </div>
+    </div>
+);
 
 export default SalesImportModal;

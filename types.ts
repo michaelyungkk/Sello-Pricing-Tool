@@ -1,4 +1,5 @@
 
+
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -82,6 +83,24 @@ export interface PriceLog {
   price: number;
   velocity: number; // Sales per day at this price
   margin: number; // Net % at this price
+  platform?: string; // Platform specific tag (optional to support legacy data)
+}
+
+export interface HistoryPayload {
+  sku: string;
+  date: string;
+  price: number;
+  velocity: number;
+  margin?: number;
+  platform?: string;
+}
+
+export interface ShipmentLog {
+  id: string;
+  sku: string;
+  service: string;
+  cost: number;
+  date: string;
 }
 
 export interface AnalysisResult {
@@ -110,6 +129,18 @@ export interface PlatformConfig {
 }
 
 export type PricingRules = Record<Platform, PlatformConfig>;
+
+// --- LOGISTICS MODULE TYPES ---
+
+export interface LogisticsRule {
+  id: string;
+  name: string; // The service code e.g. YODEL-48-MED-UK
+  carrier: string; // e.g. Yodel, Evri
+  price: number;
+  maxWeight?: number; // kg
+  maxVolume?: number; // m3
+  maxLength?: number; // cm
+}
 
 // --- PROMOTION MODULE TYPES ---
 

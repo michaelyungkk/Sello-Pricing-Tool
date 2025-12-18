@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo } from 'react';
 import { Product } from '../types';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, Link as LinkIcon, ArrowRight, Search, ChevronDown, ChevronRight, Edit2, GitMerge, Eraser } from 'lucide-react';
@@ -38,13 +37,27 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
   // Create a set of valid master SKUs for quick validation
   const masterSkuSet = useMemo(() => new Set(products.map(p => p.sku)), [products]);
   
-  // Create a normalized lookup map for case-insensitive matching (handles X vs x, etc.)
+  // Create a normalized lookup map for case-insensitive matching
   const masterSkuLookup = useMemo(() => {
       const map: Record<string, string> = {};
       products.forEach(p => {
-          // Normalize: Uppercase, replace special x chars
           const normalized = p.sku.toUpperCase().replace(/×/g, 'X').replace(/\*/g, 'X');
           map[normalized] = p.sku;
+      });
+      return map;
+  }, [products]);
+
+  // Create a lookup for existing aliases across all products
+  const existingAliasLookup = useMemo(() => {
+      const map: Record<string, string> = {};
+      products.forEach(p => {
+          p.channels.forEach(c => {
+              if (c.skuAlias) {
+                  c.skuAlias.split(',').forEach(a => {
+                      map[a.trim()] = p.sku; // Map Alias -> Master SKU
+                  });
+              }
+          });
       });
       return map;
   }, [products]);
@@ -122,7 +135,6 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
         return;
     }
 
-    // 1. Find the SKU column automatically
     const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_-]/g, ''));
     
     // Heuristics for platform export headers
@@ -139,7 +151,6 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
         return;
     }
 
-    // 2. Extract and Match
     const results: DetectedRow[] = [];
     const processedSkus = new Set<string>();
 
@@ -148,32 +159,34 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
         if (!row || row.length <= skuIdx) continue;
         
         const rawSku = String(row[skuIdx]).trim();
-        // Remove quotes if CSV parsing left them
         const fileSku = rawSku.replace(/^"|"$/g, '');
 
         if (!fileSku || processedSkus.has(fileSku)) continue;
         processedSkus.add(fileSku);
 
-        // MATCHING LOGIC
         let masterSku: string | null = null;
         let method: 'exact' | 'fuzzy' | 'none' = 'none';
 
-        // Helper to normalize strings for comparison
         const normalize = (s: string) => s.toUpperCase().replace(/×/g, 'X').replace(/\*/g, 'X');
         const normalizedFileSku = normalize(fileSku);
 
-        // 1. Exact Match (Case Sensitive)
-        if (masterSkuSet.has(fileSku)) {
+        // 1. Check if this file SKU is ALREADY an alias for an existing master product
+        if (existingAliasLookup[fileSku]) {
+            masterSku = existingAliasLookup[fileSku];
+            method = 'exact'; // Treating existing alias matches as exact/confirmed
+        }
+        // 2. Exact Master SKU Match
+        else if (masterSkuSet.has(fileSku)) {
             masterSku = fileSku;
             method = 'exact';
         } 
-        // 2. Case-Insensitive / Normalized Match (Handles X vs x, × vs x)
+        // 3. Normalized Master SKU Match
         else if (masterSkuLookup[normalizedFileSku]) {
             masterSku = masterSkuLookup[normalizedFileSku];
-            method = 'exact'; // High confidence
+            method = 'exact';
         }
         else {
-            // Heuristic 1: Strip Suffix from File SKU (e.g. File: ABC-UK -> Master: ABC)
+            // Fuzzy Matching (Suffix Stripping)
             const stripped = fileSku.replace(/[_ -](UK|US|DE|FR|IT|ES|[0-9]+)$/i, '');
             const normalizedStripped = normalize(stripped);
             
@@ -184,11 +197,10 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                 masterSku = masterSkuLookup[normalizedStripped];
                 method = 'fuzzy';
             } else {
-                // Heuristic 2: Prefix Match (File SKU starts with Master SKU) e.g. File: ABC-UK_1 -> Master: ABC-UK
+                // Fuzzy Matching (Prefix Check)
                 let bestPrefixMatch = '';
                 for (const prod of products) {
                     if (fileSku.startsWith(prod.sku)) {
-                        // Check if separator follows (avoid matching BF10 to BF100)
                         const remaining = fileSku.slice(prod.sku.length);
                         if ((remaining.startsWith('-') || remaining.startsWith('_') || remaining === '') && prod.sku.length > bestPrefixMatch.length) {
                             bestPrefixMatch = prod.sku;
@@ -200,21 +212,15 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                     method = 'fuzzy';
                 }
 
-                // Heuristic 3: Reverse Prefix Match (Master SKU starts with File SKU) e.g. File: AI1005-BK -> Master: AI1005-BK-UK
-                // This handles cases where the platform uses the base SKU but inventory is regionalized
                 if (!masterSku) {
                     const candidates = products.filter(p => {
-                        // Check if Master starts with File
                         if (!p.sku.startsWith(fileSku)) return false;
-                        // Check if strictly longer
                         if (p.sku.length <= fileSku.length) return false;
-                        // Check for separator to ensure clean segment match (avoid matching A100 to A1005)
                         const separator = p.sku[fileSku.length];
                         return separator === '-' || separator === '_' || separator === ' ';
                     });
 
                     if (candidates.length > 0) {
-                        // Prioritize UK suffix if available, otherwise take the first match
                         const ukMatch = candidates.find(p => p.sku.toUpperCase().endsWith('-UK') || p.sku.toUpperCase().endsWith('_UK'));
                         masterSku = ukMatch ? ukMatch.sku : candidates[0].sku;
                         method = 'fuzzy';

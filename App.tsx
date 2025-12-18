@@ -1,7 +1,6 @@
-
-import React, { useState, useEffect } from 'react';
-import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES } from './constants';
-import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData } from './types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES } from './constants';
+import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog } from './types';
 import ProductList from './components/ProductList';
 import AnalysisModal from './components/AnalysisModal';
 import BatchUploadModal, { BatchUpdateItem } from './components/BatchUploadModal';
@@ -15,7 +14,7 @@ import UserProfile from './components/UserProfile';
 import ProductManagementPage from './components/ProductManagementPage';
 import MappingUploadModal, { SkuMapping } from './components/MappingUploadModal';
 import { analyzePriceAdjustment } from './services/geminiService';
-import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package } from 'lucide-react';
+import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package, Download } from 'lucide-react';
 
 // --- LOGIC HELPERS ---
 
@@ -59,6 +58,37 @@ const calculateOptimalPrice = (sku: string, currentHistory: PriceLog[]): number 
     return bestPrice > 0 ? bestPrice : undefined;
 };
 
+// Helper to determine Friday-Thursday week ranges
+const getFridayThursdayRanges = () => {
+    const today = new Date();
+    const currentDay = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    // Target: Friday (5).
+    // Distance to previous Friday:
+    // If today is Fri(5) -> diff 0
+    // If today is Sat(6) -> diff 1
+    // If today is Sun(0) -> diff 2
+    // If today is Thu(4) -> diff 6
+    const diff = (currentDay + 2) % 7;
+    
+    const currentStart = new Date(today);
+    currentStart.setDate(today.getDate() - diff);
+    currentStart.setHours(0,0,0,0);
+    
+    const currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentEnd.getDate() + 6);
+    currentEnd.setHours(23,59,59,999);
+    
+    const lastStart = new Date(currentStart);
+    lastStart.setDate(lastStart.getDate() - 7);
+    
+    const lastEnd = new Date(lastStart);
+    lastEnd.setDate(lastEnd.getDate() + 6);
+    lastEnd.setHours(23,59,59,999);
+    
+    return { current: { start: currentStart, end: currentEnd }, last: { start: lastStart, end: lastEnd } };
+};
+
+const formatDateShort = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
 const App: React.FC = () => {
   // --- DATABASE INITIALIZATION ---
@@ -82,6 +112,15 @@ const App: React.FC = () => {
     }
   });
 
+  const [logisticsRules, setLogisticsRules] = useState<LogisticsRule[]>(() => {
+      try {
+          const saved = localStorage.getItem('ecompulse_logistics');
+          return saved ? JSON.parse(saved) : DEFAULT_LOGISTICS_RULES;
+      } catch (e) {
+          return DEFAULT_LOGISTICS_RULES;
+      }
+  });
+
   const [priceHistory, setPriceHistory] = useState<PriceLog[]>(() => {
       try {
           const saved = localStorage.getItem('ecompulse_price_history');
@@ -91,6 +130,16 @@ const App: React.FC = () => {
       }
   });
 
+  const [shipmentHistory, setShipmentHistory] = useState<ShipmentLog[]>(() => {
+      try {
+          const saved = localStorage.getItem('ecompulse_shipment_history');
+          return saved ? JSON.parse(saved) : [];
+      } catch (e) {
+          return [];
+      }
+  });
+
+  // NOTE: This state is preserved for compatibility but rendering uses dynamicDateLabels
   const [priceDateLabels, setPriceDateLabels] = useState<{current: string, last: string}>(() => {
      try {
          const saved = localStorage.getItem('ecompulse_date_labels');
@@ -138,6 +187,14 @@ const App: React.FC = () => {
   
   // Connectivity State
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const fileRestoreRef = useRef<HTMLInputElement>(null);
+
+  // Dynamic Date Ranges
+  const weekRanges = useMemo(() => getFridayThursdayRanges(), []);
+  const dynamicDateLabels = useMemo(() => ({
+      current: `${formatDateShort(weekRanges.current.start)} - ${formatDateShort(weekRanges.current.end)}`,
+      last: `${formatDateShort(weekRanges.last.start)} - ${formatDateShort(weekRanges.last.end)}`
+  }), [weekRanges]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -152,24 +209,94 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Auto-update promotion statuses based on dates
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    setPromotions(prevPromos => {
+        let updatesNeeded = false;
+        const updated = prevPromos.map(p => {
+            let status: 'UPCOMING' | 'ACTIVE' | 'ENDED' = p.status;
+            if (today < p.startDate) status = 'UPCOMING';
+            else if (today > p.endDate) status = 'ENDED';
+            else status = 'ACTIVE';
+
+            if (status !== p.status) {
+                updatesNeeded = true;
+                return { ...p, status };
+            }
+            return p;
+        });
+        return updatesNeeded ? updated : prevPromos;
+    });
+  }, []);
+
+  // --- AUTO-AGGREGATION OF WEEKLY PRICES ---
+  useEffect(() => {
+      if (priceHistory.length === 0) return;
+
+      const { current, last } = weekRanges;
+      
+      setProducts(prevProducts => {
+          let hasChanges = false;
+          const updated = prevProducts.map(p => {
+               // Logic to calc average from logs
+               const getAvg = (start: Date, end: Date) => {
+                   const logs = priceHistory.filter(l => {
+                       const d = new Date(l.date);
+                       return l.sku === p.sku && d >= start && d <= end;
+                   });
+                   if (logs.length === 0) return null;
+                   
+                   const totalRev = logs.reduce((acc, l) => acc + (l.price * l.velocity), 0);
+                   const totalQty = logs.reduce((acc, l) => acc + l.velocity, 0);
+                   
+                   return totalQty > 0 ? totalRev / totalQty : null;
+               };
+               
+               // Current Week: Up to now (real-time)
+               const avgCurrent = getAvg(current.start, new Date());
+               const avgLast = getAvg(last.start, last.end);
+               
+               let newCurrent = p.currentPrice;
+               let newOld = p.oldPrice;
+               
+               // Only update if we have data for that period, otherwise keep existing snapshot
+               if (avgCurrent !== null) newCurrent = Number(avgCurrent.toFixed(2));
+               if (avgLast !== null) newOld = Number(avgLast.toFixed(2));
+               
+               if (Math.abs(newCurrent - p.currentPrice) > 0.001 || Math.abs((newOld || 0) - (p.oldPrice || 0)) > 0.001) {
+                   hasChanges = true;
+                   return { ...p, currentPrice: newCurrent, oldPrice: newOld };
+               }
+               return p;
+          });
+          
+          return hasChanges ? updated : prevProducts;
+      });
+  }, [priceHistory, weekRanges]);
+
+
   // --- DATA PERSISTENCE (Local Storage) ---
   
   useEffect(() => { localStorage.setItem('ecompulse_products', JSON.stringify(products)); }, [products]);
   useEffect(() => { localStorage.setItem('ecompulse_rules', JSON.stringify(pricingRules)); }, [pricingRules]);
+  useEffect(() => { localStorage.setItem('ecompulse_logistics', JSON.stringify(logisticsRules)); }, [logisticsRules]);
   useEffect(() => { localStorage.setItem('ecompulse_date_labels', JSON.stringify(priceDateLabels)); }, [priceDateLabels]);
   useEffect(() => { localStorage.setItem('ecompulse_price_history', JSON.stringify(priceHistory)); }, [priceHistory]);
+  useEffect(() => { localStorage.setItem('ecompulse_shipment_history', JSON.stringify(shipmentHistory)); }, [shipmentHistory]);
   useEffect(() => { localStorage.setItem('ecompulse_promotions', JSON.stringify(promotions)); }, [promotions]);
   useEffect(() => { localStorage.setItem('ecompulse_user_profile', JSON.stringify(userProfile)); }, [userProfile]);
 
 
   // --- HANDLERS ---
 
-  const handleRestoreData = (data: { products: Product[], rules: PricingRules, history?: PriceLog[], promotions?: PromotionEvent[] }) => {
+  const handleRestoreData = (data: { products: Product[], rules: PricingRules, logistics?: LogisticsRule[], history?: PriceLog[], promotions?: PromotionEvent[] }) => {
     try {
         console.log("Restoring data...", { productCount: data.products?.length });
         
         const safeProducts = data.products ? JSON.parse(JSON.stringify(data.products)) : [];
         const safeRules = data.rules ? JSON.parse(JSON.stringify(data.rules)) : JSON.parse(JSON.stringify(DEFAULT_PRICING_RULES));
+        const safeLogistics = data.logistics ? JSON.parse(JSON.stringify(data.logistics)) : JSON.parse(JSON.stringify(DEFAULT_LOGISTICS_RULES));
         const safeHistory = data.history ? JSON.parse(JSON.stringify(data.history)) : [];
         const safePromotions = data.promotions ? JSON.parse(JSON.stringify(data.promotions)) : [];
 
@@ -180,13 +307,51 @@ const App: React.FC = () => {
 
         setProducts(enrichedProducts);
         setPricingRules(safeRules);
+        setLogisticsRules(safeLogistics);
         setPriceHistory(safeHistory);
         setPromotions(safePromotions);
-        
+        alert("Database restored successfully!");
     } catch (e) {
         console.error("Failed to restore data", e);
-        alert("An error occurred while loading data. Please try again.");
+        alert("An error occurred while loading data. Please check your backup file.");
     }
+  };
+
+  const handleExportBackup = () => {
+    const backupData = {
+      products,
+      rules: pricingRules,
+      logistics: logisticsRules,
+      history: priceHistory,
+      shipmentHistory,
+      promotions,
+      timestamp: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ecompulse_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        handleRestoreData(json);
+      } catch (err) {
+        alert("Invalid backup file format.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleAnalyze = async (product: Product) => {
@@ -327,42 +492,55 @@ const App: React.FC = () => {
     setIsUploadModalOpen(false);
   };
   
-  const handleSalesImport = (updatedProducts: Product[], dateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[]) => {
+  const handleSalesImport = (
+      updatedProducts: Product[], 
+      dateLabels?: { current: string, last: string }, 
+      historyPayload?: HistoryPayload[],
+      shipmentLogs?: ShipmentLog[]
+  ) => {
+      // 1. Process new history logs (Now containing weekly aggregated data)
       const newLogs: PriceLog[] = [];
       if (historyPayload) {
           historyPayload.forEach(item => {
               const product = updatedProducts.find(p => p.sku === item.sku);
               if (product) {
+                  // Only add history if velocity > 0 to avoid cluttering with empty weeks, 
+                  // unless it's explicitly recording a drop to 0.
                   newLogs.push({
                       id: `hist-${item.sku}-${item.date}-${Math.random().toString(36).substr(2, 5)}`,
                       sku: item.sku,
                       price: item.price,
                       velocity: item.velocity,
                       date: item.date,
-                      margin: item.margin !== undefined ? item.margin : calculateMargin(product, item.price)
+                      margin: item.margin !== undefined ? item.margin : calculateMargin(product, item.price),
+                      platform: item.platform 
                   });
               }
           });
       }
 
+      // 2. Merge with existing history (Preventing duplicates for same SKU+Date)
       let updatedHistory = [...priceHistory];
       if (newLogs.length > 0) {
           const newDates = new Set(newLogs.map(l => l.sku + l.date));
           updatedHistory = priceHistory.filter(l => !newDates.has(l.sku + l.date));
           updatedHistory = [...updatedHistory, ...newLogs];
-          
           setPriceHistory(updatedHistory);
       }
 
+      // Update Shipment Logs if provided (Append new ones)
+      if (shipmentLogs && shipmentLogs.length > 0) {
+          setShipmentHistory(prev => [...prev, ...shipmentLogs]);
+      }
+
+      // 3. Update Products (Snapshot Data)
       setProducts(prev => {
           return updatedProducts.map(newP => {
               const existing = prev.find(p => p.sku === newP.sku);
               return {
                   ...newP,
-                  // Preserve static data from ERP Inventory if not present in Sales
                   brand: existing?.brand,
                   cartonDimensions: existing?.cartonDimensions,
-                  // Preserve manual settings if not in import
                   costPrice: newP.costPrice || existing?.costPrice,
                   floorPrice: existing?.floorPrice,
                   ceilingPrice: existing?.ceilingPrice,
@@ -439,6 +617,10 @@ const App: React.FC = () => {
       setIsMappingModalOpen(false);
   };
 
+  const handleUpdateProduct = (updatedProduct: Product) => {
+      setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+  };
+
   const handleAddPromotion = (promo: PromotionEvent) => {
       setPromotions(prev => [promo, ...prev]);
   };
@@ -448,7 +630,7 @@ const App: React.FC = () => {
   };
 
   // Dynamic Styles
-  const isUrl = userProfile.backgroundImage && (userProfile.backgroundImage.startsWith('http') || userProfile.backgroundImage.startsWith('data:') || userProfile.backgroundImage.startsWith('/'));
+  const isUrl = userProfile.backgroundImage && (userProfile.backgroundImage.startsWith('http') || userProfile.backgroundImage.startsWith('data:') || userProfile.backgroundImage.startsWith('data:') || userProfile.backgroundImage.startsWith('/'));
   
   const bgStyle: React.CSSProperties = userProfile.backgroundImage && userProfile.backgroundImage !== 'none'
       ? isUrl 
@@ -465,7 +647,6 @@ const App: React.FC = () => {
 
   // Header Color Logic
   const headerTextColor = userProfile.textColor || '#111827';
-  const headerSubColor = userProfile.textColor ? `${userProfile.textColor}CC` : '#6b7280'; // Add transparency for subtext if colored, else gray
   
   // Readability Shadow
   const textShadowStyle = userProfile.backgroundImage ? { textShadow: '0 2px 4px rgba(0,0,0,0.5)' } : {};
@@ -516,7 +697,32 @@ const App: React.FC = () => {
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-100 space-y-4">
+        <div className="p-4 border-t border-gray-100 space-y-3">
+          {/* Database Quick Actions */}
+          <div className="px-2 space-y-2">
+            <button 
+              onClick={handleExportBackup}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Backup Database
+            </button>
+            <button 
+              onClick={() => fileRestoreRef.current?.click()}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Restore Database
+            </button>
+            <input 
+              ref={fileRestoreRef}
+              type="file" 
+              accept=".json"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+          </div>
+
           <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100 backdrop-blur-sm">
             <div className="flex justify-between items-center mb-1">
                 <p className="text-xs font-semibold text-gray-500">Tool Status</p>
@@ -561,7 +767,7 @@ const App: React.FC = () => {
                  currentView === 'costs' ? 'Set cost prices, and define minimum/maximum price guardrails.' : 
                  currentView === 'definitions' ? 'Reference guide for calculations and logic.' :
                  currentView === 'promotions' ? 'Plan, execute, and track sales events across platforms.' :
-                 'Manage platform fees and user settings.'}
+                 'Manage platform fees, logistics rates, and user settings.'}
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -675,7 +881,8 @@ const App: React.FC = () => {
                         products={products} 
                         onAnalyze={handleAnalyze} 
                         onApplyChanges={handleApplyBatchChanges}
-                        dateLabels={priceDateLabels}
+                        dateLabels={dynamicDateLabels}
+                        pricingRules={pricingRules}
                         themeColor={userProfile.themeColor}
                     />
                 </>
@@ -687,7 +894,10 @@ const App: React.FC = () => {
             <ProductManagementPage 
                 products={products}
                 pricingRules={pricingRules}
+                promotions={promotions}
+                priceHistory={priceHistory}
                 onOpenMappingModal={() => setIsMappingModalOpen(true)}
+                onUpdateProduct={handleUpdateProduct}
                 themeColor={userProfile.themeColor}
                 headerStyle={headerStyle}
             />
@@ -709,7 +919,9 @@ const App: React.FC = () => {
             <PromotionPage 
                 products={products}
                 pricingRules={pricingRules}
+                logisticsRules={logisticsRules}
                 promotions={promotions}
+                priceHistory={priceHistory}
                 onAddPromotion={handleAddPromotion}
                 onUpdatePromotion={handleUpdatePromotion}
                 themeColor={userProfile.themeColor}
@@ -729,12 +941,16 @@ const App: React.FC = () => {
                 onSave={(newRules) => {
                     setPricingRules(newRules);
                 }} 
+                logisticsRules={logisticsRules}
+                onSaveLogistics={(newLogistics) => {
+                    setLogisticsRules(newLogistics);
+                }}
                 products={products}
-                onRestore={handleRestoreData}
                 extraData={{
                     priceHistory,
                     promotions
                 }}
+                shipmentHistory={shipmentHistory}
                 themeColor={userProfile.themeColor}
                 headerStyle={headerStyle}
             />

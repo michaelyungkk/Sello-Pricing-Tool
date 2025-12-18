@@ -1,20 +1,21 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Product } from '../types';
-import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe } from 'lucide-react';
+import { Product, PricingRules } from '../types';
+import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
   onAnalyze: (product: Product) => void;
   onApplyChanges: (updates: { productId: string, newPrice: number }[]) => void;
   dateLabels?: { current: string, last: string };
+  pricingRules?: PricingRules;
   themeColor: string;
 }
 
 type SortKey = keyof Product | 'estNewPrice';
 
-const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyChanges, dateLabels, themeColor }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyChanges, dateLabels, pricingRules, themeColor }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [managerFilter, setManagerFilter] = useState('All');
@@ -57,16 +58,28 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
   // Extract unique options for dropdowns
   const uniqueManagers = useMemo(() => {
-    const managers = new Set<string>();
-    products.forEach(p => p.channels.forEach(c => managers.add(c.manager)));
-    return Array.from(managers).sort();
-  }, [products]);
+    const managerSet = new Set<string>();
+    // From Products
+    products.forEach(p => p.channels.forEach(c => managerSet.add(c.manager)));
+    // From Rules Defaults
+    if (pricingRules) {
+        Object.values(pricingRules).forEach((r: any) => {
+            if (r.manager && r.manager !== 'Unassigned') managerSet.add(r.manager);
+        });
+    }
+    return Array.from(managerSet).sort();
+  }, [products, pricingRules]);
 
   const uniquePlatforms = useMemo(() => {
-    const platforms = new Set<string>();
-    products.forEach(p => p.channels.forEach(c => platforms.add(c.platform)));
-    return Array.from(platforms).sort();
-  }, [products]);
+    const platformSet = new Set<string>();
+    // From Products
+    products.forEach(p => p.channels.forEach(c => platformSet.add(c.platform)));
+    // From Rules Defaults
+    if (pricingRules) {
+        Object.keys(pricingRules).forEach(k => platformSet.add(k));
+    }
+    return Array.from(platformSet).sort();
+  }, [products, pricingRules]);
 
   const uniqueBrands = useMemo(() => {
       const brands = new Set(products.map(p => p.brand).filter(Boolean) as string[]);
@@ -88,11 +101,12 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   }, [products, mainCatFilter]);
 
   const getSimulatedPrice = (product: Product): number => {
+      const current = product.currentPrice || 0;
       if (priceOverrides[product.id] !== undefined) {
           return priceOverrides[product.id];
       }
       if (product.stockLevel <= 0 && !allowOutOfStockAdjustment) {
-          return product.currentPrice;
+          return current;
       }
       let multiplier = 1;
       // Use the *displayed* status (Trend Aware) to decide if bulk adjustment applies
@@ -101,7 +115,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
       } else if (product.status === 'Overstock') {
           multiplier = 1 - (adjustmentIntensity / 100);
       }
-      return Number((product.currentPrice * multiplier).toFixed(2));
+      return Number((current * multiplier).toFixed(2));
   };
 
   const handleSort = (key: SortKey) => {
@@ -135,7 +149,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         
         // Base metrics (Global or Filtered)
         let displayVelocity = p.averageDailySales;
-        let displayPrice = p.currentPrice;
+        let displayPrice = p.currentPrice || 0;
         
         if (isFiltering) {
             const totalFilteredVelocity = matchingChannels.reduce((sum, c) => sum + c.velocity, 0);
@@ -144,7 +158,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
             let weightedDivisor = 0;
 
             matchingChannels.forEach(c => {
-                const price = c.price || p.currentPrice;
+                const price = c.price || p.currentPrice || 0;
                 weightedPriceSum += (price * c.velocity);
                 weightedDivisor += c.velocity;
             });
@@ -152,7 +166,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
             if (weightedDivisor > 0) {
                 displayPrice = Number((weightedPriceSum / weightedDivisor).toFixed(2));
             } else if (matchingChannels.length > 0) {
-                const sumPrices = matchingChannels.reduce((sum, c) => sum + (c.price || p.currentPrice), 0);
+                const sumPrices = matchingChannels.reduce((sum, c) => sum + (c.price || p.currentPrice || 0), 0);
                 displayPrice = Number((sumPrices / matchingChannels.length).toFixed(2));
             }
 
@@ -166,9 +180,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         
         // --- TREND AWARE RECOMMENDATION LOGIC ---
         // Calculate Deltas
-        const priceChange = (p.oldPrice && p.oldPrice > 0) 
-            ? (p.currentPrice - p.oldPrice) / p.oldPrice 
-            : 0;
+        const currentP = p.currentPrice || 0;
+        const oldP = p.oldPrice || 0;
+        const priceChange = (oldP > 0) ? (currentP - oldP) / oldP : 0;
             
         const velocityChange = (p.previousDailySales && p.previousDailySales > 0)
             ? (p.averageDailySales - p.previousDailySales) / p.previousDailySales
@@ -325,7 +339,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
     const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Est. New Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost'];
     const rows = filteredProducts.map(p => {
         const simulatedPrice = getSimulatedPrice(p);
-        const exportNewPrice = Math.abs(simulatedPrice - p.currentPrice) > 0.001 ? simulatedPrice.toFixed(2) : '';
+        // CHANGE: Always export the simulated price to ensure full column data for uploads
+        const exportNewPrice = simulatedPrice.toFixed(2);
 
         // Alias Logic
         let exportSku = p.sku;
@@ -343,7 +358,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
             p.brand || '',
             p.category || '',
             p.subcategory || '',
-            p.currentPrice.toFixed(2),
+            (p.currentPrice || 0).toFixed(2),
             exportNewPrice,
             p.stockLevel,
             p.averageDailySales.toFixed(2),
@@ -374,17 +389,20 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         const simulatedPrice = getSimulatedPrice(p);
         const isOverridden = priceOverrides[p.id] !== undefined;
         let finalPrice = simulatedPrice;
+        const currentP = p.currentPrice || 0;
         
         if (!isOverridden) {
-            if (Math.abs(simulatedPrice - p.currentPrice) > 0.001) {
+            // FIX: Comparison against 2-decimal rounded version to avoid float drift activation
+            // Defensive: ensure currentPrice exists before calling toFixed
+            if (Math.abs(simulatedPrice - Number(currentP.toFixed(2))) > 0.001) {
                 finalPrice = Math.ceil(simulatedPrice) - 0.01;
                 if (finalPrice < 0) finalPrice = 0.99;
             } else {
-                finalPrice = p.currentPrice;
+                finalPrice = currentP;
             }
         }
 
-        if (Math.abs(finalPrice - p.currentPrice) > 0.001) {
+        if (Math.abs(finalPrice - Number(currentP.toFixed(2))) > 0.001) {
             newOverrides[p.id] = Number(finalPrice.toFixed(2));
             hasChanges = true;
         }
@@ -396,7 +414,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         setIsConfirmed(true);
         setShowSuccessMessage(true);
         setTimeout(() => setShowSuccessMessage(false), 2000);
-        onApplyChanges(Object.entries(newOverrides).map(([productId, newPrice]) => ({ productId, newPrice })));
+        
+        // NOTE: We deliberately DO NOT call onApplyChanges here.
+        // This ensures the "Current Price" in the app remains the "Actual/Live" price,
+        // while the confirmed simulation values are locked into `priceOverrides` ready for Export.
+        // onApplyChanges(Object.entries(newOverrides).map(([productId, newPrice]) => ({ productId, newPrice })));
     } else {
         alert("No changes detected to confirm.");
     }
@@ -406,7 +428,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
      let count = 0;
      filteredProducts.forEach(p => {
          const final = getSimulatedPrice(p);
-         if (Math.abs(final - p.currentPrice) > 0.001) count++;
+         // FIX: Comparison against 2-decimal rounded version to avoid float drift activation
+         if (Math.abs(final - Number((p.currentPrice || 0).toFixed(2))) > 0.001) count++;
      });
      return count;
   }, [filteredProducts, priceOverrides, adjustmentIntensity, allowOutOfStockAdjustment]);
@@ -544,17 +567,17 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                   {showSuccessMessage ? (
                       <>
                         <CheckCircle className="w-3.5 h-3.5" />
-                        Saved
+                        Locked
                       </>
                   ) : isConfirmed && changedCount > 0 ? (
                       <>
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        Confirmed
+                        <Lock className="w-3.5 h-3.5" />
+                        Changes Locked
                       </>
                   ) : (
                       <>
                         <Save className="w-3.5 h-3.5" />
-                        Confirm {changedCount > 0 && `(${changedCount})`}
+                        Lock Changes {changedCount > 0 && `(${changedCount})`}
                       </>
                   )}
               </button>
@@ -819,7 +842,10 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                 const overrideValue = priceOverrides[product.id];
                 const simulatedPrice = getSimulatedPrice(product);
                 const displayValue = simulatedPrice;
-                const isModified = Math.abs(displayValue - product.currentPrice) > 0.001;
+                // FIX: Use rounded comparison to avoid floating point drift activating the input
+                // Defensive check: ensure currentPrice exists before using toFixed
+                const currentPrice = product.currentPrice || 0;
+                const isModified = Math.abs(displayValue - Number(currentPrice.toFixed(2))) > 0.001;
                 const isOverridden = overrideValue !== undefined;
                 const violatesFloor = product.floorPrice && displayValue < product.floorPrice;
                 const violatesCeiling = product.ceilingPrice && displayValue > product.ceilingPrice;
@@ -858,7 +884,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                        </div>
                     </td>
                     <td className="p-2.5 text-right">
-                       <div className="font-bold text-gray-900">£{product.currentPrice.toFixed(2)}</div>
+                       <div className="font-bold text-gray-900">£{(product.currentPrice || 0).toFixed(2)}</div>
                     </td>
                     <td className="p-2.5 text-right">
                        <div className="flex items-center justify-end gap-2 relative">
@@ -887,7 +913,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                           )}
                           {!isOverridden && isModified && !isViolation && (
                              <div className="absolute -right-4 top-1/2 -translate-y-1/2">
-                                {displayValue > product.currentPrice ? (
+                                {displayValue > (product.currentPrice || 0) ? (
                                     <TrendingUp className="w-3 h-3 text-green-500" />
                                 ) : (
                                     <TrendingDown className="w-3 h-3 text-red-500" />
@@ -1038,6 +1064,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 };
 
 const RecommendationTooltip = ({ product, rect }: { product: Product; rect: DOMRect }) => {
+    // Safety check: if find() failed in parent, do not render
+    if (!product) return null;
+
     const style: React.CSSProperties = {
         position: 'fixed',
         top: `${rect.top - 8}px`,
@@ -1077,7 +1106,7 @@ const RecommendationTooltip = ({ product, rect }: { product: Product; rect: DOMR
         reason = "Stock will run out before replenishment arrives.";
         colorClass = "text-red-300";
     } else if (product.status === 'Overstock') {
-        triggerFormula = `Runway (${runway.toFixed(1)}d) > 4x Lead Time (${leadTime * 4}d)`;
+        triggerFormula = `Runway (${runway.toFixed(1)}d) > 4x Lead Time (${leadTime}d)`;
         reason = "Holding too much inventory relative to sales velocity.";
         colorClass = "text-orange-300";
     } else {

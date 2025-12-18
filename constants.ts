@@ -1,5 +1,5 @@
 
-import { Product, PriceLog, PromotionEvent, PricingRules } from './types';
+import { Product, PriceLog, PromotionEvent, PricingRules, LogisticsRule } from './types';
 
 export const DEFAULT_PRICING_RULES: PricingRules = {
   'Amazon(UK)': { markup: 2.0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900' },
@@ -13,6 +13,28 @@ export const DEFAULT_PRICING_RULES: PricingRules = {
   'Tesco': { markup: 0, commission: 10.0, manager: 'Queenie Wong', color: '#00539F' },
   'Debenhams': { markup: 0, commission: 26.0, manager: 'Queenie Wong', color: '#1B4D3E' }
 };
+
+export const DEFAULT_LOGISTICS_RULES: LogisticsRule[] = [
+    { id: 'evri', name: 'EVRI', carrier: 'Evri', price: 0 },
+    { id: 'its-dx-z', name: 'ITS-DX-Z', carrier: 'DX', price: 0 },
+    { id: 'its-dx', name: 'ITS-DX', carrier: 'DX', price: 0 },
+    { id: 'its-rmt48', name: 'ITS-RMT48', carrier: 'Royal Mail', price: 0 },
+    { id: 'xdp-econ', name: 'XDP-ECON', carrier: 'XDP', price: 0 },
+    { id: 'xdp-econ-z', name: 'XDP-ECON-Z', carrier: 'XDP', price: 0 },
+    { id: 'yodel-48-mini-ni', name: 'YODEL-48-MINI-NI', carrier: 'Yodel', price: 0 },
+    { id: 'fba', name: 'FBA', carrier: 'Amazon', price: 0 },
+    { id: 'na', name: 'NA', carrier: 'Other', price: 0 },
+    { id: 'yodel-48-mini-uk', name: 'YODEL-48-MINI-UK', carrier: 'Yodel', price: 0 },
+    { id: 'its-rmt48-z', name: 'ITS-RMT48-Z', carrier: 'Royal Mail', price: 0 },
+    { id: 'its', name: 'ITS', carrier: 'ITS', price: 0 },
+    { id: 'its-dpd', name: 'ITS-DPD', carrier: 'DPD', price: 0 },
+    { id: 'pickup', name: 'PICKUP', carrier: 'Collection', price: 0 },
+    { id: 'xdp-2man', name: 'XDP-2MAN', carrier: 'XDP', price: 0 },
+    { id: 'yodel-48-lrg-uk', name: 'YODEL-48-LRG-UK', carrier: 'Yodel', price: 0 },
+    { id: 'yodel-48-lrg-uk-z', name: 'YODEL-48-LRG-UK-Z', carrier: 'Yodel', price: 0 },
+    { id: 'yodel-48-med-ni', name: 'YODEL-48-MED-NI', carrier: 'Yodel', price: 0 },
+    { id: 'yodel-48-med-uk', name: 'YODEL-48-MED-UK', carrier: 'Yodel', price: 0 },
+];
 
 export const INITIAL_PRODUCTS: Product[] = [
   {
