@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo } from 'react';
 import { Product, PricingRules, HistoryPayload, ShipmentLog } from '../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck } from 'lucide-react';
@@ -496,24 +495,24 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     </div>
 
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                        <MappingSelect label="SKU (sku_code)" value={mapping.sku} onChange={(v) => mapField('sku', v)} options={rawHeaders} required />
-                        <MappingSelect label="Quantity (sku_quantity)" value={mapping.qty} onChange={(v) => mapField('qty', v)} options={rawHeaders} required />
-                        <MappingSelect label="Revenue (sales_amt)" value={mapping.revenue} onChange={(v) => mapField('revenue', v)} options={rawHeaders} required />
-                        <MappingSelect label="Date (order_time)" value={mapping.date} onChange={(v) => mapField('date', v)} options={rawHeaders} />
-                        <MappingSelect label="Platform Source" value={mapping.platform} onChange={(v) => mapField('platform', v)} options={rawHeaders} />
+                        <MappingSelect label="SKU (sku_code)" value={mapping.sku} onChange={(v: string) => mapField('sku', v)} options={rawHeaders} required />
+                        <MappingSelect label="Quantity (sku_quantity)" value={mapping.qty} onChange={(v: string) => mapField('qty', v)} options={rawHeaders} required />
+                        <MappingSelect label="Revenue (sales_amt)" value={mapping.revenue} onChange={(v: string) => mapField('revenue', v)} options={rawHeaders} required />
+                        <MappingSelect label="Date (order_time)" value={mapping.date} onChange={(v: string) => mapField('date', v)} options={rawHeaders} />
+                        <MappingSelect label="Platform Source" value={mapping.platform} onChange={(v: string) => mapField('platform', v)} options={rawHeaders} />
                     </div>
 
                     {showAdvancedMapping && (
                         <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-4 animate-in fade-in slide-in-from-top-2">
                             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Fees & Logistics (Optional)</h4>
                             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                <MappingSelect label="Selling Fee" value={mapping.sellingFee} onChange={v => mapField('sellingFee', v)} options={rawHeaders} />
-                                <MappingSelect label="Ad Spend / PPC" value={mapping.adsFee} onChange={v => mapField('adsFee', v)} options={rawHeaders} />
-                                <MappingSelect label="Postage Cost" value={mapping.postage} onChange={v => mapField('postage', v)} options={rawHeaders} />
-                                <MappingSelect label="Logistics Name (Service)" value={mapping.logisticsService} onChange={v => mapField('logisticsService', v)} options={rawHeaders} />
-                                <MappingSelect label="WMS Fee" value={mapping.wmsFee} onChange={v => mapField('wmsFee', v)} options={rawHeaders} />
-                                <MappingSelect label="Extra Freight (Income)" value={mapping.extraFreight} onChange={v => mapField('extraFreight', v)} options={rawHeaders} />
-                                <MappingSelect label="Category" value={mapping.category} onChange={v => mapField('category', v)} options={rawHeaders} />
+                                <MappingSelect label="Selling Fee" value={mapping.sellingFee} onChange={(v: string) => mapField('sellingFee', v)} options={rawHeaders} />
+                                <MappingSelect label="Ad Spend / PPC" value={mapping.adsFee} onChange={(v: string) => mapField('adsFee', v)} options={rawHeaders} />
+                                <MappingSelect label="Postage Cost" value={mapping.postage} onChange={(v: string) => mapField('postage', v)} options={rawHeaders} />
+                                <MappingSelect label="Logistics Name (Service)" value={mapping.logisticsService} onChange={(v: string) => mapField('logisticsService', v)} options={rawHeaders} />
+                                <MappingSelect label="WMS Fee" value={mapping.wmsFee} onChange={(v: string) => mapField('wmsFee', v)} options={rawHeaders} />
+                                <MappingSelect label="Extra Freight (Income)" value={mapping.extraFreight} onChange={(v: string) => mapField('extraFreight', v)} options={rawHeaders} />
+                                <MappingSelect label="Category" value={mapping.category} onChange={(v: string) => mapField('category', v)} options={rawHeaders} />
                             </div>
                         </div>
                     )}

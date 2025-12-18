@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog } from '../types';
 import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2 } from 'lucide-react';
@@ -531,10 +530,10 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
 }
 
 // 2. MASTER CATALOG VIEW
-const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeColor }: any) => {
+const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeColor }: { products: Product[], onEditAliases: (p: Product) => void, onOpenMappingModal: () => void, themeColor: string }) => {
     const [search, setSearch] = useState('');
 
-    const filtered = products.filter((p: any) =>
+    const filtered = products.filter((p: Product) =>
         p.sku.toLowerCase().includes(search.toLowerCase()) ||
         p.name.toLowerCase().includes(search.toLowerCase())
     );
@@ -574,7 +573,7 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
                         </tr>
                     </thead>
                     <tbody className="divide-y">
-                        {filtered.map((p: any) => (
+                        {filtered.map((p: Product) => (
                             <tr key={p.id} className="hover:bg-gray-50">
                                 <td className="p-4 font-mono font-bold text-gray-900">{p.sku}</td>
                                 <td className="p-4 text-gray-600 truncate max-w-xs">{p.name}</td>
@@ -604,30 +603,43 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
 };
 
 // 3. PRICE MATRIX VIEW
-const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: any) => {
+const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { products: Product[], pricingRules: PricingRules, promotions: PromotionEvent[], themeColor: string }) => {
     const platforms = Object.keys(pricingRules);
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-in fade-in duration-500">
-            <div className="overflow-x-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-in fade-in duration-500 h-full flex flex-col">
+            <div className="overflow-auto flex-1">
                 <table className="w-full text-left text-xs">
-                    <thead className="bg-gray-50 text-gray-500 font-bold border-b uppercase tracking-wider">
+                    <thead className="bg-gray-50 text-gray-500 font-bold border-b uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                         <tr>
-                            <th className="p-4 sticky left-0 bg-gray-50 z-10">Master SKU</th>
-                            {platforms.map(plat => <th key={plat} className="p-4 text-right min-w-[100px]">{plat}</th>)}
+                            <th className="p-4 sticky left-0 bg-gray-50 z-20 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Master SKU</th>
+                            {platforms.map(plat => <th key={plat} className="p-4 text-right min-w-[120px]">{plat}</th>)}
                         </tr>
                     </thead>
-                    <tbody className="divide-y">
-                        {products.map(p => (
+                    <tbody className="divide-y divide-gray-100">
+                        {products.map((p: Product) => (
                             <tr key={p.id} className="hover:bg-gray-50">
-                                <td className="p-4 sticky left-0 bg-white font-bold text-gray-900 border-r">{p.sku}</td>
-                                {platforms.map(plat => {
+                                <td className="p-4 sticky left-0 bg-white font-bold text-gray-900 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] group-hover:bg-gray-50">{p.sku}</td>
+                                {platforms.map((plat: string) => {
                                     const channel = p.channels.find((c: any) => c.platform === plat);
                                     const price = channel?.price || p.currentPrice;
+                                    
+                                    // Find active promotion logic (Updated)
+                                    const activePromo = promotions?.find((promo: PromotionEvent) => 
+                                        promo.platform === plat && 
+                                        promo.status === 'ACTIVE' &&
+                                        promo.items.some((item: any) => item.sku === p.sku)
+                                    );
+                                    const promoItem = activePromo?.items.find((item: any) => item.sku === p.sku);
+
                                     return (
                                         <td key={plat} className="p-4 text-right">
-                                            <div className="font-mono font-bold">£{price.toFixed(2)}</div>
-                                            {channel?.skuAlias && <div className="text-[10px] text-gray-400 mt-1 truncate max-w-[80px]">{channel.skuAlias}</div>}
+                                            <div className="font-mono font-bold text-gray-700">£{price.toFixed(2)}</div>
+                                            {promoItem ? (
+                                                <div className="text-[10px] text-red-600 font-bold mt-1 bg-red-50 px-1.5 py-0.5 rounded border border-red-100 inline-block whitespace-nowrap">
+                                                    Promo: £{promoItem.promoPrice.toFixed(2)}
+                                                </div>
+                                            ) : null}
                                         </td>
                                     );
                                 })}
@@ -641,7 +653,7 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: any
 };
 
 // 4. ALIAS DRAWER
-const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: any) => {
+const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { product: Product, pricingRules: PricingRules, onClose: () => void, onSave: (p: Product) => void, themeColor: string }) => {
     const [localProduct, setLocalProduct] = useState({ ...product });
     const [newAliasInputs, setNewAliasInputs] = useState<Record<string, string>>({}); // Temporary inputs for tags
 
