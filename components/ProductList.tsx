@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules } from '../types';
-import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock } from 'lucide-react';
+import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -14,6 +14,73 @@ interface ProductListProps {
 }
 
 type SortKey = keyof Product | 'estNewPrice';
+
+const RecommendationTooltip = ({ product, rect }: { product: Product, rect: DOMRect }) => {
+  const style: React.CSSProperties = {
+    position: 'fixed',
+    top: `${rect.top}px`,
+    left: `${rect.left + rect.width / 2}px`,
+    transform: 'translate(-50%, -100%) translateY(-8px)',
+    zIndex: 9999,
+    pointerEvents: 'none'
+  };
+
+  return createPortal(
+    <div style={style} className="animate-in fade-in zoom-in duration-200">
+      <div className="bg-gray-900 text-white p-3 rounded-lg shadow-xl text-xs max-w-xs z-50 border border-gray-700 backdrop-blur-md bg-opacity-95">
+        <div className="font-bold mb-2 border-b border-gray-700 pb-1 flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${
+                product.status === 'Critical' ? 'bg-red-500' :
+                product.status === 'Overstock' ? 'bg-orange-500' :
+                product.status === 'Warning' ? 'bg-amber-500' : 'bg-green-500'
+            }`}></span>
+            Inventory Intelligence
+        </div>
+        <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                <span className="text-gray-400">Status:</span>
+                <span className={`font-bold text-right ${
+                    product.status === 'Critical' ? 'text-red-400' :
+                    product.status === 'Overstock' ? 'text-orange-400' :
+                    product.status === 'Warning' ? 'text-amber-400' : 'text-green-400'
+                }`}>{product.status}</span>
+
+                <span className="text-gray-400">Action:</span>
+                <span className="text-right text-gray-200">{product.recommendation}</span>
+
+                <span className="text-gray-400">Runway:</span>
+                <span className="text-right text-gray-200">{product.daysRemaining > 900 ? '> 2 Years' : `${product.daysRemaining.toFixed(0)} Days`}</span>
+
+                <span className="text-gray-400">Lead Time:</span>
+                <span className="text-right text-gray-200">{product.leadTimeDays} Days</span>
+            </div>
+            
+            {(product as any)._trendData && (
+                <div className="mt-2 pt-2 border-t border-gray-700">
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-gray-500 font-bold uppercase text-[10px]">Trend (7d)</span>
+                    </div>
+                    <div className="flex justify-between text-[10px]">
+                         <span className="text-gray-400">Velocity:</span>
+                         <span className={(product as any)._trendData.velocityChange > 0 ? 'text-green-400' : (product as any)._trendData.velocityChange < 0 ? 'text-red-400' : 'text-gray-400'}>
+                            {(product as any)._trendData.velocityChange > 0 ? '+' : ''}{((product as any)._trendData.velocityChange * 100).toFixed(0)}%
+                         </span>
+                    </div>
+                    <div className="flex justify-between text-[10px]">
+                         <span className="text-gray-400">Price:</span>
+                         <span className={(product as any)._trendData.priceChange > 0 ? 'text-green-400' : (product as any)._trendData.priceChange < 0 ? 'text-red-400' : 'text-gray-400'}>
+                            {(product as any)._trendData.priceChange > 0 ? '+' : ''}{((product as any)._trendData.priceChange * 100).toFixed(0)}%
+                         </span>
+                    </div>
+                </div>
+            )}
+        </div>
+      </div>
+      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+    </div>,
+    document.body
+  );
+};
 
 const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyChanges, dateLabels, pricingRules, themeColor }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,7 +95,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   
   // Visibility Toggles
   const [showInactive, setShowInactive] = useState(false); // Toggle for "Ghost" products (0 stock, 0 sales)
-  const [showOOS, setShowOOS] = useState(false); // Toggle for Out of Stock products (stock <= 0)
+  const [showOOS, setShowOOS] = useState(true); // Toggle for Out of Stock products (stock <= 0) - Default True to avoid confusion
 
   // Advanced Filter State
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -995,7 +1062,18 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
               {filteredProducts.length === 0 && (
                   <tr>
                       <td colSpan={8} className="p-8 text-center text-gray-500">
-                          No products found matching your filters.
+                          <div className="flex flex-col items-center justify-center gap-2">
+                              <p>No products found matching your filters.</p>
+                              {products.length > 0 && !showInactive && (
+                                  <button 
+                                    onClick={() => setShowInactive(true)}
+                                    className="text-indigo-600 text-sm font-medium hover:underline flex items-center gap-1"
+                                  >
+                                      <Eye className="w-4 h-4" />
+                                      Show {products.length - filteredProducts.length} hidden items (Inactive/Ghost)
+                                  </button>
+                              )}
+                          </div>
                       </td>
                   </tr>
               )}
@@ -1061,103 +1139,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
       )}
     </div>
   );
-};
-
-const RecommendationTooltip = ({ product, rect }: { product: Product; rect: DOMRect }) => {
-    // Safety check: if find() failed in parent, do not render
-    if (!product) return null;
-
-    const style: React.CSSProperties = {
-        position: 'fixed',
-        top: `${rect.top - 8}px`,
-        left: `${rect.left + rect.width / 2}px`,
-        transform: 'translate(-50%, -100%)',
-        zIndex: 9999,
-    };
-    const runway = product.averageDailySales > 0 ? product.stockLevel / product.averageDailySales : 999;
-    const leadTime = product.leadTimeDays;
-    
-    // Trend Data (Accessing dynamic prop added in render loop)
-    const trendData = (product as any)._trendData || { priceChange: 0, velocityChange: 0 };
-    const priceChangePct = (trendData.priceChange * 100).toFixed(1);
-    const velocityChangePct = (trendData.velocityChange * 100).toFixed(1);
-    
-    let triggerFormula = "";
-    let reason = "";
-    let colorClass = "text-green-300";
-
-    if (product.recommendation === 'Out of Stock') {
-        triggerFormula = `Stock (${product.stockLevel}) <= 0`;
-        reason = "Inventory is completely depleted.";
-        colorClass = "text-gray-300";
-    } else if (product.recommendation.includes('Monitor')) {
-        colorClass = "text-blue-300";
-        if (product.status === 'Warning' && runway < leadTime) {
-             // Critical Stock but Monitoring
-             triggerFormula = `Runway < Lead Time BUT Trend Effective`;
-             reason = `Price increased by ${priceChangePct}% and velocity dropped by ${Math.abs(Number(velocityChangePct))}% (>20%). Strategy working.`;
-        } else {
-             // Overstock but Monitoring
-             triggerFormula = `Runway > 4x Lead Time BUT Trend Effective`;
-             reason = `Price decreased by ${Math.abs(Number(priceChangePct))}% and velocity rose by ${velocityChangePct}% (>20%). Strategy working.`;
-        }
-    } else if (product.status === 'Critical') {
-        triggerFormula = `Runway (${runway.toFixed(1)}d) < Lead Time (${leadTime}d)`;
-        reason = "Stock will run out before replenishment arrives.";
-        colorClass = "text-red-300";
-    } else if (product.status === 'Overstock') {
-        triggerFormula = `Runway (${runway.toFixed(1)}d) > 4x Lead Time (${leadTime}d)`;
-        reason = "Holding too much inventory relative to sales velocity.";
-        colorClass = "text-orange-300";
-    } else {
-        triggerFormula = `Lead Time ≤ Runway ≤ 4x Lead Time`;
-        reason = "Supply meets demand within optimal range.";
-    }
-
-    return createPortal(
-        <div style={style} className="pointer-events-none">
-            <div className="bg-slate-900 text-white p-4 rounded-xl shadow-2xl w-80 border border-slate-700 animate-in fade-in zoom-in duration-200">
-                <div className="flex items-center justify-between mb-3 border-b border-slate-700 pb-2">
-                    <span className="font-bold text-sm">Logic Breakdown</span>
-                    <span className={`text-xs font-mono px-1.5 py-0.5 rounded bg-white/10 ${colorClass}`}>{product.recommendation === 'Out of Stock' ? 'OOS' : product.status}</span>
-                </div>
-                
-                <div className="space-y-2 text-xs">
-                    <div className="grid grid-cols-2 gap-2 text-slate-400">
-                        <span>Total Stock:</span>
-                        <span className="text-right text-white font-mono">{product.stockLevel} units</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-slate-400">
-                        <span>Current Velocity:</span>
-                        <span className="text-right text-white font-mono">{product.averageDailySales.toFixed(1)} /day</span>
-                    </div>
-                    {product.previousDailySales !== undefined && (
-                         <div className="grid grid-cols-2 gap-2 text-slate-400">
-                            <span>Previous Velocity:</span>
-                            <span className="text-right text-gray-400 font-mono">{product.previousDailySales.toFixed(1)} /day</span>
-                        </div>
-                    )}
-                    
-                    <div className="mt-2 pt-2 border-t border-slate-700">
-                         <div className="flex justify-between items-center mb-1">
-                            <span className="text-indigo-300 font-semibold">Calculated Runway:</span>
-                            <span className="font-mono text-indigo-300">{product.recommendation === 'Out of Stock' ? '0' : runway.toFixed(1)} days</span>
-                         </div>
-                         <div className="bg-slate-800 p-2 rounded border border-slate-600 font-mono text-[10px] text-center mb-2 leading-tight">
-                             {triggerFormula}
-                         </div>
-                         <p className="text-slate-400 italic leading-relaxed">
-                            "{reason}"
-                         </p>
-                    </div>
-                </div>
-                
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-8 border-transparent border-t-slate-700"></div>
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[2px] border-8 border-transparent border-t-slate-900"></div>
-            </div>
-        </div>,
-        document.body
-    );
 };
 
 export default ProductList;

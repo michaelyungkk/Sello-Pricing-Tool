@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, FeeBounds } from '../types';
+import { Product, FeeBounds, LogisticsRule } from '../types';
 import { Search, Save, Upload, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Info, Download, X, Eye, EyeOff } from 'lucide-react';
 
 interface CostUpdate {
@@ -15,22 +15,47 @@ interface CostManagementPageProps {
   products: Product[];
   onUpdateCosts: (updates: CostUpdate[]) => void;
   onOpenUpload: () => void;
+  logisticsRules?: LogisticsRule[];
   themeColor: string;
   headerStyle: React.CSSProperties;
 }
 
-type SortKey = keyof Product | 'margin';
+type SortKey = keyof Product | 'margin' | 'grossMargin';
 
-const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpdateCosts, onOpenUpload, themeColor, headerStyle }) => {
+interface BreakdownData {
+    type: 'gross' | 'net';
+    sellPrice: number;
+    cogs: number;
+    wms: number;
+    other: number;
+    // Gross specific
+    estLogistics?: number;
+    // Net specific
+    sellingFee?: number;
+    adsFee?: number;
+    postage?: number;
+    subFee?: number;
+    extraFreight?: number;
+    
+    profit: number;
+    margin: number;
+    grossMargin: number;
+    netMargin: number;
+    grossProfit: number;
+    netProfit: number;
+}
+
+const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpdateCosts, onOpenUpload, logisticsRules = [], themeColor, headerStyle }) => {
   const [search, setSearch] = useState('');
   const [editedCosts, setEditedCosts] = useState<Record<string, Partial<CostUpdate>>>({});
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
   const [showInactive, setShowInactive] = useState(false); // Toggle for Ghost products
 
   // Tooltip State
-  const [hoveredFee, setHoveredFee] = useState<{ 
+  const [activeTooltip, setActiveTooltip] = useState<{ 
+      type: 'fee' | 'margin';
       rect: DOMRect; 
-      bounds: FeeBounds; 
+      data: any; // FeeBounds or BreakdownData
   } | null>(null);
 
   // Modal State
@@ -73,7 +98,6 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
       const selling = product.sellingFee || 0;
       const ads = product.adsFee || 0;
       const post = product.postage || 0;
-      // Extra freight is Income, so excluded from Cost here. It is handled in Net Calc.
       const other = product.otherFee || 0;
       const sub = product.subscriptionFee || 0;
       const wms = product.wmsFee || 0;
@@ -81,13 +105,49 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
       return cogs + selling + ads + post + other + sub + wms;
   };
 
+  // Helper to find the "Calculated Logistic Rate" (same logic as Promotion Page)
+  const getEstimatedLogisticsCost = (product: Product) => {
+      if (!logisticsRules || logisticsRules.length === 0) return product.postage || 0; // Fallback
+      
+      const weight = product.cartonDimensions?.weight || 0;
+      
+      // Filter valid rules (Standard only, cheapest valid)
+      const valid = logisticsRules.filter(r => 
+          r.price > 0 &&
+          r.id !== 'pickup' &&
+          r.id !== 'na' &&
+          (!r.maxWeight || r.maxWeight >= weight) &&
+          !r.name.includes('-Z') && !r.name.includes('-NI') && !r.name.includes('REMOTE')
+      ).sort((a, b) => a.price - b.price);
+
+      // If no standard found, check any valid
+      if (valid.length === 0) {
+           const fallback = logisticsRules.filter(r => 
+                r.price > 0 && 
+                (!r.maxWeight || r.maxWeight >= weight)
+           ).sort((a, b) => a.price - b.price);
+           return fallback.length > 0 ? fallback[0].price : (product.postage || 0);
+      }
+
+      return valid[0].price;
+  };
+
+  // Sorting Helpers
   const getMargin = (product: Product, edits: Partial<CostUpdate> = {}) => {
       const totalCost = getTotalCost(product, edits);
-      // Net = (Price + ExtraFreight) - TotalCost
       const net = (product.currentPrice + (product.extraFreight || 0)) - totalCost;
+      return product.currentPrice > 0 ? (net / product.currentPrice) * 100 : -100;
+  };
+
+  const getGrossMargin = (product: Product, edits: Partial<CostUpdate> = {}) => {
+      const sellPrice = product.currentPrice || 0;
+      const cogs = edits.costPrice !== undefined ? edits.costPrice : (product.costPrice || 0);
+      const wms = product.wmsFee || 0;
+      const other = product.otherFee || 0;
+      const logistics = getEstimatedLogisticsCost(product);
       
-      if (product.currentPrice <= 0) return -100;
-      return (net / product.currentPrice) * 100;
+      const grossProfit = sellPrice - cogs - wms - other - logistics;
+      return sellPrice > 0 ? (grossProfit / sellPrice) * 100 : -100;
   };
 
   const handleSort = (key: SortKey) => {
@@ -117,6 +177,10 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                 aValue = getMargin(a);
                 bValue = getMargin(b);
             }
+            else if (sortConfig.key === 'grossMargin') {
+                aValue = getGrossMargin(a);
+                bValue = getGrossMargin(b);
+            }
 
             if (typeof aValue === 'string') aValue = aValue.toLowerCase();
             if (typeof bValue === 'string') bValue = bValue.toLowerCase();
@@ -128,7 +192,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
     }
 
     return result;
-  }, [products, search, sortConfig, showInactive]);
+  }, [products, search, sortConfig, showInactive, logisticsRules]);
 
   // Reset pagination when search changes
   useEffect(() => {
@@ -168,20 +232,20 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
       if (val === 0) return <span className="text-gray-300">-</span>;
 
       // Check if the average is significantly higher than the max bound (e.g., due to 0-qty cost rows)
-      // We use a small buffer (1.05) to ignore floating point noise
       const isOutlier = bounds && bounds.max > 0 && val > (bounds.max * 1.05);
 
       const handleMouseEnter = (e: React.MouseEvent) => {
           if (bounds && (bounds.min > 0 || bounds.max > 0)) {
-              setHoveredFee({
+              setActiveTooltip({
+                  type: 'fee',
                   rect: e.currentTarget.getBoundingClientRect(),
-                  bounds
+                  data: bounds
               });
           }
       };
 
       const handleMouseLeave = () => {
-          setHoveredFee(null);
+          setActiveTooltip(null);
       };
 
       return (
@@ -297,13 +361,27 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                            <th className="p-3 text-right min-w-[60px] text-xs bg-gray-50 sticky top-0 z-10 shadow-sm">WMS</th>
                            <th className="p-3 text-right min-w-[60px] text-xs bg-gray-50 sticky top-0 z-10 shadow-sm">Other</th>
                            
-                           {/* Sticky Right Margin Column */}
+                           {/* Sticky Gross Margin Column (Fixed Width & Solid BG) */}
                            <th 
-                                className="p-3 text-right sticky right-0 top-0 bg-gray-50 z-20 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                className="p-3 text-right sticky right-[130px] top-0 w-[130px] min-w-[130px] bg-indigo-50 z-30 shadow-sm cursor-pointer hover:bg-indigo-100 transition-colors select-none text-indigo-700 border-l border-indigo-200"
+                                onClick={() => handleSort('grossMargin')}
+                                title="Gross Margin = Sell Price - COGS - WMS - Other - Est.Logistics"
+                           >
+                               <div className="flex items-center justify-end gap-1">
+                                  Gross %
+                                  {sortConfig?.key === 'grossMargin' ? (
+                                    sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                                  ) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
+                               </div>
+                           </th>
+
+                           {/* Sticky Net Margin Column (Fixed Width & Solid BG) */}
+                           <th 
+                                className="p-3 text-right sticky right-0 top-0 w-[130px] min-w-[130px] bg-gray-50 z-30 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none border-l border-gray-100"
                                 onClick={() => handleSort('margin')}
                            >
                                <div className="flex items-center justify-end gap-1">
-                                  Net Margin
+                                  Net %
                                   {sortConfig?.key === 'margin' ? (
                                     sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" style={{ color: themeColor }} /> : <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />
                                   ) : <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />}
@@ -319,13 +397,21 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                            const floor = edits.floorPrice ?? product.floorPrice ?? 0;
                            const ceiling = edits.ceilingPrice ?? product.ceilingPrice ?? 0;
 
+                           // Net Profit Calculations
                            const totalCost = getTotalCost(product, edits);
-                           // Net Profit = (Price + ExtraFreight) - TotalCost
                            const netProfit = (product.currentPrice + (product.extraFreight || 0)) - totalCost;
                            const margin = product.currentPrice > 0 
                               ? (netProfit / product.currentPrice) * 100 
                               : 0;
                            
+                           // Gross Profit Calculations
+                           const estLogistics = getEstimatedLogisticsCost(product);
+                           const grossCosts = cogs + (product.wmsFee || 0) + (product.otherFee || 0) + estLogistics;
+                           const grossProfit = product.currentPrice - grossCosts;
+                           const grossMargin = product.currentPrice > 0 
+                              ? (grossProfit / product.currentPrice) * 100
+                              : 0;
+
                            const renderInput = (field: keyof Omit<CostUpdate, 'sku'>, value: number, placeholder: string = "0.00") => (
                                <input 
                                     type="number" 
@@ -341,11 +427,37 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                />
                            );
 
+                           const handleMouseEnterMargin = (e: React.MouseEvent, type: 'gross' | 'net') => {
+                               const breakdown: BreakdownData = {
+                                   type,
+                                   sellPrice: product.currentPrice,
+                                   cogs,
+                                   wms: product.wmsFee || 0,
+                                   other: product.otherFee || 0,
+                                   estLogistics,
+                                   sellingFee: product.sellingFee,
+                                   adsFee: product.adsFee,
+                                   postage: product.postage,
+                                   subFee: product.subscriptionFee,
+                                   extraFreight: product.extraFreight,
+                                   profit: type === 'gross' ? grossProfit : netProfit,
+                                   margin: type === 'gross' ? grossMargin : margin,
+                                   grossMargin,
+                                   netMargin: margin,
+                                   grossProfit,
+                                   netProfit
+                               };
+                               setActiveTooltip({
+                                   type: 'margin',
+                                   rect: e.currentTarget.getBoundingClientRect(),
+                                   data: breakdown
+                               });
+                           };
+
                            return (
-                               <tr key={product.id} className="hover:bg-gray-50">
+                               <tr key={product.id} className="hover:bg-gray-50 group">
                                    <td className="p-3 sticky left-0 bg-white group-hover:bg-gray-50 z-10 border-r border-gray-100">
                                        <div className="font-bold text-gray-900">{product.sku}</div>
-                                       {/* Removed Product Name as requested */}
                                        {product.subcategory && (
                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 mt-1">
                                                {product.subcategory}
@@ -360,7 +472,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                    <td className="p-3 text-right bg-blue-50/30">{renderInput('floorPrice', floor, '-')}</td>
                                    <td className="p-3 text-right bg-blue-50/30">{renderInput('ceilingPrice', ceiling, '-')}</td>
 
-                                   {/* Read Only Fees - extracted from reports with Tooltips */}
+                                   {/* Read Only Fees */}
                                    <td className="p-3 text-right bg-gray-50/30">
                                        <FeeCell value={product.sellingFee} bounds={product.feeBounds?.sellingFee} />
                                    </td>
@@ -383,7 +495,32 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                        <FeeCell value={product.otherFee} bounds={product.feeBounds?.otherFee} />
                                    </td>
 
-                                   <td className="p-3 text-right sticky right-0 bg-white group-hover:bg-gray-50 z-10 border-l border-gray-100">
+                                   {/* Gross Margin (Sticky - Solid BG) */}
+                                   <td 
+                                        className="p-3 text-right sticky right-[130px] bg-indigo-50 z-20 border-l border-indigo-200 cursor-help min-w-[130px]"
+                                        onMouseEnter={(e) => handleMouseEnterMargin(e, 'gross')}
+                                        onMouseLeave={() => setActiveTooltip(null)}
+                                   >
+                                       <div className="flex flex-col items-end">
+                                           <span className={`font-mono font-bold ${
+                                                grossMargin < 0 ? 'text-red-600' : 
+                                                grossMargin < 20 ? 'text-yellow-600' : 
+                                                'text-indigo-600'
+                                            }`}>
+                                                {grossMargin.toFixed(1)}%
+                                            </span>
+                                            <span className="text-[10px] text-indigo-400 font-medium">
+                                                £{grossProfit.toFixed(2)}
+                                            </span>
+                                       </div>
+                                   </td>
+
+                                   {/* Net Margin (Sticky - Solid BG) */}
+                                   <td 
+                                        className="p-3 text-right sticky right-0 bg-white group-hover:bg-gray-50 z-20 border-l border-gray-100 cursor-help min-w-[130px]"
+                                        onMouseEnter={(e) => handleMouseEnterMargin(e, 'net')}
+                                        onMouseLeave={() => setActiveTooltip(null)}
+                                   >
                                        <div className="flex flex-col items-end">
                                             <span className={`font-mono font-bold ${
                                                 margin < 0 ? 'text-red-600' : 
@@ -392,8 +529,8 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                             }`}>
                                                 {margin.toFixed(1)}%
                                             </span>
-                                            <span className="text-[10px] text-gray-400" title="Net = (Price + ExtraFreight) - TotalCosts">
-                                                Net: £{netProfit.toFixed(2)}
+                                            <span className="text-[10px] text-gray-400">
+                                                £{netProfit.toFixed(2)}
                                             </span>
                                        </div>
                                    </td>
@@ -402,7 +539,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                        })}
                        {paginatedProducts.length === 0 && (
                            <tr>
-                               <td colSpan={13} className="p-8 text-center text-gray-500">
+                               <td colSpan={14} className="p-8 text-center text-gray-500">
                                    No products found.
                                </td>
                            </tr>
@@ -451,8 +588,9 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
 
        </div>
 
-       {/* Portal Tooltip - Minimal Version (Min/Max Only) */}
-       {hoveredFee && <FeeTooltip data={hoveredFee} />}
+       {/* Portal Tooltips */}
+       {activeTooltip?.type === 'fee' && <FeeTooltip data={activeTooltip} />}
+       {activeTooltip?.type === 'margin' && <MarginBreakdownTooltip data={activeTooltip} />}
 
        {/* Export Modal */}
        {isExportModalOpen && (
@@ -462,9 +600,8 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
   );
 };
 
-const FeeTooltip = ({ data }: { data: { rect: DOMRect; bounds: FeeBounds } }) => {
-    const { rect, bounds } = data;
-    
+const FeeTooltip = ({ data }: { data: { rect: DOMRect; data: FeeBounds } }) => {
+    const { rect, data: bounds } = data;
     const style: React.CSSProperties = {
         position: 'fixed',
         top: `${rect.top}px`,
@@ -473,18 +610,101 @@ const FeeTooltip = ({ data }: { data: { rect: DOMRect; bounds: FeeBounds } }) =>
         zIndex: 9999,
         pointerEvents: 'none'
     };
-  
-    // Only show if we actually have bounds
     if (!bounds || (bounds.min === 0 && bounds.max === 0)) return null;
-
     return createPortal(
         <div style={style}>
             <div className="bg-gray-900 text-white px-3 py-2 rounded shadow-lg text-xs whitespace-nowrap">
                 <div className="font-mono">Min: £{bounds.min.toFixed(2)}</div>
                 <div className="font-mono">Max: £{bounds.max.toFixed(2)}</div>
             </div>
-            {/* Small Arrow */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+        </div>,
+        document.body
+    );
+};
+
+const MarginBreakdownTooltip = ({ data }: { data: { rect: DOMRect; data: BreakdownData } }) => {
+    const { rect, data: breakdown } = data;
+    const style: React.CSSProperties = {
+        position: 'fixed',
+        top: `${rect.top}px`,
+        left: `${rect.left}px`,
+        transform: 'translate(-100%, -50%) translateX(-12px)',
+        zIndex: 9999,
+        pointerEvents: 'none'
+    };
+
+    const isGross = breakdown.type === 'gross';
+
+    return createPortal(
+        <div style={style} className="bg-gray-900 text-white p-4 rounded-xl shadow-xl w-64 text-xs z-50">
+            <h4 className="font-bold text-gray-200 mb-2 border-b border-gray-700 pb-1 flex justify-between">
+                {isGross ? 'Gross Calculation' : 'Net Calculation'}
+                <span className={isGross ? 'text-indigo-400' : 'text-green-400'}>
+                    {isGross ? breakdown.grossMargin.toFixed(1) : breakdown.netMargin.toFixed(1)}%
+                </span>
+            </h4>
+            
+            <div className="space-y-1 mb-2">
+                <div className="flex justify-between">
+                    <span className="text-gray-400">Sell Price</span>
+                    <span className="font-mono text-white">£{breakdown.sellPrice.toFixed(2)}</span>
+                </div>
+                {!isGross && breakdown.extraFreight && breakdown.extraFreight > 0 && (
+                    <div className="flex justify-between">
+                        <span className="text-green-400">+ Ex. Freight</span>
+                        <span className="font-mono text-green-400">£{breakdown.extraFreight.toFixed(2)}</span>
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-1 mb-3 text-gray-400 border-t border-b border-gray-700 py-2 border-dashed">
+                <div className="flex justify-between">
+                    <span>- COGS</span>
+                    <span className="text-red-300">£{breakdown.cogs.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                    <span>- WMS Fee</span>
+                    <span className="text-red-300">£{breakdown.wms.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                    <span>- Other Fee</span>
+                    <span className="text-red-300">£{breakdown.other.toFixed(2)}</span>
+                </div>
+                
+                {isGross ? (
+                    <div className="flex justify-between">
+                        <span>- Est. Logistics</span>
+                        <span className="text-red-300">£{(breakdown.estLogistics || 0).toFixed(2)}</span>
+                    </div>
+                ) : (
+                    <>
+                        <div className="flex justify-between">
+                            <span>- Selling Fee</span>
+                            <span className="text-red-300">£{(breakdown.sellingFee || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span>- Ads Spend</span>
+                            <span className="text-red-300">£{(breakdown.adsFee || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span>- Postage (Avg)</span>
+                            <span className="text-red-300">£{(breakdown.postage || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span>- Subscription</span>
+                            <span className="text-red-300">£{(breakdown.subFee || 0).toFixed(2)}</span>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <div className="flex justify-between items-center font-bold text-sm">
+                <span className="text-gray-300">{isGross ? 'Gross Profit' : 'Net Profit'}</span>
+                <span className={breakdown.profit > 0 ? 'text-white' : 'text-red-400'}>
+                    £{breakdown.profit.toFixed(2)}
+                </span>
+            </div>
         </div>,
         document.body
     );

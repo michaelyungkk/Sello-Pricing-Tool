@@ -1,5 +1,5 @@
 
-import { Product, PriceLog, PromotionEvent, PricingRules, LogisticsRule } from './types';
+import { Product, PriceLog, PromotionEvent, PricingRules, LogisticsRule, StrategyConfig } from './types';
 
 export const DEFAULT_PRICING_RULES: PricingRules = {
   'Amazon(UK)': { markup: 2.0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900' },
@@ -35,6 +35,26 @@ export const DEFAULT_LOGISTICS_RULES: LogisticsRule[] = [
     { id: 'yodel-48-med-ni', name: 'YODEL-48-MED-NI', carrier: 'Yodel', price: 0 },
     { id: 'yodel-48-med-uk', name: 'YODEL-48-MED-UK', carrier: 'Yodel', price: 0 },
 ];
+
+export const DEFAULT_STRATEGY_RULES: StrategyConfig = {
+    increase: {
+        minRunwayWeeks: 6,
+        minStock: 0,
+        minVelocity7Days: 2,
+        adjustmentPercent: 5,
+        adjustmentFixed: 1
+    },
+    decrease: {
+        highStockWeeks: 48,
+        medStockWeeks: 24,
+        minMarginPercent: 25,
+        adjustmentPercent: 5,
+        includeNewProducts: false
+    },
+    safety: {
+        minMarginPercent: 10
+    }
+};
 
 export const INITIAL_PRODUCTS: Product[] = [
   {

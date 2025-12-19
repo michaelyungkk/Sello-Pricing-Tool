@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, FileText, Database, ArrowRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -11,6 +12,7 @@ export interface BatchUpdateItem {
   subcategory?: string;
   stock?: number;
   cost?: number;
+  inventoryStatus?: string; // New Field for "New Product" logic
   cartonDimensions?: {
     length: number;
     width: number;
@@ -99,7 +101,8 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
       try {
         if (rows.length < 2) throw new Error("File empty.");
 
-        const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_-]/g, ''));
+        // Clean headers: lower case, remove spaces/underscores/special chars for robust matching
+        const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
         
         // Mapping helpers
         const findCol = (terms: string[]) => headers.findIndex(h => terms.some(t => h.includes(t)));
@@ -109,9 +112,16 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
         const brandIdx = findCol(['brand']);
         const catIdx = findCol(['category', 'maincat']);
         const subIdx = findCol(['subcategory', 'subcat']);
-        const stockIdx = findCol(['stock', 'inventory', 'qty', 'quantity']);
-        const costIdx = findCol(['cost', 'cogs', 'buyingprice']);
         
+        // Specific Fix: Prioritize 'totalinventoryqty' and '库存总量' BEFORE generic 'inventory'.
+        // 'Inventory' often matches 'Inventory Status' column which contains strings, resulting in 0/NaN stock.
+        const stockIdx = findCol(['totalinventoryqty', '库存总量', 'stock', 'qty', 'quantity', 'available', 'onhand', '数量']);
+        
+        const costIdx = findCol(['cost', 'cogs', 'buyingprice', 'purchaseprice', '成本', '进价', '采购价']);
+        
+        // Status Column detection (Inventory Status/库存状态)
+        const statusIdx = findCol(['inventorystatus', 'status', '库存状态']);
+
         // Dimensions
         const lenIdx = findCol(['length', 'depth']);
         const widthIdx = findCol(['width']);
@@ -143,6 +153,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 subcategory: subIdx !== -1 ? String(row[subIdx]).trim() : undefined,
                 stock: parseNum(stockIdx),
                 cost: parseNum(costIdx),
+                inventoryStatus: statusIdx !== -1 ? String(row[statusIdx]).trim() : undefined,
             };
 
             const l = parseNum(lenIdx);
@@ -264,6 +275,9 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                                             {item.sku}
                                             {!existingSkus.has(item.sku) && (
                                                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 uppercase">New</span>
+                                            )}
+                                            {item.inventoryStatus === 'New Product' && (
+                                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-700 font-bold border border-green-200 uppercase">Status: New</span>
                                             )}
                                         </div>
                                         {item.name && <div className="text-xs text-gray-500 truncate">{item.name}</div>}

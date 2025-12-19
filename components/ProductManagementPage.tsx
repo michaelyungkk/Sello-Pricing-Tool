@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog } from '../types';
 import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2 } from 'lucide-react';
@@ -126,20 +127,25 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
         return priceHistory.reduce((max, log) => log.date > max ? log.date : max, '0000-00-00');
     }, [priceHistory, yesterdayStr]);
 
-    const anchorDateStr = datasetMaxDate > yesterdayStr ? datasetMaxDate : yesterdayStr;
+    // Force anchor to be yesterday if specifically looking at yesterday, otherwise respect latest data
+    const anchorDateStr = timeFrame === 'Yesterday' ? yesterdayStr : (datasetMaxDate > yesterdayStr ? datasetMaxDate : yesterdayStr);
 
     // Custom range state
     const [customRange, setCustomRange] = useState({
         start: new Date(new Date(anchorDateStr).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         end: anchorDateStr
     });
+    
+    // Temporary state for the calendar picker inputs
+    const [tempDateRange, setTempDateRange] = useState(customRange);
 
     const effectiveReportDate = useMemo(() => {
+        if (timeFrame === 'Yesterday') return yesterdayStr;
         if (!priceHistory || priceHistory.length === 0) return anchorDateStr;
         const availableDates = Array.from(new Set(priceHistory.map(p => p.date))).sort().reverse();
         const match = availableDates.find(d => d <= anchorDateStr);
         return match || anchorDateStr;
-    }, [priceHistory, anchorDateStr]);
+    }, [priceHistory, anchorDateStr, timeFrame, yesterdayStr]);
 
     const periodLength = useMemo(() => {
         if (timeFrame === 'Yesterday') return 1;
@@ -280,13 +286,56 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
             {/* Filter Toolbar */}
             <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm gap-4">
                 <div className="flex items-center gap-3">
-                    <button 
-                        onClick={() => setShowCalendar(!showCalendar)}
-                        className={`p-2 rounded-lg transition-colors border ${showCalendar || timeFrame === 'Custom' ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-gray-50 border-gray-100 text-gray-500 hover:bg-gray-100'}`}
-                        title="Pick Custom Range"
-                    >
-                        <Calendar className="w-4 h-4" />
-                    </button>
+                    <div className="relative">
+                        <button 
+                            onClick={() => {
+                                setShowCalendar(!showCalendar);
+                                if (!showCalendar) setTempDateRange(customRange);
+                            }}
+                            className={`p-2 rounded-lg transition-colors border ${showCalendar || timeFrame === 'Custom' ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-gray-50 border-gray-100 text-gray-500 hover:bg-gray-100'}`}
+                            title="Pick Custom Range"
+                        >
+                            <Calendar className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Custom Date Picker Popover */}
+                        {showCalendar && (
+                            <div className="absolute top-full left-0 mt-2 bg-white p-4 rounded-xl shadow-xl border border-gray-200 z-50 w-72 animate-in fade-in slide-in-from-top-2">
+                                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Custom Range</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-xs text-gray-400 block mb-1">Start Date</label>
+                                        <input 
+                                            type="date" 
+                                            value={tempDateRange.start}
+                                            onChange={(e) => setTempDateRange({...tempDateRange, start: e.target.value})}
+                                            className="w-full text-sm border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-gray-400 block mb-1">End Date</label>
+                                        <input 
+                                            type="date" 
+                                            value={tempDateRange.end}
+                                            onChange={(e) => setTempDateRange({...tempDateRange, end: e.target.value})}
+                                            className="w-full text-sm border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={() => {
+                                            setCustomRange(tempDateRange);
+                                            setTimeFrame('Custom');
+                                            setShowCalendar(false);
+                                        }}
+                                        className="w-full py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                                    >
+                                        Apply Range
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
                         {(['Yesterday', 'Last 7 Days', 'Last 30 Days'] as TimeFrame[]).map(tf => (
                             <button
@@ -531,6 +580,7 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
 
 // 2. MASTER CATALOG VIEW
 const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeColor }: { products: Product[], onEditAliases: (p: Product) => void, onOpenMappingModal: () => void, themeColor: string }) => {
+// ... existing MasterCatalogView implementation remains unchanged
     const [search, setSearch] = useState('');
 
     const filtered = products.filter((p: Product) =>
@@ -604,6 +654,7 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
 
 // 3. PRICE MATRIX VIEW
 const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { products: Product[], pricingRules: PricingRules, promotions: PromotionEvent[], themeColor: string }) => {
+// ... existing PriceMatrixView implementation remains unchanged
     const platforms = Object.keys(pricingRules);
 
     return (
@@ -654,6 +705,7 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
 
 // 4. ALIAS DRAWER
 const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { product: Product, pricingRules: PricingRules, onClose: () => void, onSave: (p: Product) => void, themeColor: string }) => {
+// ... existing AliasDrawer implementation remains unchanged
     const [localProduct, setLocalProduct] = useState({ ...product });
     const [newAliasInputs, setNewAliasInputs] = useState<Record<string, string>>({}); // Temporary inputs for tags
 

@@ -1,5 +1,4 @@
 
-
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -64,6 +63,7 @@ export interface Product {
   category: string; // Main Category
   subcategory?: string; // Subcategory
   brand?: string; // Brand
+  inventoryStatus?: string; // e.g. "New Product", "Active", "Clearance" from ERP
   
   // Dimensions (Stored from ERP)
   cartonDimensions?: {
@@ -129,6 +129,28 @@ export interface PlatformConfig {
 }
 
 export type PricingRules = Record<Platform, PlatformConfig>;
+
+// --- STRATEGY ENGINE TYPES ---
+
+export interface StrategyConfig {
+    increase: {
+        minRunwayWeeks: number; // e.g. 6
+        minStock: number; // e.g. 0
+        minVelocity7Days: number; // e.g. 2 units
+        adjustmentPercent: number; // e.g. 5
+        adjustmentFixed: number; // e.g. 1 (GBP)
+    };
+    decrease: {
+        highStockWeeks: number; // e.g. 48
+        medStockWeeks: number; // e.g. 24
+        minMarginPercent: number; // e.g. 25
+        adjustmentPercent: number; // e.g. 5
+        includeNewProducts?: boolean; // Override to include new products in decrease logic
+    };
+    safety: {
+        minMarginPercent: number; // e.g. 10 (Cost * 1.10)
+    };
+}
 
 // --- LOGISTICS MODULE TYPES ---
 

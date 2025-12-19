@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES } from './constants';
-import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog } from './types';
+import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES } from './constants';
+import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig } from './types';
 import ProductList from './components/ProductList';
 import AnalysisModal from './components/AnalysisModal';
 import BatchUploadModal, { BatchUpdateItem } from './components/BatchUploadModal';
@@ -13,8 +14,9 @@ import PromotionPage from './components/PromotionPage';
 import UserProfile from './components/UserProfile';
 import ProductManagementPage from './components/ProductManagementPage';
 import MappingUploadModal, { SkuMapping } from './components/MappingUploadModal';
+import StrategyPage from './components/StrategyPage';
 import { analyzePriceAdjustment } from './services/geminiService';
-import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package, Download } from 'lucide-react';
+import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package, Download, Calculator } from 'lucide-react';
 
 // --- LOGIC HELPERS ---
 
@@ -58,20 +60,14 @@ const calculateOptimalPrice = (sku: string, currentHistory: PriceLog[]): number 
     return bestPrice > 0 ? bestPrice : undefined;
 };
 
-// Helper to determine Friday-Thursday week ranges
-const getFridayThursdayRanges = () => {
-    const today = new Date();
-    const currentDay = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+// Helper to determine Friday-Thursday week ranges relative to a specific date
+const getFridayThursdayRanges = (anchorDate: Date = new Date()) => {
+    const currentDay = anchorDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
     // Target: Friday (5).
-    // Distance to previous Friday:
-    // If today is Fri(5) -> diff 0
-    // If today is Sat(6) -> diff 1
-    // If today is Sun(0) -> diff 2
-    // If today is Thu(4) -> diff 6
     const diff = (currentDay + 2) % 7;
     
-    const currentStart = new Date(today);
-    currentStart.setDate(today.getDate() - diff);
+    const currentStart = new Date(anchorDate);
+    currentStart.setDate(anchorDate.getDate() - diff);
     currentStart.setHours(0,0,0,0);
     
     const currentEnd = new Date(currentStart);
@@ -121,6 +117,15 @@ const App: React.FC = () => {
       }
   });
 
+  const [strategyRules, setStrategyRules] = useState<StrategyConfig>(() => {
+      try {
+          const saved = localStorage.getItem('ecompulse_strategy');
+          return saved ? JSON.parse(saved) : DEFAULT_STRATEGY_RULES;
+      } catch (e) {
+          return DEFAULT_STRATEGY_RULES;
+      }
+  });
+
   const [priceHistory, setPriceHistory] = useState<PriceLog[]>(() => {
       try {
           const saved = localStorage.getItem('ecompulse_price_history');
@@ -139,15 +144,20 @@ const App: React.FC = () => {
       }
   });
 
-  // NOTE: This state is preserved for compatibility but rendering uses dynamicDateLabels
-  const [priceDateLabels, setPriceDateLabels] = useState<{current: string, last: string}>(() => {
-     try {
-         const saved = localStorage.getItem('ecompulse_date_labels');
-         return saved ? JSON.parse(saved) : { current: '', last: '' };
-     } catch(e) {
-         return { current: '', last: '' };
-     }
-  });
+  // Calculate the most recent data point to anchor the "Current Week" logic
+  // This ensures that even if data is from last month, the UI shows relative comparison correctly
+  const latestHistoryDate = useMemo(() => {
+      if (priceHistory.length === 0) return new Date();
+      const maxDate = priceHistory.reduce((max, p) => p.date > max ? p.date : max, '');
+      return maxDate ? new Date(maxDate) : new Date();
+  }, [priceHistory]);
+
+  const weekRanges = useMemo(() => getFridayThursdayRanges(latestHistoryDate), [latestHistoryDate]);
+  
+  const dynamicDateLabels = useMemo(() => ({
+      current: `${formatDateShort(weekRanges.current.start)} - ${formatDateShort(weekRanges.current.end)}`,
+      last: `${formatDateShort(weekRanges.last.start)} - ${formatDateShort(weekRanges.last.end)}`
+  }), [weekRanges]);
 
   // Promotions State
   const [promotions, setPromotions] = useState<PromotionEvent[]>(() => {
@@ -183,18 +193,11 @@ const App: React.FC = () => {
   const [isCostUploadModalOpen, setIsCostUploadModalOpen] = useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
   
-  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'settings' | 'costs' | 'definitions' | 'promotions'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'strategy' | 'products' | 'settings' | 'costs' | 'definitions' | 'promotions'>('dashboard');
   
   // Connectivity State
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const fileRestoreRef = useRef<HTMLInputElement>(null);
-
-  // Dynamic Date Ranges
-  const weekRanges = useMemo(() => getFridayThursdayRanges(), []);
-  const dynamicDateLabels = useMemo(() => ({
-      current: `${formatDateShort(weekRanges.current.start)} - ${formatDateShort(weekRanges.current.end)}`,
-      last: `${formatDateShort(weekRanges.last.start)} - ${formatDateShort(weekRanges.last.end)}`
-  }), [weekRanges]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -231,6 +234,7 @@ const App: React.FC = () => {
   }, []);
 
   // --- AUTO-AGGREGATION OF WEEKLY PRICES ---
+  // Calculates 'oldPrice' (Last Week) vs 'currentPrice' (This Week) based on data, not calendar
   useEffect(() => {
       if (priceHistory.length === 0) return;
 
@@ -253,8 +257,8 @@ const App: React.FC = () => {
                    return totalQty > 0 ? totalRev / totalQty : null;
                };
                
-               // Current Week: Up to now (real-time)
-               const avgCurrent = getAvg(current.start, new Date());
+               // Calculate based on dynamic week ranges
+               const avgCurrent = getAvg(current.start, current.end);
                const avgLast = getAvg(last.start, last.end);
                
                let newCurrent = p.currentPrice;
@@ -281,7 +285,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('ecompulse_products', JSON.stringify(products)); }, [products]);
   useEffect(() => { localStorage.setItem('ecompulse_rules', JSON.stringify(pricingRules)); }, [pricingRules]);
   useEffect(() => { localStorage.setItem('ecompulse_logistics', JSON.stringify(logisticsRules)); }, [logisticsRules]);
-  useEffect(() => { localStorage.setItem('ecompulse_date_labels', JSON.stringify(priceDateLabels)); }, [priceDateLabels]);
+  useEffect(() => { localStorage.setItem('ecompulse_strategy', JSON.stringify(strategyRules)); }, [strategyRules]);
   useEffect(() => { localStorage.setItem('ecompulse_price_history', JSON.stringify(priceHistory)); }, [priceHistory]);
   useEffect(() => { localStorage.setItem('ecompulse_shipment_history', JSON.stringify(shipmentHistory)); }, [shipmentHistory]);
   useEffect(() => { localStorage.setItem('ecompulse_promotions', JSON.stringify(promotions)); }, [promotions]);
@@ -455,6 +459,7 @@ const App: React.FC = () => {
                 subcategory: item.subcategory,
                 stockLevel: item.stock || 0,
                 costPrice: item.cost || 0,
+                inventoryStatus: item.inventoryStatus, // Capture Inventory Status
                 cartonDimensions: item.cartonDimensions,
                 currentPrice: 0,
                 averageDailySales: 0,
@@ -481,6 +486,7 @@ const App: React.FC = () => {
                 subcategory: update.subcategory || p.subcategory,
                 stockLevel: update.stock !== undefined ? update.stock : p.stockLevel,
                 costPrice: update.cost !== undefined ? update.cost : p.costPrice,
+                inventoryStatus: update.inventoryStatus || p.inventoryStatus, // Update Status
                 cartonDimensions: update.cartonDimensions || p.cartonDimensions,
                 lastUpdated: new Date().toISOString().split('T')[0]
             };
@@ -498,14 +504,15 @@ const App: React.FC = () => {
       historyPayload?: HistoryPayload[],
       shipmentLogs?: ShipmentLog[]
   ) => {
-      // 1. Process new history logs (Now containing weekly aggregated data)
+      // ... (Implementation unchanged, see above if modifications needed)
+      // For brevity, using the previous logic for Sales Import which is solid.
+      
+      // 1. Process new history logs
       const newLogs: PriceLog[] = [];
       if (historyPayload) {
           historyPayload.forEach(item => {
               const product = updatedProducts.find(p => p.sku === item.sku);
               if (product) {
-                  // Only add history if velocity > 0 to avoid cluttering with empty weeks, 
-                  // unless it's explicitly recording a drop to 0.
                   newLogs.push({
                       id: `hist-${item.sku}-${item.date}-${Math.random().toString(36).substr(2, 5)}`,
                       sku: item.sku,
@@ -519,7 +526,6 @@ const App: React.FC = () => {
           });
       }
 
-      // 2. Merge with existing history (Preventing duplicates for same SKU+Date)
       let updatedHistory = [...priceHistory];
       if (newLogs.length > 0) {
           const newDates = new Set(newLogs.map(l => l.sku + l.date));
@@ -528,12 +534,10 @@ const App: React.FC = () => {
           setPriceHistory(updatedHistory);
       }
 
-      // Update Shipment Logs if provided (Append new ones)
       if (shipmentLogs && shipmentLogs.length > 0) {
           setShipmentHistory(prev => [...prev, ...shipmentLogs]);
       }
 
-      // 3. Update Products (Snapshot Data)
       setProducts(prev => {
           return updatedProducts.map(newP => {
               const existing = prev.find(p => p.sku === newP.sku);
@@ -541,6 +545,7 @@ const App: React.FC = () => {
                   ...newP,
                   brand: existing?.brand,
                   cartonDimensions: existing?.cartonDimensions,
+                  inventoryStatus: existing?.inventoryStatus, // Preserve inventory status if not in sales report
                   costPrice: newP.costPrice || existing?.costPrice,
                   floorPrice: existing?.floorPrice,
                   ceilingPrice: existing?.ceilingPrice,
@@ -549,9 +554,8 @@ const App: React.FC = () => {
           });
       });
 
-      if (dateLabels) {
-          setPriceDateLabels(dateLabels);
-      }
+      // No need to setPriceDateLabels here manually anymore as it's computed dynamically
+      // but keeping modal close logic
       setIsSalesImportModalOpen(false);
   };
 
@@ -574,43 +578,24 @@ const App: React.FC = () => {
   const handleUpdateMappings = (mappings: SkuMapping[], mode: 'merge' | 'replace', platform: string) => {
       setProducts(prev => {
           let tempProducts = prev;
-          
-          // 1. If REPLACE mode, clear existing aliases for this platform first
           if (mode === 'replace') {
               tempProducts = tempProducts.map(p => ({
                   ...p,
                   channels: p.channels.map(c => c.platform === platform ? { ...c, skuAlias: undefined } : c)
               }));
           }
-
-          // 2. Apply mappings
           return tempProducts.map(p => {
               const myMappings = mappings.filter(m => m.masterSku === p.sku);
               if (myMappings.length === 0) return p;
-
-              // Clone channels to update
               const updatedChannels = [...p.channels];
-
               myMappings.forEach(map => {
                   const existingChannelIndex = updatedChannels.findIndex(c => c.platform === map.platform);
-                  
                   if (existingChannelIndex !== -1) {
-                      // Update existing channel
-                      updatedChannels[existingChannelIndex] = {
-                          ...updatedChannels[existingChannelIndex],
-                          skuAlias: map.alias
-                      };
+                      updatedChannels[existingChannelIndex] = { ...updatedChannels[existingChannelIndex], skuAlias: map.alias };
                   } else {
-                      // Add new channel entry just for mapping (velocity 0)
-                      updatedChannels.push({
-                          platform: map.platform,
-                          manager: 'Unassigned',
-                          velocity: 0,
-                          skuAlias: map.alias
-                      });
+                      updatedChannels.push({ platform: map.platform, manager: 'Unassigned', velocity: 0, skuAlias: map.alias });
                   }
               });
-
               return { ...p, channels: updatedChannels };
           });
       });
@@ -638,23 +623,17 @@ const App: React.FC = () => {
         : { backgroundImage: userProfile.backgroundImage, backgroundAttachment: 'fixed', backgroundSize: 'cover' }
       : { backgroundColor: userProfile.backgroundColor || '#f3f4f6' };
 
-  // Determine if we should show the full dashboard or the onboarding
   const hasInventory = products.length > 0;
-  // History or velocity presence implies transaction report was loaded
   const hasSalesData = priceHistory.length > 0 || products.some(p => p.averageDailySales > 0);
   
   const showDashboard = hasInventory && hasSalesData;
-
-  // Header Color Logic
   const headerTextColor = userProfile.textColor || '#111827';
-  
-  // Readability Shadow
   const textShadowStyle = userProfile.backgroundImage ? { textShadow: '0 2px 4px rgba(0,0,0,0.5)' } : {};
   const headerStyle = { color: headerTextColor, ...textShadowStyle };
 
   return (
     <div className="min-h-screen flex font-sans text-gray-900 transition-colors duration-500" style={bgStyle}>
-      {/* Background Overlay for readability if image is present */}
+      {/* Background Overlay */}
       {userProfile.backgroundImage && <div className="fixed inset-0 bg-white/90 backdrop-blur-sm -z-10"></div>}
 
       {/* Sidebar */}
@@ -672,6 +651,7 @@ const App: React.FC = () => {
         <nav className="flex-1 px-4 py-4 space-y-1">
           {[
               { id: 'dashboard', icon: LayoutDashboard, label: 'Pricing Tool' },
+              { id: 'strategy', icon: Calculator, label: 'Strategy Engine' }, // NEW
               { id: 'products', icon: Package, label: 'Product Mgmt.' },
               { id: 'costs', icon: DollarSign, label: 'Cost Management' },
               { id: 'promotions', icon: Tag, label: 'Promotions' },
@@ -726,7 +706,7 @@ const App: React.FC = () => {
           <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100 backdrop-blur-sm">
             <div className="flex justify-between items-center mb-1">
                 <p className="text-xs font-semibold text-gray-500">Tool Status</p>
-                <span className="text-[10px] text-gray-400">v1.2.3</span>
+                <span className="text-[10px] text-gray-400">v1.3.0</span>
             </div>
             <div className={`flex items-center gap-2 text-sm ${isOnline ? 'text-green-600' : 'text-gray-500'}`}>
                 {isOnline ? (
@@ -755,6 +735,7 @@ const App: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold transition-colors" style={headerStyle}>
                 {currentView === 'dashboard' ? 'Pricing & Inventory Analysis' : 
+                 currentView === 'strategy' ? 'Pricing Strategy Engine' :
                  currentView === 'products' ? 'Product Management' :
                  currentView === 'costs' ? 'Product Costs & Limits' : 
                  currentView === 'definitions' ? 'Definitions & Formulas' : 
@@ -763,6 +744,7 @@ const App: React.FC = () => {
             </h1>
             <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
                 {currentView === 'dashboard' ? 'Manage SKUs, review velocities, and calculate strategies.' : 
+                 currentView === 'strategy' ? 'Define and apply rule-based pricing logic.' :
                  currentView === 'products' ? 'Manage Master SKUs and platform aliases.' :
                  currentView === 'costs' ? 'Set cost prices, and define minimum/maximum price guardrails.' : 
                  currentView === 'definitions' ? 'Reference guide for calculations and logic.' :
@@ -786,11 +768,12 @@ const App: React.FC = () => {
 
         {/* Content Area - Using Display Toggling for Persistence */}
         
-        {/* VIEW: DASHBOARD (Pricing Tool) */}
+        {/* VIEW: DASHBOARD (Legacy/Pricing Tool) */}
         <div style={{ display: currentView === 'dashboard' ? 'block' : 'none' }} className="h-full">
             {!showDashboard ? (
                 // --- ONBOARDING FLOW ---
                 <div className="flex flex-col items-center justify-center min-h-[500px] bg-white/90 backdrop-blur rounded-2xl border-2 border-dashed border-gray-200 text-center p-12 animate-in fade-in zoom-in duration-300">
+                        {/* ... (Existing onboarding code remains the same) ... */}
                         <div 
                             className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
                             style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}
@@ -889,6 +872,17 @@ const App: React.FC = () => {
             )}
         </div>
 
+        {/* VIEW: STRATEGY ENGINE */}
+        <div style={{ display: currentView === 'strategy' ? 'block' : 'none' }} className="h-full">
+            <StrategyPage 
+                products={products}
+                currentConfig={strategyRules}
+                onSaveConfig={(newConfig) => setStrategyRules(newConfig)}
+                themeColor={userProfile.themeColor}
+                headerStyle={headerStyle}
+            />
+        </div>
+
         {/* VIEW: PRODUCT MANAGEMENT */}
         <div style={{ display: currentView === 'products' ? 'block' : 'none' }} className="h-full">
             <ProductManagementPage 
@@ -909,6 +903,7 @@ const App: React.FC = () => {
                 products={products}
                 onUpdateCosts={handleUpdateCosts}
                 onOpenUpload={() => setIsCostUploadModalOpen(true)}
+                logisticsRules={logisticsRules}
                 themeColor={userProfile.themeColor}
                 headerStyle={headerStyle}
             />
