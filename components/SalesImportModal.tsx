@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Product, PricingRules, HistoryPayload, ShipmentLog } from '../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck } from 'lucide-react';
@@ -13,7 +14,8 @@ interface SalesImportModalProps {
     updatedProducts: Product[],
     dateLabels?: { current: string, last: string },
     historyPayload?: HistoryPayload[],
-    shipmentLogs?: ShipmentLog[]
+    shipmentLogs?: ShipmentLog[],
+    discoveredPlatforms?: string[]
   ) => void;
 }
 
@@ -23,6 +25,7 @@ interface ColumnMapping {
   revenue: string;
   date?: string;
   platform?: string;
+  platformLevel2?: string; // New: Detect FBA/FBM distinction
   // Extended ERP Columns
   category?: string;
   cogs?: string;
@@ -92,6 +95,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                   revenue: findExact(['salesamt', 'revenue', 'totalprice', 'price', 'grosssales']),
                   date: findExact(['ordertime', 'date', 'orderdate', 'created']),
                   platform: findExact(['platformnamelevel1', 'platform', 'source', 'channel', 'marketplace']),
+                  platformLevel2: findExact(['platformnamelevel2', 'fulfillment', 'subsource']),
                   
                   // ERP Specific
                   category: findExact(['category', 'maincategory']),
@@ -147,6 +151,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
           const revIdx = getIdx(map.revenue);
           const dateIdx = getIdx(map.date);
           const platIdx = getIdx(map.platform);
+          const plat2Idx = getIdx(map.platformLevel2);
           
           // Fee Indices
           const cogsIdx = getIdx(map.cogs);
@@ -180,6 +185,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
               revenue: number,
               platform?: string
           }> = {};
+
+          const discoveredPlatforms = new Set<string>();
 
           let minDate = new Date();
           let maxDate = new Date(0);
@@ -215,6 +222,30 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
               const qty = parseVal(qtyIdx);
               const rev = parseVal(revIdx);
 
+              // Capture Platform Logic (Prioritize Level 2, but provide context if needed)
+              let platformName = 'Unknown';
+              
+              const p1 = (platIdx !== -1 && row[platIdx]) ? String(row[platIdx]).trim() : '';
+              const p2 = (plat2Idx !== -1 && row[plat2Idx]) ? String(row[plat2Idx]).trim() : '';
+
+              if (p2 && p2 !== '-' && p2.toLowerCase() !== 'unknown') {
+                  // If p2 is very short/generic (e.g. just "FBA"), try to prepend p1 for context
+                  // e.g. p1="Amazon(UK)", p2="FBA" -> "Amazon(UK) FBA"
+                  // But if p2 already contains p1 (e.g. "Amazon(UK) FBA"), just use p2.
+                  if (p1 && !p2.toLowerCase().includes(p1.toLowerCase()) && p2.length < 5) {
+                      platformName = `${p1} ${p2}`;
+                  } else {
+                      platformName = p2;
+                  }
+              } else if (p1) {
+                  platformName = p1;
+              }
+
+              discoveredPlatforms.add(platformName);
+
+              // Check Exclusion Rules
+              const isExcluded = pricingRules[platformName]?.isExcluded;
+
               // --- Overall Aggregation ---
               if (!aggregated[masterSku]) aggregated[masterSku] = { 
                   qty: 0, revenue: 0, count: 0, dates: new Set(),
@@ -224,66 +255,67 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
               };
               
               const item = aggregated[masterSku];
-              item.qty += qty;
-              item.revenue += rev;
-              item.count++;
-
-              // Aggregating Fees
-              const postageCost = parseVal(postIdx);
-              item.fees.selling += parseVal(sellingIdx);
-              item.fees.ads += parseVal(adsIdx);
-              item.fees.postage += postageCost;
-              item.fees.extra += parseVal(extraIdx);
-              item.fees.other += parseVal(otherIdx);
-              item.fees.sub += parseVal(subIdx);
-              item.fees.wms += parseVal(wmsIdx);
-              item.fees.cogs += parseVal(cogsIdx);
-
-              // Capture Category
-              if (catIdx !== -1 && row[catIdx]) item.category = String(row[catIdx]).trim();
               
-              // Capture Platform
-              let currentPlatform = 'Unknown';
-              if (platIdx !== -1 && row[platIdx]) {
-                  const platVal = String(row[platIdx]).trim();
-                  if(platVal) currentPlatform = platVal;
+              // Only add to GLOBAL Totals if NOT excluded
+              if (!isExcluded) {
+                  item.qty += qty;
+                  item.revenue += rev;
+                  item.count++;
+
+                  // Aggregating Fees (only for included retail channels)
+                  const postageCost = parseVal(postIdx);
+                  item.fees.selling += parseVal(sellingIdx);
+                  item.fees.ads += parseVal(adsIdx);
+                  item.fees.postage += postageCost;
+                  item.fees.extra += parseVal(extraIdx);
+                  item.fees.other += parseVal(otherIdx);
+                  item.fees.sub += parseVal(subIdx);
+                  item.fees.wms += parseVal(wmsIdx);
+                  item.fees.cogs += parseVal(cogsIdx);
+                  
+                  // Capture Category
+                  if (catIdx !== -1 && row[catIdx]) item.category = String(row[catIdx]).trim();
+                  
+                  // --- LOGISTICS CALIBRATION (Only from retail) ---
+                  const serviceName = (logNameIdx !== -1 && row[logNameIdx]) ? String(row[logNameIdx]).trim() : '';
+                  const dLog = (dateIdx !== -1 && row[dateIdx]) ? new Date(row[dateIdx]) : new Date();
+                  if (qty === 1 && serviceName && postageCost > 0) {
+                      shipmentLogs.push({
+                          id: Math.random().toString(36).substr(2, 9),
+                          sku: masterSku,
+                          service: serviceName,
+                          cost: postageCost,
+                          date: dLog.toISOString()
+                      });
+                  }
               }
               
-              // Aggregate Platform Stats for Channel update
-              if (!item.platformStats[currentPlatform]) {
-                  item.platformStats[currentPlatform] = { qty: 0, revenue: 0 };
+              // ALWAYS Aggregate Platform Stats for Channel update (Total Visibility)
+              if (!item.platformStats[platformName]) {
+                  item.platformStats[platformName] = { qty: 0, revenue: 0 };
               }
-              item.platformStats[currentPlatform].qty += qty;
-              item.platformStats[currentPlatform].revenue += rev;
+              item.platformStats[platformName].qty += qty;
+              item.platformStats[platformName].revenue += rev;
 
               const d = (dateIdx !== -1 && row[dateIdx]) ? new Date(row[dateIdx]) : new Date();
               if (dateIdx !== -1 && row[dateIdx] && !isNaN(d.getTime())) {
                   hasDates = true;
                   if (d < minDate) minDate = d;
                   if (d > maxDate) maxDate = d;
-                  item.dates.add(d.toISOString().split('T')[0]);
-
-                  // --- Weekly Bucketing ---
-                  const weekStart = getFridayWeekStart(d);
-                  const weekKey = `${masterSku}|${weekStart}`;
                   
-                  if (!weeklyAggregated[weekKey]) {
-                      weeklyAggregated[weekKey] = { sku: masterSku, weekStart, qty: 0, revenue: 0, platform: currentPlatform };
-                  }
-                  weeklyAggregated[weekKey].qty += qty;
-                  weeklyAggregated[weekKey].revenue += rev;
-              }
+                  if (!isExcluded) { // Only track dates for valid retail periods? Or all? Let's stick to Retail for consistency.
+                      item.dates.add(d.toISOString().split('T')[0]);
 
-              // --- LOGISTICS CALIBRATION LOGGING ---
-              const serviceName = (logNameIdx !== -1 && row[logNameIdx]) ? String(row[logNameIdx]).trim() : '';
-              if (qty === 1 && serviceName && postageCost > 0) {
-                  shipmentLogs.push({
-                      id: Math.random().toString(36).substr(2, 9),
-                      sku: masterSku,
-                      service: serviceName,
-                      cost: postageCost,
-                      date: d.toISOString()
-                  });
+                      // --- Weekly Bucketing (Retail Only) ---
+                      const weekStart = getFridayWeekStart(d);
+                      const weekKey = `${masterSku}|${weekStart}`;
+                      
+                      if (!weeklyAggregated[weekKey]) {
+                          weeklyAggregated[weekKey] = { sku: masterSku, weekStart, qty: 0, revenue: 0, platform: platformName };
+                      }
+                      weeklyAggregated[weekKey].qty += qty;
+                      weeklyAggregated[weekKey].revenue += rev;
+                  }
               }
           });
 
@@ -326,6 +358,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
               if (!product) return;
 
               const validQty = data.qty > 0 ? data.qty : 1; 
+              // Note: averageDailySales here is purely RETAIL velocity if exclusion logic applied
               const newVelocity = data.qty / calculatedPeriod;
               const currentPrice = product.currentPrice || 0;
               const rawAvg = data.qty > 0 ? data.revenue / data.qty : currentPrice;
@@ -341,7 +374,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                   wms: data.fees.wms / validQty,
               };
 
-              // Rebuild Channels based on report data
+              // Rebuild Channels based on report data (ALL CHANNELS, including Excluded)
               const updatedChannels = [...product.channels];
               Object.entries(data.platformStats).forEach(([platform, stats]) => {
                   const channelIdx = updatedChannels.findIndex(c => c.platform === platform);
@@ -386,7 +419,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
               });
 
               // Fallback: If no dates were found in file, push a single 'today' history entry
-              if (!hasDates) {
+              if (!hasDates && newVelocity > 0) {
                   // Find primary platform
                   const primaryPlatform = Object.keys(data.platformStats)[0] || 'General';
                   history.push({
@@ -417,7 +450,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                   totalRevenue: Object.values(aggregated).reduce((a, b) => a + b.revenue, 0),
                   period: calculatedPeriod,
                   dateLabel,
-                  shipmentCount: shipmentLogs.length
+                  shipmentCount: shipmentLogs.length,
+                  discoveredPlatforms: Array.from(discoveredPlatforms)
               }
           });
           setStep('preview');
@@ -499,7 +533,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         <MappingSelect label="Quantity (sku_quantity)" value={mapping.qty} onChange={(v: string) => mapField('qty', v)} options={rawHeaders} required />
                         <MappingSelect label="Revenue (sales_amt)" value={mapping.revenue} onChange={(v: string) => mapField('revenue', v)} options={rawHeaders} required />
                         <MappingSelect label="Date (order_time)" value={mapping.date} onChange={(v: string) => mapField('date', v)} options={rawHeaders} />
-                        <MappingSelect label="Platform Source" value={mapping.platform} onChange={(v: string) => mapField('platform', v)} options={rawHeaders} />
+                        <MappingSelect label="Platform Level 1" value={mapping.platform} onChange={(v: string) => mapField('platform', v)} options={rawHeaders} />
+                        <MappingSelect label="Platform Level 2 (Subsource)" value={mapping.platformLevel2} onChange={(v: string) => mapField('platformLevel2', v)} options={rawHeaders} />
                     </div>
 
                     {showAdvancedMapping && (
@@ -620,7 +655,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             )}
             {step === 'preview' && (
                 <button 
-                    onClick={() => onConfirm(previewData.updates, { current: previewData.stats.dateLabel, last: "Previous" }, previewData.history, previewData.shipmentLogs)}
+                    onClick={() => onConfirm(previewData.updates, { current: previewData.stats.dateLabel, last: "Previous" }, previewData.history, previewData.shipmentLogs, previewData.stats.discoveredPlatforms)}
                     className="px-6 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all"
                 >
                     <Check className="w-4 h-4" />

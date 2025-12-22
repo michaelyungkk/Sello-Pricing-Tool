@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES } from './constants';
-import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig } from './types';
+import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback } from './types';
 import ProductList from './components/ProductList';
 import AnalysisModal from './components/AnalysisModal';
 import BatchUploadModal, { BatchUpdateItem } from './components/BatchUploadModal';
@@ -126,6 +126,14 @@ const App: React.FC = () => {
       }
   });
 
+  const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(() => {
+      try {
+          return (localStorage.getItem('ecompulse_velocity_setting') as VelocityLookback) || '30';
+      } catch (e) {
+          return '30';
+      }
+  });
+
   const [priceHistory, setPriceHistory] = useState<PriceLog[]>(() => {
       try {
           const saved = localStorage.getItem('ecompulse_price_history');
@@ -148,8 +156,13 @@ const App: React.FC = () => {
   // This ensures that even if data is from last month, the UI shows relative comparison correctly
   const latestHistoryDate = useMemo(() => {
       if (priceHistory.length === 0) return new Date();
-      const maxDate = priceHistory.reduce((max, p) => p.date > max ? p.date : max, '');
-      return maxDate ? new Date(maxDate) : new Date();
+      // Safely parse dates and find max
+      let maxTs = 0;
+      priceHistory.forEach(p => {
+          const ts = new Date(p.date).getTime();
+          if (!isNaN(ts) && ts > maxTs) maxTs = ts;
+      });
+      return maxTs > 0 ? new Date(maxTs) : new Date();
   }, [priceHistory]);
 
   const weekRanges = useMemo(() => getFridayThursdayRanges(latestHistoryDate), [latestHistoryDate]);
@@ -183,6 +196,23 @@ const App: React.FC = () => {
           return { name: '', themeColor: '#4f46e5', backgroundImage: '', backgroundColor: '#f3f4f6' };
       }
   });
+
+  // --- FIX: Sync Body Background to eliminate gaps on scroll bounce ---
+  useEffect(() => {
+      if (userProfile.backgroundImage && userProfile.backgroundImage !== 'none') {
+          const isUrl = userProfile.backgroundImage.startsWith('http') || userProfile.backgroundImage.startsWith('data:') || userProfile.backgroundImage.startsWith('/');
+          document.body.style.background = isUrl 
+            ? `url(${userProfile.backgroundImage})` 
+            : userProfile.backgroundImage;
+          document.body.style.backgroundSize = 'cover';
+          document.body.style.backgroundPosition = 'center';
+          document.body.style.backgroundAttachment = 'fixed';
+          document.body.style.backgroundRepeat = 'no-repeat';
+      } else {
+          document.body.style.background = userProfile.backgroundColor || '#f3f4f6';
+          document.body.style.backgroundImage = '';
+      }
+  }, [userProfile]);
 
   // --- STATE MANAGEMENT ---
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -233,8 +263,77 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // --- AUTO-AGGREGATION OF WEEKLY PRICES ---
-  // Calculates 'oldPrice' (Last Week) vs 'currentPrice' (This Week) based on data, not calendar
+  // --- CORE LOGIC: RECALCULATE VELOCITIES BASED ON SETTINGS ---
+  useEffect(() => {
+      if (priceHistory.length === 0) return;
+
+      // 1. Determine Window Dates based on latest history and setting
+      const anchorTime = latestHistoryDate.getTime();
+      let lookbackDays = 30; // Default
+      
+      if (velocityLookback !== 'ALL') {
+          lookbackDays = parseInt(velocityLookback, 10);
+      } else {
+          // If ALL, we just use a very large number effectively
+          lookbackDays = 9999;
+      }
+
+      // Current Window: [Now - Lookback] to [Now]
+      const currentWindowStart = anchorTime - (lookbackDays * 24 * 60 * 60 * 1000);
+      
+      // Previous Window: [Now - 2*Lookback] to [Now - Lookback]
+      const prevWindowStart = anchorTime - (lookbackDays * 2 * 24 * 60 * 60 * 1000);
+      const prevWindowEnd = currentWindowStart;
+
+      setProducts(prevProducts => {
+          let hasChanges = false;
+          
+          const updated = prevProducts.map(p => {
+              // Get all history for this SKU
+              const skuLogs = priceHistory.filter(l => l.sku === p.sku);
+              if (skuLogs.length === 0) return p;
+
+              // Helper to calculate avg velocity for a time window
+              const calcAvgVel = (startMs: number, endMs: number) => {
+                  const relevantLogs = skuLogs.filter(l => {
+                      const d = new Date(l.date).getTime();
+                      return d >= startMs && d <= endMs;
+                  });
+                  
+                  if (relevantLogs.length === 0) return 0;
+                  
+                  // Sum up daily velocities? Or average them?
+                  // PriceLog.velocity is "Average Daily Sales" for that period (usually a week).
+                  // So an average of these averages is a fair representation of the daily sales over the longer period.
+                  const sumVel = relevantLogs.reduce((acc, l) => acc + l.velocity, 0);
+                  return sumVel / relevantLogs.length;
+              };
+
+              const newAvgDaily = calcAvgVel(currentWindowStart, anchorTime);
+              const newPrevDaily = calcAvgVel(prevWindowStart, prevWindowEnd);
+
+              // Only update if significantly different to avoid render loops on tiny floats
+              if (
+                  Math.abs(newAvgDaily - p.averageDailySales) > 0.001 || 
+                  Math.abs((newPrevDaily || 0) - (p.previousDailySales || 0)) > 0.001
+              ) {
+                  hasChanges = true;
+                  return {
+                      ...p,
+                      averageDailySales: Number(newAvgDaily.toFixed(2)),
+                      previousDailySales: Number(newPrevDaily.toFixed(2))
+                  };
+              }
+              return p;
+          });
+
+          return hasChanges ? updated : prevProducts;
+      });
+
+  }, [priceHistory, velocityLookback, latestHistoryDate]);
+
+
+  // --- AUTO-AGGREGATION OF WEEKLY PRICES (EXISTING LOGIC, PRESERVED) ---
   useEffect(() => {
       if (priceHistory.length === 0) return;
 
@@ -243,28 +342,23 @@ const App: React.FC = () => {
       setProducts(prevProducts => {
           let hasChanges = false;
           const updated = prevProducts.map(p => {
-               // Logic to calc average from logs
                const getAvg = (start: Date, end: Date) => {
                    const logs = priceHistory.filter(l => {
                        const d = new Date(l.date);
                        return l.sku === p.sku && d >= start && d <= end;
                    });
                    if (logs.length === 0) return null;
-                   
                    const totalRev = logs.reduce((acc, l) => acc + (l.price * l.velocity), 0);
                    const totalQty = logs.reduce((acc, l) => acc + l.velocity, 0);
-                   
                    return totalQty > 0 ? totalRev / totalQty : null;
                };
                
-               // Calculate based on dynamic week ranges
                const avgCurrent = getAvg(current.start, current.end);
                const avgLast = getAvg(last.start, last.end);
                
                let newCurrent = p.currentPrice;
                let newOld = p.oldPrice;
                
-               // Only update if we have data for that period, otherwise keep existing snapshot
                if (avgCurrent !== null) newCurrent = Number(avgCurrent.toFixed(2));
                if (avgLast !== null) newOld = Number(avgLast.toFixed(2));
                
@@ -274,7 +368,6 @@ const App: React.FC = () => {
                }
                return p;
           });
-          
           return hasChanges ? updated : prevProducts;
       });
   }, [priceHistory, weekRanges]);
@@ -290,11 +383,12 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('ecompulse_shipment_history', JSON.stringify(shipmentHistory)); }, [shipmentHistory]);
   useEffect(() => { localStorage.setItem('ecompulse_promotions', JSON.stringify(promotions)); }, [promotions]);
   useEffect(() => { localStorage.setItem('ecompulse_user_profile', JSON.stringify(userProfile)); }, [userProfile]);
+  useEffect(() => { localStorage.setItem('ecompulse_velocity_setting', velocityLookback); }, [velocityLookback]);
 
 
   // --- HANDLERS ---
 
-  const handleRestoreData = (data: { products: Product[], rules: PricingRules, logistics?: LogisticsRule[], history?: PriceLog[], promotions?: PromotionEvent[] }) => {
+  const handleRestoreData = (data: { products: Product[], rules: PricingRules, logistics?: LogisticsRule[], history?: PriceLog[], promotions?: PromotionEvent[], velocitySetting?: VelocityLookback }) => {
     try {
         console.log("Restoring data...", { productCount: data.products?.length });
         
@@ -303,6 +397,7 @@ const App: React.FC = () => {
         const safeLogistics = data.logistics ? JSON.parse(JSON.stringify(data.logistics)) : JSON.parse(JSON.stringify(DEFAULT_LOGISTICS_RULES));
         const safeHistory = data.history ? JSON.parse(JSON.stringify(data.history)) : [];
         const safePromotions = data.promotions ? JSON.parse(JSON.stringify(data.promotions)) : [];
+        const safeVelocity = data.velocitySetting || '30';
 
         const enrichedProducts = safeProducts.map((p: Product) => ({
             ...p,
@@ -314,6 +409,7 @@ const App: React.FC = () => {
         setLogisticsRules(safeLogistics);
         setPriceHistory(safeHistory);
         setPromotions(safePromotions);
+        setVelocityLookback(safeVelocity);
         alert("Database restored successfully!");
     } catch (e) {
         console.error("Failed to restore data", e);
@@ -329,6 +425,7 @@ const App: React.FC = () => {
       history: priceHistory,
       shipmentHistory,
       promotions,
+      velocitySetting: velocityLookback,
       timestamp: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
@@ -502,16 +599,15 @@ const App: React.FC = () => {
       updatedProducts: Product[], 
       dateLabels?: { current: string, last: string }, 
       historyPayload?: HistoryPayload[],
-      shipmentLogs?: ShipmentLog[]
+      shipmentLogs?: ShipmentLog[],
+      discoveredPlatforms?: string[]
   ) => {
-      // ... (Implementation unchanged, see above if modifications needed)
-      // For brevity, using the previous logic for Sales Import which is solid.
-      
       // 1. Process new history logs
       const newLogs: PriceLog[] = [];
       if (historyPayload) {
           historyPayload.forEach(item => {
-              const product = updatedProducts.find(p => p.sku === item.sku);
+              // Find matching product in existing catalog first, or fall back to updated list
+              const product = products.find(p => p.sku === item.sku) || updatedProducts.find(p => p.sku === item.sku);
               if (product) {
                   newLogs.push({
                       id: `hist-${item.sku}-${item.date}-${Math.random().toString(36).substr(2, 5)}`,
@@ -538,24 +634,57 @@ const App: React.FC = () => {
           setShipmentHistory(prev => [...prev, ...shipmentLogs]);
       }
 
+      // --- CRITICAL FIX: MERGE UPDATES INSTEAD OF REPLACE ---
+      // This ensures we don't lose the 600+ products that had no sales in this report
       setProducts(prev => {
-          return updatedProducts.map(newP => {
-              const existing = prev.find(p => p.sku === newP.sku);
-              return {
-                  ...newP,
-                  brand: existing?.brand,
-                  cartonDimensions: existing?.cartonDimensions,
-                  inventoryStatus: existing?.inventoryStatus, // Preserve inventory status if not in sales report
-                  costPrice: newP.costPrice || existing?.costPrice,
-                  floorPrice: existing?.floorPrice,
-                  ceilingPrice: existing?.ceilingPrice,
-                  optimalPrice: calculateOptimalPrice(newP.sku, updatedHistory) 
-              };
+          const updateMap = new Map(updatedProducts.map(p => [p.sku, p]));
+          
+          return prev.map(existing => {
+              if (updateMap.has(existing.sku)) {
+                  const newP = updateMap.get(existing.sku)!;
+                  return {
+                      ...newP, // Overwrite with new sales data
+                      // Preserve existing fields that might not be in the sales update
+                      brand: existing.brand || newP.brand,
+                      cartonDimensions: existing.cartonDimensions || newP.cartonDimensions,
+                      inventoryStatus: existing.inventoryStatus || newP.inventoryStatus,
+                      costPrice: newP.costPrice || existing.costPrice,
+                      floorPrice: existing.floorPrice,
+                      ceilingPrice: existing.ceilingPrice,
+                      // Recalculate optimal based on updated history
+                      optimalPrice: calculateOptimalPrice(newP.sku, updatedHistory) 
+                  };
+              }
+              return existing; // Keep product as-is if not in this sales report
           });
       });
 
-      // No need to setPriceDateLabels here manually anymore as it's computed dynamically
-      // but keeping modal close logic
+      // --- AUTO ADD PLATFORMS TO CONFIG ---
+      if (discoveredPlatforms && discoveredPlatforms.length > 0) {
+          setPricingRules(prevRules => {
+              const newRules = { ...prevRules };
+              let hasChanges = false;
+              
+              discoveredPlatforms.forEach(plat => {
+                  if (!newRules[plat]) {
+                      // Attempt to inherit from parent platform
+                      const parentKey = Object.keys(newRules).find(k => plat.includes(k));
+                      const parent = parentKey ? newRules[parentKey] : null;
+                      
+                      newRules[plat] = {
+                          markup: parent?.markup || 0,
+                          commission: parent?.commission || 0,
+                          manager: parent?.manager || 'Unassigned',
+                          color: parent?.color || '#374151',
+                          isExcluded: parent?.isExcluded || false
+                      };
+                      hasChanges = true;
+                  }
+              });
+              return hasChanges ? newRules : prevRules;
+          });
+      }
+
       setIsSalesImportModalOpen(false);
   };
 
@@ -876,6 +1005,7 @@ const App: React.FC = () => {
         <div style={{ display: currentView === 'strategy' ? 'block' : 'none' }} className="h-full">
             <StrategyPage 
                 products={products}
+                pricingRules={pricingRules}
                 currentConfig={strategyRules}
                 onSaveConfig={(newConfig) => setStrategyRules(newConfig)}
                 themeColor={userProfile.themeColor}
@@ -933,8 +1063,9 @@ const App: React.FC = () => {
         <div style={{ display: currentView === 'settings' ? 'block' : 'none' }} className="h-full">
             <SettingsPage 
                 currentRules={pricingRules} 
-                onSave={(newRules) => {
+                onSave={(newRules, newVelocity) => {
                     setPricingRules(newRules);
+                    setVelocityLookback(newVelocity);
                 }} 
                 logisticsRules={logisticsRules}
                 onSaveLogistics={(newLogistics) => {

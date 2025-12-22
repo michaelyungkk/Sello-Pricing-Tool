@@ -2,7 +2,8 @@
 import { Product, PriceLog, PromotionEvent, PricingRules, LogisticsRule, StrategyConfig } from './types';
 
 export const DEFAULT_PRICING_RULES: PricingRules = {
-  'Amazon(UK)': { markup: 2.0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900' },
+  'Amazon(UK) FBA': { markup: 0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900' },
+  'Amazon(UK) FBM': { markup: 0, commission: 15.0, manager: 'Bella Qin', color: '#E68A00' },
   'eBay': { markup: 0, commission: 10.0, manager: 'Sophie Nie', color: '#E53238' },
   'The Range': { markup: 0, commission: 12.0, manager: 'Queenie Wong', color: '#2C3E50' },
   'ManoMano': { markup: 0, commission: 18.0, manager: 'Queenie Wong', color: '#00D09C' },
@@ -83,8 +84,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     sku: 'PT1298-GY-60-UK',
     channels: [
       { platform: 'eBay', manager: 'Sophie Nie', velocity: 6.5 },
-      { platform: 'Amazon', manager: 'Bella Qin', velocity: 4.0 },
-      { platform: 'Temu', manager: 'Elaine Wang', velocity: 8.0 }
+      { platform: 'Amazon(UK) FBA', manager: 'Bella Qin', velocity: 4.0 },
+      { platform: 'Temu(UK)', manager: 'Elaine Wang', velocity: 8.0 }
     ],
     currentPrice: 11.65,
     costPrice: 4.50,
@@ -103,8 +104,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: 'Carriers & Totes (Grey)',
     sku: 'PT1343-GY-UK',
     channels: [
-      { platform: 'Amazon', manager: 'Bella Qin', velocity: 5.5 },
-      { platform: 'Temu', manager: 'Elaine Wang', velocity: 9.0 },
+      { platform: 'Amazon(UK) FBM', manager: 'Bella Qin', velocity: 5.5 },
+      { platform: 'Temu(UK)', manager: 'Elaine Wang', velocity: 9.0 },
       { platform: 'Debenhams', manager: 'Queenie Wong', velocity: 2.1 }
     ],
     currentPrice: 18.32,
@@ -124,7 +125,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: 'Lavio Memory Foam Pillow',
     sku: 'PILO1014-GY-UK',
     channels: [
-      { platform: 'Amazon', manager: 'Bella Qin', velocity: 3.2 },
+      { platform: 'Amazon(UK) FBA', manager: 'Bella Qin', velocity: 3.2 },
       { platform: 'Debenhams', manager: 'Queenie Wong', velocity: 1.5 }
     ],
     currentPrice: 29.02,

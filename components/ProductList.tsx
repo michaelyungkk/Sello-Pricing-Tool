@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules } from '../types';
-import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw } from 'lucide-react';
+import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -86,7 +86,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [managerFilter, setManagerFilter] = useState('All');
-  const [platformFilter, setPlatformFilter] = useState('All');
+  const [platformFilters, setPlatformFilters] = useState<string[]>([]); // Multi-select array
   
   // New Filters
   const [brandFilter, setBrandFilter] = useState('All');
@@ -94,8 +94,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   const [subCatFilter, setSubCatFilter] = useState('All');
   
   // Visibility Toggles
-  const [showInactive, setShowInactive] = useState(false); // Toggle for "Ghost" products (0 stock, 0 sales)
-  const [showOOS, setShowOOS] = useState(true); // Toggle for Out of Stock products (stock <= 0) - Default True to avoid confusion
+  const [showInactive, setShowInactive] = useState(false); 
+  const [showOOS, setShowOOS] = useState(true); 
 
   // Advanced Filter State
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -123,12 +123,23 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false); 
 
+  // Helper to resolve manager from config if available (Dynamic Lookup)
+  const getEffectiveManager = (platform: string, storedManager: string) => {
+      // If pricingRules has a specific manager for this platform (and it's not unassigned), use it as source of truth.
+      // This overrides potentially stale data in the product record.
+      if (pricingRules && pricingRules[platform]?.manager && pricingRules[platform].manager !== 'Unassigned') {
+          return pricingRules[platform].manager;
+      }
+      return storedManager || 'Unassigned';
+  };
+
   // Extract unique options for dropdowns
   const uniqueManagers = useMemo(() => {
     const managerSet = new Set<string>();
-    // From Products
-    products.forEach(p => p.channels.forEach(c => managerSet.add(c.manager)));
-    // From Rules Defaults
+    products.forEach(p => p.channels.forEach(c => {
+        managerSet.add(getEffectiveManager(c.platform, c.manager));
+    }));
+    // Also add any from rules just in case they aren't used yet but exist in config
     if (pricingRules) {
         Object.values(pricingRules).forEach((r: any) => {
             if (r.manager && r.manager !== 'Unassigned') managerSet.add(r.manager);
@@ -139,9 +150,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
   const uniquePlatforms = useMemo(() => {
     const platformSet = new Set<string>();
-    // From Products
     products.forEach(p => p.channels.forEach(c => platformSet.add(c.platform)));
-    // From Rules Defaults
     if (pricingRules) {
         Object.keys(pricingRules).forEach(k => platformSet.add(k));
     }
@@ -176,7 +185,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
           return current;
       }
       let multiplier = 1;
-      // Use the *displayed* status (Trend Aware) to decide if bulk adjustment applies
       if (product.status === 'Critical') {
           multiplier = 1 + (adjustmentIntensity / 100);
       } else if (product.status === 'Overstock') {
@@ -196,25 +204,28 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   const filteredProducts = useMemo(() => {
     const aggregatedData = products.map(p => {
         // --- VISIBILITY LOGIC ---
-        // 1. Ghost Products (Inactive)
         if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) {
             return { ...p, _isVisible: false };
         }
-        // 2. Out of Stock (Active but 0 stock)
-        // If showOOS is false, hide items with 0 stock (unless they are ghost items already handled above, this handles active OOS)
         if (!showOOS && p.stockLevel <= 0) {
              return { ...p, _isVisible: false };
         }
 
+        // Multi-select Filter Logic
+        const isPlatformFiltered = platformFilters.length > 0;
+        
         const matchingChannels = p.channels.filter(c => {
-             const matchPlatform = platformFilter === 'All' || c.platform === platformFilter;
-             const matchManager = managerFilter === 'All' || c.manager === managerFilter;
+             const matchPlatform = !isPlatformFiltered || platformFilters.includes(c.platform);
+             
+             // Dynamic Manager Check
+             const effectiveManager = getEffectiveManager(c.platform, c.manager);
+             const matchManager = managerFilter === 'All' || effectiveManager === managerFilter;
+             
              return matchPlatform && matchManager;
         });
 
-        const isFiltering = platformFilter !== 'All' || managerFilter !== 'All';
+        const isFiltering = isPlatformFiltered || managerFilter !== 'All';
         
-        // Base metrics (Global or Filtered)
         let displayVelocity = p.averageDailySales;
         let displayPrice = p.currentPrice || 0;
         
@@ -242,18 +253,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
         const stock = p.stockLevel;
         const leadTime = p.leadTimeDays;
-        
         const displayRunway = stock <= 0 ? 0 : (displayVelocity > 0 ? stock / displayVelocity : 999);
-        
-        // --- TREND AWARE RECOMMENDATION LOGIC ---
-        // Calculate Deltas
-        const currentP = p.currentPrice || 0;
-        const oldP = p.oldPrice || 0;
-        const priceChange = (oldP > 0) ? (currentP - oldP) / oldP : 0;
-            
-        const velocityChange = (p.previousDailySales && p.previousDailySales > 0)
-            ? (p.averageDailySales - p.previousDailySales) / p.previousDailySales
-            : 0;
         
         // Default Logic (Snapshot based)
         let displayStatus: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
@@ -263,25 +263,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
             displayStatus = 'Critical';
             displayRec = 'Out of Stock';
         } else if (displayRunway < leadTime) {
-            // STOCK IS CRITICAL
-            // Check Trend: Did we recently increase price (>3%) and did velocity drop (>20%)?
-            if (priceChange > 0.03 && velocityChange < -0.20) {
-                displayStatus = 'Warning'; // Downgrade from Critical
-                displayRec = 'Monitor (Trend Effective)';
-            } else {
-                displayStatus = 'Critical';
-                displayRec = 'Increase Price';
-            }
+            displayStatus = 'Critical';
+            displayRec = 'Increase Price';
         } else if (displayRunway > leadTime * 4) {
-            // STOCK IS HIGH
-            // Check Trend: Did we recently decrease price (<-3%) and did velocity rise (>20%)?
-            if (priceChange < -0.03 && velocityChange > 0.20) {
-                displayStatus = 'Warning'; // Downgrade from Overstock/Action needed
-                displayRec = 'Monitor (Trend Effective)';
-            } else {
-                displayStatus = 'Overstock';
-                displayRec = 'Decrease Price';
-            }
+            displayStatus = 'Overstock';
+            displayRec = 'Decrease Price';
         } else if (displayRunway < leadTime * 1.5) {
             displayStatus = 'Warning';
             displayRec = 'Maintain';
@@ -298,8 +284,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
             status: displayStatus,
             recommendation: displayRec,
             _trendData: {
-                priceChange,
-                velocityChange
+                priceChange: 0,
+                velocityChange: 0
             }
         };
     }).filter(p => p._isVisible); 
@@ -350,13 +336,12 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
     }
 
     return result;
-  }, [products, searchQuery, statusFilter, managerFilter, platformFilter, brandFilter, mainCatFilter, subCatFilter, sortConfig, priceOverrides, adjustmentIntensity, velocityFilter, runwayFilter, allowOutOfStockAdjustment, showInactive, showOOS]);
+  }, [products, searchQuery, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, priceOverrides, adjustmentIntensity, velocityFilter, runwayFilter, allowOutOfStockAdjustment, showInactive, showOOS, pricingRules]);
 
   useEffect(() => {
       setCurrentPage(1);
-  }, [searchQuery, statusFilter, managerFilter, platformFilter, brandFilter, mainCatFilter, subCatFilter, showInactive, showOOS]);
+  }, [searchQuery, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, showInactive, showOOS]);
 
-  // Reset subcat filter if main cat changes
   useEffect(() => {
       setSubCatFilter('All');
   }, [mainCatFilter]);
@@ -406,10 +391,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
     const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Est. New Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost'];
     const rows = filteredProducts.map(p => {
         const simulatedPrice = getSimulatedPrice(p);
-        // CHANGE: Always export the simulated price to ensure full column data for uploads
         const exportNewPrice = simulatedPrice.toFixed(2);
 
-        // Alias Logic
         let exportSku = p.sku;
         if (platform !== 'All') {
             const channel = p.channels.find(c => c.platform === platform);
@@ -459,8 +442,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         const currentP = p.currentPrice || 0;
         
         if (!isOverridden) {
-            // FIX: Comparison against 2-decimal rounded version to avoid float drift activation
-            // Defensive: ensure currentPrice exists before calling toFixed
             if (Math.abs(simulatedPrice - Number(currentP.toFixed(2))) > 0.001) {
                 finalPrice = Math.ceil(simulatedPrice) - 0.01;
                 if (finalPrice < 0) finalPrice = 0.99;
@@ -481,11 +462,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         setIsConfirmed(true);
         setShowSuccessMessage(true);
         setTimeout(() => setShowSuccessMessage(false), 2000);
-        
-        // NOTE: We deliberately DO NOT call onApplyChanges here.
-        // This ensures the "Current Price" in the app remains the "Actual/Live" price,
-        // while the confirmed simulation values are locked into `priceOverrides` ready for Export.
-        // onApplyChanges(Object.entries(newOverrides).map(([productId, newPrice]) => ({ productId, newPrice })));
     } else {
         alert("No changes detected to confirm.");
     }
@@ -495,7 +471,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
      let count = 0;
      filteredProducts.forEach(p => {
          const final = getSimulatedPrice(p);
-         // FIX: Comparison against 2-decimal rounded version to avoid float drift activation
          if (Math.abs(final - Number((p.currentPrice || 0).toFixed(2))) > 0.001) count++;
      });
      return count;
@@ -536,7 +511,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
     );
   };
 
-  const isContextFiltered = platformFilter !== 'All' || managerFilter !== 'All';
+  const isContextFiltered = platformFilters.length > 0 || managerFilter !== 'All';
   const isButtonDisabled = showSuccessMessage || (isConfirmed && changedCount > 0) || (changedCount === 0 && Object.keys(priceOverrides).length === 0);
 
   // Helper for filter pills
@@ -564,6 +539,85 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
           </div>
       </div>
   );
+
+  // Multi-Select Dropdown Component
+  const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, themeColor }: any) => {
+      const [isOpen, setIsOpen] = useState(false);
+      const dropdownRef = useRef<HTMLDivElement>(null);
+
+      useEffect(() => {
+          const handleClickOutside = (event: MouseEvent) => {
+              if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                  setIsOpen(false);
+              }
+          };
+          document.addEventListener('mousedown', handleClickOutside);
+          return () => document.removeEventListener('mousedown', handleClickOutside);
+      }, []);
+
+      const toggleOption = (option: string) => {
+          if (selected.includes(option)) {
+              onChange(selected.filter((item: string) => item !== option));
+          } else {
+              onChange([...selected, option]);
+          }
+      };
+
+      const displayText = selected.length === 0 ? 'All' : selected.length === 1 ? selected[0] : `${selected.length} Selected`;
+
+      return (
+          <div className="relative" ref={dropdownRef}>
+              <div 
+                className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden cursor-pointer"
+                onClick={() => setIsOpen(!isOpen)}
+                style={{ borderColor: isOpen ? themeColor : '#d1d5db' }}
+              >
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
+                      {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+                  </div>
+                  <div className="flex-1 min-w-[120px] px-3 py-2 flex items-center justify-between">
+                      <span className="text-sm text-gray-900 truncate max-w-[140px]">{displayText}</span>
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  </div>
+              </div>
+
+              {isOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-100">
+                      <div className="p-2 border-b border-gray-100 flex justify-between">
+                          <button 
+                            className="text-[10px] text-gray-500 hover:text-gray-800"
+                            onClick={() => onChange(options)}
+                          >Select All</button>
+                          <button 
+                            className="text-[10px] text-gray-500 hover:text-gray-800"
+                            onClick={() => onChange([])}
+                          >Clear</button>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto p-1">
+                          {options.map((opt: string) => {
+                              const isSelected = selected.includes(opt);
+                              return (
+                                  <div 
+                                    key={opt} 
+                                    className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer rounded-md"
+                                    onClick={() => toggleOption(opt)}
+                                  >
+                                      {isSelected ? (
+                                          <CheckSquare className="w-4 h-4 text-indigo-600 flex-shrink-0" style={{ color: themeColor }} />
+                                      ) : (
+                                          <Square className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                                      )}
+                                      <span className={`text-sm ${isSelected ? 'font-medium text-gray-900' : 'text-gray-600'}`}>{opt}</span>
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  </div>
+              )}
+          </div>
+      );
+  };
 
   return (
     <div className="space-y-4">
@@ -799,11 +853,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                      
                      {/* Row 2 Filters */}
                      <div className="flex flex-wrap gap-3 flex-1">
-                        <FilterDropdown 
+                        <MultiSelectDropdown 
                             label="Platform" 
                             icon={Globe} 
-                            value={platformFilter} 
-                            onChange={(e: any) => { setPlatformFilter(e.target.value); setCurrentPage(1); }} 
+                            selected={platformFilters} 
+                            onChange={(selected: string[]) => { setPlatformFilters(selected); setCurrentPage(1); }} 
                             options={uniquePlatforms} 
                             themeColor={themeColor} 
                         />
@@ -874,8 +928,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
              <Info className="w-4 h-4" />
              <span>
                 Showing data aggregated for 
-                {platformFilter !== 'All' && <strong> {platformFilter} </strong>}
-                {platformFilter !== 'All' && managerFilter !== 'All' && <span>and</span>}
+                {platformFilters.length > 0 && <strong> {platformFilters.length} Platform(s) </strong>}
+                {platformFilters.length > 0 && managerFilter !== 'All' && <span>and</span>}
                 {managerFilter !== 'All' && <strong> {managerFilter} </strong>}
                 only. Prices are recalculated weighted averages for this selection.
              </span>
@@ -1061,7 +1115,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
               })}
               {filteredProducts.length === 0 && (
                   <tr>
-                      <td colSpan={8} className="p-8 text-center text-gray-500">
+                      <td colSpan={9} className="p-8 text-center text-gray-500">
                           <div className="flex flex-col items-center justify-center gap-2">
                               <p>No products found matching your filters.</p>
                               {products.length > 0 && !showInactive && (

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { PricingRules, Platform, Product, PriceLog, PromotionEvent, LogisticsRule, ShipmentLog } from '../types';
-import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler } from 'lucide-react';
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { PricingRules, Platform, Product, PriceLog, PromotionEvent, LogisticsRule, ShipmentLog, VelocityLookback } from '../types';
+import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Calendar } from 'lucide-react';
 
 interface SettingsPageProps {
   currentRules: PricingRules;
-  onSave: (rules: PricingRules) => void;
+  onSave: (rules: PricingRules, velocitySetting: VelocityLookback) => void;
   logisticsRules?: LogisticsRule[];
   onSaveLogistics?: (rules: LogisticsRule[]) => void;
   products: Product[];
@@ -18,11 +19,22 @@ interface SettingsPageProps {
 }
 
 const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logisticsRules = [], onSaveLogistics, products, extraData, shipmentHistory = [], themeColor, headerStyle }) => {
-  const [activeTab, setActiveTab] = useState<'platforms' | 'logistics'>('platforms');
+  const [activeTab, setActiveTab] = useState<'platforms' | 'logistics' | 'analysis'>('platforms');
   const [rules, setRules] = useState<PricingRules>(JSON.parse(JSON.stringify(currentRules)));
   const [logistics, setLogistics] = useState<LogisticsRule[]>(JSON.parse(JSON.stringify(logisticsRules)));
+  const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(() => {
+      return (localStorage.getItem('ecompulse_velocity_setting') as VelocityLookback) || '30';
+  });
+  
   const [newPlatformName, setNewPlatformName] = useState('');
   const [isSaved, setIsSaved] = useState(false);
+
+  // Extract platforms that exist in the product data but might not be in rules yet
+  const discoveredPlatforms = useMemo(() => {
+      const set = new Set<string>();
+      products.forEach(p => p.channels.forEach(c => set.add(c.platform)));
+      return Array.from(set).sort();
+  }, [products]);
 
   useEffect(() => {
     if (isSaved) {
@@ -67,15 +79,24 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
     }));
   };
 
+  const toggleExclusion = (platform: Platform) => {
+      setRules(prev => ({
+          ...prev,
+          [platform]: { ...prev[platform], isExcluded: !prev[platform].isExcluded }
+      }));
+  };
+
   const handleAddPlatform = () => {
-    if (newPlatformName && !rules[newPlatformName]) {
+    const trimmedName = newPlatformName.trim();
+    if (trimmedName && !rules[trimmedName]) {
       setRules(prev => ({
         ...prev,
-        [newPlatformName]: { 
+        [trimmedName]: { 
             markup: 0, 
             commission: 0, 
             manager: 'Unassigned',
-            color: '#374151' // Default gray
+            color: '#374151',
+            isExcluded: false
         }
       }));
       setNewPlatformName('');
@@ -164,7 +185,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
   };
 
   const handleSave = () => {
-    onSave(rules);
+    onSave(rules, velocityLookback);
     if (onSaveLogistics) onSaveLogistics(logistics);
     setIsSaved(true);
   };
@@ -185,24 +206,37 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
   return (
     <div className="max-w-6xl mx-auto pb-10 flex flex-col h-[calc(100vh-100px)]">
       
-      {/* Tab Navigation */}
-      <div className="flex justify-center mb-6">
-          <div className="bg-gray-100 p-1 rounded-xl inline-flex shadow-inner">
-              <button 
-                onClick={() => setActiveTab('platforms')}
-                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'platforms' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                  <Globe className="w-4 h-4" />
-                  Platform Rules
-              </button>
-              <button 
-                onClick={() => setActiveTab('logistics')}
-                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'logistics' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                  <Truck className="w-4 h-4" />
-                  Logistics Rates
-              </button>
-          </div>
+      {/* Updated Tab Navigation (Underlined Style) */}
+      <div className="flex gap-8 border-b border-gray-200 mb-6">
+          <button 
+            onClick={() => setActiveTab('platforms')}
+            className={`pb-3 text-sm font-medium flex items-center gap-2 transition-colors relative ${activeTab === 'platforms' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+            style={activeTab === 'platforms' ? { color: themeColor } : {}}
+          >
+              <Globe className="w-4 h-4" />
+              Platform Rules
+              {activeTab === 'platforms' && <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full" style={{ backgroundColor: themeColor }}></div>}
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('logistics')}
+            className={`pb-3 text-sm font-medium flex items-center gap-2 transition-colors relative ${activeTab === 'logistics' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+            style={activeTab === 'logistics' ? { color: themeColor } : {}}
+          >
+              <Truck className="w-4 h-4" />
+              Logistics Rates
+              {activeTab === 'logistics' && <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full" style={{ backgroundColor: themeColor }}></div>}
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('analysis')}
+            className={`pb-3 text-sm font-medium flex items-center gap-2 transition-colors relative ${activeTab === 'analysis' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+            style={activeTab === 'analysis' ? { color: themeColor } : {}}
+          >
+              <BarChart2 className="w-4 h-4" />
+              Analysis Logic
+              {activeTab === 'analysis' && <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full" style={{ backgroundColor: themeColor }}></div>}
+          </button>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto pr-2">
@@ -211,7 +245,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
         <div className="space-y-6">
             <div>
                 <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Platform Configuration</h2>
-                <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Configure commission fees, strategic markups, and default managers for each marketplace.</p>
+                <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Configure commission fees, strategic markups, and data aggregation rules.</p>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -221,7 +255,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                         <p className="font-semibold">How these settings affect analysis:</p>
                         <p className="mt-1">
                             <strong>Commission Fee:</strong> Deducted from the selling price during AI analysis.<br/>
-                            <strong>Default Manager:</strong> Automatically assigned to new products or imports if no manager is specified in the CSV.
+                            <strong>Exclude from Global Average:</strong> If checked, sales from this platform (e.g. Wayfair, FBA) will NOT affect the "Current Price" or "Velocity" used for strategy calculations, but will still appear in the Channel breakdown.
                         </p>
                     </div>
                 </div>
@@ -231,16 +265,18 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                         <div className="col-span-3">Platform</div>
                         <div className="col-span-2 text-center">Commission (%)</div>
                         <div className="col-span-2 text-center">Markup (%)</div>
-                        <div className="col-span-4">Default Manager</div>
+                        <div className="col-span-3">Default Manager</div>
+                        <div className="col-span-1 text-center">Global Avg</div>
                         <div className="col-span-1"></div>
                     </div>
 
                     <div className="space-y-3">
                         {platformKeys.map((platform) => {
                             const currentColor = getPlatformColor(platform, rules[platform].color);
+                            const isExcluded = rules[platform].isExcluded;
 
                             return (
-                                <div key={platform} className="grid grid-cols-12 gap-4 items-center p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors group">
+                                <div key={platform} className={`grid grid-cols-12 gap-4 items-center p-4 rounded-lg border transition-colors group ${isExcluded ? 'bg-gray-50 border-gray-200 opacity-90' : 'bg-white border-gray-100 hover:border-gray-200'}`}>
                                     <div className="col-span-3 flex items-center gap-3">
                                         <div className="relative group/icon cursor-pointer">
                                             <input
@@ -259,6 +295,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                         </div>
                                         <div className="flex flex-col">
                                             <span className="font-semibold text-gray-800 text-sm truncate" title={platform}>{platform}</span>
+                                            {isExcluded && <span className="text-[10px] text-gray-500">Excluded from Avg</span>}
                                         </div>
                                     </div>
 
@@ -291,7 +328,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                         </div>
                                     </div>
 
-                                    <div className="col-span-4">
+                                    <div className="col-span-3">
                                         <div className="relative w-full">
                                             <input
                                                 type="text"
@@ -303,6 +340,16 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                             />
                                             <User className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                                         </div>
+                                    </div>
+
+                                    <div className="col-span-1 flex justify-center">
+                                        <button
+                                            onClick={() => toggleExclusion(platform)}
+                                            className={`p-2 rounded-lg transition-colors ${!isExcluded ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
+                                            title={isExcluded ? "Click to INCLUDE in Global Average" : "Click to EXCLUDE from Global Average"}
+                                        >
+                                            {!isExcluded ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                        </button>
                                     </div>
                                     
                                     <div className="col-span-1 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
@@ -321,15 +368,23 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
 
                     <div className="mt-6 pt-6 border-t border-gray-100">
                         <h3 className="text-sm font-semibold text-gray-700 mb-3">Add New Platform</h3>
-                        <div className="flex gap-3">
-                            <input 
-                                type="text" 
-                                placeholder="Enter platform name (e.g. Shopify)" 
-                                value={newPlatformName}
-                                onChange={(e) => setNewPlatformName(e.target.value)}
-                                className="flex-1 max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50"
-                                style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
-                            />
+                        <div className="flex gap-3 relative">
+                            <div className="relative flex-1 max-w-sm">
+                                <input 
+                                    type="text" 
+                                    list="platform-suggestions"
+                                    placeholder="Enter platform name (e.g. Shopify)" 
+                                    value={newPlatformName}
+                                    onChange={(e) => setNewPlatformName(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50"
+                                    style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                                />
+                                <datalist id="platform-suggestions">
+                                    {discoveredPlatforms.filter(p => !rules[p]).map(p => (
+                                        <option key={p} value={p} />
+                                    ))}
+                                </datalist>
+                            </div>
                             <button 
                                 onClick={handleAddPlatform}
                                 disabled={!newPlatformName}
@@ -339,6 +394,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                 Add Platform
                             </button>
                         </div>
+                        <p className="text-[10px] text-gray-400 mt-2">
+                            Tip: Use the autocomplete to match platform names exactly as they appear in your imported files.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -436,6 +494,76 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
             </div>
         </div>
       )}
+
+      {/* Analysis Logic Section */}
+      {activeTab === 'analysis' && (
+          <div className="space-y-6">
+              <div>
+                  <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Analysis Logic</h2>
+                  <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
+                      Control how the system interprets historical sales data to calculate velocity and trends.
+                  </p>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-6">
+                      <div className="flex flex-col gap-6">
+                          <div className="flex flex-col md:flex-row gap-6">
+                              <div className="flex-1">
+                                  <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                      <Calendar className="w-4 h-4 text-indigo-600" />
+                                      Velocity Lookback Window
+                                  </label>
+                                  <p className="text-xs text-gray-500 mb-3">
+                                      Determines how many days of recent history are used to calculate "Average Daily Sales".
+                                      Changing this will instantly update the stock runway and restocking recommendations for all products.
+                                  </p>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                                      {[
+                                          { val: '7', label: 'Last 7 Days', desc: 'Highly sensitive. Good for fast-moving goods.' },
+                                          { val: '30', label: 'Last 30 Days', desc: 'Balanced. Recommended for general retail.' },
+                                          { val: '60', label: 'Last 60 Days', desc: 'Smoothed. Reduces noise from short spikes.' },
+                                          { val: '90', label: 'Last 90 Days', desc: 'Conservative. Good for slow-movers.' },
+                                          { val: 'ALL', label: 'Full History', desc: 'Maximum data. Uses all imported logs.' }
+                                      ].map((opt) => (
+                                          <button
+                                              key={opt.val}
+                                              onClick={() => setVelocityLookback(opt.val as VelocityLookback)}
+                                              className={`text-left p-3 rounded-lg border transition-all ${
+                                                  velocityLookback === opt.val 
+                                                  ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' 
+                                                  : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50'
+                                              }`}
+                                          >
+                                              <div className={`font-bold text-sm mb-1 ${velocityLookback === opt.val ? 'text-indigo-700' : 'text-gray-700'}`}>
+                                                  {opt.label}
+                                              </div>
+                                              <div className="text-[10px] text-gray-500 leading-tight">
+                                                  {opt.desc}
+                                              </div>
+                                          </button>
+                                      ))}
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3">
+                              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                              <div className="text-sm text-blue-800">
+                                  <p className="font-bold mb-1">Impact on "Rising Stars"</p>
+                                  <p>
+                                      The "Rising Stars" chart on the dashboard compares the velocity of the selected window (e.g., Last 30 Days) against the 
+                                      <strong> immediately preceding period</strong> of the same length (e.g., Days 31-60). 
+                                      Selecting a shorter window makes the system more responsive to recent trend changes.
+                                  </p>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       </div>
 
       {/* Footer Actions (Sticky) */}

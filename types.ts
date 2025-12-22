@@ -12,6 +12,14 @@ export interface FeeBounds {
   max: number;
 }
 
+export interface ShipmentDetail {
+  containerId: string;
+  status: string; // 'Shipped Out' | 'To Be Shipped'
+  quantity: number;
+  eta?: string; // Expected ETA
+  customsDate?: string; // Custom Clearing Date
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -24,7 +32,10 @@ export interface Product {
   platform?: string; // Optional: Primary platform for analysis context
   
   // Stock & Velocity
-  stockLevel: number; // Total stock across warehouses
+  stockLevel: number; // Total stock across warehouses (On Hand)
+  incomingStock?: number; // Total Incoming Stock (On Water/Booking)
+  shipments?: ShipmentDetail[]; // List of active shipments
+  
   averageDailySales: number; // Current Velocity (Week 0)
   previousDailySales?: number; // Previous Velocity (Week 1) for trend analysis
   leadTimeDays: number;
@@ -126,6 +137,7 @@ export interface PlatformConfig {
   commission: number;
   manager: string;
   color?: string; // Hex color code for the platform badge
+  isExcluded?: boolean; // New: If true, exclude from Global Weighted Averages
 }
 
 export type PricingRules = Record<Platform, PlatformConfig>;
@@ -205,3 +217,5 @@ export interface User {
   email: string;
   avatar?: string;
 }
+
+export type VelocityLookback = '7' | '30' | '60' | '90' | 'ALL';

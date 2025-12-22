@@ -1,32 +1,30 @@
 
 import React, { useState, useMemo } from 'react';
-import { Product, StrategyConfig } from '../types';
-import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { Product, StrategyConfig, PricingRules } from '../types';
+import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship } from 'lucide-react';
 
 interface StrategyPageProps {
     products: Product[];
+    pricingRules: PricingRules;
     currentConfig: StrategyConfig;
     onSaveConfig: (config: StrategyConfig) => void;
     themeColor: string;
     headerStyle: React.CSSProperties;
 }
 
-const EXCLUDED_PLATFORMS = ['Groupon(UK)', 'Temu(UK)', 'Wayfair', 'Wowcher'];
-
-const StrategyPage: React.FC<StrategyPageProps> = ({ products, currentConfig, onSaveConfig, themeColor, headerStyle }) => {
+const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle }) => {
     const [config, setConfig] = useState<StrategyConfig>(JSON.parse(JSON.stringify(currentConfig)));
     const [isConfigOpen, setIsConfigOpen] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [includeIncoming, setIncludeIncoming] = useState(false); // New Toggle State
 
     // --- LOGIC HELPERS ---
 
-    // 1. Calculate Filtered Global Price (excluding specific platforms)
+    // 1. Calculate Filtered Global Price (excluding specific platforms defined in Settings)
     const getFilteredPrice = (product: Product) => {
-        const validChannels = product.channels.filter(c => !EXCLUDED_PLATFORMS.includes(c.platform));
+        const validChannels = product.channels.filter(c => !pricingRules[c.platform]?.isExcluded);
         
         if (validChannels.length === 0) {
-            // Fallback: If ALL channels are excluded (e.g. only sells on Wayfair), use the master price but flag it?
-            // For now, return currentPrice as fallback.
             return product.currentPrice;
         }
 
@@ -39,8 +37,12 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, currentConfig, on
     // 2. Metrics Calculation
     const getMetrics = (product: Product, filteredPrice: number) => {
         const weeklyVelocity = product.averageDailySales * 7;
+        
+        // --- UPDATED LOGIC FOR RUNWAY ---
+        const effectiveStock = product.stockLevel + (includeIncoming ? (product.incomingStock || 0) : 0);
+        
         // Avoid division by zero for runway
-        const runwayWeeks = weeklyVelocity > 0 ? (product.stockLevel / weeklyVelocity) : 999;
+        const runwayWeeks = weeklyVelocity > 0 ? (effectiveStock / weeklyVelocity) : 999;
         
         const totalCost = (product.costPrice || 0) + (product.sellingFee || 0) + (product.adsFee || 0) + 
                           (product.postage || 0) + (product.otherFee || 0) + (product.subscriptionFee || 0) + (product.wmsFee || 0);
@@ -54,12 +56,12 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, currentConfig, on
         const isNew = product.inventoryStatus === 'New Product' || 
                       (new Date().getTime() - new Date(product.lastUpdated).getTime()) / (1000 * 3600 * 24) < 14; 
 
-        return { weeklyVelocity, runwayWeeks, marginPercent, floorPrice, isNew };
+        return { weeklyVelocity, runwayWeeks, marginPercent, floorPrice, isNew, effectiveStock };
     };
 
     // 3. Decision Engine
     const getRecommendation = (product: Product, metrics: any) => {
-        const { weeklyVelocity, runwayWeeks, marginPercent, floorPrice, isNew } = metrics;
+        const { weeklyVelocity, runwayWeeks, marginPercent, floorPrice, isNew, effectiveStock } = metrics;
         const filteredPrice = getFilteredPrice(product);
 
         let action: 'INCREASE' | 'DECREASE' | 'MAINTAIN' = 'MAINTAIN';
@@ -75,7 +77,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, currentConfig, on
         // RULE 1: INCREASE
         if (
             runwayWeeks < config.increase.minRunwayWeeks &&
-            product.stockLevel > config.increase.minStock &&
+            effectiveStock > config.increase.minStock &&
             weeklyVelocity >= config.increase.minVelocity7Days
         ) {
             action = 'INCREASE';
@@ -126,7 +128,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, currentConfig, on
                 const score = (x: string) => x === 'INCREASE' ? 3 : x === 'DECREASE' ? 2 : 1;
                 return score(b.action) - score(a.action);
             });
-    }, [products, config, searchQuery]);
+    }, [products, config, searchQuery, pricingRules, includeIncoming]);
 
     const handleExport = () => {
         const headers = ['SKU', 'Name', 'Filtered Price', 'Runway (Wks)', 'Margin %', 'Is New', 'Action', 'Suggested Price', 'Floor Price', 'Safety Alert', 'Reason'];
@@ -165,7 +167,17 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, currentConfig, on
                         Rule-based pricing logic. Adjust criteria below to generate real-time recommendations.
                     </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
+                    {/* Incoming Stock Toggle */}
+                    <button 
+                        onClick={() => setIncludeIncoming(!includeIncoming)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-500 border-gray-300'}`}
+                        title={includeIncoming ? "Including Incoming Stock in Runway Calc" : "Excluding Incoming Stock (Conservative Mode)"}
+                    >
+                        <Ship className="w-4 h-4" />
+                        {includeIncoming ? 'Incoming Included' : 'Incoming Excluded'}
+                    </button>
+
                     <button 
                         onClick={() => setIsConfigOpen(!isConfigOpen)}
                         className={`px-4 py-2 rounded-lg font-medium border flex items-center gap-2 transition-all ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white text-indigo-600 border-indigo-200'}`}
@@ -374,15 +386,11 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, currentConfig, on
                             </div>
 
                             <div className="mt-6 pt-4 border-t border-gray-100">
-                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Platform Exclusions (Fixed)</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {EXCLUDED_PLATFORMS.map(p => (
-                                        <span key={p} className="px-2 py-1 bg-gray-100 text-gray-500 rounded text-[10px] border border-gray-200 line-through decoration-red-400">
-                                            {p}
-                                        </span>
-                                    ))}
-                                </div>
-                                <p className="text-[10px] text-gray-400 mt-2">These platforms are excluded from the Weighted Average Price calculation.</p>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Platform Exclusions</label>
+                                <p className="text-[10px] text-gray-400">
+                                    Configure excluded platforms (e.g. Wayfair, FBA) in the <strong>Settings</strong> page. 
+                                    Transactions from excluded platforms are filtered out from the price calculation above.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -410,7 +418,9 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, currentConfig, on
                                 <th className="p-4">Product</th>
                                 <th className="p-4 text-right">Filtered Price</th>
                                 <th className="p-4 text-right">Velocity (7d)</th>
-                                <th className="p-4 text-right">Runway (Wks)</th>
+                                <th className="p-4 text-right">
+                                    {includeIncoming ? 'Runway (Inc. Incoming)' : 'Runway (On Hand Only)'}
+                                </th>
                                 <th className="p-4 text-right">Margin %</th>
                                 <th className="p-4 text-center">Status</th>
                                 <th className="p-4 text-center">Action</th>
@@ -432,7 +442,12 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, currentConfig, on
                                     </td>
                                     <td className="p-4 text-right font-mono text-gray-600">£{row.filteredPrice.toFixed(2)}</td>
                                     <td className="p-4 text-right">{row.weeklyVelocity.toFixed(1)}</td>
-                                    <td className="p-4 text-right">{row.runwayWeeks > 100 ? '100+' : row.runwayWeeks.toFixed(1)}</td>
+                                    <td className="p-4 text-right">
+                                        {row.runwayWeeks > 100 ? '100+' : row.runwayWeeks.toFixed(1)}
+                                        {includeIncoming && row.incomingStock && row.incomingStock > 0 ? (
+                                            <span className="block text-[9px] text-blue-500 font-bold">+ Incoming</span>
+                                        ) : null}
+                                    </td>
                                     <td className="p-4 text-right">{row.marginPercent.toFixed(1)}%</td>
                                     
                                     <td className="p-4 text-center">
