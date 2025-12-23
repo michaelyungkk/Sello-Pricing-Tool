@@ -20,6 +20,17 @@ export interface ShipmentDetail {
   customsDate?: string; // Custom Clearing Date
 }
 
+export interface RefundLog {
+  id: string;
+  sku: string;
+  date: string;
+  quantity: number;
+  amount: number;
+  platform?: string;
+  reason?: string;
+  orderId?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -85,6 +96,10 @@ export interface Product {
   };
 
   lastUpdated: string;
+  
+  // Dynamic Metrics (Calculated on the fly)
+  returnRate?: number; // % of units returned vs sold
+  totalRefunded?: number; // Total value refunded in current period
 }
 
 export interface PriceLog {
@@ -209,6 +224,13 @@ export interface UserProfile {
   backgroundImage: string; // URL or 'none'
   backgroundColor: string; // Hex fallback
   textColor?: string; // Optional: Auto-detected optimal text color
+  
+  // Liquid Glass Aesthetics
+  glassMode?: 'light' | 'dark';
+  glassOpacity?: number; // 0-100
+  glassBlur?: number;    // 0-40px
+  ambientGlass?: boolean;
+  ambientGlassOpacity?: number; // 0-100
 }
 
 export interface User {

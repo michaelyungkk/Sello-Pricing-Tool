@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES } from './constants';
-import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback } from './types';
+import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback, RefundLog } from './types';
 import ProductList from './components/ProductList';
 import AnalysisModal from './components/AnalysisModal';
 import BatchUploadModal, { BatchUpdateItem } from './components/BatchUploadModal';
@@ -15,8 +15,9 @@ import UserProfile from './components/UserProfile';
 import ProductManagementPage from './components/ProductManagementPage';
 import MappingUploadModal, { SkuMapping } from './components/MappingUploadModal';
 import StrategyPage from './components/StrategyPage';
+import ReturnsUploadModal from './components/ReturnsUploadModal'; // New Import
 import { analyzePriceAdjustment } from './services/geminiService';
-import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package, Download, Calculator } from 'lucide-react';
+import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package, Download, Calculator, RotateCcw } from 'lucide-react';
 
 // --- LOGIC HELPERS ---
 
@@ -143,6 +144,15 @@ const App: React.FC = () => {
       }
   });
 
+  const [refundHistory, setRefundHistory] = useState<RefundLog[]>(() => {
+      try {
+          const saved = localStorage.getItem('ecompulse_refund_history');
+          return saved ? JSON.parse(saved) : [];
+      } catch (e) {
+          return [];
+      }
+  });
+
   const [shipmentHistory, setShipmentHistory] = useState<ShipmentLog[]>(() => {
       try {
           const saved = localStorage.getItem('ecompulse_shipment_history');
@@ -186,32 +196,62 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfileType>(() => {
       try {
           const saved = localStorage.getItem('ecompulse_user_profile');
-          return saved ? JSON.parse(saved) : { 
+          const parsed = saved ? JSON.parse(saved) : {};
+          return {
+              name: parsed.name || '', 
+              themeColor: parsed.themeColor || '#4f46e5', 
+              backgroundImage: parsed.backgroundImage || '', 
+              backgroundColor: parsed.backgroundColor || '#f3f4f6',
+              glassMode: parsed.glassMode || 'light',
+              glassOpacity: parsed.glassOpacity !== undefined ? parsed.glassOpacity : 90,
+              glassBlur: parsed.glassBlur !== undefined ? parsed.glassBlur : 10,
+              ambientGlass: parsed.ambientGlass !== undefined ? parsed.ambientGlass : true,
+              ambientGlassOpacity: parsed.ambientGlassOpacity !== undefined ? parsed.ambientGlassOpacity : 15,
+              textColor: parsed.textColor // Add fallback handled below
+          };
+      } catch(e) {
+          return { 
               name: '', 
               themeColor: '#4f46e5', 
               backgroundImage: '', 
-              backgroundColor: '#f3f4f6' 
+              backgroundColor: '#f3f4f6',
+              glassMode: 'light',
+              glassOpacity: 90,
+              glassBlur: 10,
+              ambientGlass: true,
+              ambientGlassOpacity: 15
           };
-      } catch(e) {
-          return { name: '', themeColor: '#4f46e5', backgroundImage: '', backgroundColor: '#f3f4f6' };
       }
   });
 
-  // --- FIX: Sync Body Background to eliminate gaps on scroll bounce ---
+  // --- FIX: Sync Body AND HTML Background to eliminate gaps on scroll bounce ---
   useEffect(() => {
-      if (userProfile.backgroundImage && userProfile.backgroundImage !== 'none') {
-          const isUrl = userProfile.backgroundImage.startsWith('http') || userProfile.backgroundImage.startsWith('data:') || userProfile.backgroundImage.startsWith('/');
-          document.body.style.background = isUrl 
-            ? `url(${userProfile.backgroundImage})` 
-            : userProfile.backgroundImage;
-          document.body.style.backgroundSize = 'cover';
-          document.body.style.backgroundPosition = 'center';
-          document.body.style.backgroundAttachment = 'fixed';
-          document.body.style.backgroundRepeat = 'no-repeat';
-      } else {
-          document.body.style.background = userProfile.backgroundColor || '#f3f4f6';
-          document.body.style.backgroundImage = '';
-      }
+      const elements = [document.body, document.documentElement];
+      
+      elements.forEach(el => {
+          // Clear potentially conflicting properties first
+          el.style.background = '';
+          el.style.backgroundColor = '';
+          el.style.backgroundImage = '';
+
+          if (userProfile.backgroundImage && userProfile.backgroundImage !== 'none') {
+              const isUrl = userProfile.backgroundImage.startsWith('http') || userProfile.backgroundImage.startsWith('data:') || userProfile.backgroundImage.startsWith('/');
+              
+              // Apply backgroundImage directly
+              el.style.backgroundImage = isUrl 
+                ? `url(${userProfile.backgroundImage})` 
+                : userProfile.backgroundImage;
+              
+              el.style.backgroundColor = 'transparent'; // Fallback
+              el.style.backgroundSize = 'cover';
+              el.style.backgroundPosition = 'center';
+              el.style.backgroundAttachment = 'fixed';
+              el.style.backgroundRepeat = 'no-repeat';
+          } else {
+              el.style.backgroundImage = 'none';
+              el.style.backgroundColor = userProfile.backgroundColor || '#f3f4f6';
+          }
+      });
   }, [userProfile]);
 
   // --- STATE MANAGEMENT ---
@@ -222,6 +262,7 @@ const App: React.FC = () => {
   const [isSalesImportModalOpen, setIsSalesImportModalOpen] = useState(false);
   const [isCostUploadModalOpen, setIsCostUploadModalOpen] = useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+  const [isReturnsModalOpen, setIsReturnsModalOpen] = useState(false); // NEW
   
   const [currentView, setCurrentView] = useState<'dashboard' | 'strategy' | 'products' | 'settings' | 'costs' | 'definitions' | 'promotions'>('dashboard');
   
@@ -263,7 +304,7 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // --- CORE LOGIC: RECALCULATE VELOCITIES BASED ON SETTINGS ---
+  // --- CORE LOGIC: RECALCULATE VELOCITIES & RETURNS BASED ON SETTINGS ---
   useEffect(() => {
       if (priceHistory.length === 0) return;
 
@@ -289,10 +330,10 @@ const App: React.FC = () => {
           let hasChanges = false;
           
           const updated = prevProducts.map(p => {
+              // --- SALES VELOCITY ---
               // Get all history for this SKU
               const skuLogs = priceHistory.filter(l => l.sku === p.sku);
-              if (skuLogs.length === 0) return p;
-
+              
               // Helper to calculate avg velocity for a time window
               const calcAvgVel = (startMs: number, endMs: number) => {
                   const relevantLogs = skuLogs.filter(l => {
@@ -301,27 +342,44 @@ const App: React.FC = () => {
                   });
                   
                   if (relevantLogs.length === 0) return 0;
-                  
-                  // Sum up daily velocities? Or average them?
-                  // PriceLog.velocity is "Average Daily Sales" for that period (usually a week).
-                  // So an average of these averages is a fair representation of the daily sales over the longer period.
                   const sumVel = relevantLogs.reduce((acc, l) => acc + l.velocity, 0);
                   return sumVel / relevantLogs.length;
               };
 
+              // --- RETURNS METRICS ---
+              const skuRefunds = refundHistory.filter(r => r.sku === p.sku);
+              let totalRefunded = 0;
+              let refundedQty = 0;
+              
+              // Calculate refunds within current window
+              skuRefunds.forEach(r => {
+                  const rDate = new Date(r.date).getTime();
+                  if (rDate >= currentWindowStart && rDate <= anchorTime) {
+                      totalRefunded += r.amount;
+                      refundedQty += r.quantity;
+                  }
+              });
+
+              // Calculate Sales in same period for Rate %
+              // Note: averageDailySales is daily * days = total sold approximation
+              const estimatedSold = (calcAvgVel(currentWindowStart, anchorTime) || p.averageDailySales) * lookbackDays;
+              const returnRate = estimatedSold > 0 ? (refundedQty / estimatedSold) * 100 : 0;
+
               const newAvgDaily = calcAvgVel(currentWindowStart, anchorTime);
               const newPrevDaily = calcAvgVel(prevWindowStart, prevWindowEnd);
 
-              // Only update if significantly different to avoid render loops on tiny floats
-              if (
-                  Math.abs(newAvgDaily - p.averageDailySales) > 0.001 || 
-                  Math.abs((newPrevDaily || 0) - (p.previousDailySales || 0)) > 0.001
-              ) {
+              // Update conditions
+              const velChanged = Math.abs(newAvgDaily - p.averageDailySales) > 0.001 || Math.abs((newPrevDaily || 0) - (p.previousDailySales || 0)) > 0.001;
+              const returnsChanged = Math.abs((p.returnRate || 0) - returnRate) > 0.01 || Math.abs((p.totalRefunded || 0) - totalRefunded) > 0.01;
+
+              if (velChanged || returnsChanged) {
                   hasChanges = true;
                   return {
                       ...p,
                       averageDailySales: Number(newAvgDaily.toFixed(2)),
-                      previousDailySales: Number(newPrevDaily.toFixed(2))
+                      previousDailySales: Number(newPrevDaily.toFixed(2)),
+                      returnRate: Number(returnRate.toFixed(2)),
+                      totalRefunded: Number(totalRefunded.toFixed(2))
                   };
               }
               return p;
@@ -330,7 +388,7 @@ const App: React.FC = () => {
           return hasChanges ? updated : prevProducts;
       });
 
-  }, [priceHistory, velocityLookback, latestHistoryDate]);
+  }, [priceHistory, refundHistory, velocityLookback, latestHistoryDate]);
 
 
   // --- AUTO-AGGREGATION OF WEEKLY PRICES (EXISTING LOGIC, PRESERVED) ---
@@ -380,6 +438,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('ecompulse_logistics', JSON.stringify(logisticsRules)); }, [logisticsRules]);
   useEffect(() => { localStorage.setItem('ecompulse_strategy', JSON.stringify(strategyRules)); }, [strategyRules]);
   useEffect(() => { localStorage.setItem('ecompulse_price_history', JSON.stringify(priceHistory)); }, [priceHistory]);
+  useEffect(() => { localStorage.setItem('ecompulse_refund_history', JSON.stringify(refundHistory)); }, [refundHistory]);
   useEffect(() => { localStorage.setItem('ecompulse_shipment_history', JSON.stringify(shipmentHistory)); }, [shipmentHistory]);
   useEffect(() => { localStorage.setItem('ecompulse_promotions', JSON.stringify(promotions)); }, [promotions]);
   useEffect(() => { localStorage.setItem('ecompulse_user_profile', JSON.stringify(userProfile)); }, [userProfile]);
@@ -388,7 +447,7 @@ const App: React.FC = () => {
 
   // --- HANDLERS ---
 
-  const handleRestoreData = (data: { products: Product[], rules: PricingRules, logistics?: LogisticsRule[], history?: PriceLog[], promotions?: PromotionEvent[], velocitySetting?: VelocityLookback }) => {
+  const handleRestoreData = (data: { products: Product[], rules: PricingRules, logistics?: LogisticsRule[], history?: PriceLog[], refunds?: RefundLog[], promotions?: PromotionEvent[], velocitySetting?: VelocityLookback }) => {
     try {
         console.log("Restoring data...", { productCount: data.products?.length });
         
@@ -396,6 +455,7 @@ const App: React.FC = () => {
         const safeRules = data.rules ? JSON.parse(JSON.stringify(data.rules)) : JSON.parse(JSON.stringify(DEFAULT_PRICING_RULES));
         const safeLogistics = data.logistics ? JSON.parse(JSON.stringify(data.logistics)) : JSON.parse(JSON.stringify(DEFAULT_LOGISTICS_RULES));
         const safeHistory = data.history ? JSON.parse(JSON.stringify(data.history)) : [];
+        const safeRefunds = data.refunds ? JSON.parse(JSON.stringify(data.refunds)) : [];
         const safePromotions = data.promotions ? JSON.parse(JSON.stringify(data.promotions)) : [];
         const safeVelocity = data.velocitySetting || '30';
 
@@ -408,6 +468,7 @@ const App: React.FC = () => {
         setPricingRules(safeRules);
         setLogisticsRules(safeLogistics);
         setPriceHistory(safeHistory);
+        setRefundHistory(safeRefunds);
         setPromotions(safePromotions);
         setVelocityLookback(safeVelocity);
         alert("Database restored successfully!");
@@ -423,6 +484,7 @@ const App: React.FC = () => {
       rules: pricingRules,
       logistics: logisticsRules,
       history: priceHistory,
+      refunds: refundHistory,
       shipmentHistory,
       promotions,
       velocitySetting: velocityLookback,
@@ -707,24 +769,64 @@ const App: React.FC = () => {
   const handleUpdateMappings = (mappings: SkuMapping[], mode: 'merge' | 'replace', platform: string) => {
       setProducts(prev => {
           let tempProducts = prev;
+          
+          // 1. If Replace mode, clear existing aliases for this platform
           if (mode === 'replace') {
               tempProducts = tempProducts.map(p => ({
                   ...p,
                   channels: p.channels.map(c => c.platform === platform ? { ...c, skuAlias: undefined } : c)
               }));
           }
+
           return tempProducts.map(p => {
+              // Get all new mappings for this product from the uploaded file
               const myMappings = mappings.filter(m => m.masterSku === p.sku);
               if (myMappings.length === 0) return p;
+
               const updatedChannels = [...p.channels];
-              myMappings.forEach(map => {
-                  const existingChannelIndex = updatedChannels.findIndex(c => c.platform === map.platform);
-                  if (existingChannelIndex !== -1) {
-                      updatedChannels[existingChannelIndex] = { ...updatedChannels[existingChannelIndex], skuAlias: map.alias };
-                  } else {
-                      updatedChannels.push({ platform: map.platform, manager: 'Unassigned', velocity: 0, skuAlias: map.alias });
+              
+              // We know all myMappings are for the `platform` passed in arguments
+              // Aggregate new aliases from the file for this SKU
+              // Note: Using Set ensures file duplicates are removed
+              const newAliases = new Set(myMappings.map(m => m.alias));
+
+              // Helper for Fuzzy Matching Platforms
+              const normalize = (s: string) => s.toLowerCase().trim();
+              const targetPlatform = normalize(platform);
+              
+              // Try exact match first
+              let existingChannelIndex = updatedChannels.findIndex(c => normalize(c.platform) === targetPlatform);
+              
+              // Try fuzzy match if exact fail (e.g. User selected "Amazon" but channel is "Amazon(UK)")
+              if (existingChannelIndex === -1) {
+                   existingChannelIndex = updatedChannels.findIndex(c => 
+                        normalize(c.platform).includes(targetPlatform) || 
+                        targetPlatform.includes(normalize(c.platform))
+                   );
+              }
+              
+              if (existingChannelIndex !== -1) {
+                  const currentChannel = updatedChannels[existingChannelIndex];
+                  
+                  // If merge, get existing aliases and add them to the set
+                  if (mode === 'merge' && currentChannel.skuAlias) {
+                      currentChannel.skuAlias.split(',').forEach(a => newAliases.add(a.trim()));
                   }
-              });
+                  
+                  updatedChannels[existingChannelIndex] = { 
+                      ...currentChannel, 
+                      skuAlias: Array.from(newAliases).join(', ') 
+                  };
+              } else {
+                  // Create new channel entry if it doesn't exist
+                  updatedChannels.push({ 
+                      platform: platform, 
+                      manager: 'Unassigned', 
+                      velocity: 0, 
+                      skuAlias: Array.from(newAliases).join(', ') 
+                  });
+              }
+              
               return { ...p, channels: updatedChannels };
           });
       });
@@ -743,30 +845,87 @@ const App: React.FC = () => {
       setPromotions(prev => prev.map(p => p.id === updatedPromo.id ? updatedPromo : p));
   };
 
-  // Dynamic Styles
-  const isUrl = userProfile.backgroundImage && (userProfile.backgroundImage.startsWith('http') || userProfile.backgroundImage.startsWith('data:') || userProfile.backgroundImage.startsWith('data:') || userProfile.backgroundImage.startsWith('/'));
-  
-  const bgStyle: React.CSSProperties = userProfile.backgroundImage && userProfile.backgroundImage !== 'none'
-      ? isUrl 
-        ? { backgroundImage: `url(${userProfile.backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }
-        : { backgroundImage: userProfile.backgroundImage, backgroundAttachment: 'fixed', backgroundSize: 'cover' }
-      : { backgroundColor: userProfile.backgroundColor || '#f3f4f6' };
+  const handleRefundImport = (newRefunds: RefundLog[]) => {
+      setRefundHistory(prev => {
+          // --- DEDUPLICATION LOGIC ---
+          // Use the deterministic ID from the modal to identify existing records.
+          const existingIds = new Set(prev.map(r => r.id));
+          
+          const uniqueNewRefunds = newRefunds.filter(r => !existingIds.has(r.id));
+          
+          if (uniqueNewRefunds.length < newRefunds.length) {
+              console.log(`Skipped ${newRefunds.length - uniqueNewRefunds.length} duplicate refunds.`);
+              // Optional: You could show a toast here, but simple logging is sufficient for now
+          }
+          
+          return [...prev, ...uniqueNewRefunds];
+      });
+      
+      // Note: The useEffect on [refundHistory] will automatically trigger recalculation of product return rates
+      setIsReturnsModalOpen(false);
+  };
 
+  // Dynamic Styles
   const hasInventory = products.length > 0;
   const hasSalesData = priceHistory.length > 0 || products.some(p => p.averageDailySales > 0);
   
   const showDashboard = hasInventory && hasSalesData;
   const headerTextColor = userProfile.textColor || '#111827';
-  const textShadowStyle = userProfile.backgroundImage ? { textShadow: '0 2px 4px rgba(0,0,0,0.5)' } : {};
+  // Reduced shadow intensity as requested
+  const textShadowStyle = userProfile.backgroundImage && userProfile.backgroundImage !== 'none' 
+      ? { textShadow: '0 1px 3px rgba(0,0,0,0.3)' } 
+      : {};
   const headerStyle = { color: headerTextColor, ...textShadowStyle };
 
+  // Glass Mode Logic
+  const glassOpacityFraction = (userProfile.glassOpacity ?? 90) / 100;
+  const glassBlur = userProfile.glassBlur ?? 10;
+  const ambientOpacityFraction = (userProfile.ambientGlassOpacity ?? 15) / 100;
+
   return (
-    <div className="min-h-screen flex font-sans text-gray-900 transition-colors duration-500" style={bgStyle}>
-      {/* Background Overlay */}
-      {userProfile.backgroundImage && <div className="fixed inset-0 bg-white/90 backdrop-blur-sm -z-10"></div>}
+    <>
+    {/* Dynamic Glass Styles Injection */}
+    <style>{`
+      /* GLOBAL RESET TO FIX GAPS */
+      html, body {
+        height: auto;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+      }
+
+      :root {
+        --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${glassOpacityFraction})` : `rgba(255, 255, 255, ${glassOpacityFraction})`};
+        --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'};
+        --glass-blur: blur(${glassBlur}px);
+        
+        --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, glassOpacityFraction + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, glassOpacityFraction + 0.1)})`};
+        --glass-blur-modal: blur(${Math.min(40, glassBlur + 8)}px);
+        
+        --ambient-bg: ${userProfile.glassMode === 'dark' ? `rgba(0,0,0,${ambientOpacityFraction})` : `rgba(255,255,255,${ambientOpacityFraction})`};
+        --ambient-blur: blur(${Math.max(4, glassBlur / 2)}px);
+      }
+      
+      .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
+      .border-custom-glass { border-color: var(--glass-border); }
+      
+      .bg-custom-glass-modal { background-color: var(--glass-bg-modal); }
+      .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); }
+      .bg-custom-ambient { background-color: var(--ambient-bg); }
+      .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); }
+    `}</style>
+
+    <div className="min-h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent">
+      
+      {/* Ambient Depth Layer */}
+      {userProfile.ambientGlass && (
+        <div 
+            className="fixed inset-0 z-[1] pointer-events-none transition-all duration-500 bg-custom-ambient backdrop-blur-custom-ambient"
+        />
+      )}
 
       {/* Sidebar */}
-      <aside className="w-64 bg-white/95 backdrop-blur border-r border-gray-200 hidden md:flex flex-col fixed h-full z-40 shadow-sm">
+      <aside className={`w-64 border-r border-custom-glass hidden md:flex flex-col fixed h-full z-40 shadow-sm transition-all duration-300 bg-custom-glass`}>
         <div className="p-6 flex items-center gap-3">
           <div 
             className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold transition-colors duration-300"
@@ -780,7 +939,7 @@ const App: React.FC = () => {
         <nav className="flex-1 px-4 py-4 space-y-1">
           {[
               { id: 'dashboard', icon: LayoutDashboard, label: 'Pricing Tool' },
-              { id: 'strategy', icon: Calculator, label: 'Strategy Engine' }, // NEW
+              { id: 'strategy', icon: Calculator, label: 'Strategy Engine' }, 
               { id: 'products', icon: Package, label: 'Product Mgmt.' },
               { id: 'costs', icon: DollarSign, label: 'Cost Management' },
               { id: 'promotions', icon: Tag, label: 'Promotions' },
@@ -795,7 +954,7 @@ const App: React.FC = () => {
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
                         isActive 
                         ? 'bg-opacity-10' 
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'
                     }`}
                     style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
                 >
@@ -806,19 +965,19 @@ const App: React.FC = () => {
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-100 space-y-3">
+        <div className="p-4 border-t border-custom-glass space-y-3">
           {/* Database Quick Actions */}
           <div className="px-2 space-y-2">
             <button 
               onClick={handleExportBackup}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-transparent hover:border-custom-glass"
             >
               <Download className="w-3.5 h-3.5" />
               Backup Database
             </button>
             <button 
               onClick={() => fileRestoreRef.current?.click()}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-transparent hover:border-custom-glass"
             >
               <Upload className="w-3.5 h-3.5" />
               Restore Database
@@ -832,10 +991,10 @@ const App: React.FC = () => {
             />
           </div>
 
-          <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100 backdrop-blur-sm">
+          <div className="bg-gray-50/50 rounded-xl p-4 border border-custom-glass">
             <div className="flex justify-between items-center mb-1">
                 <p className="text-xs font-semibold text-gray-500">Tool Status</p>
-                <span className="text-[10px] text-gray-400">v1.3.0</span>
+                <span className="text-[10px] text-gray-400">v1.5.0</span>
             </div>
             <div className={`flex items-center gap-2 text-sm ${isOnline ? 'text-green-600' : 'text-gray-500'}`}>
                 {isOnline ? (
@@ -858,7 +1017,7 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 p-8 min-w-0">
+      <main className="flex-1 md:ml-64 p-8 min-w-0 relative z-10">
         {/* Top Bar */}
         <header className="flex justify-between items-center mb-8">
           <div>
@@ -901,8 +1060,8 @@ const App: React.FC = () => {
         <div style={{ display: currentView === 'dashboard' ? 'block' : 'none' }} className="h-full">
             {!showDashboard ? (
                 // --- ONBOARDING FLOW ---
-                <div className="flex flex-col items-center justify-center min-h-[500px] bg-white/90 backdrop-blur rounded-2xl border-2 border-dashed border-gray-200 text-center p-12 animate-in fade-in zoom-in duration-300">
-                        {/* ... (Existing onboarding code remains the same) ... */}
+                <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 animate-in fade-in zoom-in duration-300">
+                        {/* ... (Existing onboarding code) ... */}
                         <div 
                             className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
                             style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}
@@ -916,7 +1075,7 @@ const App: React.FC = () => {
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative">
                         {/* Step 1: Inventory */}
-                        <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200 hover:border-indigo-300'}`}>
+                        <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}>
                             <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'bg-white text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
                                 {hasInventory ? 'Completed' : 'Step 1'}
                             </div>
@@ -938,7 +1097,7 @@ const App: React.FC = () => {
 
                         {/* Step 2: Sales History (Locked until Step 1 done) */}
                             <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${
-                                !hasInventory ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-white border-indigo-200 shadow-lg scale-105 z-10'
+                                !hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'
                             }`}>
                             <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
                                 Step 2
@@ -973,19 +1132,26 @@ const App: React.FC = () => {
                     {/* NORMAL DASHBOARD VIEW */}
                     <div className="mb-6 flex justify-end items-center gap-3">
                         <button 
-                        onClick={() => setIsSalesImportModalOpen(true)}
-                        style={{ color: userProfile.themeColor, borderColor: `${userProfile.themeColor}40`, backgroundColor: `${userProfile.themeColor}10` }}
-                        className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-opacity-20 transition-colors flex items-center gap-2"
+                            onClick={() => setIsReturnsModalOpen(true)}
+                            className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors flex items-center gap-2"
                         >
-                        <FileBarChart className="w-4 h-4" />
-                        Import Transaction Report
+                            <RotateCcw className="w-4 h-4" />
+                            Import Refunds
                         </button>
                         <button 
-                        onClick={() => setIsUploadModalOpen(true)}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2"
+                            onClick={() => setIsSalesImportModalOpen(true)}
+                            style={{ color: userProfile.themeColor, borderColor: `${userProfile.themeColor}40`, backgroundColor: `${userProfile.themeColor}10` }}
+                            className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-opacity-20 transition-colors flex items-center gap-2 backdrop-blur-sm"
                         >
-                        <Database className="w-4 h-4" />
-                        Update Inventory (ERP)
+                            <FileBarChart className="w-4 h-4" />
+                            Import Transaction Report
+                        </button>
+                        <button 
+                            onClick={() => setIsUploadModalOpen(true)}
+                            className="px-4 py-2 bg-custom-glass border border-custom-glass text-gray-700 rounded-lg text-sm font-medium hover:bg-white/50 transition-colors flex items-center gap-2"
+                        >
+                            <Database className="w-4 h-4" />
+                            Update Inventory (ERP)
                         </button>
                     </div>
                     
@@ -1130,7 +1296,15 @@ const App: React.FC = () => {
         />
       )}
 
+      {isReturnsModalOpen && (
+        <ReturnsUploadModal
+            onClose={() => setIsReturnsModalOpen(false)}
+            onConfirm={handleRefundImport}
+        />
+      )}
+
     </div>
+    </>
   );
 };
 

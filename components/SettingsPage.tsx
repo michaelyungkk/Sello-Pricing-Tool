@@ -206,36 +206,30 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
   return (
     <div className="max-w-6xl mx-auto pb-10 flex flex-col h-[calc(100vh-100px)]">
       
-      {/* Updated Tab Navigation (Underlined Style) */}
-      <div className="flex gap-8 border-b border-gray-200 mb-6">
+      {/* Updated Tab Navigation (Strict Match with Definitions Page) */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
           <button 
             onClick={() => setActiveTab('platforms')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 transition-colors relative ${activeTab === 'platforms' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-            style={activeTab === 'platforms' ? { color: themeColor } : {}}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'platforms' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
           >
               <Globe className="w-4 h-4" />
               Platform Rules
-              {activeTab === 'platforms' && <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full" style={{ backgroundColor: themeColor }}></div>}
           </button>
           
           <button 
             onClick={() => setActiveTab('logistics')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 transition-colors relative ${activeTab === 'logistics' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-            style={activeTab === 'logistics' ? { color: themeColor } : {}}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'logistics' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
           >
               <Truck className="w-4 h-4" />
               Logistics Rates
-              {activeTab === 'logistics' && <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full" style={{ backgroundColor: themeColor }}></div>}
           </button>
 
           <button 
             onClick={() => setActiveTab('analysis')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 transition-colors relative ${activeTab === 'analysis' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-            style={activeTab === 'analysis' ? { color: themeColor } : {}}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'analysis' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
           >
               <BarChart2 className="w-4 h-4" />
               Analysis Logic
-              {activeTab === 'analysis' && <div className="absolute bottom-0 left-0 w-full h-0.5 rounded-t-full" style={{ backgroundColor: themeColor }}></div>}
           </button>
       </div>
 
@@ -243,13 +237,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
       {/* Platform Settings Section */}
       {activeTab === 'platforms' && (
         <div className="space-y-6">
+            {/* ... Content remains unchanged ... */}
             <div>
                 <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Platform Configuration</h2>
                 <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Configure commission fees, strategic markups, and data aggregation rules.</p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="border-b p-4 flex items-start gap-3" style={{ backgroundColor: `${themeColor}08`, borderColor: `${themeColor}20` }}>
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
+                <div className="border-b border-custom-glass p-4 flex items-start gap-3" style={{ backgroundColor: `${themeColor}08` }}>
                     <Info className="w-5 h-5 mt-0.5" style={{ color: themeColor }} />
                     <div className="text-sm" style={{ color: themeColor }}>
                         <p className="font-semibold">How these settings affect analysis:</p>
@@ -261,7 +256,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                 </div>
 
                 <div className="p-6">
-                    <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 rounded-lg text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50/50 rounded-lg text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                         <div className="col-span-3">Platform</div>
                         <div className="col-span-2 text-center">Commission (%)</div>
                         <div className="col-span-2 text-center">Markup (%)</div>
@@ -276,7 +271,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                             const isExcluded = rules[platform].isExcluded;
 
                             return (
-                                <div key={platform} className={`grid grid-cols-12 gap-4 items-center p-4 rounded-lg border transition-colors group ${isExcluded ? 'bg-gray-50 border-gray-200 opacity-90' : 'bg-white border-gray-100 hover:border-gray-200'}`}>
+                                <div key={platform} className={`grid grid-cols-12 gap-4 items-center p-4 rounded-lg border transition-colors group ${isExcluded ? 'bg-gray-50/80 border-gray-200 opacity-90' : 'bg-white/80 border-gray-100 hover:border-gray-200'}`}>
                                     <div className="col-span-3 flex items-center gap-3">
                                         <div className="relative group/icon cursor-pointer">
                                             <input
@@ -307,7 +302,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                                 step="0.1"
                                                 value={rules[platform].commission}
                                                 onChange={(e) => handleCommissionChange(platform, e.target.value)}
-                                                className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 font-mono text-gray-900 transition-colors text-sm"
+                                                className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 font-mono text-gray-900 transition-colors text-sm bg-white/50"
                                                 style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                             />
                                             <Coins className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-3" />
@@ -321,7 +316,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                                 step="0.1"
                                                 value={rules[platform].markup}
                                                 onChange={(e) => handleMarkupChange(platform, e.target.value)}
-                                                className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 font-mono text-gray-900 transition-colors text-sm"
+                                                className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 font-mono text-gray-900 transition-colors text-sm bg-white/50"
                                                 style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                             />
                                             <Percent className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-3" />
@@ -335,7 +330,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                                 placeholder="Unassigned"
                                                 value={rules[platform].manager || ''}
                                                 onChange={(e) => handleManagerChange(platform, e.target.value)}
-                                                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-gray-900 transition-colors text-sm"
+                                                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-gray-900 transition-colors text-sm bg-white/50"
                                                 style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                             />
                                             <User className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
@@ -376,7 +371,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                     placeholder="Enter platform name (e.g. Shopify)" 
                                     value={newPlatformName}
                                     onChange={(e) => setNewPlatformName(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 bg-white/50"
                                     style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                 />
                                 <datalist id="platform-suggestions">
@@ -421,9 +416,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                 </button>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                 <div className="p-6">
-                    <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 rounded-lg text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50/50 rounded-lg text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                         <div className="col-span-4">Service Name / Code</div>
                         <div className="col-span-2">Carrier</div>
                         <div className="col-span-2 text-right">Rate (£)</div>
@@ -433,7 +428,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
 
                     <div className="space-y-2">
                         {logistics.map((rule) => (
-                            <div key={rule.id} className="grid grid-cols-12 gap-4 items-center p-3 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-colors">
+                            <div key={rule.id} className="grid grid-cols-12 gap-4 items-center p-3 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50/50 transition-colors bg-white/50">
                                 <div className="col-span-4 font-mono font-bold text-sm text-gray-700">
                                     {rule.name}
                                 </div>
@@ -451,7 +446,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                             value={rule.price || ''}
                                             placeholder="0.00"
                                             onChange={(e) => handleLogisticsChange(rule.id, 'price', e.target.value)}
-                                            className="w-full pl-6 pr-3 py-1.5 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-opacity-50 font-bold text-gray-900 text-sm"
+                                            className="w-full pl-6 pr-3 py-1.5 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-opacity-50 font-bold text-gray-900 text-sm bg-white"
                                             style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                         />
                                         <span className="absolute left-2 top-1.5 text-gray-400 text-xs">£</span>
@@ -466,7 +461,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                             value={rule.maxWeight || ''}
                                             placeholder="-"
                                             onChange={(e) => handleLogisticsChange(rule.id, 'maxWeight', e.target.value)}
-                                            className="w-full pl-3 pr-8 py-1.5 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-opacity-50 text-sm"
+                                            className="w-full pl-3 pr-8 py-1.5 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-opacity-50 text-sm bg-white"
                                             style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                         />
                                         <Scale className="w-3 h-3 text-gray-400 absolute right-2 top-2" />
@@ -481,7 +476,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                             value={rule.maxLength || ''}
                                             placeholder="-"
                                             onChange={(e) => handleLogisticsChange(rule.id, 'maxLength', e.target.value)}
-                                            className="w-full pl-3 pr-8 py-1.5 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-opacity-50 text-sm"
+                                            className="w-full pl-3 pr-8 py-1.5 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-opacity-50 text-sm bg-white"
                                             style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                                         />
                                         <Ruler className="w-3 h-3 text-gray-400 absolute right-2 top-2" />
@@ -505,7 +500,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                   </p>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                   <div className="p-6">
                       <div className="flex flex-col gap-6">
                           <div className="flex flex-col md:flex-row gap-6">
@@ -532,7 +527,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                               className={`text-left p-3 rounded-lg border transition-all ${
                                                   velocityLookback === opt.val 
                                                   ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' 
-                                                  : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50'
+                                                  : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50/50 bg-white/50'
                                               }`}
                                           >
                                               <div className={`font-bold text-sm mb-1 ${velocityLookback === opt.val ? 'text-indigo-700' : 'text-gray-700'}`}>
@@ -547,7 +542,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                               </div>
                           </div>
 
-                          <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3">
+                          <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 flex gap-3">
                               <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                               <div className="text-sm text-blue-800">
                                   <p className="font-bold mb-1">Impact on "Rising Stars"</p>
@@ -567,7 +562,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
       </div>
 
       {/* Footer Actions (Sticky) */}
-      <div className="pt-6 border-t border-gray-200 flex justify-end">
+      <div className="pt-6 border-t border-custom-glass flex justify-end">
             <button 
                 onClick={handleSave}
                 disabled={isSaved}

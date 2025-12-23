@@ -1,259 +1,365 @@
 
-import React from 'react';
-import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone, Clock, Activity, Layers, Eye, ShieldAlert, Package, RotateCcw, CornerDownLeft, Star } from 'lucide-react';
 
 interface DefinitionsPageProps {
     headerStyle?: React.CSSProperties;
 }
 
 const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
+  const [activeTab, setActiveTab] = useState<'operational' | 'financial'>('operational');
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-10">
-      <div>
-        <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>System Definitions & Formulas</h2>
-        <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Reference guide for calculations used in the Sello UK Hub dashboard.</p>
+    <div className="max-w-5xl mx-auto space-y-6 pb-10 h-full flex flex-col">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>System Definitions & Logic</h2>
+        <p className="transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
+            Reference guide for calculation logic, status thresholds, and system behaviors.
+        </p>
       </div>
 
-      {/* Date Ranges */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
-                  <Calendar className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Weekly Reporting Cycles</h3>
-          </div>
-          <div className="prose prose-sm text-gray-600 max-w-none">
-              <p>
-                  The system automatically detects the latest date in your uploaded sales report and establishes a 
-                  <strong> Friday-to-Thursday</strong> reporting cycle. It then partitions your entire sales file into weekly buckets based on this cycle.
-              </p>
-              <div className="grid md:grid-cols-2 gap-6 mt-4">
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                      <h4 className="font-semibold text-gray-900 mb-2">Example Week</h4>
-                      <p className="mb-2">A standard pricing week starts on a Friday and ends on the following Thursday.</p>
-                      <code className="bg-white px-2 py-1 rounded border text-xs">Fri 28 Nov - Thu 04 Dec</code>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                      <h4 className="font-semibold text-gray-900 mb-2">Usage</h4>
-                      <p className="mb-2">This full calendar history feeds the "Optimal Price" algorithm, allowing it to see trends over months rather than just weeks.</p>
-                  </div>
-              </div>
-          </div>
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+          <button 
+            onClick={() => setActiveTab('operational')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'operational' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+              <Activity className="w-4 h-4" />
+              Operational Logic
+          </button>
+          <button 
+            onClick={() => setActiveTab('financial')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'financial' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+              <Calculator className="w-4 h-4" />
+              Financial Formulas
+          </button>
       </div>
 
-      {/* Ad Spend & TACoS */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
-                  <Megaphone className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Ad Spend & TACoS Logic</h3>
-          </div>
-          <div className="prose prose-sm text-gray-600 max-w-none">
-              <p>
-                  Advertising costs often appear in reports as standalone line items with a cost but <strong>0 quantity</strong> (e.g., "Sponsored Products Charge"). 
-                  Simply averaging "per order" costs would ignore these line items.
-              </p>
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 mt-3">
-                  <h4 className="font-semibold text-gray-900 mb-2">TACoS Formula (Total Advertising Cost of Sales)</h4>
-                  <div className="font-mono text-xs bg-white p-2 rounded border border-gray-200 mb-2">
-                      (Sum of All Ad Spend in Period) / (Total Units Sold in Period)
-                  </div>
-                  <p className="text-xs text-gray-500">
-                      We bucket these standalone costs by date (weekly) and divide by the total units sold in that same week. 
-                      This distributes the general ad spend across the units that were actually sold to give a true "Ad Cost per Unit".
-                  </p>
-              </div>
-          </div>
+      <div className="flex-1 overflow-y-auto pr-2 space-y-6">
+        {activeTab === 'operational' ? (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                
+                {/* Optimal Pricing Section - NEW */}
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-yellow-50 rounded-lg text-yellow-600">
+                            <Star className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900">Optimal Pricing Algorithm</h3>
+                    </div>
+                    <div className="prose prose-sm text-gray-600 max-w-none">
+                        <p>
+                            The system analyzes your entire <strong>Price History</strong> to determine a "Sweet Spot" for every SKU. This is not a prediction, but a historical fact-check.
+                        </p>
+                        <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100 mt-2">
+                            <h4 className="font-bold text-gray-900 text-xs uppercase mb-2">Calculation Method</h4>
+                            <ol className="list-decimal pl-4 space-y-1 text-xs">
+                                <li>We aggregate every price point a product has ever been sold at.</li>
+                                <li>For each price point, we calculate the <strong>Daily Profit</strong> generated (Unit Margin × Average Daily Velocity at that price).</li>
+                                <li>The price point that historically delivered the <strong>Highest Daily Profit</strong> is flagged as the "Optimal Price".</li>
+                            </ol>
+                            <div className="mt-3 flex items-center gap-2 text-xs text-indigo-600 font-medium">
+                                <Star className="w-3 h-3" />
+                                <span>Look for the Star icon in the Product List to see this reference price.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Inventory Health Section */}
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                    <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                        <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                            <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">Inventory Health Status</h3>
+                            <p className="text-xs text-gray-500">How the system decides if a product is Critical, Healthy, or Overstocked.</p>
+                        </div>
+                    </div>
+                    
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <StatusCard 
+                            status="Critical" 
+                            color="red" 
+                            condition="Runway < Lead Time" 
+                            desc="Stock will likely run out before new stock arrives. Immediate price increase recommended to slow velocity." 
+                        />
+                        <StatusCard 
+                            status="Warning" 
+                            color="amber" 
+                            condition="Runway < 1.5x Lead Time" 
+                            desc="Stock is getting low. Reordering should be in progress. Monitor closely." 
+                        />
+                        <StatusCard 
+                            status="Healthy" 
+                            color="green" 
+                            condition="Balanced Supply" 
+                            desc="Inventory levels are sufficient to cover the Lead Time with a comfortable buffer." 
+                        />
+                        <StatusCard 
+                            status="Overstock" 
+                            color="orange" 
+                            condition="Runway > 4x Lead Time" 
+                            desc="Too much capital tied up in stock. Consider price decreases or promotions to boost velocity." 
+                        />
+                    </div>
+
+                    <div className="mt-6 bg-blue-50/50 p-4 rounded-lg border border-blue-100 text-sm text-blue-800">
+                        <p className="font-bold mb-1 flex items-center gap-2"><Clock className="w-4 h-4"/> The "Runway" Calculation</p>
+                        <p className="mb-2">
+                            Runway (Days Remaining) = <span className="font-mono bg-white px-1 rounded border border-blue-200">Current Stock / Average Daily Sales</span>
+                        </p>
+                        <p className="text-xs opacity-80">
+                            * Note: Incoming stock (shipments) is excluded by default for a conservative view, but can be toggled ON in the Strategy Engine.
+                        </p>
+                    </div>
+                </div>
+
+                {/* Returns Logic Section */}
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-red-50 rounded-lg text-red-600">
+                            <RotateCcw className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900">Returns & Quality Control</h3>
+                    </div>
+                    <div className="prose prose-sm text-gray-600 max-w-none">
+                        <p>
+                            Refunds and returns are imported via the <strong>Refund Report</strong>. This data is aggregated by SKU and matched against the selected date period.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
+                            <div className="border rounded-lg p-4 bg-white/50">
+                                <h4 className="font-bold text-gray-900 text-xs uppercase mb-2 flex items-center gap-2">
+                                    <CornerDownLeft className="w-3 h-3" /> Return Rate Formula
+                                </h4>
+                                <div className="font-mono text-xs bg-white px-2 py-2 rounded border border-gray-200 mb-2">
+                                    (Total Returned / (Avg Daily Sales × Period Days)) × 100
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                    We use <strong>Projected Sales</strong> (Velocity × Days) as the denominator to smooth out volatility. This provides a stable metric even if actual sales fluctuate day-to-day.
+                                </p>
+                            </div>
+                            <div className="border rounded-lg p-4 bg-white/50">
+                                <h4 className="font-bold text-gray-900 text-xs uppercase mb-2 flex items-center gap-2">
+                                    <AlertTriangle className="w-3 h-3 text-amber-500" /> High Return Alert
+                                </h4>
+                                <p className="text-xs text-gray-600">
+                                    If a product's return rate exceeds <strong>5%</strong>, a warning badge is displayed in the Product List tooltip. 
+                                    High returns may indicate quality issues or misleading listing descriptions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Velocity Engine Section */}
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                            <TrendingUp className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900">Velocity Settings & Sensitivity</h3>
+                    </div>
+                    <div className="prose prose-sm text-gray-600 max-w-none">
+                        <p>
+                            The "Average Daily Sales" metric is the heartbeat of the system. You can change how this is calculated in <strong>Settings</strong>.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                            <div className="border rounded-lg p-3 bg-white/50">
+                                <span className="font-bold text-gray-900 block mb-1">7 Days Lookback</span>
+                                <span className="text-xs text-gray-500">Highly reactive. Use this during peak seasons (e.g., Q4) to catch sudden spikes immediately.</span>
+                            </div>
+                            <div className="border rounded-lg p-3 bg-white/50">
+                                <span className="font-bold text-gray-900 block mb-1">30 Days Lookback</span>
+                                <span className="text-xs text-gray-500">Standard mode. Smooths out weekend dips and short-term anomalies.</span>
+                            </div>
+                            <div className="border rounded-lg p-3 bg-white/50">
+                                <span className="font-bold text-gray-900 block mb-1">90 Days Lookback</span>
+                                <span className="text-xs text-gray-500">Conservative. Best for restocking decisions on stable, long-tail products.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Data Hierarchy Section */}
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-pink-50 rounded-lg text-pink-600">
+                            <Layers className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900">Data Hierarchy & "Ghost" Products</h3>
+                    </div>
+                    <div className="space-y-4">
+                        <div className="flex gap-4 items-start">
+                            <div className="bg-gray-100 p-2 rounded text-gray-500"><Package className="w-4 h-4" /></div>
+                            <div>
+                                <h4 className="font-bold text-gray-900 text-sm">Master SKU vs. Aliases</h4>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    The system revolves around the <strong>Master SKU</strong> (from your Inventory Report). 
+                                    Platform listings (e.g., Amazon FBA, eBay) are linked via <strong>Aliases</strong>. 
+                                    Sales from all aliases are aggregated into the Master SKU's velocity.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-4 items-start">
+                            <div className="bg-gray-100 p-2 rounded text-gray-500"><Eye className="w-4 h-4" /></div>
+                            <div>
+                                <h4 className="font-bold text-gray-900 text-sm">Inactive / "Ghost" Products</h4>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    To keep the dashboard clean, products with <strong>0 Stock</strong> AND <strong>0 Sales</strong> (in the selected period) are hidden by default. 
+                                    Toggle the "Show Inactive" eye icon in filters to reveal them.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        ) : (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                
+                {/* Date Ranges */}
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                            <Calendar className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900">Weekly Reporting Cycles</h3>
+                    </div>
+                    <div className="prose prose-sm text-gray-600 max-w-none">
+                        <p>
+                            The system automatically detects the latest date in your uploaded sales report and establishes a 
+                            <strong> Friday-to-Thursday</strong> reporting cycle.
+                        </p>
+                        <div className="bg-gray-50/50 p-3 rounded-lg border border-gray-100 mt-2">
+                            <code className="bg-white px-2 py-1 rounded border text-xs">Fri 28 Nov - Thu 04 Dec</code>
+                            <p className="text-xs text-gray-500 mt-2">
+                                This full calendar history feeds the "Optimal Price" algorithm, allowing it to see trends over months rather than just weeks.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Ad Spend & TACoS */}
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                            <Megaphone className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900">Ad Spend & TACoS Logic</h3>
+                    </div>
+                    <div className="prose prose-sm text-gray-600 max-w-none">
+                        <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100">
+                            <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">TACoS Formula (Total Advertising Cost of Sales)</h4>
+                            <div className="font-mono text-xs bg-white px-2 py-2 rounded border border-gray-200 mb-2">
+                                (Sum of All Ad Spend in Period) / (Total Units Sold in Period)
+                            </div>
+                            <p className="text-xs text-gray-500">
+                                We bucket standalone ad costs (e.g. "Sponsored Products Charge") by week and divide by the total units sold in that same week 
+                                to determine the "Ad Cost per Unit".
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Weighted Averages */}
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-pink-50 rounded-lg text-pink-600">
+                            <Scale className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900">Weighted Average Logic</h3>
+                    </div>
+                    
+                    <p className="text-sm text-gray-600 mb-4">
+                        When processing transaction reports, the system always uses a <strong>Volume-Weighted Average</strong> rather than a simple average. 
+                    </p>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100">
+                            <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">Price Formula</h4>
+                            <div className="font-mono text-xs bg-white px-2 py-2 rounded border border-gray-200 mb-2">
+                                (Sum of Revenue across all orders) / (Total Units Sold)
+                            </div>
+                        </div>
+                        <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100">
+                            <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">Fee Formula</h4>
+                            <div className="font-mono text-xs bg-white px-2 py-2 rounded border border-gray-200 mb-2">
+                                (Sum of Fee Costs) / (Total Units Sold)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Margin Logic */}
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-green-50 rounded-lg text-green-600">
+                            <DollarSign className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900">Margin Calculation</h3>
+                    </div>
+                    <div className="prose prose-sm text-gray-600 max-w-none">
+                        <div className="p-4 bg-gray-50/50 rounded-lg border border-gray-100">
+                            <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">Net Profit Formula</h4>
+                            <div className="font-mono text-xs bg-white px-2 py-2 rounded border border-gray-200 mb-3 overflow-x-auto">
+                                (Selling Price + Extra Freight Income) - (COGS + Platform Comm. + Ad Spend + Postage + WMS + Other Fees)
+                            </div>
+                            
+                            <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">Margin % Formula</h4>
+                            <div className="font-mono text-xs bg-white px-2 py-2 rounded border border-gray-200 mb-3">
+                                (Net Profit / Selling Price) × 100
+                            </div>
+
+                            <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase flex items-center gap-2">
+                                <RotateCcw className="w-3 h-3"/> Net Revenue (Refund Adjusted)
+                            </h4>
+                            <div className="font-mono text-xs bg-white px-2 py-2 rounded border border-gray-200">
+                                Gross Sales Revenue - Total Refunded Value
+                            </div>
+                            <p className="text-[10px] text-gray-500 mt-2">
+                                * Refunds are imported separately and deducted from Gross Revenue when analyzing performance over time.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        )}
       </div>
-
-      {/* Weighted Averages */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-pink-50 rounded-lg text-pink-600">
-                  <Scale className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Weighted Average Logic</h3>
-          </div>
-          
-          <p className="text-sm text-gray-600 mb-4">
-              When processing transaction reports, the system always uses a <strong>Volume-Weighted Average</strong> rather than a simple average. 
-              This ensures that a single small order at a weird price doesn't skew your data if you have hundreds of normal orders.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-6">
-              {/* Formula */}
-              <div className="space-y-4">
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                      <h4 className="font-semibold text-gray-900 mb-2 text-sm">Price Formula</h4>
-                      <div className="font-mono text-xs bg-white p-2 rounded border border-gray-200 mb-2">
-                          (Sum of Revenue across all orders) / (Total Units Sold)
-                      </div>
-                      <p className="text-xs text-gray-500">
-                          We sum the total money made and divide by total units, rather than averaging the "price per unit" of each row.
-                      </p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                      <h4 className="font-semibold text-gray-900 mb-2 text-sm">Cost Formula</h4>
-                      <div className="font-mono text-xs bg-white p-2 rounded border border-gray-200 mb-2">
-                          Sum(Unit Cost × Qty) / Total Units Sold
-                      </div>
-                      <p className="text-xs text-gray-500">
-                          Ensures that if you sold 100 units at low cost and 1 unit at high cost, the dashboard shows the low cost.
-                      </p>
-                  </div>
-              </div>
-
-              {/* Example */}
-              <div className="bg-slate-900 text-slate-300 p-5 rounded-lg text-sm border border-slate-700 flex flex-col justify-center">
-                  <h4 className="text-white font-bold mb-3 border-b border-slate-700 pb-2">Why this matters (Example)</h4>
-                  
-                  <div className="space-y-3 font-mono text-xs">
-                      <div className="flex justify-between">
-                          <span>Order A:</span>
-                          <span className="text-white">100 units sold @ £10.00 each</span>
-                      </div>
-                      <div className="flex justify-between">
-                          <span>Order B:</span>
-                          <span className="text-white">1 unit sold @ £50.00 each</span>
-                      </div>
-
-                      <div className="border-t border-slate-700 my-2"></div>
-
-                      <div className="flex justify-between text-red-300 opacity-75">
-                          <span>Simple Average:</span>
-                          <span>(£10 + £50) / 2 = £30.00</span>
-                      </div>
-                      <div className="text-[10px] text-red-400 mb-2">Wrong. This assumes both orders are equally important.</div>
-
-                      <div className="flex justify-between text-green-400 font-bold">
-                          <span>Weighted Average:</span>
-                          <span>£1050 / 101 = £10.39</span>
-                      </div>
-                      <div className="text-[10px] text-green-500">Correct. The price is mostly £10, slightly pulled up by the £50 sale.</div>
-                  </div>
-              </div>
-          </div>
-      </div>
-
-      {/* Optimal Reference Price */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
-                  <Target className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Optimal Reference Price</h3>
-          </div>
-          <p className="text-sm text-gray-600 mb-4">
-              The system analyzes your historical sales data (Price, Margin, and Velocity) to identify the price point that historically generated the <strong>highest total daily profit</strong>.
-          </p>
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 space-y-2 text-sm text-gray-700">
-              <p><strong>Daily Profit</strong> = (Unit Price × Margin %) × Daily Velocity</p>
-              <p className="text-xs text-gray-500 mt-2">
-                  The algorithm scans all recorded price points for a SKU and selects the one where this value was maximized.
-              </p>
-          </div>
-      </div>
-
-      {/* Price & Tax */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-green-50 rounded-lg text-green-600">
-                  <Calculator className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Price & VAT Calculation</h3>
-          </div>
-          <p className="text-sm text-gray-600 mb-4">
-              The dashboard assumes uploaded revenue figures are <strong>Net (Excluding VAT)</strong>. It automatically uplifts 
-              the calculated unit price to display a <strong>Gross (Inc. VAT)</strong> price on the dashboard.
-          </p>
-          <div className="bg-slate-900 text-slate-200 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-              Gross Price = (Total Revenue / Total Units Sold) × 1.20
-          </div>
-          <p className="text-xs text-gray-500 mt-2 italic">
-              * The multiplier 1.20 adds a standard 20% VAT rate.
-          </p>
-      </div>
-
-      {/* Inventory Health & Logic */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
-                  <AlertTriangle className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Inventory Health & Recommendation Logic</h3>
-          </div>
-          
-          <div className="grid md:grid-cols-2 gap-6">
-              {/* Strategic Status */}
-              <div>
-                  <h4 className="font-semibold text-gray-900 mb-3 text-sm border-b pb-2">Status Thresholds</h4>
-                  <div className="space-y-3">
-                      <div className="flex items-start gap-2">
-                          <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 font-bold text-[10px] rounded uppercase mt-0.5 whitespace-nowrap">Out of Stock</span>
-                          <div className="text-xs">
-                              <span className="font-semibold">Stock &le; 0</span>
-                              <p className="text-gray-500">Inventory depleted. Hidden by default, toggle in "Advanced Filters" to view.</p>
-                          </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                          <span className="px-1.5 py-0.5 bg-red-100 text-red-700 font-bold text-[10px] rounded uppercase mt-0.5">Critical</span>
-                          <div className="text-xs">
-                              <span className="font-semibold">Runway &lt; Lead Time</span>
-                              <p className="text-gray-500">Stockout Risk. Recommendation: Increase Price.</p>
-                          </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                          <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 font-bold text-[10px] rounded uppercase mt-0.5">Warning</span>
-                          <div className="text-xs">
-                              <span className="font-semibold">Runway &lt; 1.5 × Lead Time</span>
-                              <p className="text-gray-500">Approaching reorder point.</p>
-                          </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                          <span className="px-1.5 py-0.5 bg-green-100 text-green-700 font-bold text-[10px] rounded uppercase mt-0.5">Healthy</span>
-                          <div className="text-xs">
-                              <span className="font-semibold">Optimal Range</span>
-                              <p className="text-gray-500">Supply meets demand.</p>
-                          </div>
-                      </div>
-                       <div className="flex items-start gap-2">
-                          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 font-bold text-[10px] rounded uppercase mt-0.5">Overstock</span>
-                          <div className="text-xs">
-                              <span className="font-semibold">Runway &gt; 4 × Lead Time</span>
-                              <p className="text-gray-500">Excess Inventory. Recommendation: Decrease Price.</p>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-
-              {/* Trend Monitoring Logic */}
-              <div>
-                  <h4 className="font-semibold text-gray-900 mb-3 text-sm border-b pb-2">Trend Monitoring Logic</h4>
-                  <div className="space-y-3">
-                      <div className="flex items-start gap-2">
-                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 font-bold text-[10px] rounded uppercase mt-0.5 whitespace-nowrap">Monitor (Effective)</span>
-                          <div className="text-xs">
-                              <span className="font-semibold">Trend Detected</span>
-                              <p className="text-gray-500">
-                                  If a product is technically <strong>Critical</strong> (Runway &lt; Lead Time), but a recent price increase has successfully slowed velocity by &gt;20%, the status is downgraded to <strong>Warning</strong>.
-                              </p>
-                              <div className="mt-2 bg-blue-50 p-2 rounded text-[10px] text-blue-800 border border-blue-100">
-                                  <strong>Logic:</strong> Price Change &gt; 3% AND Velocity Change &lt; -20%
-                              </div>
-                          </div>
-                      </div>
-                      
-                      <div className="text-xs text-gray-500 mt-4 italic">
-                          This prevents the system from constantly screaming "Critical" when you have already taken action to fix the problem.
-                      </div>
-                  </div>
-              </div>
-          </div>
-      </div>
-
     </div>
   );
+};
+
+const StatusCard = ({ status, color, condition, desc }: { status: string, color: string, condition: string, desc: string }) => {
+    const colorClasses = {
+        red: 'bg-red-50 border-red-200 text-red-800',
+        amber: 'bg-amber-50 border-amber-200 text-amber-800',
+        green: 'bg-green-50 border-green-200 text-green-800',
+        orange: 'bg-orange-50 border-orange-200 text-orange-800',
+    };
+    const badgeClasses = {
+        red: 'bg-red-200 text-red-900',
+        amber: 'bg-amber-200 text-amber-900',
+        green: 'bg-green-200 text-green-900',
+        orange: 'bg-orange-200 text-orange-900',
+    };
+
+    return (
+        <div className={`p-4 rounded-lg border ${colorClasses[color as keyof typeof colorClasses]}`}>
+            <div className="flex justify-between items-start mb-2">
+                <span className="font-bold text-lg">{status}</span>
+                <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${badgeClasses[color as keyof typeof badgeClasses]}`}>
+                    {condition}
+                </span>
+            </div>
+            <p className="text-sm opacity-90 leading-relaxed">
+                {desc}
+            </p>
+        </div>
+    );
 };
 
 export default DefinitionsPage;

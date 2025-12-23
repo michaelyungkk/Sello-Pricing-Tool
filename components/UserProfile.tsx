@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { UserProfile as UserProfileType } from '../types';
-import { User, Settings, Palette, Image as ImageIcon, X, Check, Upload, Wand2, Sun, Moon, Type, PaintBucket, LayoutTemplate } from 'lucide-react';
+import { User, Settings, Palette, Image as ImageIcon, X, Check, Upload, Wand2, Sun, Moon, Type, PaintBucket, LayoutTemplate, Layers, RotateCw } from 'lucide-react';
 
 interface UserProfileProps {
   profile: UserProfileType;
@@ -23,6 +24,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [tempProfile, setTempProfile] = useState(profile);
   const [activeTab, setActiveTab] = useState<'image' | 'solid' | 'gradient'>('image');
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
   
   // Custom Gradient State
   const [customGradientColors, setCustomGradientColors] = useState(['#6366f1', '#ec4899']);
@@ -33,8 +35,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
 
   useEffect(() => {
       setTempProfile(profile);
-      
-      // Determine active tab based on current profile
       if (profile.backgroundImage) {
           if (profile.backgroundImage.startsWith('linear-gradient') || profile.backgroundImage.startsWith('radial-gradient')) {
               setActiveTab('gradient');
@@ -47,61 +47,55 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
   }, [profile]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+    // Using a more robust close handler for Portal
+    const handleGlobalClick = (e: MouseEvent) => {
+        if (!isOpen) return;
+        const target = e.target as Node;
+        // Check if click is inside the trigger button
+        if (dropdownRef.current && dropdownRef.current.contains(target)) {
+            return;
+        }
+        // Check if click is inside the dropdown (we need an ID or class since ref inside portal is tricky without forwarding)
+        const dropdownEl = document.getElementById('user-profile-dropdown');
+        if (dropdownEl && dropdownEl.contains(target)) {
+            return;
+        }
         setIsOpen(false);
-      }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
+    document.addEventListener('mousedown', handleGlobalClick);
+    return () => document.removeEventListener('mousedown', handleGlobalClick);
+  }, [isOpen]);
+
+  // Update position on open and scroll
   useEffect(() => {
-      // If auto-detect is valid (image URL exists)
-      const isUrl = profile.backgroundImage && (profile.backgroundImage.startsWith('http') || profile.backgroundImage.startsWith('data:') || profile.backgroundImage.startsWith('/'));
-      if (isUrl && !profile.textColor) {
-          analyzeImageBrightness(profile.backgroundImage, true);
+      if (isOpen && dropdownRef.current) {
+          const updatePos = () => {
+              const rect = dropdownRef.current!.getBoundingClientRect();
+              setDropdownPos({
+                  top: rect.bottom + 8,
+                  right: window.innerWidth - rect.right
+              });
+          };
+          updatePos();
+          window.addEventListener('resize', updatePos);
+          window.addEventListener('scroll', updatePos); 
+          return () => {
+              window.removeEventListener('resize', updatePos);
+              window.removeEventListener('scroll', updatePos);
+          };
       }
-  }, []);
+  }, [isOpen]);
+
+  // Sync custom gradient when inputs change
+  const updateCustomGradient = (colors: string[], angle: string) => {
+      const gradientString = `linear-gradient(${angle}, ${colors[0]}, ${colors[1]})`;
+      setTempProfile(prev => ({ ...prev, backgroundImage: gradientString }));
+  };
 
   const handleSave = () => {
     onUpdate(tempProfile);
     setIsOpen(false);
-  };
-
-  const analyzeImageBrightness = (imageSrc: string, autoSave: boolean = false) => {
-      if (!imageSrc.startsWith('http') && !imageSrc.startsWith('data:')) return;
-
-      const img = new Image();
-      img.src = imageSrc;
-      img.crossOrigin = "Anonymous"; 
-      
-      img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return;
-
-          canvas.width = 1;
-          canvas.height = 1;
-          ctx.drawImage(img, 0, 0, 1, 1);
-          
-          try {
-            const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-            const optimalTextColor = brightness < 128 ? '#ffffff' : '#111827';
-            
-            if (autoSave) {
-                onUpdate({ ...profile, textColor: optimalTextColor });
-            } else {
-                setTempProfile(prev => ({
-                    ...prev,
-                    textColor: optimalTextColor
-                }));
-            }
-          } catch (e) {
-              console.warn("Could not analyze image due to CORS or format", e);
-          }
-      };
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,7 +105,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
           reader.onloadend = () => {
               const result = reader.result as string;
               setTempProfile(prev => ({ ...prev, backgroundImage: result }));
-              analyzeImageBrightness(result, false);
           };
           reader.readAsDataURL(file);
       }
@@ -132,28 +125,24 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
       }));
   };
 
-  const handleCustomColorChange = (index: number, val: string) => {
-      const newColors = [...customGradientColors];
-      newColors[index] = val;
-      setCustomGradientColors(newColors);
-  };
-
-  const applyCustomGradient = () => {
-      const grad = `linear-gradient(${customGradientAngle}, ${customGradientColors[0]}, ${customGradientColors[1]})`;
-      setTempProfile(prev => ({ ...prev, backgroundImage: grad }));
+  const handleTextColorChange = (mode: 'auto' | 'dark' | 'light') => {
+      let color = undefined;
+      if (mode === 'dark') color = '#111827';
+      if (mode === 'light') color = '#ffffff';
+      setTempProfile(prev => ({ ...prev, textColor: color }));
   };
 
   return (
     <div className="relative" ref={dropdownRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 p-1.5 pl-3 pr-2 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full shadow-sm hover:shadow-md transition-all group"
+        className="flex items-center gap-2 p-1.5 pl-3 pr-2 bg-custom-glass border border-custom-glass rounded-full shadow-sm hover:shadow-md transition-all group"
       >
         <div className="flex flex-col items-end mr-1">
-             <span className="text-xs font-bold text-gray-700 leading-none">
-                {profile.name || 'Guest User'}
+             <span className="text-xs font-bold text-gray-700 leading-none" style={{ color: profile.textColor || 'inherit' }}>
+                {profile.name || 'Guest'}
              </span>
-             <span className="text-[10px] text-gray-500">Settings</span>
+             <span className="text-[10px] text-gray-500" style={{ color: profile.textColor ? `${profile.textColor}90` : 'inherit' }}>Settings</span>
         </div>
         <div 
             className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-inner"
@@ -163,236 +152,269 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
         </div>
       </button>
 
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                <h3 className="font-bold text-gray-900">Personalize</h3>
+      {isOpen && dropdownPos && createPortal(
+        <div 
+            id="user-profile-dropdown"
+            className="fixed w-80 bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-white/40 overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-200"
+            style={{ top: dropdownPos.top, right: dropdownPos.right }}
+        >
+            <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <h3 className="font-bold text-sm text-gray-800 uppercase tracking-wide">Personalize</h3>
                 <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4"/></button>
             </div>
             
-            <div className="p-4 space-y-5">
-                {/* Name Input */}
-                <div className="space-y-1">
-                    <label className="text-xs font-semibold text-gray-500 uppercase">Display Name</label>
-                    <input 
-                        type="text" 
-                        value={tempProfile.name}
-                        onChange={(e) => setTempProfile({...tempProfile, name: e.target.value})}
-                        placeholder="Enter your name"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                    />
-                </div>
-
-                {/* Theme Color (Color Wheel) */}
-                <div className="space-y-2">
-                    <label className="text-xs font-semibold text-gray-500 uppercase flex items-center gap-1">
-                        <Palette className="w-3 h-3" /> Theme Color
-                    </label>
-                    <div className="flex items-center gap-3">
-                        <div className="relative w-10 h-10 rounded-full overflow-hidden shadow-sm border border-gray-200 hover:scale-105 transition-transform">
+            <div className="p-3 space-y-4 max-h-[80vh] overflow-y-auto">
+                {/* High Density Row: Name & Color */}
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Display Name</label>
+                        <input 
+                            type="text" 
+                            value={tempProfile.name}
+                            onChange={(e) => setTempProfile({...tempProfile, name: e.target.value})}
+                            className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs focus:ring-1 focus:ring-indigo-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Theme</label>
+                        <div className="relative w-8 h-8 rounded-full overflow-hidden shadow-sm border border-gray-200">
                             <input 
                                 type="color" 
                                 value={tempProfile.themeColor}
                                 onChange={(e) => setTempProfile({...tempProfile, themeColor: e.target.value})}
-                                className="absolute -top-2 -left-2 w-16 h-16 cursor-pointer"
+                                className="absolute -top-2 -left-2 w-12 h-12 cursor-pointer"
                             />
                         </div>
-                        <span className="text-sm font-mono text-gray-600 uppercase bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                            {tempProfile.themeColor}
-                        </span>
-                        <span className="text-xs text-gray-400">Click circle to pick</span>
                     </div>
+                </div>
+
+                {/* Text Color Preference */}
+                <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Text Color</label>
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button 
+                            onClick={() => handleTextColorChange('auto')}
+                            className={`flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-medium rounded transition-all ${!tempProfile.textColor ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
+                        >
+                            <Wand2 className="w-3 h-3" /> Auto
+                        </button>
+                        <button 
+                            onClick={() => handleTextColorChange('dark')}
+                            className={`flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-medium rounded transition-all ${tempProfile.textColor === '#111827' ? 'bg-gray-800 shadow text-white' : 'text-gray-500'}`}
+                        >
+                            <Moon className="w-3 h-3" /> Dark
+                        </button>
+                        <button 
+                            onClick={() => handleTextColorChange('light')}
+                            className={`flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-medium rounded transition-all ${tempProfile.textColor === '#ffffff' ? 'bg-white shadow text-gray-900 border border-gray-200' : 'text-gray-500'}`}
+                        >
+                            <Sun className="w-3 h-3" /> Light
+                        </button>
+                    </div>
+                </div>
+
+                {/* Glass Controls */}
+                <div className="bg-gray-50/50 p-2 rounded-lg border border-gray-100 space-y-3">
+                    <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1">
+                            <Layers className="w-3 h-3" /> Liquid Glass
+                        </label>
+                        <div className="flex bg-gray-200 p-0.5 rounded text-[10px]">
+                            <button 
+                                onClick={() => setTempProfile({...tempProfile, glassMode: 'light'})}
+                                className={`px-2 py-0.5 rounded transition-all ${tempProfile.glassMode !== 'dark' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}
+                            >Light</button>
+                            <button 
+                                onClick={() => setTempProfile({...tempProfile, glassMode: 'dark'})}
+                                className={`px-2 py-0.5 rounded transition-all ${tempProfile.glassMode === 'dark' ? 'bg-gray-800 shadow text-white' : 'text-gray-500'}`}
+                            >Dark</button>
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400 w-10">Opacity</span>
+                        <input 
+                            type="range" 
+                            min="0" max="100" 
+                            value={tempProfile.glassOpacity ?? 90} 
+                            onChange={(e) => setTempProfile({...tempProfile, glassOpacity: parseInt(e.target.value)})}
+                            className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        />
+                        <span className="text-[10px] font-mono text-gray-500 w-6 text-right">{tempProfile.glassOpacity}%</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400 w-10">Blur</span>
+                        <input 
+                            type="range" 
+                            min="0" max="40" 
+                            value={tempProfile.glassBlur ?? 10} 
+                            onChange={(e) => setTempProfile({...tempProfile, glassBlur: parseInt(e.target.value)})}
+                            className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        />
+                        <span className="text-[10px] font-mono text-gray-500 w-6 text-right">{tempProfile.glassBlur}px</span>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-1">
+                        <span className="text-[10px] text-gray-400">Ambient Depth Layer</span>
+                        <button 
+                            onClick={() => setTempProfile({...tempProfile, ambientGlass: !tempProfile.ambientGlass})}
+                            className={`w-8 h-4 rounded-full relative transition-colors ${tempProfile.ambientGlass ? 'bg-indigo-500' : 'bg-gray-300'}`}
+                        >
+                            <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform ${tempProfile.ambientGlass ? 'left-4.5' : 'left-0.5'}`} style={tempProfile.ambientGlass ? { left: '18px' } : { left: '2px' }} />
+                        </button>
+                    </div>
+
+                    {tempProfile.ambientGlass && (
+                        <div className="flex items-center gap-2 pt-1 border-t border-gray-200/50 mt-1 animate-in fade-in slide-in-from-top-1">
+                            <span className="text-[10px] text-gray-400 w-10">Depth</span>
+                            <input 
+                                type="range" 
+                                min="0" max="100" 
+                                value={tempProfile.ambientGlassOpacity ?? 15} 
+                                onChange={(e) => setTempProfile({...tempProfile, ambientGlassOpacity: parseInt(e.target.value)})}
+                                className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                            <span className="text-[10px] font-mono text-gray-500 w-6 text-right">{tempProfile.ambientGlassOpacity ?? 15}%</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Background Selector */}
                 <div className="space-y-2">
-                    <label className="text-xs font-semibold text-gray-500 uppercase flex items-center gap-1">
-                        <ImageIcon className="w-3 h-3" /> Background
-                    </label>
-                    
-                    {/* Tabs */}
-                    <div className="flex bg-gray-100 p-1 rounded-lg mb-2">
-                        {[
-                            { id: 'image', icon: Upload, label: 'Image' },
-                            { id: 'solid', icon: PaintBucket, label: 'Color' },
-                            { id: 'gradient', icon: LayoutTemplate, label: 'Gradient' }
-                        ].map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-[10px] font-bold rounded-md transition-all ${
-                                    activeTab === tab.id 
-                                    ? 'bg-white text-gray-900 shadow-sm' 
-                                    : 'text-gray-500 hover:text-gray-700'
-                                }`}
-                            >
-                                <tab.icon className="w-3 h-3" />
-                                {tab.label}
-                            </button>
-                        ))}
+                    <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase">Background</label>
+                        <div className="flex gap-1">
+                            {[
+                                { id: 'image', icon: Upload },
+                                { id: 'solid', icon: PaintBucket },
+                                { id: 'gradient', icon: LayoutTemplate }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as any)}
+                                    className={`p-1 rounded text-gray-500 hover:text-indigo-600 transition-colors ${activeTab === tab.id ? 'bg-indigo-50 text-indigo-600' : ''}`}
+                                    title={tab.id}
+                                >
+                                    <tab.icon className="w-3.5 h-3.5" />
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {/* Content based on Tab */}
                     {activeTab === 'image' && (
-                        <div className="space-y-2">
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2"
-                                >
-                                    <Upload className="w-3 h-3" />
-                                    Upload Photo
-                                </button>
-                                <input 
-                                    ref={fileInputRef}
-                                    type="file" 
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={handleFileUpload}
-                                />
-                            </div>
-                            {tempProfile.backgroundImage && !tempProfile.backgroundImage.startsWith('linear-gradient') && (
-                                <div className="text-[10px] text-green-600 flex items-center gap-1">
-                                    <Check className="w-3 h-3" /> Custom Image Active
-                                </div>
-                            )}
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-1"
+                            >
+                                <Upload className="w-3 h-3" /> Upload
+                            </button>
+                            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
                         </div>
                     )}
 
                     {activeTab === 'solid' && (
-                        <div className="flex items-center gap-3 p-2 border border-gray-100 rounded-lg">
-                             <div className="relative w-10 h-10 rounded-full overflow-hidden shadow-sm border border-gray-200">
+                        <div className="flex items-center gap-2">
+                             <div className="relative w-10 h-8 rounded border border-gray-200 overflow-hidden flex-shrink-0">
                                 <input 
                                     type="color" 
                                     value={tempProfile.backgroundColor}
                                     onChange={(e) => handleSolidColorChange(e.target.value)}
-                                    className="absolute -top-2 -left-2 w-16 h-16 cursor-pointer"
+                                    className="absolute -top-1 -left-1 w-12 h-10 cursor-pointer p-0 border-0"
                                 />
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-xs font-medium text-gray-700">Solid Background</span>
-                                <span className="text-[10px] text-gray-400">Pick a color</span>
+                            <div className="flex-1 relative">
+                                <input 
+                                    type="text" 
+                                    value={tempProfile.backgroundColor}
+                                    onChange={(e) => handleSolidColorChange(e.target.value)}
+                                    className="w-full pl-2 pr-2 py-1.5 border border-gray-200 rounded text-xs font-mono uppercase focus:ring-1 focus:ring-indigo-500"
+                                    placeholder="#000000"
+                                />
                             </div>
                         </div>
                     )}
 
                     {activeTab === 'gradient' && (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-4 gap-2">
+                            <div className="grid grid-cols-4 gap-1.5">
                                 {GRADIENTS.map((grad, i) => (
                                     <button
                                         key={i}
                                         onClick={() => handleGradientSelect(grad)}
-                                        className={`w-full h-8 rounded-md shadow-sm border border-gray-200 transition-transform hover:scale-105 ${tempProfile.backgroundImage === grad ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
+                                        className={`w-full h-6 rounded shadow-sm border border-gray-200 hover:scale-105 transition-transform ${tempProfile.backgroundImage === grad ? 'ring-2 ring-indigo-400' : ''}`}
                                         style={{ background: grad }}
-                                        title={`Preset ${i+1}`}
                                     />
                                 ))}
                             </div>
-
+                            
                             {/* Custom Gradient Builder */}
-                            <div className="pt-3 border-t border-gray-100">
-                                <div className="flex justify-between items-center mb-2">
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Custom Gradient</label>
-                                </div>
+                            <div className="bg-gray-50 p-2 rounded border border-gray-100">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Custom Gradient</label>
                                 <div className="flex items-center gap-2 mb-2">
-                                    {/* Color 1 */}
-                                    <div className="flex-1 relative h-8 rounded-lg overflow-hidden border border-gray-200 shadow-sm group">
-                                         <input 
-                                            type="color" 
-                                            value={customGradientColors[0]}
-                                            onChange={(e) => handleCustomColorChange(0, e.target.value)}
-                                            className="absolute -top-4 -left-4 w-24 h-24 cursor-pointer"
-                                         />
-                                    </div>
-                                    
-                                    {/* Direction */}
+                                    <input 
+                                        type="color" 
+                                        value={customGradientColors[0]}
+                                        onChange={(e) => {
+                                            const newColors = [e.target.value, customGradientColors[1]];
+                                            setCustomGradientColors(newColors);
+                                            updateCustomGradient(newColors, customGradientAngle);
+                                        }}
+                                        className="w-8 h-8 p-0 border-0 rounded cursor-pointer"
+                                    />
+                                    <ArrowRightIcon className="w-3 h-3 text-gray-400" />
+                                    <input 
+                                        type="color" 
+                                        value={customGradientColors[1]}
+                                        onChange={(e) => {
+                                            const newColors = [customGradientColors[0], e.target.value];
+                                            setCustomGradientColors(newColors);
+                                            updateCustomGradient(newColors, customGradientAngle);
+                                        }}
+                                        className="w-8 h-8 p-0 border-0 rounded cursor-pointer"
+                                    />
                                     <select 
-                                        value={customGradientAngle}
-                                        onChange={(e) => setCustomGradientAngle(e.target.value)}
-                                        className="w-16 h-8 text-xs border border-gray-200 bg-gray-50 rounded-lg text-center cursor-pointer focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        value={customGradientAngle} 
+                                        onChange={(e) => {
+                                            setCustomGradientAngle(e.target.value);
+                                            updateCustomGradient(customGradientColors, e.target.value);
+                                        }}
+                                        className="flex-1 text-xs border border-gray-300 rounded py-1 pl-1"
                                     >
-                                        <option value="to right">⮕</option>
-                                        <option value="to bottom">⬇</option>
-                                        <option value="to bottom right">↘</option>
-                                        <option value="to top right">↗</option>
+                                        <option value="to right">Right</option>
+                                        <option value="to bottom">Down</option>
                                         <option value="45deg">45°</option>
                                         <option value="135deg">135°</option>
                                     </select>
-
-                                    {/* Color 2 */}
-                                    <div className="flex-1 relative h-8 rounded-lg overflow-hidden border border-gray-200 shadow-sm group">
-                                         <input 
-                                            type="color" 
-                                            value={customGradientColors[1]}
-                                            onChange={(e) => handleCustomColorChange(1, e.target.value)}
-                                            className="absolute -top-4 -left-4 w-24 h-24 cursor-pointer"
-                                         />
-                                    </div>
                                 </div>
-                                
-                                <button
-                                    onClick={applyCustomGradient}
-                                    className="w-full py-1.5 text-xs font-medium text-white rounded-lg shadow-sm border border-black/5 hover:opacity-90 transition-opacity"
-                                    style={{ background: `linear-gradient(${customGradientAngle}, ${customGradientColors[0]}, ${customGradientColors[1]})` }}
-                                >
-                                    Apply Custom
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Text Color Controls (Always visible if background is set) */}
-                    {(tempProfile.backgroundImage || tempProfile.backgroundColor) && (
-                        <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
-                            <label className="text-xs font-semibold text-gray-500 uppercase flex items-center gap-1">
-                                <Type className="w-3 h-3" /> Text Color
-                            </label>
-                            <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
-                                <button
-                                    onClick={() => setTempProfile({...tempProfile, textColor: '#111827'})}
-                                    className={`p-1.5 rounded-md transition-all ${tempProfile.textColor === '#111827' ? 'bg-white shadow text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
-                                    title="Dark Text"
-                                >
-                                    <Moon className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => setTempProfile({...tempProfile, textColor: '#ffffff'})}
-                                    className={`p-1.5 rounded-md transition-all ${tempProfile.textColor === '#ffffff' ? 'bg-gray-800 shadow text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                                    title="Light Text"
-                                >
-                                    <Sun className="w-3.5 h-3.5" />
-                                </button>
-                                {/* Auto-detect only works for images */}
-                                {activeTab === 'image' && (
-                                    <button
-                                        onClick={() => analyzeImageBrightness(tempProfile.backgroundImage, false)}
-                                        className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-md"
-                                        title="Auto-detect Best Color from Image"
-                                    >
-                                        <Wand2 className="w-3.5 h-3.5" />
-                                    </button>
-                                )}
                             </div>
                         </div>
                     )}
                 </div>
             </div>
 
-            <div className="p-3 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <div className="p-3 bg-gray-50/80 border-t border-gray-100 flex justify-end">
                 <button 
                     onClick={handleSave}
-                    className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 shadow-sm"
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-white text-xs font-bold rounded shadow-sm hover:opacity-90"
                     style={{ backgroundColor: tempProfile.themeColor }}
                 >
-                    <Check className="w-4 h-4" />
-                    Save Changes
+                    <Check className="w-3.5 h-3.5" />
+                    Apply Changes
                 </button>
             </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
 };
+
+// Helper icon
+const ArrowRightIcon = ({ className }: { className?: string }) => (
+    <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+);
 
 export default UserProfile;

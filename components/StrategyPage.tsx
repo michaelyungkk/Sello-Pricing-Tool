@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Product, StrategyConfig, PricingRules } from '../types';
-import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship } from 'lucide-react';
+import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight } from 'lucide-react';
 
 interface StrategyPageProps {
     products: Product[];
@@ -17,6 +18,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [isConfigOpen, setIsConfigOpen] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [includeIncoming, setIncludeIncoming] = useState(false); // New Toggle State
+    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false); // Export Menu State
 
     // --- LOGIC HELPERS ---
 
@@ -130,31 +132,88 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
             });
     }, [products, config, searchQuery, pricingRules, includeIncoming]);
 
-    const handleExport = () => {
-        const headers = ['SKU', 'Name', 'Filtered Price', 'Runway (Wks)', 'Margin %', 'Is New', 'Action', 'Suggested Price', 'Floor Price', 'Safety Alert', 'Reason'];
-        const rows = tableData.map(r => [
-            r.sku,
-            `"${r.name.replace(/"/g, '""')}"`,
-            r.filteredPrice.toFixed(2),
-            r.runwayWeeks.toFixed(1),
-            r.marginPercent.toFixed(1),
-            r.isNew ? 'Yes' : 'No',
-            r.action,
-            r.adjustedPrice.toFixed(2),
-            r.floorPrice.toFixed(2),
-            r.safetyViolation ? 'VIOLATION' : '',
-            r.reasoning
-        ]);
+    const uniquePlatforms = useMemo(() => {
+        const platformSet = new Set<string>();
+        products.forEach(p => p.channels.forEach(c => platformSet.add(c.platform)));
+        if (pricingRules) {
+            Object.keys(pricingRules).forEach(k => platformSet.add(k));
+        }
+        return Array.from(platformSet).sort();
+    }, [products, pricingRules]);
+
+    const handleExport = (platform: string = 'All') => {
+        // Helper to sanitize CSV fields
+        const clean = (val: any) => {
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/[\r\n]+/g, ' '); // Strip newlines
+            return `"${str.replace(/"/g, '""')}"`; // Escape quotes
+        };
+
+        const headers = ['SKU', 'Master SKU', 'Name', 'Filtered Price', 'Runway (Wks)', 'Margin %', 'Is New', 'Action', 'Suggested Price', 'Floor Price', 'Safety Alert', 'Reason'];
+        const rows: string[][] = [];
+
+        tableData.forEach(r => {
+            // Common Data Row
+            const commonData = [
+                clean(r.name),
+                r.filteredPrice.toFixed(2),
+                r.runwayWeeks.toFixed(1),
+                r.marginPercent.toFixed(1),
+                r.isNew ? 'Yes' : 'No',
+                clean(r.action),
+                r.adjustedPrice.toFixed(2),
+                r.floorPrice.toFixed(2),
+                r.safetyViolation ? 'VIOLATION' : '',
+                clean(r.reasoning)
+            ];
+
+            if (platform === 'All') {
+                // Standard Export: 1 Row, using Master SKU
+                rows.push([clean(r.sku), clean(r.sku), ...commonData]);
+            } else {
+                // Platform Specific: Check for multiple aliases (One-to-Many)
+                // Use case-insensitive + fuzzy match to find correct channel
+                const normalize = (s: string) => s.toLowerCase().trim();
+                const targetPlatform = normalize(platform);
+                
+                // 1. Exact match
+                let channel = r.channels.find(c => normalize(c.platform) === targetPlatform);
+                
+                // 2. Fuzzy match
+                if (!channel) {
+                    channel = r.channels.find(c => normalize(c.platform).includes(targetPlatform) || targetPlatform.includes(normalize(c.platform)));
+                }
+                
+                if (channel && channel.skuAlias) {
+                    // Split comma-separated aliases and create a row for EACH
+                    const aliases = channel.skuAlias.split(',').map(s => s.trim()).filter(Boolean);
+                    
+                    if (aliases.length > 0) {
+                        aliases.forEach(alias => {
+                            rows.push([clean(alias), clean(r.sku), ...commonData]);
+                        });
+                    } else {
+                        // Fallback to Master SKU
+                        rows.push([clean(r.sku), clean(r.sku), ...commonData]);
+                    }
+                } else {
+                    // Fallback to Master SKU if no channel found
+                    rows.push([clean(r.sku), clean(r.sku), ...commonData]);
+                }
+            }
+        });
         
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `pricing_strategy_export_${new Date().toISOString().slice(0,10)}.csv`);
+        const filename = platform === 'All' ? `pricing_strategy_master_${new Date().toISOString().slice(0,10)}.csv` : `pricing_strategy_${platform.toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.csv`;
+        link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setIsExportMenuOpen(false);
     };
 
     return (
@@ -167,11 +226,11 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                         Rule-based pricing logic. Adjust criteria below to generate real-time recommendations.
                     </p>
                 </div>
-                <div className="flex gap-3 items-center">
+                <div className="flex gap-3 items-center relative">
                     {/* Incoming Stock Toggle */}
                     <button 
                         onClick={() => setIncludeIncoming(!includeIncoming)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-500 border-gray-300'}`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white/80 text-gray-500 border-gray-300'}`}
                         title={includeIncoming ? "Including Incoming Stock in Runway Calc" : "Excluding Incoming Stock (Conservative Mode)"}
                     >
                         <Ship className="w-4 h-4" />
@@ -180,25 +239,77 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
                     <button 
                         onClick={() => setIsConfigOpen(!isConfigOpen)}
-                        className={`px-4 py-2 rounded-lg font-medium border flex items-center gap-2 transition-all ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white text-indigo-600 border-indigo-200'}`}
+                        className={`px-4 py-2 rounded-lg font-medium border flex items-center gap-2 transition-all ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white/80 text-indigo-600 border-indigo-200'}`}
                     >
                         <Settings className="w-4 h-4" />
                         {isConfigOpen ? 'Hide Rules' : 'Edit Rules'}
                     </button>
-                    <button 
-                        onClick={handleExport}
-                        className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
-                    >
-                        <Download className="w-4 h-4" />
-                        Export Matrix
-                    </button>
+                    
+                    <div className="relative">
+                        <button 
+                            onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                            className="px-4 py-2 bg-white/80 text-gray-700 border border-gray-300 rounded-lg hover:bg-white flex items-center gap-2"
+                        >
+                            <Download className="w-4 h-4" />
+                            Export Matrix
+                            <ChevronDown className="w-3 h-3 text-gray-400" />
+                        </button>
+
+                        {/* Floating Modal for Export */}
+                        {isExportMenuOpen && createPortal(
+                            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
+                                <div 
+                                    className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20"
+                                    onClick={e => e.stopPropagation()} 
+                                >
+                                    <div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50">
+                                        <h3 className="font-bold text-gray-900">Export Strategy</h3>
+                                        <button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200/50 rounded-full transition-colors">
+                                            <X className="w-4 h-4 text-gray-500" />
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="p-2">
+                                        <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div>
+                                        <button 
+                                            onClick={() => handleExport('All')}
+                                            className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between group rounded-lg transition-colors"
+                                        >
+                                            <span className="font-medium">Standard (Master SKUs)</span>
+                                            <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" />
+                                        </button>
+                                        
+                                        <div className="my-2 border-t border-gray-100/50"></div>
+                                        
+                                        <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div>
+                                        <div className="max-h-60 overflow-y-auto">
+                                            {uniquePlatforms.map(platform => (
+                                                <button 
+                                                    key={platform}
+                                                    onClick={() => handleExport(platform)}
+                                                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between rounded-lg transition-colors"
+                                                >
+                                                    <span>{platform}</span>
+                                                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span>
+                                                </button>
+                                            ))}
+                                            {uniquePlatforms.length === 0 && (
+                                                <div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>,
+                            document.body
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* Config Panel */}
+            {/* Config Panel - Glass UI */}
             {isConfigOpen && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-4">
-                    <div className="border-b bg-gray-50 p-4 flex justify-between items-center">
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden animate-in fade-in slide-in-from-top-4">
+                    <div className="border-b border-custom-glass bg-gray-50/50 p-4 flex justify-between items-center">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
                             <Settings className="w-4 h-4 text-gray-500" />
                             Configuration Parameters
@@ -227,7 +338,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                             type="number" 
                                             value={config.increase.minRunwayWeeks}
                                             onChange={e => setConfig({...config, increase: {...config.increase, minRunwayWeeks: parseFloat(e.target.value)}})}
-                                            className="w-full border rounded p-1.5 text-sm" 
+                                            className="w-full border rounded p-1.5 text-sm bg-white/50" 
                                         />
                                     </div>
                                 </div>
@@ -239,7 +350,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                             type="number" 
                                             value={config.increase.minStock}
                                             onChange={e => setConfig({...config, increase: {...config.increase, minStock: parseFloat(e.target.value)}})}
-                                            className="w-full border rounded p-1.5 text-sm" 
+                                            className="w-full border rounded p-1.5 text-sm bg-white/50" 
                                         />
                                     </div>
                                 </div>
@@ -253,13 +364,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                         type="number" 
                                         value={config.increase.minVelocity7Days}
                                         onChange={e => setConfig({...config, increase: {...config.increase, minVelocity7Days: parseFloat(e.target.value)}})}
-                                        className="w-20 border rounded p-1.5 text-sm" 
+                                        className="w-20 border rounded p-1.5 text-sm bg-white/50" 
                                     />
                                     <span className="text-xs text-gray-400">units</span>
                                 </div>
                             </div>
 
-                            <div className="bg-green-50 p-3 rounded border border-green-100">
+                            <div className="bg-green-50/50 p-3 rounded border border-green-100">
                                 <label className="text-xs font-bold text-green-800 uppercase block mb-2">Adjustment Action</label>
                                 <div className="flex gap-2">
                                     <div className="flex-1">
@@ -268,7 +379,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                             type="number" 
                                             value={config.increase.adjustmentPercent}
                                             onChange={e => setConfig({...config, increase: {...config.increase, adjustmentPercent: parseFloat(e.target.value)}})}
-                                            className="w-full border rounded p-1 text-sm text-green-700 font-bold" 
+                                            className="w-full border rounded p-1 text-sm text-green-700 font-bold bg-white/80" 
                                         />
                                     </div>
                                     <div className="flex-1">
@@ -277,7 +388,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                             type="number" 
                                             value={config.increase.adjustmentFixed}
                                             onChange={e => setConfig({...config, increase: {...config.increase, adjustmentFixed: parseFloat(e.target.value)}})}
-                                            className="w-full border rounded p-1 text-sm text-green-700 font-bold" 
+                                            className="w-full border rounded p-1 text-sm text-green-700 font-bold bg-white/80" 
                                         />
                                     </div>
                                 </div>
@@ -286,12 +397,12 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                         </div>
 
                         {/* Decrease Rules */}
-                        <div className="space-y-4 border-l border-r border-gray-100 px-6">
+                        <div className="space-y-4 border-l border-r border-gray-200/50 px-6">
                             <div className="flex items-center gap-2 text-red-700 font-bold border-b border-red-100 pb-2 mb-2">
                                 <TrendingDown className="w-4 h-4" /> Decrease Logic
                             </div>
 
-                            <div className="bg-gray-50 p-2 rounded text-xs text-gray-600 mb-2 flex items-center justify-between">
+                            <div className="bg-gray-50/50 p-2 rounded text-xs text-gray-600 mb-2 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Info className="w-3 h-3" /> 
                                     <span>Include "New Products"?</span>
@@ -312,7 +423,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                         type="number" 
                                         value={config.decrease.highStockWeeks}
                                         onChange={e => setConfig({...config, decrease: {...config.decrease, highStockWeeks: parseFloat(e.target.value)}})}
-                                        className="w-16 border rounded p-1.5 text-sm" 
+                                        className="w-16 border rounded p-1.5 text-sm bg-white/50" 
                                     />
                                     <span className="text-sm text-gray-600">weeks</span>
                                 </div>
@@ -327,7 +438,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                             type="number" 
                                             value={config.decrease.medStockWeeks}
                                             onChange={e => setConfig({...config, decrease: {...config.decrease, medStockWeeks: parseFloat(e.target.value)}})}
-                                            className="w-16 border rounded p-1.5 text-sm" 
+                                            className="w-16 border rounded p-1.5 text-sm bg-white/50" 
                                         />
                                         <span className="text-sm text-gray-600">weeks</span>
                                     </div>
@@ -337,14 +448,14 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                             type="number" 
                                             value={config.decrease.minMarginPercent}
                                             onChange={e => setConfig({...config, decrease: {...config.decrease, minMarginPercent: parseFloat(e.target.value)}})}
-                                            className="w-16 border rounded p-1.5 text-sm" 
+                                            className="w-16 border rounded p-1.5 text-sm bg-white/50" 
                                         />
                                         <span className="text-sm text-gray-600">%</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="bg-red-50 p-3 rounded border border-red-100">
+                            <div className="bg-red-50/50 p-3 rounded border border-red-100">
                                 <label className="text-xs font-bold text-red-800 uppercase block mb-2">Adjustment Action</label>
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm text-gray-600">Decrease by</span>
@@ -352,7 +463,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                         type="number" 
                                         value={config.decrease.adjustmentPercent}
                                         onChange={e => setConfig({...config, decrease: {...config.decrease, adjustmentPercent: parseFloat(e.target.value)}})}
-                                        className="w-20 border rounded p-1 text-sm text-red-700 font-bold" 
+                                        className="w-20 border rounded p-1 text-sm text-red-700 font-bold bg-white/80" 
                                     />
                                     <span className="text-sm text-gray-600">%</span>
                                 </div>
@@ -365,10 +476,10 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 <AlertTriangle className="w-4 h-4" /> Safety Net
                             </div>
 
-                            <div className="bg-amber-50 p-4 rounded border border-amber-100">
+                            <div className="bg-amber-50/50 p-4 rounded border border-amber-100">
                                 <label className="text-xs font-bold text-amber-800 uppercase block mb-2">Minimum Floor Constraint</label>
                                 <p className="text-xs text-amber-700 mb-3">Price must not fall below:</p>
-                                <div className="flex items-center gap-2 font-mono text-sm bg-white p-2 rounded border border-amber-200 mb-3">
+                                <div className="flex items-center gap-2 font-mono text-sm bg-white/80 p-2 rounded border border-amber-200 mb-3">
                                     (Cost + Ship) × 
                                     <span className="font-bold">1.{config.safety.minMarginPercent}</span>
                                 </div>
@@ -379,13 +490,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                         type="number" 
                                         value={config.safety.minMarginPercent}
                                         onChange={e => setConfig({...config, safety: {...config.safety, minMarginPercent: parseFloat(e.target.value)}})}
-                                        className="w-16 border rounded p-1 text-sm font-bold text-amber-700" 
+                                        className="w-16 border rounded p-1 text-sm font-bold text-amber-700 bg-white/80" 
                                     />
                                     <span className="text-xs text-amber-800">%</span>
                                 </div>
                             </div>
 
-                            <div className="mt-6 pt-4 border-t border-gray-100">
+                            <div className="mt-6 pt-4 border-t border-gray-200/50">
                                 <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Platform Exclusions</label>
                                 <p className="text-[10px] text-gray-400">
                                     Configure excluded platforms (e.g. Wayfair, FBA) in the <strong>Settings</strong> page. 
@@ -397,13 +508,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 </div>
             )}
 
-            {/* Results Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-4 border-b border-gray-100 flex items-center gap-4">
+            {/* Results Table - Glass UI */}
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+                <div className="p-4 border-b border-custom-glass flex items-center gap-4 bg-gray-50/50">
                     <input 
                         type="text" 
                         placeholder="Filter by SKU..." 
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-64"
+                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-64 bg-white/80"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                     />
@@ -413,7 +524,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
+                        <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
                             <tr>
                                 <th className="p-4">Product</th>
                                 <th className="p-4 text-right">Filtered Price</th>
@@ -429,9 +540,9 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 <th className="p-4">Reason</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-100/50">
                             {tableData.map((row) => (
-                                <tr key={row.id} className={`hover:bg-gray-50 ${row.safetyViolation ? 'bg-amber-50/30' : ''}`}>
+                                <tr key={row.id} className={`hover:bg-gray-50/50 ${row.safetyViolation ? 'bg-amber-50/30' : ''}`}>
                                     <td className="p-4">
                                         <div className="font-bold text-gray-900">{row.sku}</div>
                                         {row.isNew && (

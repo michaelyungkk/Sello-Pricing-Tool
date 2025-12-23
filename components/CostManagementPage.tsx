@@ -210,7 +210,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
     const isActive = sortConfig?.key === sortKey;
     return (
       <th 
-        className={`p-3 sticky top-0 bg-gray-50 z-10 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none ${alignRight ? 'text-right' : 'text-left'}`}
+        className={`px-2 py-3 sticky top-0 bg-gray-50/50 backdrop-blur-md z-10 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none ${alignRight ? 'text-right' : 'text-left'}`}
         onClick={() => handleSort(sortKey)}
       >
         <div className={`flex items-center gap-1 ${alignRight ? 'justify-end' : 'justify-start'}`}>
@@ -265,7 +265,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4">
+    <div className="w-full space-y-4">
        {/* Page Header */}
        <div className="flex justify-between items-center mb-2">
            <div>
@@ -275,7 +275,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
            <div className="flex items-center gap-3">
                <button 
                  onClick={() => setIsExportModalOpen(true)}
-                 className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                 className="px-4 py-2 bg-white/80 text-gray-700 border border-gray-300 rounded-lg hover:bg-white flex items-center gap-2 transition-colors"
                >
                    <Download className="w-4 h-4" />
                    Export
@@ -291,8 +291,8 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
            </div>
        </div>
 
-       {/* Toolbar Bubble */}
-       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+       {/* Toolbar Bubble (Glass) */}
+       <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-center gap-4">
            <div className="relative flex-1">
                <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
                <input 
@@ -300,7 +300,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                     placeholder="Search SKU..." 
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 bg-white/50"
                     style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                />
            </div>
@@ -328,15 +328,15 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
            )}
        </div>
 
-       {/* Table Bubble */}
-       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+       {/* Table Bubble (Glass) */}
+       <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
            <div className="overflow-x-auto max-h-[600px] overflow-y-auto relative">
                <table className="w-full text-left text-sm whitespace-nowrap">
-                   <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                   <thead className="bg-gray-50/50 text-gray-500 uppercase text-xs">
                        <tr>
                            {/* Custom Sticky Header for Product Name handled manually for sticky behavior conflict with th component */}
                            <th 
-                                className="p-3 sticky left-0 top-0 bg-gray-50 z-20 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                className="px-2 py-3 sticky left-0 top-0 bg-white/80 backdrop-blur-md z-20 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none"
                                 onClick={() => handleSort('sku')}
                            >
                                <div className="flex items-center gap-1">
@@ -353,17 +353,17 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                            <SortHeader label="Max" sortKey="ceilingPrice" alignRight />
                            
                            {/* Updated: Sticky Headers for Fee Columns */}
-                           <th className="p-3 text-right min-w-[60px] text-xs bg-gray-50 sticky top-0 z-10 shadow-sm">Sell Fee</th>
-                           <th className="p-3 text-right min-w-[60px] text-xs bg-gray-50 sticky top-0 z-10 shadow-sm">Ads</th>
-                           <th className="p-3 text-right min-w-[60px] text-xs bg-gray-50 sticky top-0 z-10 shadow-sm">Post</th>
-                           <th className="p-3 text-right min-w-[60px] text-xs bg-green-50 border-l border-green-100 text-green-700 font-semibold sticky top-0 z-10 shadow-sm" title="Income">Ex. Freight</th>
-                           <th className="p-3 text-right min-w-[60px] text-xs bg-gray-50 border-l border-gray-100 sticky top-0 z-10 shadow-sm">Sub</th>
-                           <th className="p-3 text-right min-w-[60px] text-xs bg-gray-50 sticky top-0 z-10 shadow-sm">WMS</th>
-                           <th className="p-3 text-right min-w-[60px] text-xs bg-gray-50 sticky top-0 z-10 shadow-sm">Other</th>
+                           <th className="px-2 py-3 text-right min-w-[60px] text-xs bg-gray-50/50 backdrop-blur-md sticky top-0 z-10 shadow-sm">Sell Fee</th>
+                           <th className="px-2 py-3 text-right min-w-[60px] text-xs bg-gray-50/50 backdrop-blur-md sticky top-0 z-10 shadow-sm">Ads</th>
+                           <th className="px-2 py-3 text-right min-w-[60px] text-xs bg-gray-50/50 backdrop-blur-md sticky top-0 z-10 shadow-sm">Post</th>
+                           <th className="px-2 py-3 text-right min-w-[60px] text-xs bg-green-50/50 backdrop-blur-md border-l border-green-100 text-green-700 font-semibold sticky top-0 z-10 shadow-sm" title="Income">Ex. Freight</th>
+                           <th className="px-2 py-3 text-right min-w-[60px] text-xs bg-gray-50/50 backdrop-blur-md border-l border-gray-100 sticky top-0 z-10 shadow-sm">Sub</th>
+                           <th className="px-2 py-3 text-right min-w-[60px] text-xs bg-gray-50/50 backdrop-blur-md sticky top-0 z-10 shadow-sm">WMS</th>
+                           <th className="px-2 py-3 text-right min-w-[60px] text-xs bg-gray-50/50 backdrop-blur-md sticky top-0 z-10 shadow-sm">Other</th>
                            
                            {/* Sticky Gross Margin Column (Fixed Width & Solid BG) */}
                            <th 
-                                className="p-3 text-right sticky right-[130px] top-0 w-[130px] min-w-[130px] bg-indigo-50 z-30 shadow-sm cursor-pointer hover:bg-indigo-100 transition-colors select-none text-indigo-700 border-l border-indigo-200"
+                                className="px-2 py-3 text-right sticky right-[130px] top-0 w-[130px] min-w-[130px] bg-indigo-50/80 backdrop-blur-md z-30 shadow-sm cursor-pointer hover:bg-indigo-100 transition-colors select-none text-indigo-700 border-l border-indigo-200"
                                 onClick={() => handleSort('grossMargin')}
                                 title="Gross Margin = Sell Price - COGS - WMS - Other - Est.Logistics"
                            >
@@ -377,7 +377,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
 
                            {/* Sticky Net Margin Column (Fixed Width & Solid BG) */}
                            <th 
-                                className="p-3 text-right sticky right-0 top-0 w-[130px] min-w-[130px] bg-gray-50 z-30 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none border-l border-gray-100"
+                                className="px-2 py-3 text-right sticky right-0 top-0 w-[130px] min-w-[130px] bg-white/80 backdrop-blur-md z-30 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none border-l border-gray-100"
                                 onClick={() => handleSort('margin')}
                            >
                                <div className="flex items-center justify-end gap-1">
@@ -389,7 +389,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                            </th>
                        </tr>
                    </thead>
-                   <tbody className="divide-y divide-gray-100">
+                   <tbody className="divide-y divide-gray-100/50">
                        {paginatedProducts.map(product => {
                            const edits = editedCosts[product.sku] || {};
                            
@@ -420,7 +420,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                     value={value === 0 ? '' : value}
                                     placeholder={placeholder}
                                     onChange={(e) => handleInputChange(product.sku, field, e.target.value)}
-                                    className={`w-16 text-right border rounded px-1.5 py-1 focus:ring-2 focus:ring-opacity-50 text-xs ${
+                                    className={`w-16 text-right border rounded px-1.5 py-1 focus:ring-2 focus:ring-opacity-50 text-xs bg-white/50 ${
                                         edits[field] !== undefined ? 'bg-opacity-10' : 'border-gray-200'
                                     }`}
                                     style={edits[field] !== undefined ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, '--tw-ring-color': themeColor } as React.CSSProperties : { '--tw-ring-color': themeColor } as React.CSSProperties}
@@ -455,8 +455,8 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                            };
 
                            return (
-                               <tr key={product.id} className="hover:bg-gray-50 group">
-                                   <td className="p-3 sticky left-0 bg-white group-hover:bg-gray-50 z-10 border-r border-gray-100">
+                               <tr key={product.id} className="hover:bg-gray-50/50 group">
+                                   <td className="px-2 py-2 sticky left-0 bg-white/50 backdrop-blur-sm group-hover:bg-white z-10 border-r border-gray-100">
                                        <div className="font-bold text-gray-900">{product.sku}</div>
                                        {product.subcategory && (
                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 mt-1">
@@ -464,40 +464,40 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                            </span>
                                        )}
                                    </td>
-                                   <td className="p-3 text-right text-gray-600 font-medium">
+                                   <td className="px-2 py-2 text-right text-gray-600 font-medium">
                                        £{product.currentPrice.toFixed(2)}
                                    </td>
                                    
-                                   <td className="p-3 text-right">{renderInput('costPrice', cogs)}</td>
-                                   <td className="p-3 text-right bg-blue-50/30">{renderInput('floorPrice', floor, '-')}</td>
-                                   <td className="p-3 text-right bg-blue-50/30">{renderInput('ceilingPrice', ceiling, '-')}</td>
+                                   <td className="px-2 py-2 text-right">{renderInput('costPrice', cogs)}</td>
+                                   <td className="px-2 py-2 text-right bg-blue-50/30">{renderInput('floorPrice', floor, '-')}</td>
+                                   <td className="px-2 py-2 text-right bg-blue-50/30">{renderInput('ceilingPrice', ceiling, '-')}</td>
 
                                    {/* Read Only Fees */}
-                                   <td className="p-3 text-right bg-gray-50/30">
+                                   <td className="px-2 py-2 text-right bg-gray-50/30">
                                        <FeeCell value={product.sellingFee} bounds={product.feeBounds?.sellingFee} />
                                    </td>
-                                   <td className="p-3 text-right bg-gray-50/30">
+                                   <td className="px-2 py-2 text-right bg-gray-50/30">
                                        <FeeCell value={product.adsFee} bounds={product.feeBounds?.adsFee} />
                                    </td>
-                                   <td className="p-3 text-right bg-gray-50/30">
+                                   <td className="px-2 py-2 text-right bg-gray-50/30">
                                        <FeeCell value={product.postage} bounds={product.feeBounds?.postage} />
                                    </td>
-                                   <td className="p-3 text-right bg-green-50/30 border-l border-green-100 text-green-700">
+                                   <td className="px-2 py-2 text-right bg-green-50/30 border-l border-green-100 text-green-700">
                                        <FeeCell value={product.extraFreight} bounds={product.feeBounds?.extraFreight} />
                                    </td>
-                                   <td className="p-3 text-right bg-gray-50/30 border-l border-gray-100">
+                                   <td className="px-2 py-2 text-right bg-gray-50/30 border-l border-gray-100">
                                        <FeeCell value={product.subscriptionFee} bounds={product.feeBounds?.subscriptionFee} />
                                    </td>
-                                   <td className="p-3 text-right bg-gray-50/30">
+                                   <td className="px-2 py-2 text-right bg-gray-50/30">
                                        <FeeCell value={product.wmsFee} bounds={product.feeBounds?.wmsFee} />
                                    </td>
-                                   <td className="p-3 text-right bg-gray-50/30">
+                                   <td className="px-2 py-2 text-right bg-gray-50/30">
                                        <FeeCell value={product.otherFee} bounds={product.feeBounds?.otherFee} />
                                    </td>
 
                                    {/* Gross Margin (Sticky - Solid BG) */}
                                    <td 
-                                        className="p-3 text-right sticky right-[130px] bg-indigo-50 z-20 border-l border-indigo-200 cursor-help min-w-[130px]"
+                                        className="px-2 py-2 text-right sticky right-[130px] bg-indigo-50/80 backdrop-blur-md z-20 border-l border-indigo-200 cursor-help min-w-[130px]"
                                         onMouseEnter={(e) => handleMouseEnterMargin(e, 'gross')}
                                         onMouseLeave={() => setActiveTooltip(null)}
                                    >
@@ -517,7 +517,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
 
                                    {/* Net Margin (Sticky - Solid BG) */}
                                    <td 
-                                        className="p-3 text-right sticky right-0 bg-white group-hover:bg-gray-50 z-20 border-l border-gray-100 cursor-help min-w-[130px]"
+                                        className="px-2 py-2 text-right sticky right-0 bg-white/80 backdrop-blur-md group-hover:bg-white z-20 border-l border-gray-100 cursor-help min-w-[130px]"
                                         onMouseEnter={(e) => handleMouseEnterMargin(e, 'net')}
                                         onMouseLeave={() => setActiveTooltip(null)}
                                    >
@@ -550,7 +550,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
 
            {/* Pagination Footer */}
            {filteredAndSorted.length > 0 && (
-            <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex items-center justify-between sm:px-6 rounded-b-lg mt-0">
+            <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6 rounded-b-lg mt-0">
                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                     <div>
                         <p className="text-sm text-gray-700">
@@ -600,6 +600,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
   );
 };
 
+// ... Tooltips and Export Modal remain unchanged ... (they are already portals/modals)
 const FeeTooltip = ({ data }: { data: { rect: DOMRect; data: FeeBounds } }) => {
     const { rect, data: bounds } = data;
     const style: React.CSSProperties = {
@@ -712,6 +713,13 @@ const MarginBreakdownTooltip = ({ data }: { data: { rect: DOMRect; data: Breakdo
 
 const CostExportModal = ({ products, onClose, themeColor }: { products: Product[], onClose: () => void, themeColor: string }) => {
     const handleDownload = () => {
+        // Helper to sanitize CSV fields
+        const clean = (val: any) => {
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/[\r\n]+/g, ' '); // Strip newlines
+            return `"${str.replace(/"/g, '""')}"`; // Escape quotes
+        };
+
         const headers = ['SKU', 'Product Name', 'Cost Price (COGS)', 'Min Price', 'Max Price', 'Current Price', 'Net Margin %'];
         const rows = products.map(p => {
              // Calculate Net Margin for export context
@@ -720,8 +728,8 @@ const CostExportModal = ({ products, onClose, themeColor }: { products: Product[
              const margin = p.currentPrice > 0 ? (net / p.currentPrice) * 100 : 0;
             
              return [
-                 p.sku,
-                 `"${p.name.replace(/"/g, '""')}"`,
+                 clean(p.sku),
+                 clean(p.name),
                  p.costPrice?.toFixed(2) || '',
                  p.floorPrice?.toFixed(2) || '',
                  p.ceilingPrice?.toFixed(2) || '',

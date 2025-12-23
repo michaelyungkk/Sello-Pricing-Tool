@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules } from '../types';
-import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square } from 'lucide-react';
+import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft } from 'lucide-react';
 
 interface ProductListProps {
   products: Product[];
@@ -55,22 +55,11 @@ const RecommendationTooltip = ({ product, rect }: { product: Product, rect: DOMR
                 <span className="text-right text-gray-200">{product.leadTimeDays} Days</span>
             </div>
             
-            {(product as any)._trendData && (
+            {product.returnRate !== undefined && product.returnRate > 5 && (
                 <div className="mt-2 pt-2 border-t border-gray-700">
-                    <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-500 font-bold uppercase text-[10px]">Trend (7d)</span>
-                    </div>
-                    <div className="flex justify-between text-[10px]">
-                         <span className="text-gray-400">Velocity:</span>
-                         <span className={(product as any)._trendData.velocityChange > 0 ? 'text-green-400' : (product as any)._trendData.velocityChange < 0 ? 'text-red-400' : 'text-gray-400'}>
-                            {(product as any)._trendData.velocityChange > 0 ? '+' : ''}{((product as any)._trendData.velocityChange * 100).toFixed(0)}%
-                         </span>
-                    </div>
-                    <div className="flex justify-between text-[10px]">
-                         <span className="text-gray-400">Price:</span>
-                         <span className={(product as any)._trendData.priceChange > 0 ? 'text-green-400' : (product as any)._trendData.priceChange < 0 ? 'text-red-400' : 'text-gray-400'}>
-                            {(product as any)._trendData.priceChange > 0 ? '+' : ''}{((product as any)._trendData.priceChange * 100).toFixed(0)}%
-                         </span>
+                    <div className="flex justify-between items-center text-red-400">
+                        <span className="font-bold flex items-center gap-1"><CornerDownLeft className="w-3 h-3"/> High Returns</span>
+                        <span>{product.returnRate.toFixed(1)}%</span>
                     </div>
                 </div>
             )}
@@ -388,34 +377,71 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
   };
 
   const handleExport = (platform: string = 'All') => {
-    const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Est. New Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost'];
-    const rows = filteredProducts.map(p => {
+    // Helper to sanitize CSV fields: Remove line breaks, escape quotes
+    const clean = (val: any) => {
+        if (val === null || val === undefined) return '';
+        const str = String(val).replace(/[\r\n]+/g, ' '); // Replace newlines with space
+        return `"${str.replace(/"/g, '""')}"`; // Escape double quotes and wrap
+    };
+
+    const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Est. New Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost', 'Return Rate %'];
+    const rows: (string | number)[][] = [];
+
+    filteredProducts.forEach(p => {
         const simulatedPrice = getSimulatedPrice(p);
         const exportNewPrice = simulatedPrice.toFixed(2);
 
-        let exportSku = p.sku;
-        if (platform !== 'All') {
-            const channel = p.channels.find(c => c.platform === platform);
-            if (channel && channel.skuAlias) {
-                exportSku = channel.skuAlias;
-            }
-        }
-
-        return [
-            exportSku,
-            p.sku, 
-            `"${p.name.replace(/"/g, '""')}"`,
-            p.brand || '',
-            p.category || '',
-            p.subcategory || '',
+        // Common Data Row
+        const commonData = [
+            clean(p.sku), 
+            clean(p.name),
+            clean(p.brand || ''),
+            clean(p.category || ''),
+            clean(p.subcategory || ''),
             (p.currentPrice || 0).toFixed(2),
             exportNewPrice,
             p.stockLevel,
             p.averageDailySales.toFixed(2),
             p.daysRemaining.toFixed(0),
-            p.status,
-            p.costPrice ? p.costPrice.toFixed(2) : '0.00'
+            clean(p.status),
+            p.costPrice ? p.costPrice.toFixed(2) : '0.00',
+            (p.returnRate || 0).toFixed(2)
         ];
+
+        if (platform === 'All') {
+            // Standard Export: 1 Row, using Master SKU as primary identifier
+            rows.push([clean(p.sku), ...commonData]);
+        } else {
+            // Platform Specific: Check for multiple aliases (One-to-Many)
+            // Use case-insensitive + fuzzy match to find correct channel
+            const normalize = (s: string) => s.toLowerCase().trim();
+            const targetPlatform = normalize(platform);
+            
+            // 1. Exact match
+            let channel = p.channels.find(c => normalize(c.platform) === targetPlatform);
+            
+            // 2. Fuzzy match
+            if (!channel) {
+                channel = p.channels.find(c => normalize(c.platform).includes(targetPlatform) || targetPlatform.includes(normalize(c.platform)));
+            }
+            
+            if (channel && channel.skuAlias) {
+                // Split comma-separated aliases and create a row for EACH
+                const aliases = channel.skuAlias.split(',').map(s => s.trim()).filter(Boolean);
+                
+                if (aliases.length > 0) {
+                    aliases.forEach(alias => {
+                        rows.push([clean(alias), ...commonData]);
+                    });
+                } else {
+                    // Fallback to Master SKU if alias string is empty
+                    rows.push([clean(p.sku), ...commonData]);
+                }
+            } else {
+                // Fallback to Master SKU if no channel found (or no alias)
+                rows.push([clean(p.sku), ...commonData]);
+            }
+        }
     });
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -489,7 +515,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
     const isActive = sortConfig?.key === sortKey;
     return (
       <th 
-        className={`p-2.5 font-semibold cursor-pointer select-none hover:bg-gray-100 transition-colors ${alignRight ? 'text-right' : 'text-left'} ${width || ''}`}
+        className={`p-2.5 font-semibold cursor-pointer select-none hover:bg-gray-100/50 transition-colors ${alignRight ? 'text-right' : 'text-left'} ${width || ''}`}
         onClick={() => handleSort(sortKey)}
       >
         <div className={`flex flex-col ${alignRight ? 'items-end' : 'items-start'}`}>
@@ -621,9 +647,10 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
   return (
     <div className="space-y-4">
+      {/* ... (Header and Filters unchanged) ... */}
       
-      {/* Simulation & Action Bar */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative overflow-hidden">
+      {/* Simulation & Action Bar - Updated with bg-custom-glass */}
+      <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-lg flex flex-col xl:flex-row items-center justify-between gap-4 relative overflow-hidden backdrop-blur-custom">
           
           <div className="flex items-center gap-6 w-full xl:w-auto">
               <div className="flex items-center gap-2">
@@ -658,7 +685,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                   </div>
               </div>
 
-              <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+              <div className="flex items-center gap-2 border-l border-gray-200/50 pl-4">
                   <button 
                     onClick={() => { setAllowOutOfStockAdjustment(!allowOutOfStockAdjustment); setIsConfirmed(false); }}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none`}
@@ -707,7 +734,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
           <div className="w-full xl:w-auto flex justify-end relative">
               <button 
                   onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-                  className="px-4 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 flex items-center gap-1.5 transition-colors"
+                  className="px-4 py-1.5 bg-white/50 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
               >
                   <Download className="w-3.5 h-3.5" />
                   Export List
@@ -718,12 +745,12 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
               {isExportMenuOpen && createPortal(
                   <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
                     <div 
-                        className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200"
+                        className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20"
                         onClick={e => e.stopPropagation()} // Prevent close on modal click
                     >
-                        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                        <div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50">
                             <h3 className="font-bold text-gray-900">Export Options</h3>
-                            <button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200 rounded-full transition-colors">
+                            <button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200/50 rounded-full transition-colors">
                                 <X className="w-4 h-4 text-gray-500" />
                             </button>
                         </div>
@@ -732,13 +759,13 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                             <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div>
                             <button 
                                 onClick={() => handleExport('All')}
-                                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between group rounded-lg transition-colors"
+                                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between group rounded-lg transition-colors"
                             >
                                 <span className="font-medium">Standard (Master SKUs)</span>
                                 <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" />
                             </button>
                             
-                            <div className="my-2 border-t border-gray-100"></div>
+                            <div className="my-2 border-t border-gray-100/50"></div>
                             
                             <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div>
                             <div className="max-h-60 overflow-y-auto">
@@ -746,7 +773,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                                     <button 
                                         key={platform}
                                         onClick={() => handleExport(platform)}
-                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between rounded-lg transition-colors"
+                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between rounded-lg transition-colors"
                                     >
                                         <span>{platform}</span>
                                         <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span>
@@ -764,8 +791,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
           </div>
       </div>
 
-      {/* Filters Toolbar */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
+      {/* Filters Toolbar - Updated with relative z-30 */}
+      <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg flex flex-col backdrop-blur-custom relative z-30">
+          {/* ... (Existing Filters Content) ... */}
           <div className="p-4 space-y-4">
             {/* Top Row: Search + Main Filters */}
             <div className="flex flex-col lg:flex-row gap-4">
@@ -777,7 +805,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         placeholder="Search SKU or Product Name..." 
                         value={searchQuery}
                         onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-sm"
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-sm bg-white/50 backdrop-blur-sm"
                         style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                     />
                 </div>
@@ -834,7 +862,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                         className={`px-3 py-2.5 border rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ml-auto lg:ml-0`}
                         style={{ 
-                            backgroundColor: showAdvancedFilters ? `${themeColor}10` : '#ffffff',
+                            backgroundColor: showAdvancedFilters ? `${themeColor}10` : 'rgba(255,255,255,0.5)',
                             borderColor: showAdvancedFilters ? themeColor : '#d1d5db',
                             color: showAdvancedFilters ? themeColor : '#4b5563'
                         }}
@@ -848,7 +876,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
         {/* Collapsible Advanced Filters */}
         {showAdvancedFilters && (
-            <div className="px-4 pb-4 border-t border-gray-100 bg-gray-50 rounded-b-xl animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="px-4 pb-4 border-t border-gray-100/50 bg-gray-50/50 rounded-b-xl animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-sm">
                 <div className="flex flex-col lg:flex-row gap-4 pt-4 items-start lg:items-center">
                      
                      {/* Row 2 Filters */}
@@ -898,7 +926,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         {/* Show OOS Toggle */}
                         <button 
                             onClick={() => setShowOOS(!showOOS)}
-                            className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors bg-white hover:bg-gray-50 ${showOOS ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600'}`}
+                            className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors hover:bg-gray-50 ${showOOS ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
                             style={showOOS ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
                         >
                             <span className="text-xs font-bold uppercase">Show Out of Stock</span>
@@ -908,7 +936,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         {/* Show Inactive (Ghost) Toggle */}
                         <button 
                             onClick={() => setShowInactive(!showInactive)}
-                            className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors bg-white hover:bg-gray-50 ${showInactive ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600'}`}
+                            className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors hover:bg-gray-50 ${showInactive ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
                             style={showInactive ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
                         >
                             <span className="text-xs font-bold uppercase">Show Inactive</span>
@@ -922,7 +950,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
       
       {isContextFiltered && (
           <div 
-             className="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm animate-in fade-in slide-in-from-top-2"
+             className="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm animate-in fade-in slide-in-from-top-2 backdrop-blur-sm"
              style={{ backgroundColor: `${themeColor}10`, borderColor: `${themeColor}30`, color: themeColor }}
           >
              <Info className="w-4 h-4" />
@@ -936,23 +964,24 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
           </div>
       )}
 
-      {/* Main Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      {/* Main Table - Updated with bg-custom-glass */}
+      <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100 text-xs uppercase tracking-wider text-gray-500">
+              <tr className="bg-gray-50/50 border-b border-gray-100/50 text-xs uppercase tracking-wider text-gray-500">
                 <SortHeader label="Product" sortKey="sku" />
                 <SortHeader label="Optimal Ref." sortKey="optimalPrice" alignRight width="w-[100px]" />
                 <SortHeader label="Last Week Price" sortKey="oldPrice" alignRight subLabel={dateLabels?.last} width="w-[120px]" />
                 <SortHeader label={isContextFiltered ? "Cur. Price (Filt.)" : "Current Price"} sortKey="currentPrice" alignRight subLabel={dateLabels?.current} width="w-[120px]" />
                 <SortHeader label="Est. New Price" sortKey="estNewPrice" alignRight width="w-[120px]" />
                 <SortHeader label={isContextFiltered ? "Runway (Filtered)" : "Runway"} sortKey="daysRemaining" alignRight width="min-w-[140px]" />
+                <SortHeader label="Return Rate" sortKey="returnRate" alignRight width="w-[100px]" />
                 <SortHeader label={isContextFiltered ? "Rec. (Filtered)" : "Recommendation"} sortKey="status" width="w-[150px]" />
                 <th className="p-4 font-semibold text-right w-12"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100/50">
               {paginatedProducts.map((product) => {
                 // Determine if we should be alarmed
                 const isCritical = product.status === 'Critical';
@@ -975,9 +1004,12 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
                 // --- Low Stock Tag Logic ---
                 const isLowStock = product.stockLevel <= 10 && product.stockLevel > 0;
+                
+                // --- High Returns Logic ---
+                const isHighReturns = product.returnRate !== undefined && product.returnRate > 5;
 
                 return (
-                  <tr key={product.id} className="hover:bg-gray-50 transition-colors group text-sm">
+                  <tr key={product.id} className="hover:bg-gray-50/50 transition-colors group text-sm">
                     <td className="p-2.5">
                       <div>
                         <div className="font-bold text-gray-900 font-mono">{product.sku}</div>
@@ -1070,6 +1102,14 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                         </div>
                       </div>
                     </td>
+                    <td className="p-2.5 text-right">
+                        {product.returnRate !== undefined ? (
+                            <div className={`flex items-center justify-end gap-1 font-medium ${isHighReturns ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
+                                {isHighReturns && <CornerDownLeft className="w-3 h-3" />}
+                                {product.returnRate.toFixed(1)}%
+                            </div>
+                        ) : <span className="text-gray-300">-</span>}
+                    </td>
                     <td 
                         className="p-2.5 cursor-help"
                         onMouseEnter={(e) => handleMouseEnter(product.id, e)}
@@ -1137,7 +1177,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         
         {/* Pagination Footer */}
         {filteredProducts.length > 0 && (
-            <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex items-center justify-between sm:px-6">
+            <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6">
                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                     <div className="flex items-center gap-4">
                         <p className="text-sm text-gray-700">
