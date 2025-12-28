@@ -35,22 +35,23 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
-  
+
   // Aggregated Data
   channels: ChannelData[]; // List of where this product is sold and who manages it
   currentPrice: number; // Weighted average price or master price
+  caPrice?: number; // Channel Advisor reference price (used as reference regardless of platform)
   oldPrice?: number; // Previous price for tracking changes
   platform?: string; // Optional: Primary platform for analysis context
-  
+
   // Stock & Velocity
   stockLevel: number; // Total stock across warehouses (On Hand)
   incomingStock?: number; // Total Incoming Stock (On Water/Booking)
   shipments?: ShipmentDetail[]; // List of active shipments
-  
+
   averageDailySales: number; // Current Velocity (Week 0)
   previousDailySales?: number; // Previous Velocity (Week 1) for trend analysis
   leadTimeDays: number;
-  
+
   // Costs & Fees
   costPrice?: number; // Cost of Goods Sold (From Inventory Report)
   sellingFee?: number;
@@ -60,7 +61,7 @@ export interface Product {
   otherFee?: number;
   subscriptionFee?: number;
   wmsFee?: number;
-  
+
   // Fee Statistics (Min/Max from import)
   feeBounds?: {
     sellingFee?: FeeBounds;
@@ -71,32 +72,32 @@ export interface Product {
     subscriptionFee?: FeeBounds;
     wmsFee?: FeeBounds;
   };
-  
+
   // Strategic Bounds & Intelligence
   floorPrice?: number;   // Minimum allowable price
   ceilingPrice?: number; // Maximum allowable price
   optimalPrice?: number; // Calculated "Sweet Spot" based on history
-  
+
   // Analysis Fields (Populated during import)
   status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock';
   recommendation: string;
   daysRemaining: number;
-  
+
   category: string; // Main Category
   subcategory?: string; // Subcategory
   brand?: string; // Brand
   inventoryStatus?: string; // e.g. "New Product", "Active", "Clearance" from ERP
-  
+
   // Dimensions (Stored from ERP)
   cartonDimensions?: {
-      length: number;
-      width: number;
-      height: number;
-      weight: number;
+    length: number;
+    width: number;
+    height: number;
+    weight: number;
   };
 
   lastUpdated: string;
-  
+
   // Dynamic Metrics (Calculated on the fly)
   returnRate?: number; // % of units returned vs sold
   totalRefunded?: number; // Total value refunded in current period
@@ -109,7 +110,9 @@ export interface PriceLog {
   price: number;
   velocity: number; // Sales per day at this price
   margin: number; // Net % at this price
+  profit?: number; // Absolute profit value
   platform?: string; // Platform specific tag (optional to support legacy data)
+  orderId?: string; // Optional: Unique Order ID for transaction-level tracking
 }
 
 export interface HistoryPayload {
@@ -118,7 +121,9 @@ export interface HistoryPayload {
   price: number;
   velocity: number;
   margin?: number;
+  profit?: number;
   platform?: string;
+  orderId?: string;
 }
 
 export interface ShipmentLog {
@@ -160,23 +165,23 @@ export type PricingRules = Record<Platform, PlatformConfig>;
 // --- STRATEGY ENGINE TYPES ---
 
 export interface StrategyConfig {
-    increase: {
-        minRunwayWeeks: number; // e.g. 6
-        minStock: number; // e.g. 0
-        minVelocity7Days: number; // e.g. 2 units
-        adjustmentPercent: number; // e.g. 5
-        adjustmentFixed: number; // e.g. 1 (GBP)
-    };
-    decrease: {
-        highStockWeeks: number; // e.g. 48
-        medStockWeeks: number; // e.g. 24
-        minMarginPercent: number; // e.g. 25
-        adjustmentPercent: number; // e.g. 5
-        includeNewProducts?: boolean; // Override to include new products in decrease logic
-    };
-    safety: {
-        minMarginPercent: number; // e.g. 10 (Cost * 1.10)
-    };
+  increase: {
+    minRunwayWeeks: number; // e.g. 6
+    minStock: number; // e.g. 0
+    minVelocity7Days: number; // e.g. 2 units
+    adjustmentPercent: number; // e.g. 5
+    adjustmentFixed: number; // e.g. 1 (GBP)
+  };
+  decrease: {
+    highStockWeeks: number; // e.g. 48
+    medStockWeeks: number; // e.g. 24
+    minMarginPercent: number; // e.g. 25
+    adjustmentPercent: number; // e.g. 5
+    includeNewProducts?: boolean; // Override to include new products in decrease logic
+  };
+  safety: {
+    minMarginPercent: number; // e.g. 10 (Cost * 1.10)
+  };
 }
 
 // --- LOGISTICS MODULE TYPES ---
@@ -224,7 +229,7 @@ export interface UserProfile {
   backgroundImage: string; // URL or 'none'
   backgroundColor: string; // Hex fallback
   textColor?: string; // Optional: Auto-detected optimal text color
-  
+
   // Liquid Glass Aesthetics
   glassMode?: 'light' | 'dark';
   glassOpacity?: number; // 0-100

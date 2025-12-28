@@ -2,59 +2,59 @@
 import { Product, PriceLog, PromotionEvent, PricingRules, LogisticsRule, StrategyConfig } from './types';
 
 export const DEFAULT_PRICING_RULES: PricingRules = {
-  'Amazon(UK) FBA': { markup: 0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900' },
+  'Amazon(UK) FBA': { markup: 0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900', isExcluded: true },
   'Amazon(UK) FBM': { markup: 0, commission: 15.0, manager: 'Bella Qin', color: '#E68A00' },
   'eBay': { markup: 0, commission: 10.0, manager: 'Sophie Nie', color: '#E53238' },
   'The Range': { markup: 0, commission: 12.0, manager: 'Queenie Wong', color: '#2C3E50' },
   'ManoMano': { markup: 0, commission: 18.0, manager: 'Queenie Wong', color: '#00D09C' },
-  'Wayfair': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#7F187F' },
+  'Wayfair': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#7F187F', isExcluded: true },
   'Onbuy': { markup: 0, commission: 9.0, manager: 'Queenie Wong', color: '#3B82F6' },
-  'Groupon(UK)': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#53A318' },
-  'Temu(UK)': { markup: 0, commission: 5.0, manager: 'Elaine Wang', color: '#FB7701' },
+  'Groupon(UK)': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#53A318', isExcluded: true },
+  'Temu(UK)': { markup: 0, commission: 5.0, manager: 'Elaine Wang', color: '#FB7701', isExcluded: true },
   'Tesco': { markup: 0, commission: 10.0, manager: 'Queenie Wong', color: '#00539F' },
   'Debenhams': { markup: 0, commission: 26.0, manager: 'Queenie Wong', color: '#1B4D3E' }
 };
 
 export const DEFAULT_LOGISTICS_RULES: LogisticsRule[] = [
-    { id: 'evri', name: 'EVRI', carrier: 'Evri', price: 0 },
-    { id: 'its-dx-z', name: 'ITS-DX-Z', carrier: 'DX', price: 0 },
-    { id: 'its-dx', name: 'ITS-DX', carrier: 'DX', price: 0 },
-    { id: 'its-rmt48', name: 'ITS-RMT48', carrier: 'Royal Mail', price: 0 },
-    { id: 'xdp-econ', name: 'XDP-ECON', carrier: 'XDP', price: 0 },
-    { id: 'xdp-econ-z', name: 'XDP-ECON-Z', carrier: 'XDP', price: 0 },
-    { id: 'yodel-48-mini-ni', name: 'YODEL-48-MINI-NI', carrier: 'Yodel', price: 0 },
-    { id: 'fba', name: 'FBA', carrier: 'Amazon', price: 0 },
-    { id: 'na', name: 'NA', carrier: 'Other', price: 0 },
-    { id: 'yodel-48-mini-uk', name: 'YODEL-48-MINI-UK', carrier: 'Yodel', price: 0 },
-    { id: 'its-rmt48-z', name: 'ITS-RMT48-Z', carrier: 'Royal Mail', price: 0 },
-    { id: 'its', name: 'ITS', carrier: 'ITS', price: 0 },
-    { id: 'its-dpd', name: 'ITS-DPD', carrier: 'DPD', price: 0 },
-    { id: 'pickup', name: 'PICKUP', carrier: 'Collection', price: 0 },
-    { id: 'xdp-2man', name: 'XDP-2MAN', carrier: 'XDP', price: 0 },
-    { id: 'yodel-48-lrg-uk', name: 'YODEL-48-LRG-UK', carrier: 'Yodel', price: 0 },
-    { id: 'yodel-48-lrg-uk-z', name: 'YODEL-48-LRG-UK-Z', carrier: 'Yodel', price: 0 },
-    { id: 'yodel-48-med-ni', name: 'YODEL-48-MED-NI', carrier: 'Yodel', price: 0 },
-    { id: 'yodel-48-med-uk', name: 'YODEL-48-MED-UK', carrier: 'Yodel', price: 0 },
+  { id: 'evri', name: 'EVRI', carrier: 'Evri', price: 0 },
+  { id: 'its-dx-z', name: 'ITS-DX-Z', carrier: 'DX', price: 0 },
+  { id: 'its-dx', name: 'ITS-DX', carrier: 'DX', price: 0 },
+  { id: 'its-rmt48', name: 'ITS-RMT48', carrier: 'Royal Mail', price: 0 },
+  { id: 'xdp-econ', name: 'XDP-ECON', carrier: 'XDP', price: 0 },
+  { id: 'xdp-econ-z', name: 'XDP-ECON-Z', carrier: 'XDP', price: 0 },
+  { id: 'yodel-48-mini-ni', name: 'YODEL-48-MINI-NI', carrier: 'Yodel', price: 0 },
+  { id: 'fba', name: 'FBA', carrier: 'Amazon', price: 0 },
+  { id: 'na', name: 'NA', carrier: 'Other', price: 0 },
+  { id: 'yodel-48-mini-uk', name: 'YODEL-48-MINI-UK', carrier: 'Yodel', price: 0 },
+  { id: 'its-rmt48-z', name: 'ITS-RMT48-Z', carrier: 'Royal Mail', price: 0 },
+  { id: 'its', name: 'ITS', carrier: 'ITS', price: 0 },
+  { id: 'its-dpd', name: 'ITS-DPD', carrier: 'DPD', price: 0 },
+  { id: 'pickup', name: 'PICKUP', carrier: 'Collection', price: 0 },
+  { id: 'xdp-2man', name: 'XDP-2MAN', carrier: 'XDP', price: 0 },
+  { id: 'yodel-48-lrg-uk', name: 'YODEL-48-LRG-UK', carrier: 'Yodel', price: 0 },
+  { id: 'yodel-48-lrg-uk-z', name: 'YODEL-48-LRG-UK-Z', carrier: 'Yodel', price: 0 },
+  { id: 'yodel-48-med-ni', name: 'YODEL-48-MED-NI', carrier: 'Yodel', price: 0 },
+  { id: 'yodel-48-med-uk', name: 'YODEL-48-MED-UK', carrier: 'Yodel', price: 0 },
 ];
 
 export const DEFAULT_STRATEGY_RULES: StrategyConfig = {
-    increase: {
-        minRunwayWeeks: 6,
-        minStock: 0,
-        minVelocity7Days: 2,
-        adjustmentPercent: 5,
-        adjustmentFixed: 1
-    },
-    decrease: {
-        highStockWeeks: 48,
-        medStockWeeks: 24,
-        minMarginPercent: 25,
-        adjustmentPercent: 5,
-        includeNewProducts: false
-    },
-    safety: {
-        minMarginPercent: 10
-    }
+  increase: {
+    minRunwayWeeks: 6,
+    minStock: 0,
+    minVelocity7Days: 2,
+    adjustmentPercent: 5,
+    adjustmentFixed: 1
+  },
+  decrease: {
+    highStockWeeks: 48,
+    medStockWeeks: 24,
+    minMarginPercent: 25,
+    adjustmentPercent: 5,
+    includeNewProducts: false
+  },
+  safety: {
+    minMarginPercent: 10
+  }
 };
 
 export const INITIAL_PRODUCTS: Product[] = [
@@ -172,185 +172,185 @@ export const MOCK_CHART_DATA = [
 ];
 
 export const MOCK_PRICE_HISTORY: PriceLog[] = [
-    // SKU 001: Dog Kennels (Current: 39.15, Vel: 5.2, Profit/Unit approx 10) -> Daily ~52
-    { id: 'h1', sku: 'PT1337-75-UK', date: '2024-11-20', price: 39.15, velocity: 5.2, margin: 35 },
-    { id: 'h2', sku: 'PT1337-75-UK', date: '2024-11-13', price: 42.50, velocity: 3.1, margin: 40 }, // High price, low vol -> Daily Profit lower
-    { id: 'h3', sku: 'PT1337-75-UK', date: '2024-11-06', price: 36.00, velocity: 7.8, margin: 25 }, // Low price, high vol -> Daily Profit might be higher? 36*0.25=9 * 7.8 = 70. Winner.
-    
-    // SKU 002: Pet Bed (Current: 11.65, Vel: 18.5)
-    { id: 'h4', sku: 'PT1298-GY-60-UK', date: '2024-11-20', price: 11.65, velocity: 18.5, margin: 45 },
-    { id: 'h5', sku: 'PT1298-GY-60-UK', date: '2024-11-13', price: 13.00, velocity: 12.0, margin: 50 },
-    { id: 'h6', sku: 'PT1298-GY-60-UK', date: '2024-11-06', price: 10.50, velocity: 22.0, margin: 35 },
+  // SKU 001: Dog Kennels (Current: 39.15, Vel: 5.2, Profit/Unit approx 10) -> Daily ~52
+  { id: 'h1', sku: 'PT1337-75-UK', date: '2025-11-20', price: 39.15, velocity: 5.2, margin: 35 },
+  { id: 'h2', sku: 'PT1337-75-UK', date: '2025-11-13', price: 42.50, velocity: 3.1, margin: 40 }, // High price, low vol -> Daily Profit lower
+  { id: 'h3', sku: 'PT1337-75-UK', date: '2025-11-06', price: 36.00, velocity: 7.8, margin: 25 }, // Low price, high vol -> Daily Profit might be higher? 36*0.25=9 * 7.8 = 70. Winner.
 
-    // SKU 003: Carriers (Overstock, Needs lower price)
-    { id: 'h7', sku: 'PT1343-GY-UK', date: '2024-11-20', price: 18.32, velocity: 16.6, margin: 40 },
-    { id: 'h8', sku: 'PT1343-GY-UK', date: '2024-11-13', price: 21.00, velocity: 8.0, margin: 48 },
-    { id: 'h9', sku: 'PT1343-GY-UK', date: '2024-11-06', price: 17.00, velocity: 20.0, margin: 35 },
+  // SKU 002: Pet Bed (Current: 11.65, Vel: 18.5)
+  { id: 'h4', sku: 'PT1298-GY-60-UK', date: '2025-11-20', price: 11.65, velocity: 18.5, margin: 45 },
+  { id: 'h5', sku: 'PT1298-GY-60-UK', date: '2025-11-13', price: 13.00, velocity: 12.0, margin: 50 },
+  { id: 'h6', sku: 'PT1298-GY-60-UK', date: '2025-11-06', price: 10.50, velocity: 22.0, margin: 35 },
 
-    // SKU 005: Fridge (Critical, Needs higher price)
-    { id: 'h10', sku: 'FRDG1007-5L-UK', date: '2024-11-20', price: 24.99, velocity: 5.0, margin: 30 },
-    { id: 'h11', sku: 'FRDG1007-5L-UK', date: '2024-11-13', price: 28.00, velocity: 3.0, margin: 38 },
-    { id: 'h12', sku: 'FRDG1007-5L-UK', date: '2024-11-06', price: 22.00, velocity: 8.0, margin: 20 },
+  // SKU 003: Carriers (Overstock, Needs lower price)
+  { id: 'h7', sku: 'PT1343-GY-UK', date: '2025-11-20', price: 18.32, velocity: 16.6, margin: 40 },
+  { id: 'h8', sku: 'PT1343-GY-UK', date: '2025-11-13', price: 21.00, velocity: 8.0, margin: 48 },
+  { id: 'h9', sku: 'PT1343-GY-UK', date: '2025-11-06', price: 17.00, velocity: 20.0, margin: 35 },
+
+  // SKU 005: Fridge (Critical, Needs higher price)
+  { id: 'h10', sku: 'FRDG1007-5L-UK', date: '2025-11-20', price: 24.99, velocity: 5.0, margin: 30 },
+  { id: 'h11', sku: 'FRDG1007-5L-UK', date: '2025-11-13', price: 28.00, velocity: 3.0, margin: 38 },
+  { id: 'h12', sku: 'FRDG1007-5L-UK', date: '2025-11-06', price: 22.00, velocity: 8.0, margin: 20 },
 ];
 
 export const MOCK_PROMOTIONS: PromotionEvent[] = [
-    {
-        id: 'promo-001',
-        platform: 'The Range',
-        name: 'BFCM Phase 2 & 3',
-        startDate: '2025-11-13',
-        endDate: '2025-12-10',
-        submissionDeadline: '2025-11-07',
-        status: 'ACTIVE',
-        items: []
-    },
-    {
-        id: 'promo-002',
-        platform: 'Wayfair',
-        name: 'UK/IE Deal of the Day - December 9 2025',
-        startDate: '2025-12-09',
-        endDate: '2025-12-10',
-        submissionDeadline: '2025-12-03',
-        status: 'ACTIVE',
-        items: []
-    },
-    {
-        id: 'promo-003',
-        platform: 'Wayfair',
-        name: 'UK/IE Deal of the Day - December 10 2025',
-        startDate: '2025-12-10',
-        endDate: '2025-12-11',
-        submissionDeadline: '2025-12-04',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-004',
-        platform: 'The Range',
-        name: 'Winter Sale 2025',
-        startDate: '2025-12-11',
-        endDate: '2026-01-28',
-        submissionDeadline: '2025-12-05',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-005',
-        platform: 'Wayfair',
-        name: 'UK/IE Deal of the Day - December 11 2025',
-        startDate: '2025-12-11',
-        endDate: '2025-12-12',
-        submissionDeadline: '2025-12-04',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-006',
-        platform: 'The Range',
-        name: 'GREAT BIG FURNITURE EVENT! - WEEK 8',
-        startDate: '2025-12-11',
-        endDate: '2025-12-24',
-        submissionDeadline: '2025-12-08',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-007',
-        platform: 'Debenhams',
-        name: 'Christmas & Boxing Day Offer',
-        startDate: '2025-12-11',
-        endDate: '2026-01-06',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-008',
-        platform: 'Wayfair',
-        name: 'UK/IE Deal of the Day - December 12 2025',
-        startDate: '2025-12-12',
-        endDate: '2025-12-13',
-        submissionDeadline: '2025-12-04',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-009',
-        platform: 'Tesco',
-        name: 'January sale campaign',
-        startDate: '2025-12-23',
-        endDate: '2026-02-03',
-        submissionDeadline: '2025-12-03',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-010',
-        platform: 'The Range',
-        name: 'Healthy Living Event 2025',
-        startDate: '2025-12-24',
-        endDate: '2026-01-28',
-        submissionDeadline: '2025-12-10',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-011',
-        platform: 'The Range',
-        name: 'Cleaning Essentials',
-        startDate: '2025-12-25',
-        endDate: '2026-01-28',
-        submissionDeadline: '2025-12-15',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-012',
-        platform: 'ManoMano',
-        name: 'Winter Sales',
-        startDate: '2026-01-07',
-        endDate: '2026-02-03',
-        submissionDeadline: '2026-01-07',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-013',
-        platform: 'Tesco',
-        name: "Valentine's Day",
-        startDate: '2026-01-22',
-        endDate: '2026-02-14',
-        submissionDeadline: '2025-12-08',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-014',
-        platform: 'Wayfair',
-        name: 'UK/IE Winter Clearance 2026',
-        startDate: '2026-01-26',
-        endDate: '2026-02-03',
-        submissionDeadline: '2025-12-12',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-015',
-        platform: 'Wayfair',
-        name: 'UK/IE Weekend Sale - February 2026',
-        startDate: '2026-02-12',
-        endDate: '2026-02-17',
-        submissionDeadline: '2025-12-12',
-        status: 'UPCOMING',
-        items: []
-    },
-    {
-        id: 'promo-016',
-        platform: 'Wayfair',
-        name: 'UK/IE Boxing Day Sale (UK) / Winter Sale (IE) 2025',
-        startDate: '2025-12-23',
-        endDate: '2025-12-31',
-        submissionDeadline: '2025-12-12',
-        status: 'UPCOMING',
-        items: []
-    }
+  {
+    id: 'promo-001',
+    platform: 'The Range',
+    name: 'BFCM Phase 2 & 3',
+    startDate: '2025-11-13',
+    endDate: '2025-12-10',
+    submissionDeadline: '2025-11-07',
+    status: 'ACTIVE',
+    items: []
+  },
+  {
+    id: 'promo-002',
+    platform: 'Wayfair',
+    name: 'UK/IE Deal of the Day - December 9 2025',
+    startDate: '2025-12-09',
+    endDate: '2025-12-10',
+    submissionDeadline: '2025-12-03',
+    status: 'ACTIVE',
+    items: []
+  },
+  {
+    id: 'promo-003',
+    platform: 'Wayfair',
+    name: 'UK/IE Deal of the Day - December 10 2025',
+    startDate: '2025-12-10',
+    endDate: '2025-12-11',
+    submissionDeadline: '2025-12-04',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-004',
+    platform: 'The Range',
+    name: 'Winter Sale 2025',
+    startDate: '2025-12-11',
+    endDate: '2026-01-28',
+    submissionDeadline: '2025-12-05',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-005',
+    platform: 'Wayfair',
+    name: 'UK/IE Deal of the Day - December 11 2025',
+    startDate: '2025-12-11',
+    endDate: '2025-12-12',
+    submissionDeadline: '2025-12-04',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-006',
+    platform: 'The Range',
+    name: 'GREAT BIG FURNITURE EVENT! - WEEK 8',
+    startDate: '2025-12-11',
+    endDate: '2025-12-24',
+    submissionDeadline: '2025-12-08',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-007',
+    platform: 'Debenhams',
+    name: 'Christmas & Boxing Day Offer',
+    startDate: '2025-12-11',
+    endDate: '2026-01-06',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-008',
+    platform: 'Wayfair',
+    name: 'UK/IE Deal of the Day - December 12 2025',
+    startDate: '2025-12-12',
+    endDate: '2025-12-13',
+    submissionDeadline: '2025-12-04',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-009',
+    platform: 'Tesco',
+    name: 'January sale campaign',
+    startDate: '2025-12-23',
+    endDate: '2026-02-03',
+    submissionDeadline: '2025-12-03',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-010',
+    platform: 'The Range',
+    name: 'Healthy Living Event 2025',
+    startDate: '2025-12-24',
+    endDate: '2026-01-28',
+    submissionDeadline: '2025-12-10',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-011',
+    platform: 'The Range',
+    name: 'Cleaning Essentials',
+    startDate: '2025-12-25',
+    endDate: '2026-01-28',
+    submissionDeadline: '2025-12-15',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-012',
+    platform: 'ManoMano',
+    name: 'Winter Sales',
+    startDate: '2026-01-07',
+    endDate: '2026-02-03',
+    submissionDeadline: '2026-01-07',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-013',
+    platform: 'Tesco',
+    name: "Valentine's Day",
+    startDate: '2026-01-22',
+    endDate: '2026-02-14',
+    submissionDeadline: '2025-12-08',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-014',
+    platform: 'Wayfair',
+    name: 'UK/IE Winter Clearance 2026',
+    startDate: '2026-01-26',
+    endDate: '2026-02-03',
+    submissionDeadline: '2025-12-12',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-015',
+    platform: 'Wayfair',
+    name: 'UK/IE Weekend Sale - February 2026',
+    startDate: '2026-02-12',
+    endDate: '2026-02-17',
+    submissionDeadline: '2025-12-12',
+    status: 'UPCOMING',
+    items: []
+  },
+  {
+    id: 'promo-016',
+    platform: 'Wayfair',
+    name: 'UK/IE Boxing Day Sale (UK) / Winter Sale (IE) 2025',
+    startDate: '2025-12-23',
+    endDate: '2025-12-31',
+    submissionDeadline: '2025-12-12',
+    status: 'UPCOMING',
+    items: []
+  }
 ];

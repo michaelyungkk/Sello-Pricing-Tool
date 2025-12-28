@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone, Clock, Activity, Layers, Eye, ShieldAlert, Package, RotateCcw, CornerDownLeft, Star } from 'lucide-react';
+import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone, Clock, Activity, Layers, Eye, ShieldAlert, Package, RotateCcw, CornerDownLeft } from 'lucide-react';
 
 interface DefinitionsPageProps {
     headerStyle?: React.CSSProperties;
@@ -40,33 +40,6 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
         {activeTab === 'operational' ? (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 
-                {/* Optimal Pricing Section - NEW */}
-                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-yellow-50 rounded-lg text-yellow-600">
-                            <Star className="w-5 h-5" />
-                        </div>
-                        <h3 className="text-lg font-bold text-gray-900">Optimal Pricing Algorithm</h3>
-                    </div>
-                    <div className="prose prose-sm text-gray-600 max-w-none">
-                        <p>
-                            The system analyzes your entire <strong>Price History</strong> to determine a "Sweet Spot" for every SKU. This is not a prediction, but a historical fact-check.
-                        </p>
-                        <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100 mt-2">
-                            <h4 className="font-bold text-gray-900 text-xs uppercase mb-2">Calculation Method</h4>
-                            <ol className="list-decimal pl-4 space-y-1 text-xs">
-                                <li>We aggregate every price point a product has ever been sold at.</li>
-                                <li>For each price point, we calculate the <strong>Daily Profit</strong> generated (Unit Margin × Average Daily Velocity at that price).</li>
-                                <li>The price point that historically delivered the <strong>Highest Daily Profit</strong> is flagged as the "Optimal Price".</li>
-                            </ol>
-                            <div className="mt-3 flex items-center gap-2 text-xs text-indigo-600 font-medium">
-                                <Star className="w-3 h-3" />
-                                <span>Look for the Star icon in the Product List to see this reference price.</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Inventory Health Section */}
                 <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
                     <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">

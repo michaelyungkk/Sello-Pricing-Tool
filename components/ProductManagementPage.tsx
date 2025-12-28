@@ -6,203 +6,205 @@ import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, B
 import ShipmentUploadModal from './ShipmentUploadModal';
 
 interface ProductManagementPageProps {
-  products: Product[];
-  pricingRules: PricingRules;
-  promotions?: PromotionEvent[]; 
-  priceHistory?: PriceLog[];
-  onOpenMappingModal: () => void;
-  onUpdateProduct?: (product: Product) => void;
-  themeColor: string;
-  headerStyle: React.CSSProperties;
+    products: Product[];
+    pricingRules: PricingRules;
+    promotions?: PromotionEvent[];
+    priceHistoryMap?: Map<string, PriceLog[]>;
+    onOpenMappingModal: () => void;
+    onUpdateProduct?: (product: Product) => void;
+    themeColor: string;
+    headerStyle: React.CSSProperties;
 }
 
 type Tab = 'dashboard' | 'catalog' | 'pricing' | 'shipments';
 type DateRange = 'yesterday' | '7d' | '30d' | 'custom';
 
-const ProductManagementPage: React.FC<ProductManagementPageProps> = ({ 
-  products, 
-  pricingRules, 
-  promotions = [], 
-  priceHistory = [],
-  onOpenMappingModal, 
-  onUpdateProduct,
-  themeColor, 
-  headerStyle 
+const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
+    products,
+    pricingRules,
+    promotions = [],
+    priceHistoryMap = new Map(),
+    onOpenMappingModal,
+    onUpdateProduct,
+    themeColor,
+    headerStyle
 }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
-  const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+    const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
+    const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
 
-  const handleShipmentUpdate = (updates: { sku: string, shipments: ShipmentDetail[] }[]) => {
-      const updateMap = new Map(updates.map(u => [u.sku, u.shipments]));
+    const handleShipmentUpdate = (updates: { sku: string, shipments: ShipmentDetail[] }[]) => {
+        const updateMap = new Map(updates.map(u => [u.sku, u.shipments]));
 
-      products.forEach(p => {
-          if (updateMap.has(p.sku)) {
-              const newShipmentsData = updateMap.get(p.sku)!;
-              
-              let currentShipments = p.shipments ? [...p.shipments] : [];
-              
-              newShipmentsData.forEach(newS => {
-                  const idx = currentShipments.findIndex(s => s.containerId === newS.containerId);
-                  if (idx >= 0) {
-                      currentShipments[idx] = newS;
-                  } else {
-                      currentShipments.push(newS);
-                  }
-              });
+        products.forEach(p => {
+            if (updateMap.has(p.sku)) {
+                const newShipmentsData = updateMap.get(p.sku)!;
 
-              // Recalculate Incoming Stock
-              const incoming = currentShipments.reduce((sum, s) => sum + s.quantity, 0);
-              
-              // Recalculate Lead Time based on EARLIEST incoming ETA
-              const now = new Date().toISOString().split('T')[0];
-              const futureShipments = currentShipments
-                  .filter(s => s.eta && s.eta >= now)
-                  .sort((a, b) => (a.eta! > b.eta! ? 1 : -1));
-              
-              let newLeadTime = p.leadTimeDays;
-              if (futureShipments.length > 0 && futureShipments[0].eta) {
-                  const arrival = new Date(futureShipments[0].eta);
-                  const diffTime = Math.abs(arrival.getTime() - new Date().getTime());
-                  newLeadTime = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-              }
+                let currentShipments = p.shipments ? [...p.shipments] : [];
 
-              if (onUpdateProduct) {
-                  onUpdateProduct({
-                      ...p,
-                      shipments: currentShipments,
-                      incomingStock: incoming,
-                      leadTimeDays: newLeadTime
-                  });
-              }
-          }
-      });
-      setIsShipmentModalOpen(false);
-  };
+                newShipmentsData.forEach(newS => {
+                    const idx = currentShipments.findIndex(s => s.containerId === newS.containerId);
+                    if (idx >= 0) {
+                        currentShipments[idx] = newS;
+                    } else {
+                        currentShipments.push(newS);
+                    }
+                });
 
-  return (
-    <div className="max-w-full mx-auto space-y-6 pb-10 h-full flex flex-col">
-      {/* Header Section */}
-      <div>
-          <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Product Management</h2>
-          <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
-              Manage Master SKUs, aliases, and pricing consistency.
-          </p>
-      </div>
+                // Recalculate Incoming Stock
+                const incoming = currentShipments.reduce((sum, s) => sum + s.quantity, 0);
 
-      {/* Navigation Tabs (Strict Match with Definitions Page) */}
-      <div className="flex justify-between items-end gap-4">
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
-              <button 
-                onClick={() => setActiveTab('dashboard')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Overview
-              </button>
-              
-              <button 
-                onClick={() => setActiveTab('catalog')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'catalog' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                  <List className="w-4 h-4" />
-                  Master Catalogue
-              </button>
+                // Recalculate Lead Time based on EARLIEST incoming ETA
+                const now = new Date().toISOString().split('T')[0];
+                const futureShipments = currentShipments
+                    .filter(s => s.eta && s.eta >= now)
+                    .sort((a, b) => (a.eta! > b.eta! ? 1 : -1));
 
-              <button 
-                onClick={() => setActiveTab('shipments')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'shipments' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                  <Ship className="w-4 h-4" />
-                  Shipments
-              </button>
+                let newLeadTime = p.leadTimeDays;
+                if (futureShipments.length > 0 && futureShipments[0].eta) {
+                    const arrival = new Date(futureShipments[0].eta);
+                    const diffTime = Math.abs(arrival.getTime() - new Date().getTime());
+                    newLeadTime = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                }
 
-              <button 
-                onClick={() => setActiveTab('pricing')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'pricing' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                  <DollarSign className="w-4 h-4" />
-                  Price Matrix
-              </button>
-          </div>
+                if (onUpdateProduct) {
+                    onUpdateProduct({
+                        ...p,
+                        shipments: currentShipments,
+                        incomingStock: incoming,
+                        leadTimeDays: newLeadTime
+                    });
+                }
+            }
+        });
+        setIsShipmentModalOpen(false);
+    };
 
-          <div className="mb-1">
-              <button
-                  onClick={() => setIsShipmentModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium shadow-md hover:opacity-90 transition-all"
-                  style={{ backgroundColor: themeColor }}
-              >
-                  <Ship className="w-4 h-4" />
-                  Import Shipment Schedule
-              </button>
-          </div>
-      </div>
+    return (
+        <div className="max-w-full mx-auto space-y-6 pb-10 h-full flex flex-col">
+            {/* Header Section */}
+            <div>
+                <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Product Management</h2>
+                <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
+                    Manage Master SKUs, aliases, and pricing consistency.
+                </p>
+            </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 min-h-0 relative">
-          {activeTab === 'dashboard' && (
-              <DashboardView products={products} priceHistory={priceHistory} themeColor={themeColor} />
-          )}
+            {/* Navigation Tabs (Strict Match with Definitions Page) */}
+            <div className="flex justify-between items-end gap-4">
+                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
+                    <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <LayoutDashboard className="w-4 h-4" />
+                        Overview
+                    </button>
 
-          {activeTab === 'catalog' && (
-              <MasterCatalogView 
-                  products={products} 
-                  onEditAliases={(p: Product) => setSelectedProductForDrawer(p)} 
-                  onOpenMappingModal={onOpenMappingModal}
-                  themeColor={themeColor} 
-              />
-          )}
+                    <button
+                        onClick={() => setActiveTab('catalog')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'catalog' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <List className="w-4 h-4" />
+                        Master Catalogue
+                    </button>
 
-          {activeTab === 'shipments' && (
-              <ShipmentsView products={products} themeColor={themeColor} />
-          )}
+                    <button
+                        onClick={() => setActiveTab('shipments')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'shipments' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Ship className="w-4 h-4" />
+                        Shipments
+                    </button>
 
-          {activeTab === 'pricing' && (
-              <PriceMatrixView 
-                  products={products} 
-                  pricingRules={pricingRules} 
-                  promotions={promotions}
-                  themeColor={themeColor} 
-              />
-          )}
-      </div>
+                    <button
+                        onClick={() => setActiveTab('pricing')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'pricing' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <DollarSign className="w-4 h-4" />
+                        Price Matrix
+                    </button>
+                </div>
 
-      {/* Slide-over Drawer for Aliases - Using Portal recommended */}
-      {selectedProductForDrawer && (
-          <AliasDrawer 
-              product={selectedProductForDrawer} 
-              pricingRules={pricingRules}
-              onClose={() => setSelectedProductForDrawer(null)}
-              onSave={(updated: Product) => {
-                  if (onUpdateProduct) {
-                      onUpdateProduct(updated);
-                  }
-              }}
-              themeColor={themeColor}
-          />
-      )}
+                <div className="mb-1">
+                    <button
+                        onClick={() => setIsShipmentModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium shadow-md hover:opacity-90 transition-all"
+                        style={{ backgroundColor: themeColor }}
+                    >
+                        <Ship className="w-4 h-4" />
+                        Import Shipment Schedule
+                    </button>
+                </div>
+            </div>
 
-      {/* Modals */}
-      {isShipmentModalOpen && (
-          <ShipmentUploadModal 
-              products={products}
-              onClose={() => setIsShipmentModalOpen(false)}
-              onConfirm={handleShipmentUpdate}
-          />
-      )}
-    </div>
-  );
+            {/* Main Content Area */}
+            <div className="flex-1 min-h-0 relative">
+                {activeTab === 'dashboard' && (
+                    <DashboardView products={products} priceHistoryMap={priceHistoryMap} themeColor={themeColor} />
+                )}
+
+                {activeTab === 'catalog' && (
+                    <MasterCatalogView
+                        products={products}
+                        onEditAliases={(p: Product) => setSelectedProductForDrawer(p)}
+                        onOpenMappingModal={onOpenMappingModal}
+                        themeColor={themeColor}
+                    />
+                )}
+
+                {activeTab === 'shipments' && (
+                    <ShipmentsView products={products} themeColor={themeColor} />
+                )}
+
+                {activeTab === 'pricing' && (
+                    <PriceMatrixView
+                        products={products}
+                        pricingRules={pricingRules}
+                        promotions={promotions}
+                        themeColor={themeColor}
+                    />
+                )}
+            </div>
+
+            {/* Slide-over Drawer for Aliases - Using Portal recommended */}
+            {selectedProductForDrawer && (
+                <AliasDrawer
+                    product={selectedProductForDrawer}
+                    pricingRules={pricingRules}
+                    onClose={() => setSelectedProductForDrawer(null)}
+                    onSave={(updated: Product) => {
+                        if (onUpdateProduct) {
+                            onUpdateProduct(updated);
+                        }
+                    }}
+                    themeColor={themeColor}
+                />
+            )}
+
+            {/* Modals */}
+            {isShipmentModalOpen && (
+                <ShipmentUploadModal
+                    products={products}
+                    onClose={() => setIsShipmentModalOpen(false)}
+                    onConfirm={handleShipmentUpdate}
+                />
+            )}
+        </div>
+    );
 };
 
 // 1. DASHBOARD VIEW (GLASS UI)
-const DashboardView = ({ products, priceHistory, themeColor }: { products: Product[], priceHistory: PriceLog[], themeColor: string }) => {
+const DashboardView = ({ products, priceHistoryMap, themeColor }: { products: Product[], priceHistoryMap: Map<string, PriceLog[]>, themeColor: string }) => {
+    // Flatten map for global dashboard statistics if needed
+    const priceHistory = useMemo(() => Array.from(priceHistoryMap.values()).flat(), [priceHistoryMap]);
     // ... (State logic unchanged)
     const [range, setRange] = useState<DateRange>('yesterday');
-    
+
     // Updated: Range State
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
-    
+
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [topSellerMetric, setTopSellerMetric] = useState<'units' | 'rev'>('units');
 
@@ -213,7 +215,7 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
     const totalValue = products.reduce((sum, p) => sum + (p.stockLevel * (p.costPrice || 0)), 0);
 
     // Dynamic Filter Logic based on Range
-    const { filteredSales, daysMultiplier, periodLabel } = useMemo(() => {
+    const { filteredSales, prevFilteredSales, platformSales, categorySales, daysMultiplier, periodLabel } = useMemo(() => {
         let startDate = new Date();
         let endDate = new Date();
         let days = 1;
@@ -241,45 +243,61 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                 endDate = temp;
             }
             const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-            days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
+            days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
             label = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
         }
 
         const sStr = startDate.toISOString().split('T')[0];
         const eStr = endDate.toISOString().split('T')[0];
-        
+
+        // Previous Period Logic for Growth
+        const prevStart = new Date(startDate);
+        const prevEnd = new Date(startDate);
+        prevEnd.setDate(prevEnd.getDate() - 1);
+        prevStart.setDate(prevStart.getDate() - days);
+
+        const psStr = prevStart.toISOString().split('T')[0];
+        const peStr = prevEnd.toISOString().split('T')[0];
+
         const salesMap: Record<string, { units: number, revenue: number }> = {};
+        const prevSalesMap: Record<string, { units: number, revenue: number }> = {};
+        const platSalesMap: Record<string, number> = {};
+        const catSalesMap: Record<string, number> = {};
+
+        // Helper Map for SKU -> Category
+        const skuToCat: Record<string, string> = {};
+        products.forEach(p => skuToCat[p.sku] = p.category || 'Uncategorized');
 
         if (priceHistory && priceHistory.length > 0) {
-            const relevantLogs = priceHistory.filter(l => {
+            // Current Period
+            priceHistory.forEach(l => {
                 const d = l.date.split('T')[0];
-                return d >= sStr && d <= eStr;
-            });
-            
-            if (relevantLogs.length > 0) {
-                relevantLogs.forEach(l => {
+                if (d >= sStr && d <= eStr) {
                     if (!salesMap[l.sku]) salesMap[l.sku] = { units: 0, revenue: 0 };
-                    salesMap[l.sku].units += l.velocity; 
+                    salesMap[l.sku].units += l.velocity;
                     salesMap[l.sku].revenue += (l.velocity * l.price);
-                });
-            } else {
-                products.forEach(p => {
-                    salesMap[p.sku] = {
-                        units: p.averageDailySales * days,
-                        revenue: p.averageDailySales * p.currentPrice * days
-                    };
-                });
-            }
-        } else {
-            products.forEach(p => {
-                salesMap[p.sku] = {
-                    units: p.averageDailySales * days,
-                    revenue: p.averageDailySales * p.currentPrice * days
-                };
+
+                    const plat = l.platform || 'General';
+                    platSalesMap[plat] = (platSalesMap[plat] || 0) + l.velocity;
+
+                    const cat = skuToCat[l.sku] || 'Uncategorized';
+                    catSalesMap[cat] = (catSalesMap[cat] || 0) + l.velocity;
+                } else if (d >= psStr && d <= peStr) {
+                    if (!prevSalesMap[l.sku]) prevSalesMap[l.sku] = { units: 0, revenue: 0 };
+                    prevSalesMap[l.sku].units += l.velocity;
+                    prevSalesMap[l.sku].revenue += (l.velocity * l.price);
+                }
             });
         }
 
-        return { filteredSales: salesMap, daysMultiplier: days, periodLabel: label };
+        return {
+            filteredSales: salesMap,
+            prevFilteredSales: prevSalesMap,
+            platformSales: platSalesMap,
+            categorySales: catSalesMap,
+            daysMultiplier: days,
+            periodLabel: label
+        };
     }, [products, priceHistory, range, customStart, customEnd]);
 
     const topSellers = useMemo(() => {
@@ -295,31 +313,19 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
     }, [products, filteredSales, topSellerMetric]);
 
     const categoryData = useMemo(() => {
-        const counts: Record<string, number> = {};
-        products.forEach(p => {
-            const cat = p.category || 'Uncategorized';
-            if (!counts[cat]) counts[cat] = 0;
-            counts[cat] += p.stockLevel;
-        });
-        return Object.entries(counts)
-            .map(([name, value]) => ({ name, value }))
+        return Object.entries(categorySales)
+            .map(([name, value]) => ({ name, value: Math.round(value) }))
             .sort((a, b) => b.value - a.value)
-            .slice(0, 8);
-    }, [products]);
+            .slice(0, 10);
+    }, [categorySales]);
 
     const platformData = useMemo(() => {
-        const counts: Record<string, number> = {};
-        products.forEach(p => {
-            p.channels.forEach(c => {
-                if (!counts[c.platform]) counts[c.platform] = 0;
-                counts[c.platform] += 1;
-            });
-        });
-        
-        const data = Object.entries(counts).map(([name, value]) => ({ name, value }));
+        const data = Object.entries(platformSales).map(([name, value]) => ({ name, value: Math.round(value) }));
         const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe', '#00C49F'];
-        return data.map((d, i) => ({ ...d, color: colors[i % colors.length] }));
-    }, [products]);
+        return data
+            .sort((a, b) => b.value - a.value)
+            .map((d, i) => ({ ...d, color: colors[i % colors.length] }));
+    }, [platformSales]);
 
     const missingAliases = products.filter(p => !p.channels || p.channels.length === 0 || p.channels.every(c => !c.skuAlias)).length;
     const missingCosts = products.filter(p => !p.costPrice || p.costPrice === 0).length;
@@ -327,18 +333,20 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
     const risingStars = useMemo(() => {
         return products
             .map(p => {
-                const currentVel = p.averageDailySales;
-                const prevVel = p.previousDailySales || 0;
-                const growth = prevVel > 0 ? ((currentVel - prevVel) / prevVel) * 100 : 0;
-                const periodUnits = currentVel * daysMultiplier;
-                const prevPeriodUnits = prevVel * daysMultiplier;
-                
-                return { ...p, growth, periodUnits, prevPeriodUnits };
+                const currentStats = filteredSales[p.sku] || { units: 0, revenue: 0 };
+                const prevStats = prevFilteredSales[p.sku] || { units: 0, revenue: 0 };
+
+                const currentUnits = currentStats.units;
+                const prevUnits = prevStats.units;
+
+                const growth = prevUnits > 0 ? ((currentUnits - prevUnits) / prevUnits) * 100 : (currentUnits > 0 ? 100 : 0);
+
+                return { ...p, growth, periodUnits: currentUnits, prevPeriodUnits: prevUnits };
             })
-            .filter(p => p.growth > 5 && p.periodUnits > 5)
+            .filter(p => (p.growth > 5 && p.periodUnits > 1) || (p.periodUnits > 5 && p.prevPeriodUnits === 0))
             .sort((a, b) => b.growth - a.growth)
             .slice(0, 4);
-    }, [products, daysMultiplier]);
+    }, [products, filteredSales, prevFilteredSales]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-12">
@@ -373,10 +381,10 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                 </div>
             </div>
 
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 relative z-30">
                 <div className="flex items-center gap-2">
                     <div className="relative">
-                        <button 
+                        <button
                             onClick={() => setShowDatePicker(!showDatePicker)}
                             className={`p-2 border rounded-lg hover:bg-gray-50 transition-colors ${showDatePicker || range === 'custom' ? 'border-indigo-300 text-indigo-600 bg-indigo-50' : 'border-gray-200 text-gray-600 bg-white/50'}`}
                         >
@@ -388,8 +396,8 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                                 <div className="space-y-3">
                                     <div>
                                         <span className="text-[10px] text-gray-400 font-bold">START DATE</span>
-                                        <input 
-                                            type="date" 
+                                        <input
+                                            type="date"
                                             value={customStart}
                                             onChange={(e) => {
                                                 setCustomStart(e.target.value);
@@ -400,8 +408,8 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                                     </div>
                                     <div>
                                         <span className="text-[10px] text-gray-400 font-bold">END DATE</span>
-                                        <input 
-                                            type="date" 
+                                        <input
+                                            type="date"
                                             value={customEnd}
                                             onChange={(e) => {
                                                 setCustomEnd(e.target.value);
@@ -413,7 +421,7 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                                     </div>
                                 </div>
                                 <div className="mt-3 flex justify-end">
-                                    <button 
+                                    <button
                                         onClick={() => setShowDatePicker(false)}
                                         className="text-xs text-indigo-600 font-bold hover:underline"
                                     >
@@ -423,21 +431,21 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                             </div>
                         )}
                     </div>
-                    
+
                     <div className="flex bg-gray-100 p-1 rounded-lg">
-                        <button 
+                        <button
                             onClick={() => setRange('yesterday')}
                             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${range === 'yesterday' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             Yesterday
                         </button>
-                        <button 
+                        <button
                             onClick={() => setRange('7d')}
                             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${range === '7d' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             Last 7 Days
                         </button>
-                        <button 
+                        <button
                             onClick={() => setRange('30d')}
                             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${range === '30d' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                         >
@@ -459,13 +467,13 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                             <h3 className="font-bold text-gray-900">Top Sellers</h3>
                         </div>
                         <div className="flex gap-1 text-[10px] bg-gray-100 p-1 rounded">
-                            <button 
+                            <button
                                 onClick={() => setTopSellerMetric('units')}
                                 className={`px-2 py-0.5 rounded shadow-sm font-medium transition-all ${topSellerMetric === 'units' ? 'bg-white text-gray-800' : 'text-gray-500'}`}
                             >
                                 Units
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setTopSellerMetric('rev')}
                                 className={`px-2 py-0.5 rounded shadow-sm font-medium transition-all ${topSellerMetric === 'rev' ? 'bg-white text-gray-800' : 'text-gray-500'}`}
                             >
@@ -473,7 +481,7 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                             </button>
                         </div>
                     </div>
-                    
+
                     {topSellers.length === 0 ? (
                         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">No sales data available for this period.</div>
                     ) : (
@@ -482,7 +490,7 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                                 const maxVal = topSellerMetric === 'units' ? topSellers[0].periodUnits : topSellers[0].periodRevenue;
                                 const currentVal = topSellerMetric === 'units' ? p.periodUnits : p.periodRevenue;
                                 const displayVal = topSellerMetric === 'units' ? Math.round(currentVal).toLocaleString() : `£${Math.round(currentVal).toLocaleString()}`;
-                                
+
                                 return (
                                     <div key={p.id} className="group">
                                         <div className="flex justify-between text-sm mb-1">
@@ -490,8 +498,8 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                                             <span className="font-bold text-gray-900">{displayVal}</span>
                                         </div>
                                         <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                            <div 
-                                                className="h-full rounded-full transition-all duration-500 group-hover:bg-indigo-500" 
+                                            <div
+                                                className="h-full rounded-full transition-all duration-500 group-hover:bg-indigo-500"
                                                 style={{ width: `${(currentVal / maxVal) * 100}%`, backgroundColor: themeColor }}
                                             ></div>
                                         </div>
@@ -505,22 +513,23 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                 <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
                     <div className="flex items-center gap-2 mb-2">
                         <div className="p-1.5 bg-blue-50 rounded text-blue-600"><BarChart2 className="w-4 h-4" /></div>
-                        <h3 className="font-bold text-gray-900">Quantity by Main Category</h3>
+                        <h3 className="font-bold text-gray-900">Units Sold by Category</h3>
                     </div>
                     <div className="flex-1 min-h-0 -ml-4">
                         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <BarChart data={categoryData} layout="vertical" margin={{ top: 20, right: 30, left: 40, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                                 <XAxis type="number" hide />
-                                <YAxis 
-                                    dataKey="name" 
-                                    type="category" 
-                                    width={100} 
-                                    tick={{ fontSize: 10, fill: '#6b7280' }} 
+                                <YAxis
+                                    dataKey="name"
+                                    type="category"
+                                    width={100}
+                                    tick={{ fontSize: 10, fill: '#6b7280' }}
                                     interval={0}
                                 />
-                                <RechartsTooltip 
+                                <RechartsTooltip
                                     cursor={{ fill: 'transparent' }}
+                                    formatter={(val: number) => [Math.round(val), 'Units Sold']}
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
                                 />
                                 <Bar dataKey="value" fill="#94a3b8" radius={[0, 4, 4, 0]} barSize={16}>
@@ -533,8 +542,8 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                     </div>
                     <div className="text-center">
                         <div className="text-[10px] text-gray-400 mt-2 font-medium flex justify-center items-center gap-4">
-                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-indigo-500 rounded-full" style={{ backgroundColor: themeColor }}></span> MAX: {categoryData[0]?.value || 0}</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-gray-400 rounded-full"></span> AVG: {(categoryData.reduce((a,b)=>a+b.value,0) / (categoryData.length || 1)).toFixed(0)}</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-indigo-500 rounded-full" style={{ backgroundColor: themeColor }}></span> MAX: {Math.round(categoryData[0]?.value || 0)}</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-gray-400 rounded-full"></span> AVG: {(categoryData.reduce((a, b) => a + b.value, 0) / (categoryData.length || 1)).toFixed(0)}</span>
                         </div>
                     </div>
                 </div>
@@ -542,7 +551,7 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                 <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
                     <div className="flex items-center gap-2 mb-2">
                         <div className="p-1.5 bg-purple-50 rounded text-purple-600"><Globe className="w-4 h-4" /></div>
-                        <h3 className="font-bold text-gray-900">Platform Presence</h3>
+                        <h3 className="font-bold text-gray-900">Sales by Platform</h3>
                     </div>
                     <div className="flex-1 min-h-0 relative">
                         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -561,12 +570,15 @@ const DashboardView = ({ products, priceHistory, themeColor }: { products: Produ
                                         <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
                                     ))}
                                 </Pie>
-                                <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                <RechartsTooltip
+                                    formatter={(val: number) => [Math.round(val), 'Volume']}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div className="text-center">
-                                <span className="block text-3xl font-bold text-gray-800">{platformData.reduce((a,b)=>a+b.value,0)}</span>
+                                <span className="block text-3xl font-bold text-gray-800">{platformData.reduce((a, b) => a + b.value, 0)}</span>
                                 <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Listings</span>
                             </div>
                         </div>
@@ -639,7 +651,7 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
     const [search, setSearch] = useState('');
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [showInactive, setShowInactive] = useState(false);
-    
+
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 50;
@@ -649,9 +661,9 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
         if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) {
             return false;
         }
-        
+
         return p.sku.toLowerCase().includes(search.toLowerCase()) ||
-               p.name.toLowerCase().includes(search.toLowerCase());
+            p.name.toLowerCase().includes(search.toLowerCase());
     });
 
     // Reset page on filter change
@@ -708,10 +720,10 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
                         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white/50"
                     />
                 </div>
-                
+
                 <div className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 min-w-[140px]">
                     <span className="text-xs font-bold text-gray-500 uppercase mr-2">Show Inactive</span>
-                    <button 
+                    <button
                         onClick={() => setShowInactive(!showInactive)}
                         className="text-gray-500 hover:text-indigo-600 focus:outline-none"
                         style={showInactive ? { color: themeColor } : {}}
@@ -759,7 +771,7 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
                                 const isExpanded = expandedRows.has(p.id);
                                 const totalIncoming = p.shipments?.reduce((sum, s) => sum + s.quantity, 0) || 0;
                                 const shipmentCount = p.shipments?.length || 0;
-                                
+
                                 return (
                                     <React.Fragment key={p.id}>
                                         <tr className={`hover:bg-gray-50/50 cursor-pointer ${isExpanded ? 'bg-gray-50/30' : ''}`} onClick={() => toggleRow(p.id)}>
@@ -770,10 +782,10 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
                                             <td className="p-4 text-gray-600 truncate max-w-xs">{p.name}</td>
                                             <td className="p-4 text-xs font-medium text-gray-500">{p.category}</td>
                                             <td className="p-4 text-right font-bold">{p.stockLevel}</td>
-                                            
+
                                             <td className="p-4 text-right">
                                                 {totalIncoming > 0 ? (
-                                                    <span 
+                                                    <span
                                                         className={`font-medium ${shipmentCount > 1 ? 'text-indigo-600 font-bold' : 'text-gray-900'}`}
                                                         title={shipmentCount > 1 ? `${shipmentCount} incoming shipments` : '1 incoming shipment'}
                                                     >
@@ -785,13 +797,13 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
                                             </td>
 
                                             <td className="p-4 text-right text-gray-500 text-xs">
-                                                {p.shipments && p.shipments.length > 0 
-                                                    ? `${p.leadTimeDays} days` 
+                                                {p.shipments && p.shipments.length > 0
+                                                    ? `${p.leadTimeDays} days`
                                                     : '-'}
                                             </td>
                                             <td className="p-4 text-right">
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); onEditAliases(p); }} 
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onEditAliases(p); }}
                                                     className="p-2 text-gray-400 hover:text-indigo-600"
                                                     title="Manage Aliases"
                                                 >
@@ -850,7 +862,7 @@ const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeC
                         </tbody>
                     </table>
                 </div>
-                
+
                 {/* Pagination Footer */}
                 {filtered.length > 0 && (
                     <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200 flex items-center justify-between sm:px-6">
@@ -1122,24 +1134,24 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { p
 
     const handleSave = () => {
         const updatedChannels = [...product.channels];
-        
+
         platformTags.forEach(pt => {
             const aliasString = pt.tags.join(', ');
             const idx = updatedChannels.findIndex(c => c.platform === pt.platform);
-            
+
             if (idx >= 0) {
                 updatedChannels[idx] = { ...updatedChannels[idx], skuAlias: aliasString };
             } else if (aliasString) {
                 // New channel entry
-                updatedChannels.push({ 
-                    platform: pt.platform, 
-                    manager: pricingRules[pt.platform]?.manager || 'Unassigned', 
-                    velocity: 0, 
-                    skuAlias: aliasString 
+                updatedChannels.push({
+                    platform: pt.platform,
+                    manager: pricingRules[pt.platform]?.manager || 'Unassigned',
+                    velocity: 0,
+                    skuAlias: aliasString
                 });
             }
         });
-        
+
         onSave({ ...product, channels: updatedChannels });
         onClose();
     };
@@ -1154,24 +1166,24 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { p
                 </div>
                 <div className="p-6 flex-1 overflow-y-auto space-y-6">
                     <div className="text-sm text-gray-600 bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3">
-                        <div className="p-1 bg-blue-100 rounded h-fit text-blue-600"><LinkIcon className="w-4 h-4"/></div>
+                        <div className="p-1 bg-blue-100 rounded h-fit text-blue-600"><LinkIcon className="w-4 h-4" /></div>
                         <div>
                             <p className="font-semibold text-blue-900 text-xs mb-1 uppercase">How Aliases Work</p>
                             Map platform-specific SKUs to this Master SKU. Type an alias and press <strong>Enter</strong> or <strong>Comma</strong> to add it.
                         </div>
                     </div>
-                    
+
                     {platformTags.map((item) => (
                         <div key={item.platform} className="flex flex-col gap-2">
                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">{item.platform}</label>
-                            <div 
+                            <div
                                 className="flex flex-wrap items-center gap-2 p-2 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all min-h-[42px]"
                                 onClick={() => document.getElementById(`input-${item.platform}`)?.focus()}
                             >
                                 {item.tags.map((tag, idx) => (
                                     <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100 animate-in fade-in zoom-in duration-200">
                                         {tag}
-                                        <button 
+                                        <button
                                             onClick={(e) => { e.stopPropagation(); removeTag(item.platform, idx); }}
                                             className="hover:text-red-500 rounded-full hover:bg-red-50 p-0.5 transition-colors"
                                         >
@@ -1179,9 +1191,9 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { p
                                         </button>
                                     </span>
                                 ))}
-                                <input 
+                                <input
                                     id={`input-${item.platform}`}
-                                    type="text" 
+                                    type="text"
                                     value={inputValues[item.platform] || ''}
                                     onChange={(e) => handleInputChange(item.platform, e.target.value)}
                                     onKeyDown={(e) => handleKeyDown(e, item.platform)}

@@ -12,9 +12,28 @@ View your app in AI Studio: https://ai.studio/apps/drive/1vTmVLJKGqKaElhGnH7P85A
 
 **Prerequisites:**  Node.js
 
-
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+   ```bash
+   npm install
+   ```
+2. Set your API Key:
+   Create a `.env.local` file and add:
+   `API_KEY=your_gemini_api_key_here`
 3. Run the app:
-   `npm run dev`
+   ```bash
+   npm run dev
+   ```
+
+## Deployment
+
+### GitHub
+**Important**: Do NOT upload the `node_modules` folder to GitHub. The project already includes a `.gitignore` file that handles this for you automatically.
+
+### Netlify (Ready to Deploy)
+This project is pre-configured for Netlify deployment using the included `netlify.toml`.
+
+1. **Push to GitHub**: Upload your code to a GitHub repository (excluding `node_modules`).
+2. **Connect to Netlify**: Link your GitHub repo to a new site on Netlify.
+3. **Environment Variables**: In the Netlify UI, go to **Site Settings > Build & deploy > Environment variables** and add:
+   - `API_KEY`: Your Gemini API Key.
+4. **Deploy**: Netlify will use the `npm run build` command and the `dist` folder to serve your site.

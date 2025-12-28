@@ -1,19 +1,21 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent, PromotionItem, PriceLog, LogisticsRule } from '../types';
-import { Plus, ChevronRight, Search, Trash2, ArrowLeft, CheckCircle, Check, Download, Calendar, Lock, Unlock, LayoutDashboard, List, Calculator, Edit2, AlertCircle, Save, X, RotateCcw, Eye, EyeOff, ArrowUpDown, ChevronUp, ChevronDown, Upload, FileText, Loader2, RefreshCw, TrendingUp, TrendingDown, Target, ShoppingBag, Coins, Truck, Info, HelpCircle, Archive, Zap, Clock, MoreHorizontal, Tag } from 'lucide-react';
+import { Plus, ChevronRight, Search, Trash2, ArrowLeft, CheckCircle, Check, Download, Calendar, Lock, Unlock, LayoutDashboard, List, Calculator, Edit2, AlertCircle, Save, X, RotateCcw, Eye, EyeOff, ArrowUpDown, ChevronUp, ChevronDown, Upload, FileText, Loader2, RefreshCw, TrendingUp, TrendingDown, Target, ShoppingBag, Coins, Truck, Info, HelpCircle, Archive, Zap, Clock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface PromotionPageProps {
-  products: Product[];
-  pricingRules: PricingRules;
-  logisticsRules?: LogisticsRule[];
-  promotions: PromotionEvent[];
-  priceHistory?: PriceLog[];
-  onAddPromotion: (promo: PromotionEvent) => void;
-  onUpdatePromotion: (promo: PromotionEvent) => void;
-  themeColor: string;
-  headerStyle: React.CSSProperties;
+    products: Product[];
+    pricingRules: PricingRules;
+    logisticsRules?: LogisticsRule[];
+    promotions: PromotionEvent[];
+    priceHistoryMap?: Map<string, PriceLog[]>;
+    onAddPromotion: (promo: PromotionEvent) => void;
+    onUpdatePromotion: (promo: PromotionEvent) => void;
+    onDeletePromotion: (id: string) => void;
+    themeColor: string;
+    headerStyle: React.CSSProperties;
 }
 
 type ViewMode = 'dashboard' | 'event_detail' | 'add_products';
@@ -63,27 +65,27 @@ const MarginTooltip = ({ details, marginStandard, promoPrice, rect }: any) => {
                 </div>
                 <div className="flex justify-between">
                     <span className="text-gray-400">Net Revenue (VAT ex)</span>
-                    <span className="font-mono text-white">£{details.netRevenue.toFixed(2)}</span>
+                    <span className="font-mono text-white">£{(details?.netRevenue ?? 0).toFixed(2)}</span>
                 </div>
             </div>
             <div className="space-y-1 mb-3 text-gray-400 border-t border-b border-gray-700 py-2 border-dashed">
                 <div className="flex justify-between">
-                    <span>- Commission ({details.commissionRate}%)</span>
-                    <span className="text-red-300">£{details.commissionCost.toFixed(2)}</span>
+                    <span>- Commission ({details?.commissionRate ?? 15}%)</span>
+                    <span className="text-red-300">£{(details?.commissionCost ?? 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                     <span>- Postage (Est.)</span>
-                    <span className="text-red-300">£{details.standardPostage.toFixed(2)}</span>
+                    <span className="text-red-300">£{(details?.standardPostage ?? 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                     <span>- COGS & Fees</span>
-                    <span className="text-red-300">£{details.otherCosts.toFixed(2)}</span>
+                    <span className="text-red-300">£{(details?.otherCosts ?? 0).toFixed(2)}</span>
                 </div>
             </div>
             <div className="flex justify-between items-center font-bold text-sm">
                 <span className="text-gray-300">Net Profit</span>
-                <span className={details.profitStandard > 0 ? 'text-white' : 'text-red-400'}>
-                    £{details.profitStandard.toFixed(2)}
+                <span className={(details?.profitStandard ?? 0) > 0 ? 'text-white' : 'text-red-400'}>
+                    £{(details?.profitStandard ?? 0).toFixed(2)}
                 </span>
             </div>
         </div>,
@@ -96,15 +98,25 @@ const MarginTooltip = ({ details, marginStandard, promoPrice, rect }: any) => {
 const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: any) => {
     const [formData, setFormData] = useState({
         name: '',
-        platform: 'All', 
+        platform: 'All',
         startDate: '',
         endDate: '',
         submissionDeadline: '',
         remark: ''
     });
+    const [errors, setErrors] = useState<Record<string, boolean>>({});
 
     const handleSubmit = () => {
-        if (!formData.name || !formData.startDate || !formData.endDate) return;
+        const newErrors: Record<string, boolean> = {};
+        if (!formData.name) newErrors.name = true;
+        if (!formData.startDate) newErrors.startDate = true;
+        if (!formData.endDate) newErrors.endDate = true;
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            return;
+        }
+
         onCreate({
             id: `promo-${Date.now()}`,
             ...formData,
@@ -119,25 +131,28 @@ const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: any) => 
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold text-gray-900">Create New Campaign</h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500"/></button>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
                 </div>
                 <div className="space-y-4">
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Campaign Name <span className="text-red-500">*</span></label>
-                        <input 
-                            type="text" 
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">
+                            Campaign Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 ${errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                             value={formData.name}
-                            onChange={e => setFormData({...formData, name: e.target.value})}
+                            onChange={e => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: false }); }}
                             placeholder="e.g. Black Friday Sale"
                         />
+                        {errors.name && <p className="text-xs text-red-500 mt-1">Campaign name is required.</p>}
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Platform <span className="text-red-500">*</span></label>
-                        <select 
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                        <select
+                            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 border-gray-300"
                             value={formData.platform}
-                            onChange={e => setFormData({...formData, platform: e.target.value})}
+                            onChange={e => setFormData({ ...formData, platform: e.target.value })}
                         >
                             <option value="All">All Platforms</option>
                             {platforms.map((p: string) => <option key={p} value={p}>{p}</option>)}
@@ -145,77 +160,74 @@ const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: any) => 
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Start Date <span className="text-red-500">*</span></label>
-                            <input 
-                                type="date" 
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">
+                                Start Date <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="date"
+                                className={`w-full border rounded-lg px-3 py-2 text-sm ${errors.startDate ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                                 value={formData.startDate}
-                                onChange={e => setFormData({...formData, startDate: e.target.value})}
+                                onChange={e => { setFormData({ ...formData, startDate: e.target.value }); setErrors({ ...errors, startDate: false }); }}
                             />
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">End Date <span className="text-red-500">*</span></label>
-                            <input 
-                                type="date" 
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">
+                                End Date <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="date"
+                                className={`w-full border rounded-lg px-3 py-2 text-sm ${errors.endDate ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                                 value={formData.endDate}
-                                onChange={e => setFormData({...formData, endDate: e.target.value})}
+                                onChange={e => { setFormData({ ...formData, endDate: e.target.value }); setErrors({ ...errors, endDate: false }); }}
                             />
                         </div>
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Submission Deadline (Optional)</label>
-                        <input 
-                            type="date" 
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                        <input
+                            type="date"
+                            className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300"
                             value={formData.submissionDeadline}
-                            onChange={e => setFormData({...formData, submissionDeadline: e.target.value})}
+                            onChange={e => setFormData({ ...formData, submissionDeadline: e.target.value })}
                         />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Remark (Optional)</label>
                         <textarea
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                            className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 resize-none h-20"
                             value={formData.remark}
-                            onChange={e => setFormData({...formData, remark: e.target.value})}
-                            placeholder="e.g. Requires manager approval..."
-                            rows={2}
+                            onChange={e => setFormData({ ...formData, remark: e.target.value })}
+                            placeholder="Add internal notes or objectives..."
                         />
                     </div>
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
                     <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
-                    <button 
-                        onClick={handleSubmit} 
-                        disabled={!formData.name || !formData.startDate || !formData.endDate}
-                        className="px-4 py-2 text-white rounded-lg text-sm font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed" 
-                        style={{ backgroundColor: themeColor }}
-                    >
-                        Create Campaign
-                    </button>
+                    <button onClick={handleSubmit} className="px-4 py-2 text-white rounded-lg text-sm font-medium shadow-md" style={{ backgroundColor: themeColor }}>Create Campaign</button>
                 </div>
             </div>
         </div>
     );
 };
 
-const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateEvent, themeColor }: any) => {
+const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateEvent, onDeletePromo, themeColor }: any) => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-    // KPI Summary Calculations
-    const activeCount = promotions.filter((p: any) => p.status === 'ACTIVE').length;
-    const upcomingCount = promotions.filter((p: any) => p.status === 'UPCOMING').length;
-    const totalPromoItems = promotions.reduce((acc: number, p: any) => acc + (p.items?.length || 0), 0);
+    const handleDeleteClick = (e: React.MouseEvent, id: string, name: string) => {
+        e.stopPropagation();
+        if (window.confirm(`Are you sure you want to delete campaign "${name}"?\nThis action cannot be undone.`)) {
+            onDeletePromo(id);
+        }
+    };
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            {/* Header & Actions */}
             <div className="flex justify-between items-center bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
                 <div>
                     <h3 className="text-lg font-bold text-gray-900">Active Campaigns</h3>
                     <p className="text-sm text-gray-500">Manage sales events and pricing overrides.</p>
                 </div>
-                <button 
+                <button
                     onClick={() => setIsCreateOpen(true)}
                     className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
                     style={{ backgroundColor: themeColor }}
@@ -225,100 +237,63 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
                 </button>
             </div>
 
-            {/* KPI Summary Section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Active Now</p>
-                        <p className="text-2xl font-bold text-green-600 mt-1">{activeCount}</p>
-                    </div>
-                    <div className="p-3 bg-green-50 rounded-lg text-green-600">
-                        <Zap className="w-5 h-5" />
-                    </div>
-                </div>
-                <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Upcoming</p>
-                        <p className="text-2xl font-bold text-blue-600 mt-1">{upcomingCount}</p>
-                    </div>
-                    <div className="p-3 bg-blue-50 rounded-lg text-blue-600">
-                        <Calendar className="w-5 h-5" />
-                    </div>
-                </div>
-                <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Total Items on Promo</p>
-                        <p className="text-2xl font-bold text-indigo-600 mt-1">{totalPromoItems}</p>
-                    </div>
-                    <div className="p-3 bg-indigo-50 rounded-lg text-indigo-600">
-                        <Tag className="w-5 h-5" />
-                    </div>
-                </div>
-            </div>
-
-            {/* Campaigns Table (Restored from Grid) */}
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                 <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass">
                         <tr>
                             <th className="p-4">Campaign Name</th>
                             <th className="p-4">Platform</th>
-                            <th className="p-4">Duration</th>
-                            <th className="p-4">Deadline</th>
                             <th className="p-4">Status</th>
+                            <th className="p-4">Dates</th>
                             <th className="p-4 text-center">Items</th>
+                            <th className="p-4 text-right">View</th>
                             <th className="p-4 text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
                         {promotions.map((promo: any) => (
-                            <tr 
-                                key={promo.id} 
+                            <tr
+                                key={promo.id}
                                 onClick={() => onSelectPromo(promo.id)}
-                                className="hover:bg-gray-50/50 cursor-pointer transition-colors group"
+                                className="hover:bg-gray-50/50 cursor-pointer transition-colors"
                             >
+                                <td className="p-4 font-bold text-gray-900">{promo.name}</td>
                                 <td className="p-4">
-                                    <div className="font-bold text-gray-900">{promo.name}</div>
-                                    {promo.remark && (
-                                        <div className="text-xs text-gray-400 mt-0.5 max-w-xs truncate">{promo.remark}</div>
-                                    )}
-                                </td>
-                                <td className="p-4">
-                                    <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide bg-gray-100 px-2 py-1 rounded">
                                         {promo.platform}
                                     </span>
                                 </td>
-                                <td className="p-4 text-gray-600 text-xs">
-                                    <div className="flex items-center gap-1.5">
-                                        <Calendar className="w-3 h-3 text-gray-400" />
+                                <td className="p-4"><StatusBadge status={promo.status} /></td>
+                                <td className="p-4 text-gray-500 text-xs">
+                                    <div className="flex items-center gap-1">
+                                        <Calendar className="w-3 h-3" />
                                         {new Date(promo.startDate).toLocaleDateString()} - {new Date(promo.endDate).toLocaleDateString()}
                                     </div>
                                 </td>
-                                <td className="p-4 text-gray-500 text-xs">
-                                    {promo.submissionDeadline ? (
-                                        <span className="text-red-500 font-medium">Due: {new Date(promo.submissionDeadline).toLocaleDateString()}</span>
-                                    ) : '-'}
-                                </td>
-                                <td className="p-4">
-                                    <StatusBadge status={promo.status} />
-                                </td>
                                 <td className="p-4 text-center">
-                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-md text-gray-700 font-bold border border-gray-100">
-                                        <ShoppingBag className="w-3 h-3 text-gray-400" />
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-full text-xs font-medium">
+                                        <ShoppingBag className="w-3 h-3" />
                                         {promo.items.length}
-                                    </div>
+                                    </span>
                                 </td>
                                 <td className="p-4 text-right">
-                                    <button className="text-gray-400 hover:text-indigo-600">
-                                        <ChevronRight className="w-5 h-5" />
+                                    <ChevronRight className="w-4 h-4 text-gray-400 inline-block" />
+                                </td>
+                                <td className="p-4 text-right w-10">
+                                    <button
+                                        onClick={(e) => handleDeleteClick(e, promo.id, promo.name)}
+                                        className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-600 transition-colors"
+                                        title="Delete Campaign"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
                                     </button>
                                 </td>
                             </tr>
                         ))}
                         {promotions.length === 0 && (
                             <tr>
-                                <td colSpan={7} className="p-12 text-center text-gray-400 italic">
-                                    No active campaigns found. Click "New Campaign" to create one.
+                                <td colSpan={6} className="p-12 text-center text-gray-400">
+                                    No promotions found. Create one to get started.
                                 </td>
                             </tr>
                         )}
@@ -327,8 +302,8 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
             </div>
 
             {isCreateOpen && (
-                <CreateEventModal 
-                    onClose={() => setIsCreateOpen(false)} 
+                <CreateEventModal
+                    onClose={() => setIsCreateOpen(false)}
                     onCreate={onCreateEvent}
                     platforms={Object.keys(pricingRules)}
                     themeColor={themeColor}
@@ -338,7 +313,7 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
     );
 };
 
-const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts, onDeleteItem, onUpdateMeta, themeColor }: any) => {
+const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProducts, onDeleteItem, onUpdateMeta, themeColor }: any) => {
     const [isUploadOpen, setIsUploadOpen] = useState(false);
 
     const handleExport = () => {
@@ -355,13 +330,13 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
         promo.items.forEach((item: any) => {
             const product = products.find((p: Product) => p.sku === item.sku);
             const discountPct = item.basePrice > 0 ? ((item.basePrice - item.promoPrice) / item.basePrice * 100).toFixed(2) : "0.00";
-            
+
             // Common data for this item
             const commonData = [
                 clean(item.sku), // Master SKU (or item.sku if no product found)
-                clean(product?.name || ''), 
-                item.basePrice.toFixed(2), 
-                item.promoPrice.toFixed(2), 
+                clean(product?.name || ''),
+                item.basePrice.toFixed(2),
+                item.promoPrice.toFixed(2),
                 `${discountPct}%`
             ];
 
@@ -370,19 +345,19 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
                 // Use case-insensitive + fuzzy match to find correct channel
                 const normalize = (s: string) => s.toLowerCase().trim();
                 const targetPlatform = normalize(promo.platform);
-                
+
                 // 1. Exact match
                 let channel = product.channels.find((c: any) => normalize(c.platform) === targetPlatform);
-                
+
                 // 2. Fuzzy match
                 if (!channel) {
                     channel = product.channels.find((c: any) => normalize(c.platform).includes(targetPlatform) || targetPlatform.includes(normalize(c.platform)));
                 }
-                
+
                 // 2. Check for Alias mappings
                 if (channel && channel.skuAlias) {
                     const aliases = channel.skuAlias.split(',').map((s: string) => s.trim()).filter(Boolean);
-                    
+
                     if (aliases.length > 0) {
                         // EXPLODE: Create a row for EACH alias
                         aliases.forEach((alias: string) => {
@@ -404,14 +379,23 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
         });
 
         const csvContent = [headers.join(','), ...rows.map((r: string[]) => r.join(','))].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        // Use octet-stream for Chrome compatibility and add UTF-8 BOM
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
+        link.style.display = 'none';
         link.href = url;
-        link.setAttribute('download', `promo_export_${promo.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
+        const filename = `promo_export_${promo.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`;
+        link.download = filename;
+        link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
+
+        // Extended timeout to 60s
+        setTimeout(() => {
+            if (document.body.contains(link)) document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 60000);
     };
 
     return (
@@ -422,20 +406,20 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
                 </button>
                 <div className="flex gap-2">
                     {promo.items.length > 0 && (
-                        <button 
+                        <button
                             onClick={handleExport}
                             className="bg-white/80 text-gray-700 border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-white transition-colors flex items-center gap-2"
                         >
                             <Download className="w-4 h-4" /> Export List
                         </button>
                     )}
-                    <button 
+                    <button
                         onClick={() => setIsUploadOpen(true)}
                         className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium shadow-sm hover:bg-gray-50 flex items-center gap-2"
                     >
                         <Upload className="w-4 h-4" /> Batch Upload Items
                     </button>
-                    <button 
+                    <button
                         onClick={onAddProducts}
                         className="px-4 py-2 text-white rounded-lg text-sm font-medium shadow-md hover:opacity-90 flex items-center gap-2"
                         style={{ backgroundColor: themeColor }}
@@ -453,19 +437,13 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
                             <StatusBadge status={promo.status} />
                         </div>
                         <div className="flex items-center gap-4 text-sm text-gray-500">
-                            <span className="flex items-center gap-1"><Calendar className="w-4 h-4"/> {new Date(promo.startDate).toLocaleDateString()} - {new Date(promo.endDate).toLocaleDateString()}</span>
-                            <span className="flex items-center gap-1"><Target className="w-4 h-4"/> {promo.platform}</span>
+                            <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {new Date(promo.startDate).toLocaleDateString()} - {new Date(promo.endDate).toLocaleDateString()}</span>
+                            <span className="flex items-center gap-1"><Target className="w-4 h-4" /> {promo.platform}</span>
                         </div>
-                        {promo.remark && (
-                            <div className="mt-2 text-sm text-gray-600 bg-gray-50/50 p-2 rounded border border-gray-100 inline-block max-w-2xl">
-                                <span className="font-bold text-xs uppercase text-gray-400 mr-2">Remark:</span>
-                                {promo.remark}
-                            </div>
-                        )}
                     </div>
                 </div>
-                
-                <PromoPerformanceHeader promo={promo} products={products} priceHistory={priceHistory} themeColor={themeColor} />
+
+                <PromoPerformanceHeader promo={promo} products={products} priceHistoryMap={priceHistoryMap} themeColor={themeColor} />
             </div>
 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
@@ -473,7 +451,8 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
                     <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass">
                         <tr>
                             <th className="p-4">SKU</th>
-                            <th className="p-4 text-right">Base Price</th>
+                            <th className="p-4 text-right">CA Price</th>
+                            <th className="p-4 text-right">Platform Price</th>
                             <th className="p-4 text-right">Promo Price</th>
                             <th className="p-4 text-right">Discount</th>
                             <th className="p-4 text-right">Proj. Margin</th>
@@ -483,13 +462,24 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
                     <tbody className="divide-y divide-gray-100/50">
                         {promo.items.map((item: any) => {
                             const product = products.find((p: Product) => p.sku === item.sku);
-                            const currentMargin = product ? ((item.promoPrice - (product.costPrice || 0)) / item.promoPrice * 100) : 0; 
+                            const currentMargin = product ? ((item.promoPrice - (product.costPrice || 0)) / item.promoPrice * 100) : 0;
                             const discountPercent = item.basePrice > 0 ? ((item.basePrice - item.promoPrice) / item.basePrice * 100).toFixed(1) : "0.0";
+
+                            let platformPrice = product ? product.currentPrice : 0;
+                            if (product && promo.platform !== 'All') {
+                                const channel = product.channels.find((c: any) => c.platform === promo.platform);
+                                if (channel && channel.price) platformPrice = channel.price;
+                            }
 
                             return (
                                 <tr key={item.sku} className="hover:bg-gray-50/50">
                                     <td className="p-4 font-bold text-gray-900">{item.sku}</td>
-                                    <td className="p-4 text-right text-gray-500">£{item.basePrice.toFixed(2)}</td>
+                                    <td className="p-4 text-right">
+                                        {product?.caPrice ? (
+                                            <span className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded border border-purple-100">£{product.caPrice.toFixed(2)}</span>
+                                        ) : <span className="text-gray-300">-</span>}
+                                    </td>
+                                    <td className="p-4 text-right text-gray-500">£{platformPrice.toFixed(2)}</td>
                                     <td className="p-4 text-right font-bold" style={{ color: themeColor }}>£{item.promoPrice.toFixed(2)}</td>
                                     <td className="p-4 text-right">
                                         <span className="bg-red-50 text-red-700 px-2 py-1 rounded text-xs font-bold">
@@ -498,7 +488,7 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
                                     </td>
                                     <td className="p-4 text-right font-mono">{currentMargin.toFixed(1)}%</td>
                                     <td className="p-4 text-right">
-                                        <button 
+                                        <button
                                             onClick={() => onDeleteItem(item.sku)}
                                             className="text-gray-400 hover:text-red-600 transition-colors"
                                         >
@@ -520,7 +510,7 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
             </div>
 
             {isUploadOpen && (
-                <PromoUploadModal 
+                <PromoUploadModal
                     products={products}
                     themeColor={themeColor}
                     onClose={() => setIsUploadOpen(false)}
@@ -532,7 +522,7 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
                             discountType: 'FIXED',
                             discountValue: 0
                         }));
-                        
+
                         const currentItems = promo.items;
                         const existing = new Set(currentItems.map((i: any) => i.sku));
                         const uniqueNew = newItems.filter((i: any) => !existing.has(i.sku));
@@ -547,133 +537,149 @@ const EventDetailView = ({ promo, products, priceHistory, onBack, onAddProducts,
 
 // --- MAIN COMPONENT ---
 
-const PromotionPage: React.FC<PromotionPageProps> = ({ products, pricingRules, logisticsRules = [], promotions, priceHistory = [], onAddPromotion, onUpdatePromotion, themeColor, headerStyle }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
-  const [selectedPromoId, setSelectedPromoId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+const PromotionPage: React.FC<PromotionPageProps> = ({
+    products,
+    pricingRules,
+    logisticsRules = [],
+    promotions,
+    priceHistoryMap = new Map(),
+    onAddPromotion,
+    onUpdatePromotion,
+    onDeletePromotion,
+    themeColor,
+    headerStyle
+}) => {
+    const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
+    const [selectedPromoId, setSelectedPromoId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
-  const selectedPromo = useMemo(() => 
-    promotions.find(p => p.id === selectedPromoId), 
-  [promotions, selectedPromoId]);
+    const selectedPromo = useMemo(() =>
+        promotions.find(p => p.id === selectedPromoId),
+        [promotions, selectedPromoId]);
 
-  const handleCreateEvent = (newEvent: PromotionEvent) => {
-      onAddPromotion(newEvent);
-      setSelectedPromoId(newEvent.id);
-      setViewMode('event_detail'); 
-      setActiveTab('dashboard'); 
-  };
+    const handleCreateEvent = (newEvent: PromotionEvent) => {
+        onAddPromotion(newEvent);
+        setSelectedPromoId(newEvent.id);
+        setViewMode('event_detail');
+        setActiveTab('dashboard');
+    };
 
-  const handleUpdateEventMeta = (id: string, updates: Partial<PromotionEvent>) => {
-      const promo = promotions.find(p => p.id === id);
-      if (!promo) return;
-      onUpdatePromotion({ ...promo, ...updates });
-  };
+    const handleUpdateEventMeta = (id: string, updates: Partial<PromotionEvent>) => {
+        const promo = promotions.find(p => p.id === id);
+        if (!promo) return;
+        onUpdatePromotion({ ...promo, ...updates });
+    };
 
-  const handleDeleteItem = (sku: string) => {
-      if (!selectedPromo) return;
-      const updatedItems = selectedPromo.items.filter(i => i.sku !== sku);
-      onUpdatePromotion({ ...selectedPromo, items: updatedItems });
-  };
+    const handleDeleteItem = (sku: string) => {
+        if (!selectedPromo) return;
+        const updatedItems = selectedPromo.items.filter(i => i.sku !== sku);
+        onUpdatePromotion({ ...selectedPromo, items: updatedItems });
+    };
 
-  const handleAddItems = (newItems: PromotionItem[]) => {
-      if (!selectedPromo) return;
-      const existingSkus = new Set(selectedPromo.items.map(i => i.sku));
-      const filteredNew = newItems.filter(i => !existingSkus.has(i.sku));
-      
-      onUpdatePromotion({ 
-          ...selectedPromo, 
-          items: [...selectedPromo.items, ...filteredNew] 
-      });
-      setViewMode('event_detail');
-  };
+    const handleAddItems = (newItems: PromotionItem[]) => {
+        if (!selectedPromo) return;
+        const existingSkus = new Set(selectedPromo.items.map(i => i.sku));
+        const filteredNew = newItems.filter(i => !existingSkus.has(i.sku));
 
-  const handleTabChange = (tab: Tab) => {
-      setActiveTab(tab);
-  };
+        onUpdatePromotion({
+            ...selectedPromo,
+            items: [...selectedPromo.items, ...filteredNew]
+        });
+        setViewMode('event_detail');
+    };
 
-  const TabHeader = () => (
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
-          <button 
-            onClick={() => handleTabChange('dashboard')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-              <LayoutDashboard className="w-4 h-4" />
-              Dashboard
-          </button>
-          <button 
-            onClick={() => handleTabChange('all_skus')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'all_skus' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-              <List className="w-4 h-4" />
-              All Promo SKUs
-          </button>
-          <button 
-            onClick={() => handleTabChange('simulator')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'simulator' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-              <Calculator className="w-4 h-4" />
-              Simulator
-          </button>
-      </div>
-  );
+    const handleTabChange = (tab: Tab) => {
+        setActiveTab(tab);
+    };
 
-  return (
-    <div className="max-w-full mx-auto h-full flex flex-col w-full min-w-0 pb-10">
-        
-        <TabHeader />
-
-        <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }} className="h-full">
-            {viewMode === 'dashboard' && (
-            <PromotionDashboard 
-                promotions={promotions} 
-                pricingRules={pricingRules}
-                onSelectPromo={(id: string) => { setSelectedPromoId(id); setViewMode('event_detail'); }} 
-                onCreateEvent={handleCreateEvent}
-                themeColor={themeColor}
-            />
-            )}
-            
-            {viewMode === 'event_detail' && selectedPromo && (
-            <EventDetailView 
-                promo={selectedPromo} 
-                products={products}
-                priceHistory={priceHistory}
-                onBack={() => setViewMode('dashboard')} 
-                onAddProducts={() => setViewMode('add_products')}
-                onDeleteItem={handleDeleteItem}
-                onUpdateMeta={(updates: Partial<PromotionEvent>) => handleUpdateEventMeta(selectedPromo.id, updates)}
-                themeColor={themeColor}
-            />
-            )}
-
-            {viewMode === 'add_products' && selectedPromo && (
-            <ProductSelector 
-                products={products}
-                currentPromo={selectedPromo}
-                pricingRules={pricingRules}
-                logisticsRules={logisticsRules}
-                onCancel={() => setViewMode('event_detail')}
-                onConfirm={handleAddItems}
-                themeColor={themeColor}
-            />
-            )}
+    const TabHeader = () => (
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
+            <button
+                onClick={() => handleTabChange('dashboard')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                <LayoutDashboard className="w-4 h-4" />
+                Dashboard
+            </button>
+            <button
+                onClick={() => handleTabChange('all_skus')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'all_skus' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                <List className="w-4 h-4" />
+                All Promo SKUs
+            </button>
+            <button
+                onClick={() => handleTabChange('simulator')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'simulator' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                <Calculator className="w-4 h-4" />
+                Simulator
+            </button>
         </div>
+    );
 
-        <div style={{ display: activeTab === 'all_skus' ? 'block' : 'none' }} className="h-full">
-            <AllPromoSkusView promotions={promotions} products={products} themeColor={themeColor} />
+    return (
+        <div className="max-w-full mx-auto h-full flex flex-col w-full min-w-0 pb-10">
+
+            <TabHeader />
+
+            <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }} className="h-full">
+                {viewMode === 'dashboard' && (
+                    <PromotionDashboard
+                        promotions={promotions}
+                        pricingRules={pricingRules}
+                        onSelectPromo={(id: string) => { setSelectedPromoId(id); setViewMode('event_detail'); }}
+                        onCreateEvent={handleCreateEvent}
+                        onDeletePromo={onDeletePromotion}
+                        themeColor={themeColor}
+                    />
+                )}
+
+                {viewMode === 'event_detail' && selectedPromo && (
+                    <EventDetailView
+                        promo={selectedPromo}
+                        products={products}
+                        priceHistoryMap={priceHistoryMap}
+                        onBack={() => setViewMode('dashboard')}
+                        onAddProducts={() => setViewMode('add_products')}
+                        onDeleteItem={handleDeleteItem}
+                        onUpdateMeta={(updates: Partial<PromotionEvent>) => handleUpdateEventMeta(selectedPromo.id, updates)}
+                        themeColor={themeColor}
+                    />
+                )}
+
+                {viewMode === 'add_products' && selectedPromo && (
+                    <ProductSelector
+                        products={products}
+                        currentPromo={selectedPromo}
+                        pricingRules={pricingRules}
+                        logisticsRules={logisticsRules}
+                        onCancel={() => setViewMode('event_detail')}
+                        onConfirm={handleAddItems}
+                        themeColor={themeColor}
+                    />
+                )}
+            </div>
+
+            <div style={{ display: activeTab === 'all_skus' ? 'block' : 'none' }} className="h-full">
+                <AllPromoSkusView promotions={promotions} products={products} themeColor={themeColor} />
+            </div>
+
+            <div style={{ display: activeTab === 'simulator' ? 'block' : 'none' }} className="h-full">
+                <SimulatorView themeColor={themeColor} />
+            </div>
+
         </div>
-
-        <div style={{ display: activeTab === 'simulator' ? 'block' : 'none' }} className="h-full">
-            <SimulatorView themeColor={themeColor} />
-        </div>
-
-    </div>
-  );
+    );
 };
 
 // --- SUB-COMPONENTS ---
 
-const PromoPerformanceHeader = ({ promo, products, priceHistory, themeColor }: { promo: PromotionEvent, products: Product[], priceHistory: PriceLog[], themeColor: string }) => {
+const PromoPerformanceHeader = ({ promo, products, priceHistoryMap, themeColor }: { promo: PromotionEvent, products: Product[], priceHistoryMap: Map<string, PriceLog[]>, themeColor: string }) => {
+    // Reconstruct history only for SKUs in this promotion
+    const priceHistory = useMemo(() => {
+        return promo.items.flatMap(item => priceHistoryMap.get(item.sku) || []);
+    }, [promo.items, priceHistoryMap]);
     const stats = useMemo(() => {
         let totalDailyProfitBase = 0;
         let totalDailyProfitPromo = 0;
@@ -691,7 +697,7 @@ const PromoPerformanceHeader = ({ promo, products, priceHistory, themeColor }: {
 
             const velocity = product.averageDailySales || 0;
             const cost = (product.costPrice || 0) + (product.wmsFee || 0) + (product.otherFee || 0) + (product.subscriptionFee || 0);
-            
+
             // Base
             const baseProfit = item.basePrice - cost;
             totalDailyProfitBase += (baseProfit * velocity);
@@ -710,17 +716,17 @@ const PromoPerformanceHeader = ({ promo, products, priceHistory, themeColor }: {
                     const isPlatformMatch = promo.platform === 'All' || l.platform === promo.platform;
                     return isSkuMatch && isDateMatch && isPlatformMatch;
                 });
-                
+
                 logs.forEach(l => {
-                    totalActualSold += l.velocity; 
+                    totalActualSold += l.velocity;
                     totalActualRevenue += (l.price * l.velocity);
                 });
             }
         });
 
         const profitGap = totalDailyProfitBase - totalDailyProfitPromo;
-        const breakevenLift = totalDailyProfitPromo > 0 
-            ? ((totalDailyProfitBase / totalDailyProfitPromo) - 1) * 100 
+        const breakevenLift = totalDailyProfitPromo > 0
+            ? ((totalDailyProfitBase / totalDailyProfitPromo) - 1) * 100
             : 0;
 
         return {
@@ -817,14 +823,14 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
     }, [promotions]);
 
     const filteredRows = allRows.filter(row => {
-        const matchesSearch = row.sku.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                              row.eventName.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = row.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            row.eventName.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesPlatform = platformFilter === 'All Platforms' || row.platform === platformFilter;
         return matchesSearch && matchesPlatform;
     });
 
     const formatDate = (date: Date) => {
-        return date.toLocaleDateString('en-GB'); 
+        return date.toLocaleDateString('en-GB');
     };
 
     return (
@@ -832,9 +838,9 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
             <div className="flex gap-4 bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Filter by SKU or Event Name..." 
+                    <input
+                        type="text"
+                        placeholder="Filter by SKU or Event Name..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 bg-white/50"
@@ -842,7 +848,7 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
                     />
                 </div>
                 <div className="w-48">
-                    <select 
+                    <select
                         value={platformFilter}
                         onChange={(e) => setPlatformFilter(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white/50"
@@ -911,8 +917,8 @@ const SimulatorView = ({ themeColor }: { themeColor: string }) => {
     );
 };
 
-const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules, onCancel, onConfirm, themeColor }: { 
-    products: Product[], 
+const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules, onCancel, onConfirm, themeColor }: {
+    products: Product[],
     currentPromo: PromotionEvent,
     pricingRules: PricingRules,
     logisticsRules: LogisticsRule[],
@@ -941,6 +947,15 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
             const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase());
             const matchCat = selectedCategory === 'All Categories' || p.category === selectedCategory;
             return matchSearch && matchCat;
+        }).map(p => {
+            // Context-Aware Price Mapping
+            if (currentPromo.platform !== 'All') {
+                const channel = p.channels.find(c => c.platform === currentPromo.platform);
+                if (channel && channel.price) {
+                    return { ...p, currentPrice: channel.price };
+                }
+            }
+            return p;
         });
     }, [products, searchQuery, selectedCategory, existingSkuSet, currentPromo.platform, showInactive]);
 
@@ -975,9 +990,15 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
         }
         let price = product.currentPrice;
         if (currentPromo.platform !== 'All') {
-             const channel = product.channels.find(c => c.platform === currentPromo.platform);
-             if (channel && channel.price) price = channel.price;
+            const channel = product.channels.find(c => c.platform === currentPromo.platform);
+            if (channel && channel.price) price = channel.price;
         }
+
+        // PRIORITY: CA Price override (if exists) -> Platform/Channel Price -> Base Price
+        if (product.caPrice && product.caPrice > 0) {
+            price = product.caPrice;
+        }
+
         let targetPrice = price;
         if (bulkRule.type === 'PERCENTAGE') {
             targetPrice = price * (1 - bulkRule.value / 100);
@@ -1003,10 +1024,10 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
         const netRevenue = promoPrice / 1.2;
         const platformKey = currentPromo.platform !== 'All' ? currentPromo.platform : (product.platform || 'Amazon(UK)');
         const rule = pricingRules[platformKey];
-        const commissionRate = rule ? rule.commission : 15; 
+        const commissionRate = rule ? rule.commission : 15;
         const commissionCost = promoPrice * (commissionRate / 100);
         const weight = product.cartonDimensions?.weight || 0;
-        let standardPostage = product.postage || 0; 
+        let standardPostage = product.postage || 0;
         let ruralPostage = product.postage || 0;
 
         if (logisticsRules && logisticsRules.length > 0) {
@@ -1017,11 +1038,11 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                 if (r.maxWeight !== undefined && r.maxWeight < weight) return false;
                 return true;
             };
-            const validStandard = logisticsRules.filter(r => 
+            const validStandard = logisticsRules.filter(r =>
                 isValidRule(r) &&
                 !r.name.includes('-Z') && !r.name.includes('-NI') && !r.name.includes('REMOTE')
             ).sort((a, b) => a.price - b.price);
-            const validRural = logisticsRules.filter(r => 
+            const validRural = logisticsRules.filter(r =>
                 isValidRule(r) &&
                 (r.name.includes('-Z') || r.name.includes('-NI') || r.name.includes('REMOTE'))
             ).sort((a, b) => a.price - b.price);
@@ -1037,13 +1058,13 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
         const marginStandard = promoPrice > 0 ? (profitStandard / promoPrice) * 100 : 0;
         const marginRural = promoPrice > 0 ? (profitRural / promoPrice) * 100 : 0;
 
-        return { marginStandard, marginRural, profitStandard, details: { netRevenue, commissionCost, standardPostage, ruralPostage, otherCosts, commissionRate, weight } };
+        return { marginStandard, marginRural, profitStandard, details: { netRevenue, commissionCost, standardPostage, ruralPostage, otherCosts, commissionRate, weight, profitStandard } };
     };
 
     const handleConfirm = () => {
         const items: PromotionItem[] = Array.from(selectedSkus).map((sku: string) => {
             const product = products.find(p => p.sku === sku)!;
-            const promoPrice = calculatePromoPrice(p);
+            const promoPrice = calculatePromoPrice(product);
             return {
                 sku,
                 basePrice: product.currentPrice,
@@ -1069,7 +1090,7 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                         )}
                     </div>
                 </div>
-                <button 
+                <button
                     onClick={handleConfirm}
                     disabled={selectedSkus.size === 0}
                     className="px-6 py-2 text-white rounded-lg font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all hover:opacity-90"
@@ -1080,34 +1101,34 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                 </button>
             </div>
 
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-wrap items-end gap-4">
-                 <div className="flex-1 min-w-[200px]">
-                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">Search</label>
-                     <div className="relative">
-                         <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                         <input type="text" placeholder="Search SKU..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-opacity-50 bg-white/50" style={{ '--tw-ring-color': themeColor } as React.CSSProperties} />
-                     </div>
-                 </div>
-                 <div className="w-48">
-                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">Category</label>
-                     <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm bg-white/50 focus:ring-2 focus:ring-opacity-50" style={{ '--tw-ring-color': themeColor } as React.CSSProperties}>
-                         <option>All Categories</option>
-                         {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                     </select>
-                 </div>
-                 <div className="pl-4 border-l border-gray-200 flex flex-col justify-end">
-                     <label className="text-xs font-bold text-indigo-600 uppercase tracking-wide mb-1 block">Bulk Discount Rule</label>
-                     <div className="flex items-center gap-2">
+            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-wrap items-end gap-4 relative z-20">
+                <div className="flex-1 min-w-[200px]">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">Search</label>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                        <input type="text" placeholder="Search SKU..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-opacity-50 bg-white/50" style={{ '--tw-ring-color': themeColor } as React.CSSProperties} />
+                    </div>
+                </div>
+                <div className="w-48">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">Category</label>
+                    <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm bg-white/50 focus:ring-2 focus:ring-opacity-50" style={{ '--tw-ring-color': themeColor } as React.CSSProperties}>
+                        <option>All Categories</option>
+                        {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                </div>
+                <div className="pl-4 border-l border-gray-200 flex flex-col justify-end">
+                    <label className="text-xs font-bold text-indigo-600 uppercase tracking-wide mb-1 block">Bulk Discount Rule</label>
+                    <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-700">% Off</span>
                         <input type="number" value={bulkRule.value} onChange={(e) => { setBulkRule({ ...bulkRule, value: parseFloat(e.target.value) }); setPriceOverrides({}); }} className="w-16 border-gray-300 rounded-lg text-sm py-1.5 px-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/50" />
-                     </div>
-                 </div>
-                 <div className="flex flex-col justify-end">
-                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">Show Inactive</label>
-                     <button onClick={() => setShowInactive(!showInactive)} className={`flex items-center justify-center w-10 h-9 rounded-lg border transition-colors ${showInactive ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white/50 border-gray-300 text-gray-400'}`} title="Show products with 0 stock and 0 sales">
-                         {showInactive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                     </button>
-                 </div>
+                    </div>
+                </div>
+                <div className="flex flex-col justify-end">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">Show Inactive</label>
+                    <button onClick={() => setShowInactive(!showInactive)} className={`flex items-center justify-center w-10 h-9 rounded-lg border transition-colors ${showInactive ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white/50 border-gray-300 text-gray-400'}`} title="Show products with 0 stock and 0 sales">
+                        {showInactive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex flex-col min-h-0 backdrop-blur-custom">
@@ -1117,11 +1138,11 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                             <tr>
                                 <th className="p-4 w-10"><input type="checkbox" onChange={toggleAll} checked={selectedSkus.size > 0 && selectedSkus.size === filteredProducts.length} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /></th>
                                 <th className="p-4">SKU / Category</th>
-                                <th className="p-4 text-right">Base Price (Net)</th>
                                 <th className="p-4 text-right">Platform Price</th>
                                 <th className="p-4 text-right">Optimal</th>
-                                <th className="p-4 text-right">Min Price</th>
+                                <th className="p-4 text-right">CA Price</th>
                                 <th className="p-4 text-right bg-indigo-50/80 text-indigo-900 backdrop-blur-sm">Promo Price</th>
+                                <th className="p-4 text-right">Min Price</th>
                                 <th className="p-4 text-right">Proj. Margin</th>
                             </tr>
                         </thead>
@@ -1132,7 +1153,7 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                                 const isOverridden = priceOverrides[p.sku] !== undefined;
                                 const { marginStandard, marginRural, details } = calculateDynamicMargin(p, promoPrice);
                                 const isRuralNegative = marginRural < 0;
-                                
+
                                 return (
                                     <tr key={p.id} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT') { handleRowClick(p.sku); } }} className={`cursor-pointer hover:bg-gray-50/50 transition-colors`} style={isSelected ? { backgroundColor: `${themeColor}08` } : {}}>
                                         <td className="p-4"><input type="checkbox" checked={isSelected} readOnly className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /></td>
@@ -1140,10 +1161,17 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                                             <div className="font-bold text-gray-900" onClick={(e) => e.stopPropagation()}>{p.sku}</div>
                                             <div className="inline-block mt-1 px-2 py-0.5 bg-gray-100/80 text-gray-600 text-xs rounded border border-gray-200">{p.category || 'Uncategorized'}</div>
                                         </td>
-                                        <td className="p-4 text-right text-gray-500">£{p.currentPrice.toFixed(2)}</td>
                                         <td className="p-4 text-right font-medium text-gray-900">£{p.currentPrice.toFixed(2)}</td>
                                         <td className="p-4 text-right text-indigo-600 font-medium">{p.optimalPrice ? `☆ £${p.optimalPrice.toFixed(2)}` : '-'}</td>
-                                        <td className="p-4 text-right text-gray-400">{p.floorPrice ? `£${p.floorPrice}` : '-'}</td>
+                                        <td className="p-4 text-right">
+                                            {p.caPrice ? (
+                                                <span className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded border border-purple-100">
+                                                    £{p.caPrice.toFixed(2)}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-300">-</span>
+                                            )}
+                                        </td>
                                         <td className="p-4 text-right bg-indigo-50/30">
                                             <div className="flex items-center justify-end gap-1">
                                                 <span className="text-gray-400 text-xs">£</span>
@@ -1151,6 +1179,7 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                                                 {isOverridden && (<button onClick={(e) => { e.stopPropagation(); const newO = { ...priceOverrides }; delete newO[p.sku]; setPriceOverrides(newO); }} className="text-gray-400 hover:text-indigo-600" title="Reset to calculated price"><RotateCcw className="w-3 h-3" /></button>)}
                                             </div>
                                         </td>
+                                        <td className="p-4 text-right text-gray-400">{p.floorPrice ? `£${p.floorPrice}` : '-'}</td>
                                         <td className="p-4 text-right relative">
                                             <div className="flex items-center justify-end gap-2 group/margin" onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredMargin({ id: p.id, rect }); }} onMouseLeave={() => setHoveredMargin(null)}>
                                                 {isRuralNegative && (<span title="Negative margin in Rural/Zone areas"><AlertCircle className="w-4 h-4 text-red-500 animate-pulse" /></span>)}
@@ -1161,7 +1190,7 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                                     </tr>
                                 );
                             })}
-                            {filteredProducts.length === 0 && (<tr><td colSpan={8} className="p-12 text-center text-gray-500">{products.length > 0 ? `No products found. (Showing only products selling on ${currentPromo.platform})` : "No products available."}</td></tr>)}
+                            {filteredProducts.length === 0 && (<tr><td colSpan={9} className="p-12 text-center text-gray-500">{products.length > 0 ? `No products found. (Showing only products selling on ${currentPromo.platform})` : "No products available."}</td></tr>)}
                         </tbody>
                     </table>
                 </div>
@@ -1176,161 +1205,17 @@ const PromoUploadModal = ({ products, onClose, onConfirm, themeColor }: { produc
     const [error, setError] = useState<string | null>(null);
     const [parsedItems, setParsedItems] = useState<any[] | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const handleFile = (file: File) => {
-        setIsProcessing(true);
-        setError(null);
-        setTimeout(() => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const data = e.target?.result;
-                    const workbook = XLSX.read(data, { type: file.name.endsWith('.xlsx') ? 'array' : 'string' });
-                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-                    parseRows(rows);
-                } catch (err) {
-                    setError("Failed to parse file. Please ensure valid CSV or Excel format.");
-                } finally {
-                    setIsProcessing(false);
-                }
-            };
-            if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file);
-            else reader.readAsText(file);
-        }, 100);
-    };
-
-    const parseRows = (rows: any[][]) => {
-        if (rows.length < 2) {
-            setError("File is empty.");
-            return;
-        }
-        const headers = rows[0].map(h => String(h).trim().toLowerCase());
-        const skuIdx = headers.findIndex(h => h.includes('sku'));
-        const priceIdx = headers.findIndex(h => h.includes('price') || h.includes('promo'));
-
-        if (skuIdx === -1 || priceIdx === -1) {
-            setError("Missing required columns: 'SKU' and 'Price' (or 'Promo Price').");
-            return;
-        }
-
-        const results: any[] = [];
-        const skuResolver: Record<string, string> = {};
-        
-        products.forEach(p => {
-            skuResolver[p.sku.toUpperCase()] = p.sku;
-            p.channels.forEach(c => {
-                if (c.skuAlias) {
-                    skuResolver[c.skuAlias.toUpperCase()] = p.sku;
-                }
-            });
-        });
-
-        for (let i = 1; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row[skuIdx]) continue;
-            const rawSku = String(row[skuIdx]).trim();
-            const price = parseFloat(String(row[priceIdx]));
-            
-            const masterSku = skuResolver[rawSku.toUpperCase()];
-            const isValid = !!masterSku && !isNaN(price) && price > 0;
-            
-            results.push({
-                sku: masterSku || rawSku,
-                price,
-                isValid,
-                originalSku: rawSku
-            });
-        }
-        setParsedItems(results);
-    };
-
+    const handleFile = (file: File) => { setIsProcessing(true); setError(null); setTimeout(() => { const reader = new FileReader(); reader.onload = (e) => { try { const data = e.target?.result; const workbook = XLSX.read(data, { type: file.name.endsWith('.xlsx') ? 'array' : 'string' }); const sheet = workbook.Sheets[workbook.SheetNames[0]]; const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]; parseRows(rows); } catch (err) { setError("Failed to parse file. Please ensure valid CSV or Excel format."); } finally { setIsProcessing(false); } }; if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file); else reader.readAsText(file); }, 100); };
+    const parseRows = (rows: any[][]) => { if (rows.length < 2) { setError("File is empty."); return; } const headers = rows[0].map(h => String(h).trim().toLowerCase()); const skuIdx = headers.findIndex(h => h.includes('sku')); const priceIdx = headers.findIndex(h => h.includes('price') || h.includes('promo')); if (skuIdx === -1 || priceIdx === -1) { setError("Missing required columns: 'SKU' and 'Price' (or 'Promo Price')."); return; } const results: any[] = []; const skuResolver: Record<string, string> = {}; products.forEach(p => { skuResolver[p.sku.toUpperCase()] = p.sku; p.channels.forEach(c => { if (c.skuAlias) { skuResolver[c.skuAlias.toUpperCase()] = p.sku; } }); }); for (let i = 1; i < rows.length; i++) { const row = rows[i]; if (!row[skuIdx]) continue; const rawSku = String(row[skuIdx]).trim(); const price = parseFloat(String(row[priceIdx])); const masterSku = skuResolver[rawSku.toUpperCase()]; const isValid = !!masterSku && !isNaN(price) && price > 0; results.push({ sku: masterSku || rawSku, price, isValid, originalSku: rawSku }); } setParsedItems(results); };
     const validItems = parsedItems?.filter(i => i.isValid) || [];
-
-    const handleDrag = (e: React.DragEvent) => { e.preventDefault(); setDragActive(true); };
-    const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setDragActive(false); };
-    const handleDrop = (e: React.DragEvent) => { 
-        e.preventDefault(); 
-        setDragActive(false); 
-        if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]); 
-    };
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                    <h3 className="font-bold text-gray-900">Batch Upload Promo Prices</h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
-                </div>
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center"><h3 className="font-bold text-gray-900">Batch Upload Promo Prices</h3><button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button></div>
                 <div className="p-6 flex-1 overflow-y-auto">
-                    {!parsedItems ? (
-                        <div 
-                            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-colors ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'}`}
-                            onDragEnter={handleDrag}
-                            onDragLeave={handleDragLeave}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={handleDrop}
-                        >
-                            <input ref={fileInputRef} type="file" className="hidden" accept=".csv, .xlsx" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
-                            {isProcessing ? (
-                                <Loader2 className="w-8 h-8 animate-spin text-gray-400 mb-2" />
-                            ) : (
-                                <>
-                                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                                    <p className="text-sm font-medium">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-indigo-600 underline">Browse</button></p>
-                                    <p className="text-xs text-gray-500 mt-2">Required Columns: SKU, Promo Price</p>
-                                </>
-                            )}
-                            {error && <p className="text-red-500 text-xs mt-3">{error}</p>}
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-green-600 font-bold">{validItems.length} Valid</span>
-                                <button onClick={() => setParsedItems(null)} className="text-gray-500 flex items-center gap-1">
-                                    <RefreshCw className="w-3 h-3" /> Reset
-                                </button>
-                            </div>
-                            <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="p-2">SKU (Resolved)</th>
-                                            <th className="p-2 text-right">Price</th>
-                                            <th className="p-2 text-right">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y">
-                                        {parsedItems.map((item, i) => (
-                                            <tr key={i} className={!item.isValid ? 'bg-red-50' : ''}>
-                                                <td className="p-2">
-                                                    {item.sku}
-                                                    {item.originalSku !== item.sku && <span className="text-xs text-gray-400 block">via {item.originalSku}</span>}
-                                                </td>
-                                                <td className="p-2 text-right">{item.price || '-'}</td>
-                                                <td className="p-2 text-right">
-                                                    {item.isValid ? <Check className="w-4 h-4 text-green-500 ml-auto" /> : <AlertCircle className="w-4 h-4 text-red-500 ml-auto" />}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
+                    {!parsedItems ? (<div className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-colors ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'}`} onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }} onDragOver={(e) => { e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]); }}><input ref={fileInputRef} type="file" className="hidden" accept=".csv, .xlsx" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />{isProcessing ? (<Loader2 className="w-8 h-8 animate-spin text-gray-400 mb-2" />) : (<><Upload className="w-8 h-8 text-gray-400 mb-2" /><p className="text-sm font-medium">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-indigo-600 underline">Browse</button></p><p className="text-xs text-gray-500 mt-2">Required Columns: SKU, Promo Price</p></>)}{error && <p className="text-red-500 text-xs mt-3">{error}</p>}</div>) : (<div className="space-y-4"><div className="flex justify-between items-center text-sm"><span className="text-green-600 font-bold">{validItems.length} Valid</span><button onClick={() => setParsedItems(null)} className="text-gray-500 flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Reset</button></div><div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto"><table className="w-full text-sm text-left"><thead className="bg-gray-50"><tr><th className="p-2">SKU (Resolved)</th><th className="p-2 text-right">Price</th><th className="p-2 text-right">Status</th></tr></thead><tbody className="divide-y">{parsedItems.map((item, i) => (<tr key={i} className={!item.isValid ? 'bg-red-50' : ''}><td className="p-2">{item.sku}{item.originalSku !== item.sku && <span className="text-xs text-gray-400 block">via {item.originalSku}</span>}</td><td className="p-2 text-right">{item.price || '-'}</td><td className="p-2 text-right">{item.isValid ? <Check className="w-4 h-4 text-green-500 ml-auto" /> : <AlertCircle className="w-4 h-4 text-red-500 ml-auto" />}</td></tr>))}</tbody></table></div></div>)}
                 </div>
-                <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg">Cancel</button>
-                    {validItems.length > 0 && (
-                        <button 
-                            onClick={() => onConfirm(validItems)} 
-                            className="px-6 py-2 text-white rounded-lg shadow-md hover:opacity-90" 
-                            style={{ backgroundColor: themeColor }}
-                        >
-                            Import {validItems.length} Items
-                        </button>
-                    )}
-                </div>
+                <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg">Cancel</button>{validItems.length > 0 && (<button onClick={() => onConfirm(validItems)} className="px-6 py-2 text-white rounded-lg shadow-md hover:opacity-90" style={{ backgroundColor: themeColor }}>Import {validItems.length} Items</button>)}</div>
             </div>
         </div>
     );
