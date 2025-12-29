@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail } from '../types';
-import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight } from 'lucide-react';
+import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
 import ShipmentUploadModal from './ShipmentUploadModal';
+import ProductList from './ProductList';
 
 interface ProductManagementPageProps {
     products: Product[];
@@ -11,6 +12,12 @@ interface ProductManagementPageProps {
     promotions?: PromotionEvent[];
     priceHistoryMap?: Map<string, PriceLog[]>;
     onOpenMappingModal: () => void;
+    onOpenSales?: () => void;
+    onOpenInventory?: () => void;
+    onOpenReturns?: () => void;
+    onOpenCA?: () => void;
+    onAnalyze: (product: Product) => void;
+    dateLabels: { current: string, last: string };
     onUpdateProduct?: (product: Product) => void;
     themeColor: string;
     headerStyle: React.CSSProperties;
@@ -25,6 +32,12 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     promotions = [],
     priceHistoryMap = new Map(),
     onOpenMappingModal,
+    onOpenSales,
+    onOpenInventory,
+    onOpenReturns,
+    onOpenCA,
+    onAnalyze,
+    dateLabels,
     onUpdateProduct,
     themeColor,
     headerStyle
@@ -141,14 +154,25 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
             {/* Main Content Area */}
             <div className="flex-1 min-h-0 relative">
                 {activeTab === 'dashboard' && (
-                    <DashboardView products={products} priceHistoryMap={priceHistoryMap} themeColor={themeColor} />
+                    <DashboardView
+                        products={products}
+                        priceHistoryMap={priceHistoryMap}
+                        themeColor={themeColor}
+                        onOpenSales={onOpenSales}
+                        onOpenInventory={onOpenInventory}
+                        onOpenReturns={onOpenReturns}
+                        onOpenCA={onOpenCA}
+                        onOpenMapping={onOpenMappingModal}
+                    />
                 )}
 
                 {activeTab === 'catalog' && (
-                    <MasterCatalogView
+                    <ProductList
                         products={products}
-                        onEditAliases={(p: Product) => setSelectedProductForDrawer(p)}
-                        onOpenMappingModal={onOpenMappingModal}
+                        onAnalyze={onAnalyze}
+                        onEditAliases={setSelectedProductForDrawer}
+                        dateLabels={dateLabels}
+                        pricingRules={pricingRules}
                         themeColor={themeColor}
                     />
                 )}
@@ -195,7 +219,25 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
 };
 
 // 1. DASHBOARD VIEW (GLASS UI)
-const DashboardView = ({ products, priceHistoryMap, themeColor }: { products: Product[], priceHistoryMap: Map<string, PriceLog[]>, themeColor: string }) => {
+const DashboardView = ({
+    products,
+    priceHistoryMap,
+    themeColor,
+    onOpenSales,
+    onOpenInventory,
+    onOpenReturns,
+    onOpenCA,
+    onOpenMapping
+}: {
+    products: Product[],
+    priceHistoryMap: Map<string, PriceLog[]>,
+    themeColor: string,
+    onOpenSales?: () => void,
+    onOpenInventory?: () => void,
+    onOpenReturns?: () => void,
+    onOpenCA?: () => void,
+    onOpenMapping?: () => void
+}) => {
     // Flatten map for global dashboard statistics if needed
     const priceHistory = useMemo(() => Array.from(priceHistoryMap.values()).flat(), [priceHistoryMap]);
     // ... (State logic unchanged)
@@ -349,8 +391,67 @@ const DashboardView = ({ products, priceHistoryMap, themeColor }: { products: Pr
     }, [products, filteredSales, prevFilteredSales]);
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-12">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Quick Actions / Data Hub Section */}
+            <div className="bg-custom-glass rounded-xl border border-custom-glass p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                        <Database className="w-5 h-5 text-indigo-600" />
+                        Data Action Hub
+                    </h3>
+                    <p className="text-xs text-gray-500 font-medium bg-gray-100/50 px-2 py-1 rounded-full border border-gray-200">
+                        Primary Interface for Management Reports
+                    </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <button
+                        onClick={onOpenSales}
+                        className="p-3 bg-white/50 border border-indigo-100 rounded-xl hover:border-indigo-400 hover:bg-white transition-all group text-left"
+                    >
+                        <FileBarChart className="w-5 h-5 text-indigo-600 mb-2 group-hover:scale-110 transition-transform" />
+                        <div className="font-bold text-sm text-gray-900">Import Sales</div>
+                        <div className="text-[10px] text-gray-500">Multi-Channel Reports</div>
+                    </button>
+
+                    <button
+                        onClick={onOpenInventory}
+                        className="p-3 bg-white/50 border border-blue-100 rounded-xl hover:border-blue-400 hover:bg-white transition-all group text-left"
+                    >
+                        <Layers className="w-5 h-5 text-blue-600 mb-2 group-hover:scale-110 transition-transform" />
+                        <div className="font-bold text-sm text-gray-900">Update Inventory</div>
+                        <div className="text-[10px] text-gray-500">ERP / Stock Levels</div>
+                    </button>
+
+                    <button
+                        onClick={onOpenReturns}
+                        className="p-3 bg-white/50 border border-red-100 rounded-xl hover:border-red-400 hover:bg-white transition-all group text-left"
+                    >
+                        <RotateCcw className="w-5 h-5 text-red-600 mb-2 group-hover:scale-110 transition-transform" />
+                        <div className="font-bold text-sm text-gray-900">Import Refunds</div>
+                        <div className="text-[10px] text-gray-500">Returns Analysis</div>
+                    </button>
+
+                    <button
+                        onClick={onOpenCA}
+                        className="p-3 bg-white/50 border border-purple-100 rounded-xl hover:border-purple-400 hover:bg-white transition-all group text-left"
+                    >
+                        <Upload className="w-5 h-5 text-purple-600 mb-2 group-hover:scale-110 transition-transform" />
+                        <div className="font-bold text-sm text-gray-900">CA Report</div>
+                        <div className="text-[10px] text-gray-500">Channel Advisor Prices</div>
+                    </button>
+
+                    <button
+                        onClick={onOpenMapping}
+                        className="p-3 bg-white/50 border border-amber-100 rounded-xl hover:border-amber-400 hover:bg-white transition-all group text-left"
+                    >
+                        <LinkIcon className="w-5 h-5 text-amber-600 mb-2 group-hover:scale-110 transition-transform" />
+                        <div className="font-bold text-sm text-gray-900">SKU Mapping</div>
+                        <div className="text-[10px] text-gray-500">Master SKU Aliases</div>
+                    </button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
                     <div className="text-gray-500 text-xs font-bold uppercase mb-1">Total Products</div>
                     <div className="flex justify-between items-end">
@@ -641,265 +742,6 @@ const DashboardView = ({ products, priceHistoryMap, themeColor }: { products: Pr
                         )}
                     </div>
                 </div>
-            </div>
-        </div>
-    );
-};
-
-const MasterCatalogView = ({ products, onEditAliases, onOpenMappingModal, themeColor }: { products: Product[], onEditAliases: (p: Product) => void, onOpenMappingModal: () => void, themeColor: string }) => {
-    // ... (MasterCatalogView implementation remains unchanged)
-    const [search, setSearch] = useState('');
-    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-    const [showInactive, setShowInactive] = useState(false);
-
-    // Pagination State
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 50;
-
-    const filtered = products.filter((p: Product) => {
-        // Filter out inactive products if toggle is off
-        if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) {
-            return false;
-        }
-
-        return p.sku.toLowerCase().includes(search.toLowerCase()) ||
-            p.name.toLowerCase().includes(search.toLowerCase());
-    });
-
-    // Reset page on filter change
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search, showInactive]);
-
-    const totalPages = Math.ceil(filtered.length / itemsPerPage);
-    const paginatedProducts = filtered.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
-
-    // Calculate empty rows for spreadsheet effect
-    const emptyRows = Math.max(0, itemsPerPage - paginatedProducts.length);
-
-    const toggleRow = (id: string) => {
-        const newSet = new Set(expandedRows);
-        if (newSet.has(id)) newSet.delete(id);
-        else newSet.add(id);
-        setExpandedRows(newSet);
-    };
-
-    const toggleAll = () => {
-        if (expandedRows.size === filtered.length) {
-            setExpandedRows(new Set());
-        } else {
-            setExpandedRows(new Set(filtered.map(p => p.id)));
-        }
-    };
-
-    // Helper for Badge Styles (Blue/Green Logic - Consistent with ShipmentsView)
-    const getBadgeStyle = (status: string) => {
-        const lower = status.toLowerCase();
-        if (lower.includes('to be shipped')) {
-            return 'bg-blue-100 text-blue-700 border-blue-200'; // Blue for Scheduled
-        }
-        if (lower.includes('shipped out') || lower.includes('shipped')) {
-            return 'bg-green-100 text-green-700 border-green-200'; // Green for Active
-        }
-        return 'bg-gray-100 text-gray-600 border-gray-200'; // Grey for Pending/Unknown
-    };
-
-    return (
-        <div className="space-y-4 animate-in fade-in duration-500 h-full flex flex-col">
-            <div className="flex items-center gap-4 bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Search catalogue..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white/50"
-                    />
-                </div>
-
-                <div className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 min-w-[140px]">
-                    <span className="text-xs font-bold text-gray-500 uppercase mr-2">Show Inactive</span>
-                    <button
-                        onClick={() => setShowInactive(!showInactive)}
-                        className="text-gray-500 hover:text-indigo-600 focus:outline-none"
-                        style={showInactive ? { color: themeColor } : {}}
-                        title="Toggle products with 0 stock and 0 sales"
-                    >
-                        {showInactive ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-                    </button>
-                </div>
-
-                <div className="flex gap-2">
-                    <button
-                        onClick={toggleAll}
-                        className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 flex items-center gap-2"
-                    >
-                        {expandedRows.size === filtered.length ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                        {expandedRows.size === filtered.length ? 'Collapse All' : 'Expand All'}
-                    </button>
-                    <button
-                        onClick={onOpenMappingModal}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-2"
-                    >
-                        <LinkIcon className="w-4 h-4" />
-                        Import Aliases
-                    </button>
-                </div>
-            </div>
-
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex-1 flex flex-col">
-                <div className="overflow-auto flex-1">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass sticky top-0 z-10 shadow-sm">
-                            <tr>
-                                <th className="p-4 w-10"></th>
-                                <th className="p-4">SKU</th>
-                                <th className="p-4">Name</th>
-                                <th className="p-4">Category</th>
-                                <th className="p-4 text-right">Stock</th>
-                                <th className="p-4 text-right">Incoming</th>
-                                <th className="p-4 text-right">Next Arrival</th>
-                                <th className="p-4"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100/50">
-                            {paginatedProducts.map((p: Product) => {
-                                const isExpanded = expandedRows.has(p.id);
-                                const totalIncoming = p.shipments?.reduce((sum, s) => sum + s.quantity, 0) || 0;
-                                const shipmentCount = p.shipments?.length || 0;
-
-                                return (
-                                    <React.Fragment key={p.id}>
-                                        <tr className={`hover:bg-gray-50/50 cursor-pointer ${isExpanded ? 'bg-gray-50/30' : ''}`} onClick={() => toggleRow(p.id)}>
-                                            <td className="p-4 text-center">
-                                                {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                                            </td>
-                                            <td className="p-4 font-mono font-bold text-gray-900">{p.sku}</td>
-                                            <td className="p-4 text-gray-600 truncate max-w-xs">{p.name}</td>
-                                            <td className="p-4 text-xs font-medium text-gray-500">{p.category}</td>
-                                            <td className="p-4 text-right font-bold">{p.stockLevel}</td>
-
-                                            <td className="p-4 text-right">
-                                                {totalIncoming > 0 ? (
-                                                    <span
-                                                        className={`font-medium ${shipmentCount > 1 ? 'text-indigo-600 font-bold' : 'text-gray-900'}`}
-                                                        title={shipmentCount > 1 ? `${shipmentCount} incoming shipments` : '1 incoming shipment'}
-                                                    >
-                                                        +{totalIncoming}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-300">-</span>
-                                                )}
-                                            </td>
-
-                                            <td className="p-4 text-right text-gray-500 text-xs">
-                                                {p.shipments && p.shipments.length > 0
-                                                    ? `${p.leadTimeDays} days`
-                                                    : '-'}
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onEditAliases(p); }}
-                                                    className="p-2 text-gray-400 hover:text-indigo-600"
-                                                    title="Manage Aliases"
-                                                >
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                        {isExpanded && (
-                                            <tr className="bg-gray-50/30">
-                                                <td colSpan={8} className="p-0">
-                                                    <div className="p-4 pl-12 border-b border-gray-100 shadow-inner bg-gray-50/50">
-                                                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-2">
-                                                            <Ship className="w-3 h-3" /> Incoming Shipments
-                                                        </h4>
-                                                        {p.shipments && p.shipments.length > 0 ? (
-                                                            <table className="w-full max-w-2xl text-xs bg-white border border-gray-200 rounded-lg overflow-hidden">
-                                                                <thead className="bg-gray-100 text-gray-600">
-                                                                    <tr>
-                                                                        <th className="p-2 text-left">Container No.</th>
-                                                                        <th className="p-2 text-left">Status</th>
-                                                                        <th className="p-2 text-right">Quantity</th>
-                                                                        <th className="p-2 text-right">ETA</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="divide-y divide-gray-100">
-                                                                    {p.shipments.map((s, idx) => (
-                                                                        <tr key={idx}>
-                                                                            <td className="p-2 font-mono font-medium">{s.containerId}</td>
-                                                                            <td className="p-2">
-                                                                                <span className={`px-1.5 py-0.5 rounded border ${getBadgeStyle(s.status)}`}>
-                                                                                    {s.status}
-                                                                                </span>
-                                                                            </td>
-                                                                            <td className="p-2 text-right">{s.quantity}</td>
-                                                                            <td className="p-2 text-right">{s.eta || '-'}</td>
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                            </table>
-                                                        ) : (
-                                                            <div className="text-xs text-gray-400 italic">No active shipments found.</div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })}
-                            {/* Filler Rows for Spreadsheet Style */}
-                            {emptyRows > 0 && Array.from({ length: emptyRows }).map((_, idx) => (
-                                <tr key={`empty-${idx}`} className="h-[53px]">
-                                    <td colSpan={8} className="p-4 text-transparent select-none">-</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination Footer */}
-                {filtered.length > 0 && (
-                    <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200 flex items-center justify-between sm:px-6">
-                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                            <div>
-                                <p className="text-sm text-gray-700">
-                                    Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filtered.length)}</span> of <span className="font-medium">{filtered.length}</span> results
-                                </p>
-                            </div>
-                            <div>
-                                {totalPages > 1 && (
-                                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                        <button
-                                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                            disabled={currentPage === 1}
-                                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                                        >
-                                            <span className="sr-only">Previous</span>
-                                            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                                        </button>
-                                        <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                                            Page {currentPage} of {totalPages}
-                                        </span>
-                                        <button
-                                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                            disabled={currentPage === totalPages}
-                                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                                        >
-                                            <span className="sr-only">Next</span>
-                                            <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                                        </button>
-                                    </nav>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );

@@ -192,16 +192,16 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         const floorPrice = (safeNum(product.costPrice) + safeNum(product.postage)) * (1 + minMarginBuffer);
 
         if (runwayWeeks < safeNum(config.increase.minRunwayWeeks) && effectiveStock > safeNum(config.increase.minStock)) {
-            if (last7Qty < safeNum(config.increase.minVelocity7Days)) {
+            if (last7Qty > safeNum(config.increase.minVelocity7Days)) {
                 action = 'INCREASE';
                 const increaseAmount = Math.max(
                     basePrice * (safeNum(config.increase.adjustmentPercent) / 100),
                     safeNum(config.increase.adjustmentFixed)
                 );
                 adjustedPrice = applyPsychologicalPricing(basePrice + increaseAmount);
-                reasoning = `Runway < ${config.increase.minRunwayWeeks} wks & P7D Qty < ${config.increase.minVelocity7Days}`;
+                reasoning = `Runway < ${config.increase.minRunwayWeeks} wks & P7D Qty > ${config.increase.minVelocity7Days}`;
             } else {
-                reasoning = `Excluded: P7D Qty (${safeFormat(last7Qty, 0)}) >= Limit (${config.increase.minVelocity7Days})`;
+                reasoning = `Excluded: P7D Qty (${safeFormat(last7Qty, 0)}) <= Limit (${config.increase.minVelocity7Days})`;
             }
         }
 
@@ -581,7 +581,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                             <div>
                                 <label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Past 7-Days QTY (Exclusion)</label>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-400">&ge;</span>
+                                    <span className="text-sm text-gray-400">&le;</span>
                                     <input
                                         type="number"
                                         value={config.increase.minVelocity7Days}

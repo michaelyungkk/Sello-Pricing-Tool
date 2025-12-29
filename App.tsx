@@ -18,7 +18,7 @@ import StrategyPage from './components/StrategyPage';
 import ReturnsUploadModal from './components/ReturnsUploadModal'; // New Import
 import CAUploadModal from './components/CAUploadModal';
 import { analyzePriceAdjustment } from './services/geminiService';
-import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package, Download, Calculator, RotateCcw } from 'lucide-react';
+import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package, Download, Calculator, RotateCcw, List } from 'lucide-react';
 
 // --- LOGIC HELPERS ---
 
@@ -97,7 +97,7 @@ const App: React.FC = () => {
     // --- DATABASE INITIALIZATION ---
     const [products, setProducts] = useState<Product[]>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_products');
+            const saved = localStorage.getItem('sello_products') || localStorage.getItem('ecompulse_products');
             return saved ? JSON.parse(saved) : [];
         } catch (e) {
             console.error("Failed to load products from storage", e);
@@ -107,7 +107,7 @@ const App: React.FC = () => {
 
     const [pricingRules, setPricingRules] = useState<PricingRules>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_rules');
+            const saved = localStorage.getItem('sello_rules') || localStorage.getItem('ecompulse_rules');
             const parsed = saved ? JSON.parse(saved) : null;
             return parsed && typeof parsed === 'object' ? parsed : DEFAULT_PRICING_RULES;
         } catch (e) {
@@ -117,7 +117,7 @@ const App: React.FC = () => {
 
     const [logisticsRules, setLogisticsRules] = useState<LogisticsRule[]>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_logistics');
+            const saved = localStorage.getItem('sello_logistics') || localStorage.getItem('ecompulse_logistics');
             return saved ? JSON.parse(saved) : DEFAULT_LOGISTICS_RULES;
         } catch (e) {
             return DEFAULT_LOGISTICS_RULES;
@@ -126,7 +126,7 @@ const App: React.FC = () => {
 
     const [strategyRules, setStrategyRules] = useState<StrategyConfig>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_strategy');
+            const saved = localStorage.getItem('sello_strategy') || localStorage.getItem('ecompulse_strategy');
             return saved ? JSON.parse(saved) : DEFAULT_STRATEGY_RULES;
         } catch (e) {
             return DEFAULT_STRATEGY_RULES;
@@ -135,7 +135,7 @@ const App: React.FC = () => {
 
     const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(() => {
         try {
-            return (localStorage.getItem('ecompulse_velocity_setting') as VelocityLookback) || '30';
+            return (localStorage.getItem('sello_velocity_setting') as VelocityLookback) || (localStorage.getItem('ecompulse_velocity_setting') as VelocityLookback) || '30';
         } catch (e) {
             return '30';
         }
@@ -143,7 +143,7 @@ const App: React.FC = () => {
 
     const [priceHistory, setPriceHistory] = useState<PriceLog[]>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_price_history');
+            const saved = localStorage.getItem('sello_price_history') || localStorage.getItem('ecompulse_price_history');
             return saved ? JSON.parse(saved) : [];
         } catch (e) {
             return [];
@@ -182,7 +182,7 @@ const App: React.FC = () => {
 
     const [refundHistory, setRefundHistory] = useState<RefundLog[]>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_refund_history');
+            const saved = localStorage.getItem('sello_refund_history') || localStorage.getItem('ecompulse_refund_history');
             return saved ? JSON.parse(saved) : [];
         } catch (e) {
             return [];
@@ -191,7 +191,7 @@ const App: React.FC = () => {
 
     const [shipmentHistory, setShipmentHistory] = useState<ShipmentLog[]>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_shipment_history');
+            const saved = localStorage.getItem('sello_shipment_history') || localStorage.getItem('ecompulse_shipment_history');
             return saved ? JSON.parse(saved) : [];
         } catch (e) {
             return [];
@@ -200,7 +200,7 @@ const App: React.FC = () => {
 
     const [learnedAliases, setLearnedAliases] = useState<Record<string, string>>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_learned_aliases');
+            const saved = localStorage.getItem('sello_learned_aliases') || localStorage.getItem('ecompulse_learned_aliases');
             return saved ? JSON.parse(saved) : {};
         } catch (e) {
             return {};
@@ -230,7 +230,7 @@ const App: React.FC = () => {
     // Promotions State
     const [promotions, setPromotions] = useState<PromotionEvent[]>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_promotions');
+            const saved = localStorage.getItem('sello_promotions') || localStorage.getItem('ecompulse_promotions');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 // User Request: If data is empty (wiped), restore defaults automatically
@@ -245,7 +245,7 @@ const App: React.FC = () => {
     // User Profile State
     const [userProfile, setUserProfile] = useState<UserProfileType>(() => {
         try {
-            const saved = localStorage.getItem('ecompulse_user_profile');
+            const saved = localStorage.getItem('sello_user_profile') || localStorage.getItem('ecompulse_user_profile');
             const parsed = saved ? JSON.parse(saved) : {};
             return {
                 name: parsed.name || '',
@@ -315,7 +315,7 @@ const App: React.FC = () => {
     const [isReturnsModalOpen, setIsReturnsModalOpen] = useState(false); // NEW
     const [isCAUploadModalOpen, setIsCAUploadModalOpen] = useState(false);
 
-    const [currentView, setCurrentView] = useState<'dashboard' | 'strategy' | 'products' | 'settings' | 'costs' | 'definitions' | 'promotions'>('dashboard');
+    const [currentView, setCurrentView] = useState<'dashboard' | 'strategy' | 'products' | 'settings' | 'costs' | 'definitions' | 'promotions'>('products');
 
     // Connectivity State
     const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -500,17 +500,17 @@ const App: React.FC = () => {
         }
     };
 
-    useEffect(() => { syncToStorage('ecompulse_products', products); }, [products]);
-    useEffect(() => { syncToStorage('ecompulse_rules', pricingRules); }, [pricingRules]);
-    useEffect(() => { syncToStorage('ecompulse_logistics', logisticsRules); }, [logisticsRules]);
-    useEffect(() => { syncToStorage('ecompulse_strategy', strategyRules); }, [strategyRules]);
-    useEffect(() => { syncToStorage('ecompulse_price_history', priceHistory); }, [priceHistory]);
-    useEffect(() => { syncToStorage('ecompulse_refund_history', refundHistory); }, [refundHistory]);
-    useEffect(() => { syncToStorage('ecompulse_shipment_history', shipmentHistory); }, [shipmentHistory]);
-    useEffect(() => { syncToStorage('ecompulse_promotions', promotions); }, [promotions]);
-    useEffect(() => { syncToStorage('ecompulse_user_profile', userProfile); }, [userProfile]);
-    useEffect(() => { syncToStorage('ecompulse_velocity_setting', velocityLookback); }, [velocityLookback]);
-    useEffect(() => { syncToStorage('ecompulse_learned_aliases', learnedAliases); }, [learnedAliases]);
+    useEffect(() => { syncToStorage('sello_products', products); }, [products]);
+    useEffect(() => { syncToStorage('sello_rules', pricingRules); }, [pricingRules]);
+    useEffect(() => { syncToStorage('sello_logistics', logisticsRules); }, [logisticsRules]);
+    useEffect(() => { syncToStorage('sello_strategy', strategyRules); }, [strategyRules]);
+    useEffect(() => { syncToStorage('sello_price_history', priceHistory); }, [priceHistory]);
+    useEffect(() => { syncToStorage('sello_refund_history', refundHistory); }, [refundHistory]);
+    useEffect(() => { syncToStorage('sello_shipment_history', shipmentHistory); }, [shipmentHistory]);
+    useEffect(() => { syncToStorage('sello_promotions', promotions); }, [promotions]);
+    useEffect(() => { syncToStorage('sello_user_profile', userProfile); }, [userProfile]);
+    useEffect(() => { syncToStorage('sello_velocity_setting', velocityLookback); }, [velocityLookback]);
+    useEffect(() => { syncToStorage('sello_learned_aliases', learnedAliases); }, [learnedAliases]);
 
 
     // --- HANDLERS ---
@@ -574,7 +574,7 @@ const App: React.FC = () => {
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
-        const filename = `ecompulse_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        const filename = `sello_uk_hub_backup_${new Date().toISOString().slice(0, 10)}.json`;
         a.download = filename;
         a.setAttribute('download', filename);
         document.body.appendChild(a);
@@ -1162,9 +1162,8 @@ const App: React.FC = () => {
 
                     <nav className="flex-1 px-4 py-4 space-y-1">
                         {[
-                            { id: 'dashboard', icon: LayoutDashboard, label: 'Pricing Tool' },
+                            { id: 'products', icon: LayoutDashboard, label: 'Overview' },
                             { id: 'strategy', icon: Calculator, label: 'Strategy Engine' },
-                            { id: 'products', icon: Package, label: 'Product Mgmt.' },
                             { id: 'costs', icon: DollarSign, label: 'Cost Management' },
                             { id: 'promotions', icon: Tag, label: 'Promotions' },
                             { id: 'settings', icon: Settings, label: 'Configuration' },
@@ -1245,9 +1244,9 @@ const App: React.FC = () => {
                     <header className="flex justify-between items-center mb-8">
                         <div>
                             <h1 className="text-2xl font-bold transition-colors" style={headerStyle}>
-                                {currentView === 'dashboard' ? 'Pricing & Inventory Analysis' :
-                                    currentView === 'strategy' ? 'Pricing Strategy Engine' :
-                                        currentView === 'products' ? 'Product Management' :
+                                {currentView === 'products' ? 'Business Overview' :
+                                    currentView === 'dashboard' ? 'Master Catalogue' :
+                                        currentView === 'strategy' ? 'Pricing Strategy Engine' :
                                             currentView === 'costs' ? 'Product Costs & Limits' :
                                                 currentView === 'definitions' ? 'Definitions & Formulas' :
                                                     currentView === 'promotions' ? 'Promotion Management' :
@@ -1277,221 +1276,166 @@ const App: React.FC = () => {
                         </div>
                     </header>
 
-                    {/* Content Area - Using Display Toggling for Persistence */}
 
-                    {/* VIEW: DASHBOARD */}
-                    {currentView === 'dashboard' && (
-                        !showDashboard ? (
-                            // --- ONBOARDING FLOW ---
-                            <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 animate-in fade-in zoom-in duration-300 h-full">
-                                <div
-                                    className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
-                                    style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}
-                                >
-                                    <Database className="w-10 h-10" />
-                                </div>
-                                <h3 className="text-2xl font-bold text-gray-900">Welcome to Sello UK Hub</h3>
-                                <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">
-                                    Let's get your dashboard set up. Please upload your company reports in the order below to initialize the system.
-                                </p>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative">
-                                    {/* Step 1: Inventory */}
-                                    <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}>
-                                        <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'bg-white text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
-                                            {hasInventory ? 'Completed' : 'Step 1'}
-                                        </div>
-                                        <div className="p-4 bg-white rounded-full shadow-sm mb-4">
-                                            {hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}
-                                        </div>
-                                        <h4 className="font-bold text-gray-900 text-lg">ERP Inventory Report</h4>
-                                        <p className="text-sm text-gray-500 mt-2 text-center">
-                                            Upload the 28-column ERP file to initialize Products, Stock Levels, COGS, and Categories.
-                                        </p>
-                                        <button
-                                            onClick={() => setIsUploadModalOpen(true)}
-                                            className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300 hover:bg-opacity-5'}`}
-                                            style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}
-                                        >
-                                            {hasInventory ? 'Re-upload Inventory' : 'Upload Inventory'}
-                                        </button>
+                    {/* Content Area - Persistence through conditional rendering */}
+                    <div className="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-8">
+                        {/* VIEW: OVERVIEW (Onboarding or Dashboard) */}
+                        {currentView === 'products' && (
+                            products.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 animate-in fade-in zoom-in duration-300 h-full">
+                                    <div
+                                        className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
+                                        style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}
+                                    >
+                                        <Database className="w-10 h-10" />
                                     </div>
+                                    <h3 className="text-2xl font-bold text-gray-900">Welcome to Sello UK Hub</h3>
+                                    <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">
+                                        Let's get your dashboard set up. Please upload your company reports in the order below to initialize the system.
+                                    </p>
 
-                                    {/* Step 2: Sales History (Locked until Step 1 done) */}
-                                    <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'
-                                        }`}>
-                                        <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
-                                            Step 2
-                                        </div>
-                                        <div className="p-4 bg-white rounded-full shadow-sm mb-4">
-                                            <FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} />
-                                        </div>
-                                        <h4 className="font-bold text-gray-900 text-lg">Sales Transaction Report</h4>
-                                        <p className="text-sm text-gray-500 mt-2 text-center">
-                                            Once products are loaded, upload sales history to calculate Velocity, Fees, and Margins.
-                                        </p>
-                                        <button
-                                            onClick={() => hasInventory && setIsSalesImportModalOpen(true)}
-                                            disabled={!hasInventory}
-                                            style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}
-                                            className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}
-                                        >
-                                            <Upload className="w-5 h-5" />
-                                            Upload Sales
-                                        </button>
-
-                                        {hasInventory && (
-                                            <div className="absolute -right-4 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 shadow-lg animate-pulse hidden md:block">
-                                                <ArrowRight className="w-6 h-6" style={{ color: userProfile.themeColor }} />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative">
+                                        {/* Step 1: Inventory */}
+                                        <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}>
+                                            <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'bg-white text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                                {hasInventory ? 'Completed' : 'Step 1'}
                                             </div>
-                                        )}
+                                            <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                                {hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}
+                                            </div>
+                                            <h4 className="font-bold text-gray-900 text-lg">ERP Inventory Report</h4>
+                                            <p className="text-sm text-gray-500 mt-2 text-center">
+                                                Upload the 28-column ERP file to initialize Products, Stock Levels, COGS, and Categories.
+                                            </p>
+                                            <button
+                                                onClick={() => setIsUploadModalOpen(true)}
+                                                className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300 hover:bg-opacity-5'}`}
+                                                style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}
+                                            >
+                                                {hasInventory ? 'Re-upload Inventory' : 'Upload Inventory'}
+                                            </button>
+                                        </div>
+
+                                        {/* Step 2: Sales History (Locked until Step 1 done) */}
+                                        <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'
+                                            }`}>
+                                            <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                                Step 2
+                                            </div>
+                                            <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                                <FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} />
+                                            </div>
+                                            <h4 className="font-bold text-gray-900 text-lg">Sales Transaction Report</h4>
+                                            <p className="text-sm text-gray-500 mt-2 text-center">
+                                                Once products are loaded, upload sales history to calculate Velocity, Fees, and Margins.
+                                            </p>
+                                            <button
+                                                onClick={() => hasInventory && setIsSalesImportModalOpen(true)}
+                                                disabled={!hasInventory}
+                                                style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}
+                                                className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}
+                                            >
+                                                <Upload className="w-5 h-5" />
+                                                Upload Sales
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="mb-6 flex justify-end items-center gap-3">
-                                    <button
-                                        onClick={() => setIsCAUploadModalOpen(true)}
-                                        className="px-4 py-2 bg-purple-50 text-purple-600 border border-purple-200 rounded-lg text-sm font-medium hover:bg-purple-100 transition-colors flex items-center gap-2"
-                                    >
-                                        <Upload className="w-4 h-4" />
-                                        Upload CA Report
-                                    </button>
-                                    <button
-                                        onClick={() => setIsReturnsModalOpen(true)}
-                                        className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors flex items-center gap-2"
-                                    >
-                                        <RotateCcw className="w-4 h-4" />
-                                        Import Refunds
-                                    </button>
-                                    <button
-                                        onClick={() => setIsSalesImportModalOpen(true)}
-                                        style={{ color: userProfile.themeColor, borderColor: `${userProfile.themeColor}40`, backgroundColor: `${userProfile.themeColor}10` }}
-                                        className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-opacity-20 transition-colors flex items-center gap-2 backdrop-blur-sm"
-                                    >
-                                        <FileBarChart className="w-4 h-4" />
-                                        Import Transaction Report
-                                    </button>
-                                    <button
-                                        onClick={() => setIsUploadModalOpen(true)}
-                                        className="px-4 py-2 bg-custom-glass border border-custom-glass text-gray-700 rounded-lg text-sm font-medium hover:bg-white/50 transition-colors flex items-center gap-2"
-                                    >
-                                        <Database className="w-4 h-4" />
-                                        Update Inventory (ERP)
-                                    </button>
-                                </div>
-
-                                <ProductList
+                            ) : (
+                                <ProductManagementPage
                                     products={products}
-                                    onAnalyze={handleAnalyze}
-                                    onApplyChanges={handleApplyBatchChanges}
-                                    dateLabels={dynamicDateLabels}
                                     pricingRules={pricingRules}
+                                    promotions={promotions}
+                                    priceHistoryMap={priceHistoryMap}
+                                    onOpenMappingModal={() => setIsMappingModalOpen(true)}
+                                    onOpenSales={() => setIsSalesImportModalOpen(true)}
+                                    onOpenInventory={() => setIsUploadModalOpen(true)}
+                                    onOpenReturns={() => setIsReturnsModalOpen(true)}
+                                    onOpenCA={() => setIsCAUploadModalOpen(true)}
+                                    onAnalyze={handleAnalyze}
+                                    dateLabels={dynamicDateLabels}
+                                    onUpdateProduct={handleUpdateProduct}
                                     themeColor={userProfile.themeColor}
+                                    headerStyle={headerStyle}
                                 />
-                            </>
-                        )
-                    )}
+                            )
+                        )}
 
-                    {/* VIEW: STRATEGY ENGINE */}
-                    {currentView === 'strategy' && (
-                        <StrategyPage
-                            products={products}
-                            pricingRules={pricingRules}
-                            currentConfig={strategyRules}
-                            onSaveConfig={(newConfig: StrategyConfig) => {
-                                setStrategyRules(newConfig);
-                                setCurrentView('dashboard');
-                            }}
-                            themeColor={userProfile.themeColor}
-                            headerStyle={headerStyle}
-                            priceHistoryMap={priceHistoryMap}
-                            promotions={promotions}
-                        />
-                    )}
+                        {/* VIEW: STRATEGY ENGINE */}
+                        {currentView === 'strategy' && (
+                            <StrategyPage
+                                products={products}
+                                pricingRules={pricingRules}
+                                currentConfig={strategyRules}
+                                onSaveConfig={(newConfig: StrategyConfig) => {
+                                    setStrategyRules(newConfig);
+                                    setCurrentView('products');
+                                }}
+                                themeColor={userProfile.themeColor}
+                                headerStyle={headerStyle}
+                                priceHistoryMap={priceHistoryMap}
+                                promotions={promotions}
+                            />
+                        )}
 
-                    {/* VIEW: PRODUCT MANAGEMENT */}
-                    {currentView === 'products' && (
-                        <ProductManagementPage
-                            products={products}
-                            pricingRules={pricingRules}
-                            promotions={promotions}
-                            priceHistoryMap={priceHistoryMap}
-                            onOpenMappingModal={() => setIsMappingModalOpen(true)}
-                            onUpdateProduct={handleUpdateProduct}
-                            themeColor={userProfile.themeColor}
-                            headerStyle={headerStyle}
-                        />
-                    )}
+                        {/* VIEW: COST MANAGEMENT */}
+                        {currentView === 'costs' && (
+                            <CostManagementPage
+                                products={products}
+                                onUpdateCosts={handleUpdateCosts}
+                                onOpenUpload={() => setIsCostUploadModalOpen(true)}
+                                logisticsRules={logisticsRules}
+                                themeColor={userProfile.themeColor}
+                                headerStyle={headerStyle}
+                            />
+                        )}
 
-                    {/* VIEW: COST MANAGEMENT */}
-                    {currentView === 'costs' && (
-                        <CostManagementPage
-                            products={products}
-                            onUpdateCosts={handleUpdateCosts}
-                            onOpenUpload={() => setIsCostUploadModalOpen(true)}
-                            logisticsRules={logisticsRules}
-                            themeColor={userProfile.themeColor}
-                            headerStyle={headerStyle}
-                        />
-                    )}
+                        {/* VIEW: PROMOTIONS */}
+                        {currentView === 'promotions' && (
+                            <PromotionPage
+                                products={products}
+                                pricingRules={pricingRules}
+                                logisticsRules={logisticsRules}
+                                promotions={promotions}
+                                priceHistoryMap={priceHistoryMap}
+                                onAddPromotion={handleAddPromotion}
+                                onUpdatePromotion={handleUpdatePromotion}
+                                onDeletePromotion={handleDeletePromotion}
+                                themeColor={userProfile.themeColor}
+                                headerStyle={headerStyle}
+                            />
+                        )}
 
-                    {/* VIEW: PROMOTIONS */}
-                    {currentView === 'promotions' && (
-                        <PromotionPage
-                            products={products}
-                            pricingRules={pricingRules}
-                            logisticsRules={logisticsRules}
-                            promotions={promotions}
-                            priceHistoryMap={priceHistoryMap}
-                            onAddPromotion={handleAddPromotion}
-                            onUpdatePromotion={handleUpdatePromotion}
-                            onDeletePromotion={handleDeletePromotion}
-                            themeColor={userProfile.themeColor}
-                            headerStyle={headerStyle}
-                        />
-                    )}
+                        {/* VIEW: DEFINITIONS */}
+                        {currentView === 'definitions' && (
+                            <DefinitionsPage headerStyle={headerStyle} />
+                        )}
 
-                    {/* VIEW: DEFINITIONS */}
-                    {currentView === 'definitions' && (
-                        <DefinitionsPage headerStyle={headerStyle} />
-                    )}
+                        {/* VIEW: SETTINGS */}
+                        {currentView === 'settings' && (
+                            <SettingsPage
+                                currentRules={pricingRules}
+                                onSave={(newRules, newVelocity) => {
+                                    setPricingRules(newRules);
+                                    setVelocityLookback(newVelocity);
+                                }}
+                                logisticsRules={logisticsRules}
+                                onSaveLogistics={(newLogistics) => {
+                                    setLogisticsRules(newLogistics);
+                                }}
+                                products={products}
+                                shipmentHistory={shipmentHistory}
+                                themeColor={userProfile.themeColor}
+                                headerStyle={headerStyle}
+                            />
+                        )}
+                    </div>
+                </main>
 
-                    {/* VIEW: SETTINGS */}
-                    {currentView === 'settings' && (
-                        <SettingsPage
-                            currentRules={pricingRules}
-                            onSave={(newRules, newVelocity) => {
-                                setPricingRules(newRules);
-                                setVelocityLookback(newVelocity);
-                            }}
-                            logisticsRules={logisticsRules}
-                            onSaveLogistics={(newLogistics) => {
-                                setLogisticsRules(newLogistics);
-                            }}
-                            products={products}
-                            shipmentHistory={shipmentHistory}
-                            themeColor={userProfile.themeColor}
-                            headerStyle={headerStyle}
-                        />
-                    )}
-
-                </main >
 
                 {/* Analysis Modal */}
-                {
-                    selectedProduct && (
-                        <AnalysisModal
-                            product={selectedProduct}
-                            analysis={analysis}
-                            isLoading={isAnalyzing}
-                            onClose={() => setSelectedProduct(null)}
-                            onApplyPrice={handleApplyPrice}
-                            themeColor={userProfile.themeColor}
-                        />
-                    )
-                }
+
 
                 {/* Modals */}
                 {

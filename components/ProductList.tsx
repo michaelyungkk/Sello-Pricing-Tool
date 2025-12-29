@@ -2,12 +2,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules } from '../types';
-import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft } from 'lucide-react';
+import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List } from 'lucide-react';
 
 interface ProductListProps {
     products: Product[];
     onAnalyze: (product: Product) => void;
-    onApplyChanges: (updates: { productId: string, newPrice: number }[]) => void;
+    onEditAliases?: (product: Product) => void;
     dateLabels?: { current: string, last: string };
     pricingRules?: PricingRules;
     themeColor: string;
@@ -73,43 +73,30 @@ interface ProductRowProps {
     product: Product;
     themeColor: string;
     onAnalyze: (p: Product) => void;
-    priceOverrides: Record<string, number>;
-    handleOverrideChange: (id: string, val: string) => void;
+    onEditAliases?: (p: Product) => void;
     hoveredProduct: { id: string; rect: DOMRect } | null;
     handleMouseEnter: (id: string, e: React.MouseEvent) => void;
     handleMouseLeave: () => void;
-    allowOutOfStockAdjustment: boolean;
-    getRunwayBin: (days: number, stockLevel: number) => { label: string, color: string };
-    getSimulatedPrice: (p: Product) => number;
-    setPriceOverrides: React.Dispatch<React.SetStateAction<Record<string, number>>>;
 }
 
 const ProductRow = React.memo(({
     product,
     themeColor,
     onAnalyze,
-    priceOverrides,
-    handleOverrideChange,
+    onEditAliases,
     handleMouseEnter,
-    handleMouseLeave,
-    allowOutOfStockAdjustment,
-    getRunwayBin,
-    getSimulatedPrice,
-    setPriceOverrides
+    handleMouseLeave
 }: ProductRowProps) => {
     const isOOS = product.recommendation === 'Out of Stock';
     const isMonitoring = product.status === 'Warning' && product.recommendation.includes('Monitor');
 
-    const overrideValue = priceOverrides[product.id];
-    const simulatedPrice = getSimulatedPrice(product);
-    const displayValue = simulatedPrice;
     const currentPrice = product.currentPrice || 0;
-    const isModified = Math.abs(displayValue - Number(currentPrice.toFixed(2))) > 0.001;
-    const isOverridden = overrideValue !== undefined;
-    const violatesFloor = product.floorPrice && displayValue < product.floorPrice;
-    const violatesCeiling = product.ceilingPrice && displayValue > product.ceilingPrice;
-    const isViolation = violatesFloor || violatesCeiling;
-    const runwayBin = getRunwayBin(product.daysRemaining, product.stockLevel);
+    const runwayBin = {
+        label: product.daysRemaining > 730 ? '> 2 Years' : `${Math.round(product.daysRemaining)} Days`,
+        color: product.status === 'Critical' ? 'bg-red-50 text-red-600 border-red-200' :
+            product.status === 'Overstock' ? 'bg-orange-50 text-orange-600 border-orange-200' :
+                product.status === 'Warning' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-green-50 text-green-600 border-green-200'
+    };
 
     const isLowStock = product.stockLevel <= 10 && product.stockLevel > 0;
     const isHighReturns = product.returnRate !== undefined && product.returnRate > 5;
@@ -154,55 +141,7 @@ const ProductRow = React.memo(({
                     <span className="text-gray-300">—</span>
                 )}
             </td>
-            <td className="p-2.5 text-right">
-                <div className="flex items-center justify-end gap-2 relative">
-                    <input
-                        type="number"
-                        step="0.01"
-                        value={isModified || isOverridden ? displayValue : ''}
-                        placeholder="-"
-                        disabled={isOOS && !allowOutOfStockAdjustment && !isOverridden}
-                        onChange={(e) => handleOverrideChange(product.id, e.target.value)}
-                        className={`w-24 text-right px-2 py-1 border rounded text-sm font-mono focus:ring-2 transition-colors ${isViolation
-                            ? 'border-red-500 bg-red-50 text-red-700 font-bold ring-1 ring-red-500'
-                            : isOverridden
-                                ? 'bg-opacity-10 text-opacity-100 font-bold'
-                                : isModified
-                                    ? 'border-gray-300 text-gray-900 bg-white'
-                                    : 'border-transparent bg-transparent text-gray-400 hover:border-gray-200 placeholder-gray-300'
-                            } ${isOOS && !allowOutOfStockAdjustment && !isOverridden ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''}`}
-                        style={isOverridden && !isViolation ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
-                    />
-                    {isViolation && (
-                        <div className="absolute -right-5 top-1/2 -translate-y-1/2 group/violation">
-                            <AlertCircle className="w-4 h-4 text-red-500" />
-                        </div>
-                    )}
-                    {!isOverridden && isModified && !isViolation && (
-                        <div className="absolute -right-4 top-1/2 -translate-y-1/2">
-                            {displayValue > (product.currentPrice || 0) ? (
-                                <TrendingUp className="w-3 h-3 text-green-500" />
-                            ) : (
-                                <TrendingDown className="w-3 h-3 text-red-500" />
-                            )}
-                        </div>
-                    )}
-                    {isOverridden && !isViolation && (
-                        <button
-                            onClick={() => {
-                                setPriceOverrides((prev: any) => {
-                                    const next = { ...prev };
-                                    delete next[product.id];
-                                    return next;
-                                });
-                            }}
-                            className="absolute -right-6 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                            <RotateCcw className="w-3 h-3" />
-                        </button>
-                    )}
-                </div>
-            </td>
+
             <td className="p-2.5 text-right">
                 <div className="flex flex-col items-end gap-1.5">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded border text-xs font-bold whitespace-nowrap ${runwayBin.color}`}>
@@ -254,18 +193,30 @@ const ProductRow = React.memo(({
                 </div>
             </td>
             <td className="p-2.5 text-right">
-                <button
-                    onClick={() => onAnalyze(product)}
-                    className="text-gray-400 hover:text-indigo-600 transition-colors"
-                >
-                    <Activity className="w-4 h-4" />
-                </button>
+                <div className="flex items-center justify-end gap-2">
+                    {onEditAliases && (
+                        <button
+                            onClick={() => onEditAliases(product)}
+                            className="text-gray-400 hover:text-amber-600 transition-colors"
+                            title="Edit Aliases / SKU Mapping"
+                        >
+                            <GitMerge className="w-4 h-4" />
+                        </button>
+                    )}
+                    <button
+                        onClick={() => onAnalyze(product)}
+                        className="text-gray-400 hover:text-indigo-600 transition-colors"
+                        title="Performance Analysis"
+                    >
+                        <Activity className="w-4 h-4" />
+                    </button>
+                </div>
             </td>
         </tr>
     );
 });
 
-const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyChanges, dateLabels, pricingRules, themeColor }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAliases, dateLabels, pricingRules, themeColor }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
@@ -296,22 +247,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [itemsPerPage, setItemsPerPage] = useState(25);
     const [hoveredProduct, setHoveredProduct] = useState<{ id: string; rect: DOMRect } | null>(null);
 
     // Sorting State
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
-
-    // Bulk Adjustment State
-    const [adjustmentIntensity, setAdjustmentIntensity] = useState(0);
-    const [allowOutOfStockAdjustment, setAllowOutOfStockAdjustment] = useState(false);
-
-    // Individual Overrides: Map of productId -> manualNewPrice
-    const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
-
-    // UI Feedback
-    const [showSuccessMessage, setShowSuccessMessage] = useState(false);
-    const [isConfirmed, setIsConfirmed] = useState(false);
 
     // Helper to resolve manager from config if available (Dynamic Lookup)
     const getEffectiveManager = (platform: string, storedManager: string) => {
@@ -366,22 +306,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         return Array.from(subs).sort();
     }, [products, mainCatFilter]);
 
-    const getSimulatedPrice = (product: Product): number => {
-        const current = product.currentPrice || 0;
-        if (priceOverrides[product.id] !== undefined) {
-            return priceOverrides[product.id];
-        }
-        if (product.stockLevel <= 0 && !allowOutOfStockAdjustment) {
-            return current;
-        }
-        let multiplier = 1;
-        if (product.status === 'Critical') {
-            multiplier = 1 + (adjustmentIntensity / 100);
-        } else if (product.status === 'Overstock') {
-            multiplier = 1 - (adjustmentIntensity / 100);
-        }
-        return Number((current * multiplier).toFixed(2));
-    };
+
 
     const handleSort = (key: SortKey) => {
         let direction: 'asc' | 'desc' = 'asc';
@@ -392,56 +317,32 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
     };
 
     const filteredProducts = useMemo(() => {
-        // Step 1: Initial Filter (Fast)
         const searchQueryLower = debouncedSearch.toLowerCase();
         let filtered = products.filter(p => {
-            // Search Filter first
             if (searchQueryLower && !p.sku.toLowerCase().includes(searchQueryLower) && !p.name.toLowerCase().includes(searchQueryLower)) return false;
-
-            // Basic Visibility
             if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) return false;
             if (!showOOS && p.stockLevel <= 0) return false;
-
-            // Category/Brand Filters
             if (brandFilter !== 'All' && p.brand !== brandFilter) return false;
             if (mainCatFilter !== 'All' && p.category !== mainCatFilter) return false;
             if (subCatFilter !== 'All' && p.subcategory !== subCatFilter) return false;
-
             return true;
         });
 
-        // Step 2: Advanced Aggregation & Status (Deferred if possible, but needed for sorting/filtering)
-        // To optimize, we only calculate what's needed for active filters.
         const aggregatedData = filtered.map(p => {
-            // --- VISIBILITY LOGIC ---
-            if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) {
-                return { ...p, _isVisible: false };
-            }
-            if (!showOOS && p.stockLevel <= 0) {
-                return { ...p, _isVisible: false };
-            }
-
-            // Multi-select Filter Logic
             const isPlatformFiltered = platformFilters.length > 0;
-
             const matchingChannels = p.channels.filter(c => {
                 const matchPlatform = !isPlatformFiltered || platformFilters.includes(c.platform);
-
-                // Dynamic Manager Check
                 const effectiveManager = getEffectiveManager(c.platform, c.manager);
                 const matchManager = managerFilter === 'All' || effectiveManager === managerFilter;
-
                 return matchPlatform && matchManager;
             });
 
             const isFiltering = isPlatformFiltered || managerFilter !== 'All';
-
             let displayVelocity = p.averageDailySales;
             let displayPrice = p.currentPrice || 0;
 
             if (isFiltering) {
                 const totalFilteredVelocity = matchingChannels.reduce((sum, c) => sum + c.velocity, 0);
-
                 let weightedPriceSum = 0;
                 let weightedDivisor = 0;
 
@@ -457,7 +358,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                     const sumPrices = matchingChannels.reduce((sum, c) => sum + (c.price || p.currentPrice || 0), 0);
                     displayPrice = Number((sumPrices / matchingChannels.length).toFixed(2));
                 }
-
                 displayVelocity = totalFilteredVelocity;
             }
 
@@ -465,7 +365,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
             const leadTime = p.leadTimeDays;
             const displayRunway = stock <= 0 ? 0 : (displayVelocity > 0 ? stock / displayVelocity : 999);
 
-            // Default Logic (Snapshot based)
             let displayStatus: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
             let displayRec = 'Maintain';
 
@@ -492,61 +391,30 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                 currentPrice: displayPrice,
                 daysRemaining: displayRunway,
                 status: displayStatus,
-                recommendation: displayRec,
-                _trendData: {
-                    priceChange: 0,
-                    velocityChange: 0
-                }
+                recommendation: displayRec
             };
         }).filter(p => p._isVisible);
 
-        let result = aggregatedData.filter(p => {
-            const matchesSearch = p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.name.toLowerCase().includes(searchQuery.toLowerCase());
-
-            const matchesStatus = statusFilter === 'All' || p.status === statusFilter;
-            const matchesBrand = brandFilter === 'All' || p.brand === brandFilter;
-            const matchesMainCat = mainCatFilter === 'All' || p.category === mainCatFilter;
-            const matchesSubCat = subCatFilter === 'All' || p.subcategory === subCatFilter;
-
-            const vel = p.averageDailySales;
-            const matchesVelocityMin = velocityFilter.min === '' || vel >= parseFloat(velocityFilter.min);
-            const matchesVelocityMax = velocityFilter.max === '' || vel <= parseFloat(velocityFilter.max);
-
-            const runway = p.daysRemaining;
-            const matchesRunwayMin = runwayFilter.min === '' || runway >= parseFloat(runwayFilter.min);
-            const matchesRunwayMax = runwayFilter.max === '' || runway <= parseFloat(runwayFilter.max);
-
-            return matchesSearch && matchesStatus && matchesBrand && matchesMainCat && matchesSubCat && matchesVelocityMin && matchesVelocityMax && matchesRunwayMin && matchesRunwayMax;
-        });
-
         if (sortConfig) {
-            result.sort((a, b) => {
+            aggregatedData.sort((a, b) => {
                 let aValue: any = a[sortConfig.key as keyof Product];
                 let bValue: any = b[sortConfig.key as keyof Product];
-
-                if (sortConfig.key === 'estNewPrice') {
-                    aValue = getSimulatedPrice(a);
-                    bValue = getSimulatedPrice(b);
-                }
-
                 if (typeof aValue === 'string') aValue = aValue.toLowerCase();
                 if (typeof bValue === 'string') bValue = bValue.toLowerCase();
-
                 if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
                 if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
                 return 0;
             });
         } else {
-            result.sort((a, b) => {
+            aggregatedData.sort((a, b) => {
                 if (a.status === 'Critical' && b.status !== 'Critical') return -1;
                 if (a.status !== 'Critical' && b.status === 'Critical') return 1;
                 return a.sku.localeCompare(b.sku);
             });
         }
 
-        return result;
-    }, [products, debouncedSearch, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, priceOverrides, adjustmentIntensity, velocityFilter, runwayFilter, allowOutOfStockAdjustment, showInactive, showOOS, pricingRules]);
+        return aggregatedData;
+    }, [products, debouncedSearch, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, showInactive, showOOS]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -577,161 +445,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         setHoveredProduct(null);
     };
 
-    const handleIntensityChange = (val: number) => {
-        setAdjustmentIntensity(Math.min(50, Math.max(0, val)));
-        setIsConfirmed(false);
-        if (Object.keys(priceOverrides).length > 0) {
-            setPriceOverrides({});
-        }
-    };
-
-    const handleOverrideChange = (productId: string, value: string) => {
-        setIsConfirmed(false);
-        const num = parseFloat(value);
-        if (isNaN(num)) {
-            const newOverrides = { ...priceOverrides };
-            delete newOverrides[productId];
-            setPriceOverrides(newOverrides);
-        } else {
-            setPriceOverrides(prev => ({ ...prev, [productId]: num }));
-        }
-    };
-
-    const handleExport = (platform: string = 'All') => {
-        // Helper to sanitize CSV fields: Remove line breaks, escape quotes
-        const clean = (val: any) => {
-            if (val === null || val === undefined) return '';
-            const str = String(val).replace(/[\r\n]+/g, ' '); // Replace newlines with space
-            return `"${str.replace(/"/g, '""')}"`; // Escape double quotes and wrap
-        };
-
-        const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Est. New Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost', 'Return Rate %'];
-        const rows: (string | number)[][] = [];
-
-        filteredProducts.forEach(p => {
-            const simulatedPrice = getSimulatedPrice(p);
-            const exportNewPrice = simulatedPrice.toFixed(2);
-
-            // Common Data Row
-            const commonData = [
-                clean(p.sku),
-                clean(p.name),
-                clean(p.brand || ''),
-                clean(p.category || ''),
-                clean(p.subcategory || ''),
-                (p.currentPrice || 0).toFixed(2),
-                exportNewPrice,
-                p.stockLevel,
-                p.averageDailySales.toFixed(2),
-                p.daysRemaining.toFixed(0),
-                clean(p.status),
-                p.costPrice ? p.costPrice.toFixed(2) : '0.00',
-                (p.returnRate || 0).toFixed(2)
-            ];
-
-            if (platform === 'All') {
-                // Standard Export: 1 Row, using Master SKU as primary identifier
-                rows.push([clean(p.sku), ...commonData]);
-            } else {
-                // Platform Specific: Check for multiple aliases (One-to-Many)
-                // Use case-insensitive + fuzzy match to find correct channel
-                const normalize = (s: string) => s.toLowerCase().trim();
-                const targetPlatform = normalize(platform);
-
-                // 1. Exact match
-                let channel = p.channels.find(c => normalize(c.platform) === targetPlatform);
-
-                // 2. Fuzzy match
-                if (!channel) {
-                    channel = p.channels.find(c => normalize(c.platform).includes(targetPlatform) || targetPlatform.includes(normalize(c.platform)));
-                }
-
-                if (channel && channel.skuAlias) {
-                    // Split comma-separated aliases and create a row for EACH
-                    const aliases = channel.skuAlias.split(',').map(s => s.trim()).filter(Boolean);
-
-                    if (aliases.length > 0) {
-                        aliases.forEach(alias => {
-                            rows.push([clean(alias), ...commonData]);
-                        });
-                    } else {
-                        // Fallback to Master SKU if alias string is empty
-                        rows.push([clean(p.sku), ...commonData]);
-                    }
-                } else {
-                    // Fallback to Master SKU if no channel found (or no alias)
-                    rows.push([clean(p.sku), ...commonData]);
-                }
-            }
-        });
-
-        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        // Use octet-stream for Chrome and add UTF-8 BOM
-        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = url;
-        const filename = platform === 'All' ? 'inventory_export_master.csv' : `inventory_export_${platform.toLowerCase().replace(/\s+/g, '_')}.csv`;
-        link.download = filename;
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-
-        // Revoke after 60s
-        setTimeout(() => {
-            if (document.body.contains(link)) document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 60000);
-
-        setIsExportMenuOpen(false);
-    };
-
-    const handleApply = () => {
-        const newOverrides = { ...priceOverrides };
-        let hasChanges = false;
-
-        filteredProducts.forEach(p => {
-            const simulatedPrice = getSimulatedPrice(p);
-            const isOverridden = priceOverrides[p.id] !== undefined;
-            let finalPrice = simulatedPrice;
-            const currentP = p.currentPrice || 0;
-
-            if (!isOverridden) {
-                if (Math.abs(simulatedPrice - Number(currentP.toFixed(2))) > 0.001) {
-                    finalPrice = Math.ceil(simulatedPrice) - 0.01;
-                    if (finalPrice < 0) finalPrice = 0.99;
-                } else {
-                    finalPrice = currentP;
-                }
-            }
-
-            if (Math.abs(finalPrice - Number(currentP.toFixed(2))) > 0.001) {
-                newOverrides[p.id] = Number(finalPrice.toFixed(2));
-                hasChanges = true;
-            }
-        });
-
-        if (hasChanges || Object.keys(priceOverrides).length > 0) {
-            setPriceOverrides(newOverrides);
-            setAdjustmentIntensity(0);
-            setIsConfirmed(true);
-            setShowSuccessMessage(true);
-            setTimeout(() => setShowSuccessMessage(false), 2000);
-        } else {
-            alert("No changes detected to confirm.");
-        }
-    };
-
-    const changedCount = useMemo(() => {
-        let count = 0;
-        filteredProducts.forEach(p => {
-            const final = getSimulatedPrice(p);
-            if (Math.abs(final - Number((p.currentPrice || 0).toFixed(2))) > 0.001) count++;
-        });
-        return count;
-    }, [filteredProducts, priceOverrides, adjustmentIntensity, allowOutOfStockAdjustment]);
-
     const getRunwayBin = (days: number, stockLevel: number) => {
         if (stockLevel <= 0) return { label: 'Out of Stock', color: 'bg-slate-100 text-slate-500 border-slate-200' };
         if (days <= 14) return { label: '2 Weeks', color: 'bg-red-100 text-red-800 border-red-200' };
@@ -739,6 +452,74 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
         if (days <= 84) return { label: '12 Weeks', color: 'bg-green-100 text-green-800 border-green-200' };
         if (days <= 168) return { label: '24 Weeks', color: 'bg-teal-100 text-teal-800 border-teal-200' };
         return { label: '24 Weeks +', color: 'bg-blue-100 text-blue-800 border-blue-200' };
+    };
+
+    const handleExport = (platform: string = 'All') => {
+        const cleanChar = (val: any) => {
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/[\r\n]+/g, ' ');
+            return `"${str.replace(/"/g, '""')}"`;
+        };
+
+        const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost', 'Return Rate %'];
+        const rows: (string | number)[][] = [];
+
+        filteredProducts.forEach(p => {
+            const commonData = [
+                cleanChar(p.sku),
+                cleanChar(p.name),
+                cleanChar(p.brand || ''),
+                cleanChar(p.category || ''),
+                cleanChar(p.subcategory || ''),
+                (p.currentPrice || 0).toFixed(2),
+                p.stockLevel,
+                p.averageDailySales.toFixed(2),
+                p.daysRemaining.toFixed(0),
+                cleanChar(p.status),
+                p.costPrice ? p.costPrice.toFixed(2) : '0.00',
+                (p.returnRate || 0).toFixed(2)
+            ];
+
+            if (platform === 'All') {
+                rows.push([cleanChar(p.sku), ...commonData]);
+            } else {
+                const normalize = (s: string) => s.toLowerCase().trim();
+                const targetPlatform = normalize(platform);
+                let channel = p.channels.find(c => normalize(c.platform) === targetPlatform);
+                if (!channel) {
+                    channel = p.channels.find(c => normalize(c.platform).includes(targetPlatform) || targetPlatform.includes(normalize(c.platform)));
+                }
+
+                if (channel && channel.skuAlias) {
+                    const aliases = channel.skuAlias.split(',').map(s => s.trim()).filter(Boolean);
+                    if (aliases.length > 0) {
+                        aliases.forEach(alias => {
+                            rows.push([cleanChar(alias), ...commonData]);
+                        });
+                    } else {
+                        rows.push([cleanChar(p.sku), ...commonData]);
+                    }
+                } else {
+                    rows.push([cleanChar(p.sku), ...commonData]);
+                }
+            }
+        });
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        const filename = platform === 'All' ? 'inventory_export_master.csv' : `inventory_export_${platform.toLowerCase().replace(/\s+/g, '_')}.csv`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+            if (document.body.contains(link)) document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 60000);
+        setIsExportMenuOpen(false);
     };
 
     const SortHeader = ({ label, sortKey, alignRight = false, subLabel, width }: { label: string, sortKey: SortKey, alignRight?: boolean, subLabel?: string, width?: string }) => {
@@ -768,7 +549,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
     };
 
     const isContextFiltered = platformFilters.length > 0 || managerFilter !== 'All';
-    const isButtonDisabled = showSuccessMessage || (isConfirmed && changedCount > 0) || (changedCount === 0 && Object.keys(priceOverrides).length === 0);
+    const changedCount = 0;
+    const isButtonDisabled = true;
 
     // Helper for filter pills
     const FilterDropdown = ({ label, icon: Icon, value, onChange, options, themeColor }: any) => (
@@ -877,88 +659,13 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
 
     return (
         <div className="space-y-4">
-            {/* ... (Header and Filters unchanged) ... */}
-
             {/* Simulation & Action Bar - Updated with bg-custom-glass */}
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-lg flex flex-col xl:flex-row items-center justify-between gap-4 relative overflow-hidden backdrop-blur-custom">
-
+            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative overflow-hidden backdrop-blur-custom">
                 <div className="flex items-center gap-6 w-full xl:w-auto">
                     <div className="flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5" style={{ color: themeColor }} />
-                        <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Bulk Simulator</span>
+                        <List className="w-5 h-5 text-gray-400" />
+                        <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Master Catalogue</span>
                     </div>
-
-                    <div className="flex items-center gap-4 flex-1">
-                        <span className="text-xs text-gray-500 font-medium whitespace-nowrap">Adjustment Intensity (%):</span>
-                        <div className="flex items-center gap-3">
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="50"
-                                    value={adjustmentIntensity}
-                                    onChange={(e) => handleIntensityChange(Number(e.target.value))}
-                                    className="w-16 pl-2 pr-1 py-1 border border-gray-300 rounded text-sm font-mono focus:ring-2 focus:ring-opacity-50"
-                                    style={{ borderColor: adjustmentIntensity > 0 ? themeColor : undefined }}
-                                />
-                            </div>
-                            <input
-                                type="range"
-                                min="0"
-                                max="50"
-                                step="1"
-                                value={adjustmentIntensity}
-                                onChange={(e) => handleIntensityChange(Number(e.target.value))}
-                                className="w-32 md:w-48 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                                style={{ accentColor: themeColor }}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 border-l border-gray-200/50 pl-4">
-                        <button
-                            onClick={() => { setAllowOutOfStockAdjustment(!allowOutOfStockAdjustment); setIsConfirmed(false); }}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none`}
-                            style={{ backgroundColor: allowOutOfStockAdjustment ? themeColor : '#e5e7eb' }}
-                        >
-                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${allowOutOfStockAdjustment ? 'translate-x-5' : 'translate-x-1'}`} />
-                        </button>
-                        <span
-                            className={`text-xs font-medium cursor-pointer select-none`}
-                            style={{ color: allowOutOfStockAdjustment ? themeColor : '#6b7280' }}
-                            onClick={() => { setAllowOutOfStockAdjustment(!allowOutOfStockAdjustment); setIsConfirmed(false); }}
-                        >
-                            Include Out of Stock
-                        </span>
-                    </div>
-
-                    <button
-                        onClick={handleApply}
-                        disabled={isButtonDisabled}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-lg shadow flex items-center gap-1.5 transition-all duration-200 min-w-[120px] justify-center text-white`}
-                        style={{
-                            backgroundColor: showSuccessMessage ? '#10b981' : isButtonDisabled ? '#f3f4f6' : themeColor,
-                            color: isButtonDisabled ? '#9ca3af' : '#ffffff',
-                            cursor: isButtonDisabled ? 'not-allowed' : 'pointer'
-                        }}
-                    >
-                        {showSuccessMessage ? (
-                            <>
-                                <CheckCircle className="w-3.5 h-3.5" />
-                                Locked
-                            </>
-                        ) : isConfirmed && changedCount > 0 ? (
-                            <>
-                                <Lock className="w-3.5 h-3.5" />
-                                Changes Locked
-                            </>
-                        ) : (
-                            <>
-                                <Save className="w-3.5 h-3.5" />
-                                Lock Changes {changedCount > 0 && `(${changedCount})`}
-                            </>
-                        )}
-                    </button>
                 </div>
 
                 <div className="w-full xl:w-auto flex justify-end relative">
@@ -1205,7 +912,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                                 <SortHeader label="Last Week Price" sortKey="oldPrice" alignRight subLabel={dateLabels?.last} width="w-[120px]" />
                                 <SortHeader label={isContextFiltered ? "Cur. Price (Filt.)" : "Current Price"} sortKey="currentPrice" alignRight subLabel={dateLabels?.current} width="w-[120px]" />
                                 <SortHeader label="CA Price" sortKey="caPrice" alignRight width="w-[100px]" />
-                                <SortHeader label="Est. New Price" sortKey="estNewPrice" alignRight width="w-[120px]" />
                                 <SortHeader label={isContextFiltered ? "Runway (Filtered)" : "Runway"} sortKey="daysRemaining" alignRight width="min-w-[140px]" />
                                 <SortHeader label="Return Rate" sortKey="returnRate" alignRight width="w-[100px]" />
                                 <SortHeader label={isContextFiltered ? "Rec. (Filtered)" : "Recommendation"} sortKey="status" width="w-[150px]" />
@@ -1213,23 +919,18 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onApplyC
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100/50">
-                            {paginatedProducts.map((product) => (
+                            {paginatedProducts.map((product) =>
                                 <ProductRow
                                     key={product.id}
                                     product={product}
                                     themeColor={themeColor}
                                     onAnalyze={onAnalyze}
-                                    priceOverrides={priceOverrides}
-                                    handleOverrideChange={handleOverrideChange}
+                                    onEditAliases={onEditAliases}
                                     hoveredProduct={hoveredProduct}
                                     handleMouseEnter={handleMouseEnter}
                                     handleMouseLeave={handleMouseLeave}
-                                    allowOutOfStockAdjustment={allowOutOfStockAdjustment}
-                                    getRunwayBin={getRunwayBin}
-                                    getSimulatedPrice={getSimulatedPrice}
-                                    setPriceOverrides={setPriceOverrides}
                                 />
-                            ))}
+                            )}
                             {filteredProducts.length === 0 && (
                                 <tr>
                                     <td colSpan={9} className="p-8 text-center text-gray-500">
