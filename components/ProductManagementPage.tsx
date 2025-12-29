@@ -25,6 +25,8 @@ interface ProductManagementPageProps {
 type Tab = 'dashboard' | 'catalog' | 'pricing' | 'shipments';
 type DateRange = 'yesterday' | '7d' | '30d' | 'custom';
 
+const VAT = 1.20;
+
 const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     products,
     pricingRules,
@@ -221,7 +223,6 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     );
 };
 
-// ... DashboardView Code ...
 const DashboardView = ({
     products,
     priceHistoryMap,
@@ -359,16 +360,14 @@ const DashboardView = ({
     }, [products, filteredSales, topSellerMetric]);
 
     const categoryData = useMemo(() => {
-        /* FIX: Explicitly cast 'value' to number during mapping to avoid 'unknown' type issues */
         return Object.entries(categorySales)
-            .map(([name, value]) => ({ name, value: Math.round(value as number) }))
+            .map(([name, value]) => ({ name, value: Math.round(Number(value)) }))
             .sort((a, b) => b.value - a.value)
             .slice(0, 10);
     }, [categorySales]);
 
     const platformData = useMemo(() => {
-        /* FIX: Explicitly cast 'value' to number during mapping to avoid 'unknown' type issues */
-        const data = Object.entries(platformSales).map(([name, value]) => ({ name, value: Math.round(value as number) }));
+        const data = Object.entries(platformSales).map(([name, value]) => ({ name, value: Math.round(Number(value)) }));
         const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe', '#00C49F'];
         return data
             .sort((a, b) => b.value - a.value)
@@ -633,7 +632,6 @@ const DashboardView = ({
                                 />
                                 <RechartsTooltip
                                     cursor={{ fill: 'transparent' }}
-                                    /* FIX: Change 'val: number' to 'val: any' and cast to Number to handle Recharts' potential 'unknown' or mixed types */
                                     formatter={(val: any) => [Math.round(Number(val)), 'Units Sold']}
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
                                 />
@@ -647,9 +645,8 @@ const DashboardView = ({
                     </div>
                     <div className="text-center">
                         <div className="text-[10px] text-gray-400 mt-2 font-medium flex justify-center items-center gap-4">
-                            /* FIX: Use Number() cast for categoryData value access to avoid 'unknown' type errors */
                             <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-indigo-500 rounded-full" style={{ backgroundColor: themeColor }}></span> MAX: {Math.round(Number(categoryData[0]?.value || 0))}</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-gray-400 rounded-full"></span> AVG: {(categoryData.reduce((a, b) => a + b.value, 0) / (categoryData.length || 1)).toFixed(0)}</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-gray-400 rounded-full"></span> AVG: {(categoryData.reduce((a, b) => a + Number(b.value), 0) / (categoryData.length || 1)).toFixed(0)}</span>
                         </div>
                     </div>
                 </div>
@@ -677,7 +674,6 @@ const DashboardView = ({
                                     ))}
                                 </Pie>
                                 <RechartsTooltip
-                                    /* FIX: Change 'val: number' to 'val: any' and cast to Number to handle Recharts' potential 'unknown' or mixed types */
                                     formatter={(val: any) => [Math.round(Number(val)), 'Volume']}
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                 />
@@ -685,7 +681,7 @@ const DashboardView = ({
                         </ResponsiveContainer>
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div className="text-center">
-                                <span className="block text-3xl font-bold text-gray-800">{platformData.reduce((a, b) => a + b.value, 0)}</span>
+                                <span className="block text-3xl font-bold text-gray-800">{platformData.reduce((a, b) => a + Number(b.value), 0)}</span>
                                 <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Listings</span>
                             </div>
                         </div>
@@ -1038,10 +1034,37 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
                                     </td>
                                     {platforms.map(platform => {
                                         const channel = p.channels.find(c => c.platform === platform);
+                                        
+                                        // Look for active promotion matching SKU and Platform
+                                        const activePromo = promotions.find(promo => 
+                                            promo.status === 'ACTIVE' && 
+                                            (promo.platform === platform || promo.platform === 'All') &&
+                                            promo.items.some(item => item.sku === p.sku)
+                                        );
+                                        const promoItem = activePromo ? activePromo.items.find(item => item.sku === p.sku) : null;
+
                                         return (
                                             <td key={platform} className="p-4 text-center">
                                                 {channel ? (
-                                                    <div className="flex flex-col items-center"><span className="font-bold text-gray-700">£{(channel.price || p.currentPrice).toFixed(2)}</span><span className="text-[10px] text-gray-400 mt-0.5">{channel.velocity.toFixed(1)}/day</span></div>
+                                                    <div className="flex flex-col items-center justify-center min-h-[3rem]">
+                                                        {promoItem ? (
+                                                            <>
+                                                                <div className="flex items-center gap-1 mb-0.5" title={`Active Campaign: ${activePromo?.name}`}>
+                                                                    <span className="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded text-xs border border-red-100 whitespace-nowrap">
+                                                                        £{promoItem.promoPrice.toFixed(2)}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-[10px] text-gray-400 line-through">
+                                                                    £{((channel.price || p.currentPrice) * VAT).toFixed(2)}
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="font-bold text-gray-700">
+                                                                £{((channel.price || p.currentPrice) * VAT).toFixed(2)}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-[10px] text-gray-400 mt-0.5">{channel.velocity.toFixed(1)}/day</span>
+                                                    </div>
                                                 ) : <span className="text-gray-300">-</span>}
                                             </td>
                                         );

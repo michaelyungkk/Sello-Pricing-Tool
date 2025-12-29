@@ -22,6 +22,9 @@ type ViewMode = 'dashboard' | 'event_detail' | 'add_products';
 type Tab = 'dashboard' | 'all_skus' | 'simulator';
 type PromoSortKey = 'name' | 'platform' | 'startDate' | 'submissionDeadline' | 'items' | 'status';
 
+// Standard UK VAT
+const VAT = 1.20;
+
 // --- HELPER COMPONENTS ---
 
 const StatusBadge = ({ status }: { status: 'UPCOMING' | 'ACTIVE' | 'ENDED' }) => {
@@ -462,13 +465,16 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
                     <tbody className="divide-y divide-gray-100/50">
                         {promo.items.map((item: any) => {
                             const product = products.find((p: Product) => p.sku === item.sku);
-                            const currentMargin = product ? ((item.promoPrice - (product.costPrice || 0)) / item.promoPrice * 100) : 0;
+                            // Proj. Margin remains based on Net logic internally
+                            const currentMargin = product ? ((item.promoPrice / VAT - (product.costPrice || 0)) / (item.promoPrice / VAT) * 100) : 0;
+                            
+                            // Prices displayed are Gross (VAT Inclusive)
                             const discountPercent = item.basePrice > 0 ? ((item.basePrice - item.promoPrice) / item.basePrice * 100).toFixed(1) : "0.0";
 
-                            let platformPrice = product ? product.currentPrice : 0;
+                            let platformPrice = product ? (product.currentPrice * VAT) : 0;
                             if (product && promo.platform !== 'All') {
                                 const channel = product.channels.find((c: any) => c.platform === promo.platform);
-                                if (channel && channel.price) platformPrice = channel.price;
+                                if (channel && channel.price) platformPrice = channel.price * VAT;
                             }
 
                             return (
@@ -517,8 +523,9 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
                     onConfirm={(items) => {
                         const newItems = items.map((i: any) => ({
                             sku: i.sku,
-                            basePrice: products.find((p: Product) => p.sku === i.sku)?.currentPrice || 0,
-                            promoPrice: i.price,
+                            // Store basePrice as Gross (VAT inclusive)
+                            basePrice: (products.find((p: Product) => p.sku === i.sku)?.currentPrice || 0) * VAT,
+                            promoPrice: i.price, // Uploaded price is assumed Gross
                             discountType: 'FIXED',
                             discountValue: 0
                         }));
@@ -680,6 +687,7 @@ const PromoPerformanceHeader = ({ promo, products, priceHistoryMap, themeColor }
     const priceHistory = useMemo(() => {
         return promo.items.flatMap(item => priceHistoryMap.get(item.sku) || []);
     }, [promo.items, priceHistoryMap]);
+
     const stats = useMemo(() => {
         let totalDailyProfitBase = 0;
         let totalDailyProfitPromo = 0;
@@ -698,16 +706,16 @@ const PromoPerformanceHeader = ({ promo, products, priceHistoryMap, themeColor }
             const velocity = product.averageDailySales || 0;
             const cost = (product.costPrice || 0) + (product.wmsFee || 0) + (product.otherFee || 0) + (product.subscriptionFee || 0);
 
-            // Base
-            const baseProfit = item.basePrice - cost;
+            // Base Calculations (Using VAT-exclusive base price for profit)
+            const baseProfit = (item.basePrice / VAT) - cost;
             totalDailyProfitBase += (baseProfit * velocity);
             totalBaseRevenue += (item.basePrice * velocity);
 
-            // Promo
-            const promoProfit = item.promoPrice - cost;
+            // Promo Calculations (Using VAT-exclusive promo price for profit)
+            const promoProfit = (item.promoPrice / VAT) - cost;
             totalDailyProfitPromo += (promoProfit * velocity);
 
-            // Actuals
+            // Actuals (PriceLog.price is Gross)
             if (hasStarted && priceHistory.length > 0) {
                 const logs = priceHistory.filter(l => {
                     const d = l.date.split('T')[0];
@@ -988,13 +996,15 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
         if (priceOverrides[product.sku] !== undefined) {
             return priceOverrides[product.sku];
         }
-        let price = product.currentPrice;
+
+        // Start from Gross Price
+        let price = product.currentPrice * VAT;
         if (currentPromo.platform !== 'All') {
             const channel = product.channels.find(c => c.platform === currentPromo.platform);
-            if (channel && channel.price) price = channel.price;
+            if (channel && channel.price) price = channel.price * VAT;
         }
 
-        // PRIORITY: CA Price override (if exists) -> Platform/Channel Price -> Base Price
+        // PRIORITY: CA Price override (already Gross) -> Uplifted Platform/Channel Price
         if (product.caPrice && product.caPrice > 0) {
             price = product.caPrice;
         }
@@ -1021,7 +1031,7 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
     };
 
     const calculateDynamicMargin = (product: Product, promoPrice: number) => {
-        const netRevenue = promoPrice / 1.2;
+        const netRevenue = promoPrice / VAT;
         const platformKey = currentPromo.platform !== 'All' ? currentPromo.platform : (product.platform || 'Amazon(UK)');
         const rule = pricingRules[platformKey];
         const commissionRate = rule ? rule.commission : 15;
@@ -1067,7 +1077,8 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
             const promoPrice = calculatePromoPrice(product);
             return {
                 sku,
-                basePrice: product.currentPrice,
+                // Store basePrice as Gross for consistency with promoPrice
+                basePrice: product.currentPrice * VAT,
                 discountType: bulkRule.type,
                 discountValue: bulkRule.value,
                 promoPrice
@@ -1161,8 +1172,8 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                                             <div className="font-bold text-gray-900" onClick={(e) => e.stopPropagation()}>{p.sku}</div>
                                             <div className="inline-block mt-1 px-2 py-0.5 bg-gray-100/80 text-gray-600 text-xs rounded border border-gray-200">{p.category || 'Uncategorized'}</div>
                                         </td>
-                                        <td className="p-4 text-right font-medium text-gray-900">£{p.currentPrice.toFixed(2)}</td>
-                                        <td className="p-4 text-right text-indigo-600 font-medium">{p.optimalPrice ? `☆ £${p.optimalPrice.toFixed(2)}` : '-'}</td>
+                                        <td className="p-4 text-right font-medium text-gray-900">£{(p.currentPrice * VAT).toFixed(2)}</td>
+                                        <td className="p-4 text-right text-indigo-600 font-medium">{p.optimalPrice ? `☆ £${(p.optimalPrice * VAT).toFixed(2)}` : '-'}</td>
                                         <td className="p-4 text-right">
                                             {p.caPrice ? (
                                                 <span className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded border border-purple-100">
