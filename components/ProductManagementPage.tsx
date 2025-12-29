@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail } from '../types';
 import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
@@ -45,6 +44,9 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     const [activeTab, setActiveTab] = useState<Tab>('dashboard');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
     const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
+    
+    // Lifted State for Shipment Search (Cross-Link Capability)
+    const [shipmentSearchTags, setShipmentSearchTags] = useState<string[]>([]);
 
     const handleShipmentUpdate = (updates: { sku: string, shipments: ShipmentDetail[] }[]) => {
         const updateMap = new Map(updates.map(u => [u.sku, u.shipments]));
@@ -93,6 +95,11 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
         setIsShipmentModalOpen(false);
     };
 
+    const handleViewShipments = (sku: string) => {
+        setShipmentSearchTags([sku]);
+        setActiveTab('shipments');
+    };
+
     return (
         <div className="max-w-full mx-auto space-y-6 pb-10 h-full flex flex-col">
             {/* Header Section */}
@@ -138,17 +145,6 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                         Price Matrix
                     </button>
                 </div>
-
-                <div className="mb-1">
-                    <button
-                        onClick={() => setIsShipmentModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium shadow-md hover:opacity-90 transition-all"
-                        style={{ backgroundColor: themeColor }}
-                    >
-                        <Ship className="w-4 h-4" />
-                        Import Shipment Schedule
-                    </button>
-                </div>
             </div>
 
             {/* Main Content Area */}
@@ -163,6 +159,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                         onOpenReturns={onOpenReturns}
                         onOpenCA={onOpenCA}
                         onOpenMapping={onOpenMappingModal}
+                        onOpenShipment={() => setIsShipmentModalOpen(true)}
                     />
                 )}
 
@@ -171,6 +168,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                         products={products}
                         onAnalyze={onAnalyze}
                         onEditAliases={setSelectedProductForDrawer}
+                        onViewShipments={handleViewShipments} // Pass handler
                         dateLabels={dateLabels}
                         pricingRules={pricingRules}
                         themeColor={themeColor}
@@ -178,7 +176,12 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                 )}
 
                 {activeTab === 'shipments' && (
-                    <ShipmentsView products={products} themeColor={themeColor} />
+                    <ShipmentsView 
+                        products={products} 
+                        themeColor={themeColor} 
+                        initialTags={shipmentSearchTags}
+                        onTagsChange={setShipmentSearchTags}
+                    />
                 )}
 
                 {activeTab === 'pricing' && (
@@ -218,7 +221,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     );
 };
 
-// 1. DASHBOARD VIEW (GLASS UI)
+// ... DashboardView Code ...
 const DashboardView = ({
     products,
     priceHistoryMap,
@@ -227,7 +230,8 @@ const DashboardView = ({
     onOpenInventory,
     onOpenReturns,
     onOpenCA,
-    onOpenMapping
+    onOpenMapping,
+    onOpenShipment
 }: {
     products: Product[],
     priceHistoryMap: Map<string, PriceLog[]>,
@@ -236,11 +240,11 @@ const DashboardView = ({
     onOpenInventory?: () => void,
     onOpenReturns?: () => void,
     onOpenCA?: () => void,
-    onOpenMapping?: () => void
+    onOpenMapping?: () => void,
+    onOpenShipment?: () => void
 }) => {
     // Flatten map for global dashboard statistics if needed
     const priceHistory = useMemo(() => Array.from(priceHistoryMap.values()).flat(), [priceHistoryMap]);
-    // ... (State logic unchanged)
     const [range, setRange] = useState<DateRange>('yesterday');
 
     // Updated: Range State
@@ -355,14 +359,16 @@ const DashboardView = ({
     }, [products, filteredSales, topSellerMetric]);
 
     const categoryData = useMemo(() => {
+        /* FIX: Explicitly cast 'value' to number during mapping to avoid 'unknown' type issues */
         return Object.entries(categorySales)
-            .map(([name, value]) => ({ name, value: Math.round(value) }))
+            .map(([name, value]) => ({ name, value: Math.round(value as number) }))
             .sort((a, b) => b.value - a.value)
             .slice(0, 10);
     }, [categorySales]);
 
     const platformData = useMemo(() => {
-        const data = Object.entries(platformSales).map(([name, value]) => ({ name, value: Math.round(value) }));
+        /* FIX: Explicitly cast 'value' to number during mapping to avoid 'unknown' type issues */
+        const data = Object.entries(platformSales).map(([name, value]) => ({ name, value: Math.round(value as number) }));
         const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe', '#00C49F'];
         return data
             .sort((a, b) => b.value - a.value)
@@ -393,60 +399,57 @@ const DashboardView = ({
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Quick Actions / Data Hub Section */}
-            <div className="bg-custom-glass rounded-xl border border-custom-glass p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <Database className="w-5 h-5 text-indigo-600" />
-                        Data Action Hub
-                    </h3>
-                    <p className="text-xs text-gray-500 font-medium bg-gray-100/50 px-2 py-1 rounded-full border border-gray-200">
-                        Primary Interface for Management Reports
-                    </p>
+            <div className="bg-custom-glass rounded-xl border border-custom-glass p-3 shadow-sm flex items-center gap-3">
+                <div className="flex-shrink-0 pl-2">
+                    <Database className="w-5 h-5 text-indigo-600" />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 flex-1">
                     <button
                         onClick={onOpenSales}
-                        className="p-3 bg-white/50 border border-indigo-100 rounded-xl hover:border-indigo-400 hover:bg-white transition-all group text-left"
+                        className="p-2 bg-white/50 border border-indigo-100 rounded-xl hover:border-indigo-400 hover:bg-white transition-all group text-left flex items-center gap-2"
                     >
-                        <FileBarChart className="w-5 h-5 text-indigo-600 mb-2 group-hover:scale-110 transition-transform" />
-                        <div className="font-bold text-sm text-gray-900">Import Sales</div>
-                        <div className="text-[10px] text-gray-500">Multi-Channel Reports</div>
+                        <FileBarChart className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform flex-shrink-0" />
+                        <div className="font-bold text-xs text-gray-900 truncate">Import Sales</div>
                     </button>
 
                     <button
                         onClick={onOpenInventory}
-                        className="p-3 bg-white/50 border border-blue-100 rounded-xl hover:border-blue-400 hover:bg-white transition-all group text-left"
+                        className="p-2 bg-white/50 border border-blue-100 rounded-xl hover:border-blue-400 hover:bg-white transition-all group text-left flex items-center gap-2"
                     >
-                        <Layers className="w-5 h-5 text-blue-600 mb-2 group-hover:scale-110 transition-transform" />
-                        <div className="font-bold text-sm text-gray-900">Update Inventory</div>
-                        <div className="text-[10px] text-gray-500">ERP / Stock Levels</div>
+                        <Layers className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform flex-shrink-0" />
+                        <div className="font-bold text-xs text-gray-900 truncate">Update Inventory</div>
                     </button>
 
                     <button
                         onClick={onOpenReturns}
-                        className="p-3 bg-white/50 border border-red-100 rounded-xl hover:border-red-400 hover:bg-white transition-all group text-left"
+                        className="p-2 bg-white/50 border border-red-100 rounded-xl hover:border-red-400 hover:bg-white transition-all group text-left flex items-center gap-2"
                     >
-                        <RotateCcw className="w-5 h-5 text-red-600 mb-2 group-hover:scale-110 transition-transform" />
-                        <div className="font-bold text-sm text-gray-900">Import Refunds</div>
-                        <div className="text-[10px] text-gray-500">Returns Analysis</div>
+                        <RotateCcw className="w-4 h-4 text-red-600 group-hover:scale-110 transition-transform flex-shrink-0" />
+                        <div className="font-bold text-xs text-gray-900 truncate">Import Refunds</div>
                     </button>
 
                     <button
                         onClick={onOpenCA}
-                        className="p-3 bg-white/50 border border-purple-100 rounded-xl hover:border-purple-400 hover:bg-white transition-all group text-left"
+                        className="p-2 bg-white/50 border border-purple-100 rounded-xl hover:border-purple-400 hover:bg-white transition-all group text-left flex items-center gap-2"
                     >
-                        <Upload className="w-5 h-5 text-purple-600 mb-2 group-hover:scale-110 transition-transform" />
-                        <div className="font-bold text-sm text-gray-900">CA Report</div>
-                        <div className="text-[10px] text-gray-500">Channel Advisor Prices</div>
+                        <Upload className="w-4 h-4 text-purple-600 group-hover:scale-110 transition-transform flex-shrink-0" />
+                        <div className="font-bold text-xs text-gray-900 truncate">CA Report</div>
                     </button>
 
                     <button
                         onClick={onOpenMapping}
-                        className="p-3 bg-white/50 border border-amber-100 rounded-xl hover:border-amber-400 hover:bg-white transition-all group text-left"
+                        className="p-2 bg-white/50 border border-amber-100 rounded-xl hover:border-amber-400 hover:bg-white transition-all group text-left flex items-center gap-2"
                     >
-                        <LinkIcon className="w-5 h-5 text-amber-600 mb-2 group-hover:scale-110 transition-transform" />
-                        <div className="font-bold text-sm text-gray-900">SKU Mapping</div>
-                        <div className="text-[10px] text-gray-500">Master SKU Aliases</div>
+                        <LinkIcon className="w-4 h-4 text-amber-600 group-hover:scale-110 transition-transform flex-shrink-0" />
+                        <div className="font-bold text-xs text-gray-900 truncate">SKU Mapping</div>
+                    </button>
+
+                    <button
+                        onClick={onOpenShipment}
+                        className="p-2 bg-white/50 border border-indigo-100 rounded-xl hover:border-indigo-400 hover:bg-white transition-all group text-left flex items-center gap-2"
+                    >
+                        <Ship className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform flex-shrink-0" />
+                        <div className="font-bold text-xs text-gray-900 truncate">Shipment Import</div>
                     </button>
                 </div>
             </div>
@@ -630,7 +633,8 @@ const DashboardView = ({
                                 />
                                 <RechartsTooltip
                                     cursor={{ fill: 'transparent' }}
-                                    formatter={(val: number) => [Math.round(val), 'Units Sold']}
+                                    /* FIX: Change 'val: number' to 'val: any' and cast to Number to handle Recharts' potential 'unknown' or mixed types */
+                                    formatter={(val: any) => [Math.round(Number(val)), 'Units Sold']}
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
                                 />
                                 <Bar dataKey="value" fill="#94a3b8" radius={[0, 4, 4, 0]} barSize={16}>
@@ -643,7 +647,8 @@ const DashboardView = ({
                     </div>
                     <div className="text-center">
                         <div className="text-[10px] text-gray-400 mt-2 font-medium flex justify-center items-center gap-4">
-                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-indigo-500 rounded-full" style={{ backgroundColor: themeColor }}></span> MAX: {Math.round(categoryData[0]?.value || 0)}</span>
+                            /* FIX: Use Number() cast for categoryData value access to avoid 'unknown' type errors */
+                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-indigo-500 rounded-full" style={{ backgroundColor: themeColor }}></span> MAX: {Math.round(Number(categoryData[0]?.value || 0))}</span>
                             <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-gray-400 rounded-full"></span> AVG: {(categoryData.reduce((a, b) => a + b.value, 0) / (categoryData.length || 1)).toFixed(0)}</span>
                         </div>
                     </div>
@@ -672,7 +677,8 @@ const DashboardView = ({
                                     ))}
                                 </Pie>
                                 <RechartsTooltip
-                                    formatter={(val: number) => [Math.round(val), 'Volume']}
+                                    /* FIX: Change 'val: number' to 'val: any' and cast to Number to handle Recharts' potential 'unknown' or mixed types */
+                                    formatter={(val: any) => [Math.round(Number(val)), 'Volume']}
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                 />
                             </PieChart>
@@ -747,11 +753,20 @@ const DashboardView = ({
     );
 };
 
-// ... (Rest of components: ShipmentsView, PriceMatrixView, AliasDrawer remain largely unchanged in structure)
-// Re-exporting them as is to keep file structure valid.
+const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }: { products: Product[], themeColor: string, initialTags?: string[], onTagsChange?: (tags: string[]) => void }) => {
+    // --- STATE for Multi-Search Tag Input ---
+    const [inputValue, setInputValue] = useState('');
 
-const ShipmentsView = ({ products, themeColor }: { products: Product[], themeColor: string }) => {
-    // ... (ShipmentsView logic - same as before)
+    // Use props directly as source of truth
+    const searchTags = initialTags;
+
+    // Wrapper to update parent
+    const updateTags = (newTags: string[]) => {
+        if (onTagsChange) {
+            onTagsChange(newTags);
+        }
+    };
+
     const containerMap = useMemo(() => {
         const map: Record<string, { id: string, eta: string, status: string, totalQty: number, items: { sku: string, qty: number }[] }> = {};
         products.forEach(p => {
@@ -774,6 +789,72 @@ const ShipmentsView = ({ products, themeColor }: { products: Product[], themeCol
         });
     }, [products]);
 
+    // Flatten logic for Table View
+    const allShipmentItems = useMemo(() => {
+        const items: any[] = [];
+        products.forEach(p => {
+            if (p.shipments) {
+                p.shipments.forEach(s => {
+                    items.push({
+                        id: `${p.sku}-${s.containerId}`,
+                        sku: p.sku,
+                        name: p.name,
+                        containerId: s.containerId,
+                        status: s.status,
+                        eta: s.eta,
+                        quantity: s.quantity
+                    });
+                });
+            }
+        });
+        return items.sort((a, b) => {
+            if (!a.eta) return 1;
+            if (!b.eta) return -1;
+            return a.eta.localeCompare(b.eta);
+        });
+    }, [products]);
+
+    // --- FILTER LOGIC ---
+    const filteredTableData = useMemo(() => {
+        if (searchTags.length === 0) return [];
+        return allShipmentItems.filter(item => {
+            const matchesContainer = searchTags.some(tag => item.containerId.toLowerCase().includes(tag.toLowerCase()));
+            const matchesSku = searchTags.some(tag => item.sku.toLowerCase().includes(tag.toLowerCase()));
+            return matchesContainer || matchesSku;
+        });
+    }, [allShipmentItems, searchTags]);
+
+    // --- INPUT HANDLERS ---
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const val = inputValue.trim();
+            if (val) {
+                if (!searchTags.includes(val)) {
+                    updateTags([...searchTags, val]);
+                }
+                setInputValue('');
+            }
+        } else if (e.key === 'Backspace' && !inputValue && searchTags.length > 0) {
+            updateTags(searchTags.slice(0, -1));
+        }
+    };
+
+    const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text');
+        if (!text) return;
+
+        // Split by newlines or commas
+        const newTags = text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+        const uniqueTags = new Set([...searchTags, ...newTags]);
+        updateTags(Array.from(uniqueTags));
+    };
+
+    const removeTag = (tagToRemove: string) => {
+        updateTags(searchTags.filter(tag => tag !== tagToRemove));
+    };
+
     const getBadgeStyle = (status: string) => {
         const lower = status.toLowerCase();
         if (lower.includes('to be shipped')) return 'bg-blue-100 text-blue-700 border-blue-200';
@@ -781,34 +862,125 @@ const ShipmentsView = ({ products, themeColor }: { products: Product[], themeCol
         return 'bg-gray-100 text-gray-600 border-gray-200';
     };
 
+    // Helper to check if a SKU row should be highlighted
+    const isHighlighted = (text: string) => {
+        if (searchTags.length === 0) return false;
+        return searchTags.some(tag => text.toLowerCase().includes(tag.toLowerCase()));
+    };
+
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
-            {containerMap.map(c => (
-                <div key={c.id} className="bg-custom-glass rounded-xl border border-custom-glass shadow-sm overflow-hidden flex flex-col">
-                    <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-start">
-                        <div>
-                            <h3 className="font-bold text-gray-900 flex items-center gap-2"><Ship className="w-4 h-4 text-indigo-600" />{c.id}</h3>
-                            <div className="text-xs text-gray-500 mt-1 flex items-center gap-2"><Calendar className="w-3 h-3" />ETA: {c.eta ? new Date(c.eta).toLocaleDateString() : 'Pending'}</div>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase border ${getBadgeStyle(c.status)}`}>{c.status}</span>
-                    </div>
-                    <div className="p-4 flex-1">
-                        <div className="flex justify-between items-center mb-2 text-xs font-bold text-gray-500 uppercase"><span>Contents</span><span>{c.totalQty} Units</span></div>
-                        <div className="max-h-40 overflow-y-auto pr-1 space-y-1 custom-scrollbar">
-                            {c.items.map((item, idx) => (
-                                <div key={idx} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0">
-                                    <span className="text-gray-700 font-mono truncate max-w-[180px]" title={item.sku}>{item.sku}</span>
-                                    <span className="font-medium">{item.qty}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            
+            {/* Multi-Search Tag Input */}
+            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
+                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Filter Shipments</label>
+                <div 
+                    className="flex flex-wrap items-center gap-2 p-2 border border-gray-300 rounded-lg bg-white/50 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all min-h-[42px]"
+                    onClick={() => document.getElementById('shipment-search-input')?.focus()}
+                >
+                    <Search className="w-4 h-4 text-gray-400 ml-1" />
+                    {searchTags.map(tag => (
+                        <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200 animate-in zoom-in duration-200">
+                            {tag}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
+                                className="hover:text-red-500 rounded-full hover:bg-red-50 p-0.5 transition-colors"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        </span>
+                    ))}
+                    <input
+                        id="shipment-search-input"
+                        type="text"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                        placeholder={searchTags.length === 0 ? "Paste SKUs or Container IDs..." : ""}
+                        className="flex-1 min-w-[120px] outline-none text-sm bg-transparent placeholder-gray-400 text-gray-700"
+                    />
                 </div>
-            ))}
-            {containerMap.length === 0 && (
-                <div className="col-span-full p-12 text-center text-gray-400 bg-custom-glass rounded-xl border border-dashed border-custom-glass">
-                    <Ship className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    No active shipments found.
+                <p className="text-[10px] text-gray-400 mt-2">
+                    Tip: Paste a column from Excel to search multiple SKUs at once. Press Enter to add a tag.
+                </p>
+            </div>
+
+            {searchTags.length > 0 ? (
+                // TABLE VIEW FOR ACTIVE SEARCH
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-medium">
+                            <tr>
+                                <th className="px-4 py-3">SKU</th>
+                                <th className="px-4 py-3">Product Name</th>
+                                <th className="px-4 py-3">Container ID</th>
+                                <th className="px-4 py-3">Status</th>
+                                <th className="px-4 py-3">ETA</th>
+                                <th className="px-4 py-3 text-right">Quantity</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100/50">
+                            {filteredTableData.map((row) => (
+                                <tr key={row.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-4 py-3 font-mono font-bold text-gray-900">
+                                        <span className={isHighlighted(row.sku) ? 'bg-yellow-100 px-1 rounded' : ''}>{row.sku}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-gray-500 max-w-[300px] truncate" title={row.name}>{row.name}</td>
+                                    <td className="px-4 py-3 font-medium text-indigo-600">
+                                        <span className={isHighlighted(row.containerId) ? 'bg-yellow-100 px-1 rounded' : ''}>{row.containerId}</span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase border ${getBadgeStyle(row.status)}`}>{row.status}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-700">{row.eta ? new Date(row.eta).toLocaleDateString() : 'Pending'}</td>
+                                    <td className="px-4 py-3 text-right font-bold text-gray-900">{row.quantity}</td>
+                                </tr>
+                            ))}
+                            {filteredTableData.length === 0 && (
+                                <tr>
+                                    <td colSpan={6} className="p-8 text-center text-gray-500 italic">No incoming shipments found for your search.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                // CARD VIEW FOR DEFAULT OVERVIEW
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {containerMap.map(c => (
+                        <div key={c.id} className="bg-custom-glass rounded-xl border border-custom-glass shadow-sm overflow-hidden flex flex-col transition-all duration-300">
+                            <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-start">
+                                <div>
+                                    <h3 className="font-bold text-gray-900 flex items-center gap-2"><Ship className="w-4 h-4 text-indigo-600" />{c.id}</h3>
+                                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-2"><Calendar className="w-3 h-3" />ETA: {c.eta ? new Date(c.eta).toLocaleDateString() : 'Pending'}</div>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase border ${getBadgeStyle(c.status)}`}>{c.status}</span>
+                            </div>
+                            <div className="p-4 flex-1">
+                                <div className="flex justify-between items-center mb-2 text-xs font-bold text-gray-500 uppercase"><span>Contents</span><span>{c.totalQty} Units</span></div>
+                                <div className="max-h-40 overflow-y-auto pr-1 space-y-1 custom-scrollbar">
+                                    {c.items.map((item, idx) => (
+                                        <div 
+                                            key={idx} 
+                                            className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0 rounded px-1 transition-colors hover:bg-gray-50"
+                                        >
+                                            <span className="font-mono truncate max-w-[180px] text-gray-700" title={item.sku}>
+                                                {item.sku}
+                                            </span>
+                                            <span className="font-medium">{item.qty}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {containerMap.length === 0 && (
+                        <div className="col-span-full p-12 text-center text-gray-400 bg-custom-glass rounded-xl border border-dashed border-custom-glass">
+                            <Ship className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                            No active shipments found.
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -816,7 +988,6 @@ const ShipmentsView = ({ products, themeColor }: { products: Product[], themeCol
 };
 
 const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { products: Product[], pricingRules: PricingRules, promotions: PromotionEvent[], themeColor: string }) => {
-    // ... (PriceMatrixView logic - same as before)
     const [search, setSearch] = useState('');
     const [showInactive, setShowInactive] = useState(false);
     const platforms = Object.keys(pricingRules);
@@ -854,7 +1025,7 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
                         <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th className="p-4 sticky left-0 z-20 backdrop-blur-md bg-white/80">SKU</th>
-                                <th className="p-4 text-right sticky left-[120px] z-20 border-r border-gray-200 backdrop-blur-md bg-white/80">Master Price</th>
+                                <th className="p-4 text-right sticky left-[120px] z-20 border-r border-gray-200 backdrop-blur-md bg-white/80">CA Price</th>
                                 {platforms.map(platform => <th key={platform} className="p-4 text-center">{platform}</th>)}
                             </tr>
                         </thead>
@@ -862,7 +1033,9 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
                             {paginatedProducts.map(p => (
                                 <tr key={p.id} className="hover:bg-gray-50/50">
                                     <td className="p-4 font-mono font-bold text-gray-900 sticky left-0 z-10 bg-white/50 backdrop-blur-sm">{p.sku}</td>
-                                    <td className="p-4 text-right font-medium sticky left-[120px] z-10 border-r border-gray-100 bg-white/50 backdrop-blur-sm">£{p.currentPrice.toFixed(2)}</td>
+                                    <td className="p-4 text-right font-medium sticky left-[120px] z-10 border-r border-gray-100 bg-white/50 backdrop-blur-sm">
+                                        {p.caPrice ? <span className="text-purple-700 font-bold">£{p.caPrice.toFixed(2)}</span> : <span className="text-gray-300">-</span>}
+                                    </td>
                                     {platforms.map(platform => {
                                         const channel = p.channels.find(c => c.platform === platform);
                                         return (
@@ -903,13 +1076,11 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
 };
 
 const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { product: Product, pricingRules: PricingRules, onClose: () => void, onSave: (p: Product) => void, themeColor: string }) => {
-    // 1. Initial State: Convert string aliases to array of tags
     const [platformTags, setPlatformTags] = useState<{ platform: string; tags: string[] }[]>(() => {
         const existing = product.channels.map(c => ({
             platform: c.platform,
             tags: c.skuAlias ? c.skuAlias.split(',').map(s => s.trim()).filter(Boolean) : []
         }));
-        // Ensure all platforms from rules exist
         Object.keys(pricingRules).forEach(pKey => {
             if (!existing.find(e => e.platform === pKey)) {
                 existing.push({ platform: pKey, tags: [] });
@@ -918,11 +1089,9 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { p
         return existing;
     });
 
-    // 2. Input values state (what the user is currently typing per platform)
     const [inputValues, setInputValues] = useState<Record<string, string>>({});
 
     const handleInputChange = (platform: string, value: string) => {
-        // If user enters comma, split and add tag immediately (handled via KeyDown usually, but regex safety here)
         if (value.includes(',')) {
             const parts = value.split(',').map(s => s.trim()).filter(Boolean);
             if (parts.length > 0) {
@@ -941,7 +1110,6 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { p
             addTags(platform, [val]);
             setInputValues(prev => ({ ...prev, [platform]: '' }));
         } else if (e.key === 'Backspace' && !val) {
-            // Remove last tag if input is empty
             const current = platformTags.find(p => p.platform === platform);
             if (current && current.tags.length > 0) {
                 removeTag(platform, current.tags.length - 1);
@@ -952,7 +1120,6 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { p
     const addTags = (platform: string, newTags: string[]) => {
         setPlatformTags(prev => prev.map(p => {
             if (p.platform === platform) {
-                // Prevent duplicates
                 const updated = [...p.tags];
                 newTags.forEach(t => {
                     if (!updated.includes(t)) updated.push(t);
@@ -984,7 +1151,6 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { p
             if (idx >= 0) {
                 updatedChannels[idx] = { ...updatedChannels[idx], skuAlias: aliasString };
             } else if (aliasString) {
-                // New channel entry
                 updatedChannels.push({
                     platform: pt.platform,
                     manager: pricingRules[pt.platform]?.manager || 'Unassigned',

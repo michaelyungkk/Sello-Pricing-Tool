@@ -1,13 +1,13 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules } from '../types';
-import { Activity, Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List } from 'lucide-react';
+import { Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List, Ship } from 'lucide-react';
 
 interface ProductListProps {
     products: Product[];
     onAnalyze: (product: Product) => void;
     onEditAliases?: (product: Product) => void;
+    onViewShipments?: (sku: string) => void; // New Callback
     dateLabels?: { current: string, last: string };
     pricingRules?: PricingRules;
     themeColor: string;
@@ -74,6 +74,7 @@ interface ProductRowProps {
     themeColor: string;
     onAnalyze: (p: Product) => void;
     onEditAliases?: (p: Product) => void;
+    onViewShipments?: (sku: string) => void;
     hoveredProduct: { id: string; rect: DOMRect } | null;
     handleMouseEnter: (id: string, e: React.MouseEvent) => void;
     handleMouseLeave: () => void;
@@ -84,13 +85,19 @@ const ProductRow = React.memo(({
     themeColor,
     onAnalyze,
     onEditAliases,
+    onViewShipments,
     handleMouseEnter,
     handleMouseLeave
 }: ProductRowProps) => {
     const isOOS = product.recommendation === 'Out of Stock';
     const isMonitoring = product.status === 'Warning' && product.recommendation.includes('Monitor');
 
-    const currentPrice = product.currentPrice || 0;
+    // Apply 20% VAT Uplift for Display
+    const VAT = 1.20;
+    const currentPriceWithVat = (product.currentPrice || 0) * VAT;
+    const oldPriceWithVat = product.oldPrice ? product.oldPrice * VAT : null;
+    const optimalPriceWithVat = product.optimalPrice ? product.optimalPrice * VAT : null;
+
     const runwayBin = {
         label: product.daysRemaining > 730 ? '> 2 Years' : `${Math.round(product.daysRemaining)} Days`,
         color: product.status === 'Critical' ? 'bg-red-50 text-red-600 border-red-200' :
@@ -102,37 +109,37 @@ const ProductRow = React.memo(({
     const isHighReturns = product.returnRate !== undefined && product.returnRate > 5;
 
     return (
-        <tr key={product.id} className="hover:bg-gray-50/50 transition-colors group text-sm">
-            <td className="p-2.5">
+        <tr key={product.id} className="hover:bg-gray-50/50 transition-colors group text-sm border-b border-gray-50 last:border-none">
+            <td className="px-4 py-3">
                 <div>
                     <div className="font-bold text-gray-900 font-mono">{product.sku}</div>
-                    <div className="text-gray-900 font-medium text-xs mt-0.5 truncate max-w-[200px]" title={product.name}>{product.name}</div>
-                    <div className="flex gap-2 mt-1">
+                    <div className="text-gray-900 font-medium text-xs mt-1 truncate max-w-[240px] xl:max-w-[350px]" title={product.name}>{product.name}</div>
+                    <div className="flex gap-2 mt-1.5">
                         {product.subcategory && (
-                            <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">{product.subcategory}</span>
+                            <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{product.subcategory}</span>
                         )}
                     </div>
                 </div>
             </td>
-            <td className="p-2.5 text-right">
-                {product.optimalPrice ? (
-                    <div className="flex items-center justify-end gap-1 font-bold" style={{ color: themeColor }} title="Based on historical margin & velocity performance">
+            <td className="px-4 py-3 text-right">
+                {optimalPriceWithVat ? (
+                    <div className="flex items-center justify-end gap-1 font-bold" style={{ color: themeColor }} title="Based on historical margin & velocity performance (VAT Inc)">
                         <Star className="w-3 h-3" style={{ fill: `${themeColor}20` }} />
-                        £{product.optimalPrice.toFixed(2)}
+                        £{optimalPriceWithVat.toFixed(2)}
                     </div>
                 ) : (
                     <span className="text-gray-300">-</span>
                 )}
             </td>
-            <td className="p-2.5 text-right">
+            <td className="px-4 py-3 text-right">
                 <div className="text-gray-400 font-medium">
-                    {product.oldPrice ? `£${product.oldPrice.toFixed(2)}` : '-'}
+                    {oldPriceWithVat ? `£${oldPriceWithVat.toFixed(2)}` : '-'}
                 </div>
             </td>
-            <td className="p-2.5 text-right">
-                <div className="font-bold text-gray-900">£{(product.currentPrice || 0).toFixed(2)}</div>
+            <td className="px-4 py-3 text-right">
+                <div className="font-bold text-gray-900">£{currentPriceWithVat.toFixed(2)}</div>
             </td>
-            <td className="p-2.5 text-right">
+            <td className="px-4 py-3 text-right">
                 {product.caPrice ? (
                     <div className="flex items-center justify-end gap-1 font-bold text-purple-600" title="Channel Advisor Reference Price">
                         £{product.caPrice.toFixed(2)}
@@ -141,8 +148,27 @@ const ProductRow = React.memo(({
                     <span className="text-gray-300">—</span>
                 )}
             </td>
+            
+            <td className="px-4 py-3 text-right">
+                <div className="flex flex-col items-end gap-0.5">
+                    <span className="font-bold text-gray-900">{product.stockLevel}</span>
+                    {product.incomingStock && product.incomingStock > 0 ? (
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onViewShipments) onViewShipments(product.sku);
+                            }}
+                            className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center gap-1 hover:bg-indigo-100 hover:border-indigo-300 transition-colors cursor-pointer" 
+                            title="Click to view incoming shipments"
+                        >
+                            <Ship className="w-3 h-3" />
+                            +{product.incomingStock}
+                        </button>
+                    ) : null}
+                </div>
+            </td>
 
-            <td className="p-2.5 text-right">
+            <td className="px-4 py-3 text-right">
                 <div className="flex flex-col items-end gap-1.5">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded border text-xs font-bold whitespace-nowrap ${runwayBin.color}`}>
                         {runwayBin.label}
@@ -156,7 +182,7 @@ const ProductRow = React.memo(({
                     </div>
                 </div>
             </td>
-            <td className="p-2.5 text-right">
+            <td className="px-4 py-3 text-right">
                 {product.returnRate !== undefined ? (
                     <div className={`flex items-center justify-end gap-1 font-medium ${isHighReturns ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
                         {isHighReturns && <CornerDownLeft className="w-3 h-3" />}
@@ -165,7 +191,7 @@ const ProductRow = React.memo(({
                 ) : <span className="text-gray-300">-</span>}
             </td>
             <td
-                className="p-2.5 cursor-help"
+                className="px-4 py-3 cursor-help"
                 onMouseEnter={(e) => handleMouseEnter(product.id, e)}
                 onMouseLeave={handleMouseLeave}
             >
@@ -181,7 +207,7 @@ const ProductRow = React.memo(({
                         {!isOOS && !isMonitoring && product.status === 'Overstock' && <TrendingDown className="w-4 h-4" />}
                         {!isOOS && !isMonitoring && product.status === 'Healthy' && <CheckCircle className="w-4 h-4" />}
 
-                        <span className="border-b border-dashed border-current pb-0.5 text-xs">
+                        <span className="border-b border-dashed border-current pb-0.5 text-xs truncate max-w-[160px]">
                             {product.recommendation}
                         </span>
                     </div>
@@ -192,31 +218,24 @@ const ProductRow = React.memo(({
                     )}
                 </div>
             </td>
-            <td className="p-2.5 text-right">
+            <td className="px-4 py-3 text-right">
                 <div className="flex items-center justify-end gap-2">
                     {onEditAliases && (
                         <button
                             onClick={() => onEditAliases(product)}
-                            className="text-gray-400 hover:text-amber-600 transition-colors"
+                            className="text-gray-400 hover:text-amber-600 transition-colors p-1 rounded hover:bg-amber-50"
                             title="Edit Aliases / SKU Mapping"
                         >
                             <GitMerge className="w-4 h-4" />
                         </button>
                     )}
-                    <button
-                        onClick={() => onAnalyze(product)}
-                        className="text-gray-400 hover:text-indigo-600 transition-colors"
-                        title="Performance Analysis"
-                    >
-                        <Activity className="w-4 h-4" />
-                    </button>
                 </div>
             </td>
         </tr>
     );
 });
 
-const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAliases, dateLabels, pricingRules, themeColor }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAliases, onViewShipments, dateLabels, pricingRules, themeColor }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
@@ -526,23 +545,18 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
         const isActive = sortConfig?.key === sortKey;
         return (
             <th
-                className={`p-2.5 font-semibold cursor-pointer select-none hover:bg-gray-100/50 transition-colors ${alignRight ? 'text-right' : 'text-left'} ${width || ''}`}
+                className={`px-4 py-3 font-semibold cursor-pointer select-none hover:bg-gray-100/50 transition-colors ${alignRight ? 'text-right' : 'text-left'} ${width || ''}`}
                 onClick={() => handleSort(sortKey)}
             >
-                <div className={`flex flex-col ${alignRight ? 'items-end' : 'items-start'}`}>
-                    <div className={`flex items-center gap-1`}>
-                        {label}
-                        <div className="flex flex-col">
-                            {isActive ? (
-                                sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" style={{ color: themeColor }} /> : <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />
-                            ) : (
-                                <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />
-                            )}
-                        </div>
+                <div className={`flex items-center gap-1 ${alignRight ? 'justify-end' : 'justify-start'}`}>
+                    {label}
+                    <div className="flex flex-col">
+                        {isActive ? (
+                            sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" style={{ color: themeColor }} /> : <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />
+                        ) : (
+                            <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />
+                        )}
                     </div>
-                    {subLabel && (
-                        <span className="text-[10px] text-gray-400 font-mono font-normal mt-0.5 whitespace-nowrap">{subLabel}</span>
-                    )}
                 </div>
             </th>
         );
@@ -730,19 +744,20 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
 
             {/* Filters Toolbar - Updated with bg-custom-glass */}
             <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg flex flex-col backdrop-blur-custom relative z-20">
-                {/* ... (Existing Filters Content) ... */}
                 <div className="p-4 space-y-4">
                     {/* Top Row: Search + Main Filters */}
                     <div className="flex flex-col lg:flex-row gap-4">
                         {/* Search - Flexible Width */}
                         <div className="flex-1 relative min-w-[250px]">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                                <Search className="w-5 h-5 text-gray-400" />
+                            </div>
                             <input
                                 type="text"
                                 placeholder="Search SKU or Product Name..."
                                 value={searchQuery}
                                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-sm bg-white/50 backdrop-blur-sm"
+                                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-sm bg-white/50 backdrop-blur-sm relative z-0"
                                 style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
                             />
                         </div>
@@ -906,16 +921,17 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100/50 text-xs uppercase tracking-wider text-gray-500">
-                                <SortHeader label="Product" sortKey="sku" />
-                                <SortHeader label="Optimal Ref." sortKey="optimalPrice" alignRight width="w-[100px]" />
-                                <SortHeader label="Last Week Price" sortKey="oldPrice" alignRight subLabel={dateLabels?.last} width="w-[120px]" />
-                                <SortHeader label={isContextFiltered ? "Cur. Price (Filt.)" : "Current Price"} sortKey="currentPrice" alignRight subLabel={dateLabels?.current} width="w-[120px]" />
+                            <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-medium">
+                                <SortHeader label="Product" sortKey="sku" width="min-w-[250px]" />
+                                <SortHeader label="Optimal Ref." sortKey="optimalPrice" alignRight width="w-[110px]" />
+                                <SortHeader label="Last Week" sortKey="oldPrice" alignRight subLabel={dateLabels?.last} width="w-[110px]" />
+                                <SortHeader label={isContextFiltered ? "Current (Filt.)" : "Current"} sortKey="currentPrice" alignRight subLabel={dateLabels?.current} width="w-[110px]" />
                                 <SortHeader label="CA Price" sortKey="caPrice" alignRight width="w-[100px]" />
-                                <SortHeader label={isContextFiltered ? "Runway (Filtered)" : "Runway"} sortKey="daysRemaining" alignRight width="min-w-[140px]" />
-                                <SortHeader label="Return Rate" sortKey="returnRate" alignRight width="w-[100px]" />
-                                <SortHeader label={isContextFiltered ? "Rec. (Filtered)" : "Recommendation"} sortKey="status" width="w-[150px]" />
-                                <th className="p-4 font-semibold text-right w-12"></th>
+                                <SortHeader label="Inventory" sortKey="stockLevel" alignRight width="w-[120px]" />
+                                <SortHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" alignRight width="w-[140px]" />
+                                <SortHeader label="Returns" sortKey="returnRate" alignRight width="w-[100px]" />
+                                <SortHeader label={isContextFiltered ? "Rec. (Filt.)" : "Recommendation"} sortKey="status" width="min-w-[180px]" />
+                                <th className="px-4 py-3 font-semibold text-right w-[60px]">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100/50">
@@ -926,6 +942,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                                     themeColor={themeColor}
                                     onAnalyze={onAnalyze}
                                     onEditAliases={onEditAliases}
+                                    onViewShipments={onViewShipments} // Pass handler down
                                     hoveredProduct={hoveredProduct}
                                     handleMouseEnter={handleMouseEnter}
                                     handleMouseLeave={handleMouseLeave}
@@ -933,7 +950,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                             )}
                             {filteredProducts.length === 0 && (
                                 <tr>
-                                    <td colSpan={9} className="p-8 text-center text-gray-500">
+                                    <td colSpan={10} className="p-8 text-center text-gray-500">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <p>No products found matching your filters.</p>
                                             {products.length > 0 && !showInactive && (

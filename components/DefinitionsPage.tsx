@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone, Clock, Activity, Layers, Eye, ShieldAlert, Package, RotateCcw, CornerDownLeft } from 'lucide-react';
+import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone, Clock, Activity, Layers, Eye, ShieldAlert, Package, RotateCcw, CornerDownLeft, Ship } from 'lucide-react';
 
 interface DefinitionsPageProps {
     headerStyle?: React.CSSProperties;
@@ -80,13 +79,35 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                     </div>
 
                     <div className="mt-6 bg-blue-50/50 p-4 rounded-lg border border-blue-100 text-sm text-blue-800">
-                        <p className="font-bold mb-1 flex items-center gap-2"><Clock className="w-4 h-4"/> The "Runway" Calculation</p>
-                        <p className="mb-2">
-                            Runway (Days Remaining) = <span className="font-mono bg-white px-1 rounded border border-blue-200">Current Stock / Average Daily Sales</span>
+                        <p className="font-bold mb-3 flex items-center gap-2 border-b border-blue-200 pb-2">
+                            <Clock className="w-4 h-4"/> The "Runway" Calculation
                         </p>
-                        <p className="text-xs opacity-80">
-                            * Note: Incoming stock (shipments) is excluded by default for a conservative view, but can be toggled ON in the Strategy Engine.
-                        </p>
+                        
+                        <div className="mb-4">
+                            <p className="mb-2">The core formula for days remaining is:</p>
+                            <span className="font-mono bg-white px-2 py-1 rounded border border-blue-200 text-xs font-bold">
+                                Runway = Effective Stock / Average Daily Sales
+                            </span>
+                        </div>
+
+                        <div className="bg-white/60 p-3 rounded-lg border border-blue-200">
+                            <p className="font-bold mb-2 flex items-center gap-2 text-xs uppercase text-indigo-600">
+                                <Ship className="w-3 h-3"/> Strategy Engine: "Include Incoming" Toggle
+                            </p>
+                            <p className="text-xs text-gray-600 mb-2">
+                                In the Strategy Engine, you can toggle whether "Incoming Stock" (shipments on the water) counts towards your effective stock.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="bg-white p-2 rounded border border-gray-200">
+                                    <span className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Standard Mode (Conservative)</span>
+                                    <code className="text-xs text-gray-700 bg-gray-100 px-1 rounded">Effective Stock = On Hand</code>
+                                </div>
+                                <div className="bg-white p-2 rounded border border-indigo-200">
+                                    <span className="block text-[10px] uppercase font-bold text-indigo-600 mb-1">Incoming Included</span>
+                                    <code className="text-xs text-indigo-700 bg-indigo-50 px-1 rounded">Effective Stock = On Hand + Incoming</code>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

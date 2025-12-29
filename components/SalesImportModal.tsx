@@ -266,7 +266,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             });
 
             // Add Learned Aliases to lookup
-            Object.entries(learnedAliases).forEach(([alias, master]) => {
+            /* FIX: Explicitly cast entries of learnedAliases to avoid 'unknown' type assignment issues */
+            (Object.entries(learnedAliases) as [string, string][]).forEach(([alias, master]) => {
                 const aliasUpper = alias.toUpperCase();
                 if (!aliasMap[aliasUpper]) aliasMap[aliasUpper] = master;
             });
@@ -839,7 +840,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {Object.entries(unknownSkus).map(([fileSku, data]) => (
+                                        {/* FIX: Explicitly cast entries of unknownSkus to avoid 'unknown' type access issues */}
+                                        {(Object.entries(unknownSkus) as [string, { count: number, revenue: number, masterSku: string | null }][]).map(([fileSku, data]) => (
                                             <tr key={fileSku}>
                                                 <td className="p-3 font-mono text-xs text-gray-700">{fileSku}</td>
                                                 <td className="p-3 text-center text-gray-500">{data.count}</td>
@@ -882,7 +884,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                         // Re-analyze with new mappings
                                         // We basically take the manual mappings and append them to transient aliasMap
                                         const resolvedAliases = { ...learnedAliases };
-                                        Object.entries(unknownSkus).forEach(([fileSku, data]) => {
+                                        /* FIX: Explicitly cast entries of unknownSkus to avoid 'unknown' type access issues */
+                                        (Object.entries(unknownSkus) as [string, { count: number, revenue: number, masterSku: string | null }][]).forEach(([fileSku, data]) => {
                                             if (data.masterSku && products.some(p => p.sku === data.masterSku)) {
                                                 resolvedAliases[fileSku.toUpperCase()] = data.masterSku;
                                             }

@@ -1,9 +1,8 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, StrategyConfig, PricingRules, PromotionEvent } from '../types';
 import { DEFAULT_STRATEGY_RULES } from '../constants';
-import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar } from 'lucide-react';
+import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface StrategyPageProps {
     products: Product[];
@@ -28,6 +27,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [isConfigOpen, setIsConfigOpen] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [includeIncoming, setIncludeIncoming] = useState(false); // New Toggle State
+    const [showOOS, setShowOOS] = useState(false); // OOS Visibility Toggle
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false); // Export Menu State
 
     // Time Window State
@@ -41,8 +41,6 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
-
-    // --- LOGIC HELPERS ---
 
     // --- LOGIC HELPERS ---
 
@@ -90,7 +88,9 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         }
 
         // Standard windows (7, 14, 30, 90)
-        // Example: If today is 28th, 14 days ago is 14th. Window is [14th 00:00 -> Today]
+        // Logic: Return the Start Date of the window
+        // For "Last 7 Completed Days": [Today-7] to [Today-1]
+        // Start Date is simply Today - 7.
         const days = safeNum(parseInt(timeWindow));
         d.setDate(d.getDate() - (days || 30));
         return d;
@@ -98,20 +98,31 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
     const formattedDateRange = useMemo(() => {
         const start = getWindowDateLimit();
-        const end = timeWindow === 'CUSTOM' && customRange.end
-            ? new Date(customRange.end)
-            : new Date();
+        let end = new Date();
+        
+        // VISUAL FIX: If using a preset, the window effectively ends Yesterday.
+        // Custom range respects user input.
+        if (timeWindow !== 'CUSTOM') {
+            end.setDate(end.getDate() - 1);
+        } else if (customRange.end) {
+            end = new Date(customRange.end);
+        }
+
         const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
         return `${start.toLocaleDateString(undefined, options)} - ${end.toLocaleDateString(undefined, options)}`;
     }, [timeWindow, customRange]);
 
     // 2. Metrics Calculation (now includes historical window)
     const getMetricsInWindow = (product: Product, windowLimit: Date) => {
-        // Upper limit matches the end of the day
+        // Upper limit definition
         const upperLimit = new Date();
         upperLimit.setHours(23, 59, 59, 999);
 
-        if (timeWindow === 'CUSTOM' && customRange.end) {
+        // LOGIC FIX: For presets, we strictly exclude today.
+        // The upper limit becomes Yesterday 23:59:59.999
+        if (timeWindow !== 'CUSTOM') {
+            upperLimit.setDate(upperLimit.getDate() - 1);
+        } else if (timeWindow === 'CUSTOM' && customRange.end) {
             const customEnd = new Date(customRange.end + 'T23:59:59');
             if (!isNaN(customEnd.getTime())) {
                 upperLimit.setTime(customEnd.getTime());
@@ -152,13 +163,24 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
             }
         });
 
-        const averagePrice = recentTotalQty > 0 ? weightedPriceSum / recentTotalQty : safeNum(product.currentPrice);
+        const rawAveragePrice = recentTotalQty > 0 ? weightedPriceSum / recentTotalQty : safeNum(product.currentPrice);
 
         // Revenue-Weighted Financial Net Margin: (Total Profit / Total Revenue) * 100
-        // Unified formula for both legacy and new data
+        // Calculated on the RAW sales figures (Pre-VAT adjustment) to ensure margin % is accurate.
         const netPmPercent = recentTotalSales > 0 ? (totalProfit / recentTotalSales) * 100 : 0;
 
-        return { recentTotalSales, recentTotalQty, averagePrice, netPmPercent, totalProfit };
+        // User Request: Add 20% VAT to Recent stats for Display & Strategy context
+        const VAT_MULTIPLIER = 1.20;
+        const averagePrice = rawAveragePrice * VAT_MULTIPLIER;
+        const recentTotalSalesWithVat = recentTotalSales * VAT_MULTIPLIER;
+
+        return { 
+            recentTotalSales: recentTotalSalesWithVat, 
+            recentTotalQty, 
+            averagePrice, 
+            netPmPercent, 
+            totalProfit 
+        };
     };
 
     // 3. Decision Engine
@@ -167,12 +189,20 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         const basePrice = safeNum(product.caPrice) || safeNum(averagePrice) || safeNum(product.currentPrice);
         const effectiveStock = safeNum(product.stockLevel) + (includeIncoming ? safeNum(product.incomingStock) : 0);
 
-        const limit7 = new Date();
-        limit7.setHours(0, 0, 0, 0);
-        limit7.setDate(limit7.getDate() - 7);
+        // LOGIC FIX: "Past 7 Days Velocity" check inside Strategy also needs to exclude Today to be consistent.
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        
+        const limit7Start = new Date(todayStart);
+        limit7Start.setDate(todayStart.getDate() - 7);
+
         const skuLogs = priceHistoryMap.get(product.sku) || [];
         const last7Qty = skuLogs
-            .filter((h: any) => new Date(h.date + 'T00:00:00') >= limit7)
+            .filter((h: any) => {
+                const d = new Date(h.date + 'T00:00:00');
+                // Include: Date >= Today-7 AND Date < Today
+                return d >= limit7Start && d < todayStart;
+            })
             .reduce((sum: number, h: any) => sum + (safeNum(h.velocity)), 0);
 
         const weeklyVelocity = safeNum(product.averageDailySales) * 7;
@@ -189,7 +219,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         };
 
         const minMarginBuffer = safeNum(config.safety.minMarginPercent) / 100;
-        const floorPrice = (safeNum(product.costPrice) + safeNum(product.postage)) * (1 + minMarginBuffer);
+        
+        // LOGIC CHANGE: Use Division (Gross Margin Logic) instead of Markup (Multiplication Logic)
+        // If buffer is 10%, we want Price >= Cost / (1 - 0.10)
+        const floorDivisor = 1 - minMarginBuffer;
+        const floorPrice = floorDivisor > 0 
+            ? (safeNum(product.costPrice) + safeNum(product.postage)) / floorDivisor 
+            : (safeNum(product.costPrice) + safeNum(product.postage)) * 1.5; // Fallback if invalid
 
         if (runwayWeeks < safeNum(config.increase.minRunwayWeeks) && effectiveStock > safeNum(config.increase.minStock)) {
             if (last7Qty > safeNum(config.increase.minVelocity7Days)) {
@@ -239,11 +275,25 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 // Mapped filteredPrice to averagePrice for Export compatibility
                 return { ...p, ...metrics, filteredPrice: metrics.averagePrice, ...rec };
             })
+            // --- VISIBILITY FILTER ---
+            .filter(row => {
+                const isOOS = row.effectiveStock <= 0;
+                // Active means it has sales in the selected window (or velocity > 0)
+                const isActive = row.recentTotalQty > 0;
+
+                // 1. Always hide inactive products (0 Stock + 0 Sales in window)
+                if (isOOS && !isActive) return false;
+
+                // 2. Hide Active OOS products unless toggle is enabled
+                if (isOOS && !showOOS) return false;
+
+                return true;
+            })
             .sort((a, b) => {
                 const score = (x: string) => x === 'INCREASE' ? 3 : x === 'DECREASE' ? 2 : 1;
                 return score(b.action) - score(a.action);
             });
-    }, [products, config, searchQuery, timeWindow, customRange, priceHistoryMap, includeIncoming, pricingRules]);
+    }, [products, config, searchQuery, timeWindow, customRange, priceHistoryMap, includeIncoming, pricingRules, showOOS]);
 
     const filteredAndSortedData = useMemo(() => {
         return tableData.filter(row => activeTab === 'All' || row.action === activeTab);
@@ -259,7 +309,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     // Reset pagination on filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, activeTab, timeWindow]);
+    }, [searchQuery, activeTab, timeWindow, showOOS]);
 
     const uniquePlatforms = useMemo(() => {
         const platformSet = new Set<string>();
@@ -702,8 +752,8 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 <label className="text-xs font-bold text-amber-800 uppercase block mb-2">Minimum Floor Constraint</label>
                                 <p className="text-xs text-amber-700 mb-3">Price must not fall below:</p>
                                 <div className="flex items-center gap-2 font-mono text-sm bg-white/80 p-2 rounded border border-amber-200 mb-3">
-                                    (Cost + Ship) ×
-                                    <span className="font-bold">1.{config.safety.minMarginPercent}</span>
+                                    (Cost + Ship) ÷
+                                    <span className="font-bold">{(1 - (safeNum(config.safety.minMarginPercent) / 100)).toFixed(2)}</span>
                                 </div>
 
                                 <div className="flex items-center gap-2">
@@ -753,6 +803,16 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 </button>
                             ))}
                         </div>
+
+                        {/* OOS Toggle - Moved Here */}
+                        <button
+                            onClick={() => setShowOOS(!showOOS)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold border text-xs transition-all shadow-sm ${showOOS ? 'bg-gray-800 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-300'}`}
+                            title={showOOS ? "Hide Out of Stock items" : "Show Out of Stock items (Active Only)"}
+                        >
+                            {showOOS ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                            {showOOS ? 'OOS Shown' : 'OOS Hidden'}
+                        </button>
                     </div>
                     <div className="text-xs text-gray-500">
                         Showing <strong>{tableData.filter(r => activeTab === 'All' || r.action === activeTab).length}</strong> SKUs
@@ -839,42 +899,53 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 </div>
 
                 {/* Pagination Footer */}
-                <div className="p-4 border-t border-custom-glass flex items-center justify-between bg-gray-50/30">
-                    <div className="text-xs text-gray-500 font-medium">
-                        Showing <span className="text-gray-700">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-gray-700">{Math.min(currentPage * itemsPerPage, filteredAndSortedData.length)}</span> of <span className="text-gray-700">{filteredAndSortedData.length}</span> entries
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage(prev => prev - 1)}
-                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Previous
-                        </button>
-                        <div className="flex items-center gap-1">
-                            {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                                let pageNum = currentPage <= 3 ? i + 1 : currentPage - 2 + i;
-                                if (pageNum > totalPages) return null;
-                                return (
-                                    <button
-                                        key={pageNum}
-                                        onClick={() => setCurrentPage(pageNum)}
-                                        className={`w-8 h-8 text-[11px] font-bold rounded-lg border transition-all ${currentPage === pageNum ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'}`}
-                                    >
-                                        {pageNum}
-                                    </button>
-                                );
-                            })}
+                {filteredAndSortedData.length > 0 && (
+                    <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-4">
+                                <p className="text-sm text-gray-700">
+                                    Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredAndSortedData.length)}</span> of <span className="font-medium">{filteredAndSortedData.length}</span> results
+                                </p>
+                                <select
+                                    value={itemsPerPage}
+                                    onChange={(e) => {
+                                        setItemsPerPage(Number(e.target.value));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                            </div>
+                            <div>
+                                {totalPages > 1 && (
+                                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                        <button
+                                            onClick={() => setCurrentPage(prev => prev - 1)}
+                                            disabled={currentPage === 1}
+                                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                                        >
+                                            <ChevronLeft className="h-5 w-5" />
+                                        </button>
+                                        <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                            Page {currentPage} of {totalPages}
+                                        </span>
+                                        <button
+                                            onClick={() => setCurrentPage(prev => prev + 1)}
+                                            disabled={currentPage === totalPages}
+                                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                                        >
+                                            <ChevronRight className="h-5 w-5" />
+                                        </button>
+                                    </nav>
+                                )}
+                            </div>
                         </div>
-                        <button
-                            disabled={currentPage === totalPages}
-                            onClick={() => setCurrentPage(prev => prev + 1)}
-                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Next
-                        </button>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );

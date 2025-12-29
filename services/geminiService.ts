@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Product, AnalysisResult, PlatformConfig } from "../types";
 
@@ -6,7 +7,8 @@ import { Product, AnalysisResult, PlatformConfig } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const analyzePriceAdjustment = async (product: Product, platformRule: PlatformConfig): Promise<AnalysisResult> => {
-  const modelId = "gemini-2.5-flash"; // Using flash for speed and arithmetic reasoning
+  // FIX: Upgraded model to gemini-3-pro-preview for better arithmetic reasoning capabilities.
+  const modelId = "gemini-3-pro-preview"; // Using flash for speed and arithmetic reasoning
 
   const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General');
 
