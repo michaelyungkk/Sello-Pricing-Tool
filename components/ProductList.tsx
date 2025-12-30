@@ -1,6 +1,8 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules } from '../types';
+import { TagSearchInput } from './TagSearchInput';
 import { Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List, Ship } from 'lucide-react';
 
 interface ProductListProps {
@@ -109,7 +111,7 @@ const ProductRow = React.memo(({
     const isHighReturns = product.returnRate !== undefined && product.returnRate > 5;
 
     return (
-        <tr key={product.id} className="hover:bg-gray-50/50 transition-colors group text-sm border-b border-gray-50 last:border-none">
+        <tr key={product.id} className="even:bg-gray-50/50 hover:bg-gray-100/50 transition-colors group text-sm border-b border-gray-50 last:border-none">
             <td className="px-4 py-3">
                 <div>
                     <div className="font-bold text-gray-900 font-mono">{product.sku}</div>
@@ -237,6 +239,7 @@ const ProductRow = React.memo(({
 
 const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAliases, onViewShipments, dateLabels, pricingRules, themeColor }) => {
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchTags, setSearchTags] = useState<string[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [managerFilter, setManagerFilter] = useState('All');
@@ -274,21 +277,17 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
 
     // Helper to resolve manager from config if available (Dynamic Lookup)
     const getEffectiveManager = (platform: string, storedManager: string) => {
-        // If pricingRules has a specific manager for this platform (and it's not unassigned), use it as source of truth.
-        // This overrides potentially stale data in the product record.
         if (pricingRules && pricingRules[platform]?.manager && pricingRules[platform].manager !== 'Unassigned') {
             return pricingRules[platform].manager;
         }
         return storedManager || 'Unassigned';
     };
 
-    // Extract unique options for dropdowns
     const uniqueManagers = useMemo(() => {
         const managerSet = new Set<string>();
         products.forEach(p => p.channels.forEach(c => {
             managerSet.add(getEffectiveManager(c.platform, c.manager));
         }));
-        // Also add any from rules just in case they aren't used yet but exist in config
         if (pricingRules) {
             Object.values(pricingRules).forEach((r: any) => {
                 if (r.manager && r.manager !== 'Unassigned') managerSet.add(r.manager);
@@ -325,8 +324,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
         return Array.from(subs).sort();
     }, [products, mainCatFilter]);
 
-
-
     const handleSort = (key: SortKey) => {
         let direction: 'asc' | 'desc' = 'asc';
         if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -338,7 +335,19 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
     const filteredProducts = useMemo(() => {
         const searchQueryLower = debouncedSearch.toLowerCase();
         let filtered = products.filter(p => {
-            if (searchQueryLower && !p.sku.toLowerCase().includes(searchQueryLower) && !p.name.toLowerCase().includes(searchQueryLower)) return false;
+            // Enhanced Search Logic with Tags
+            if (searchTags.length > 0) {
+                const matchesTag = searchTags.some(tag => {
+                    const t = tag.toLowerCase();
+                    return p.sku.toLowerCase().includes(t) || 
+                           p.name.toLowerCase().includes(t) ||
+                           p.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
+                });
+                if (!matchesTag) return false;
+            } else if (searchQueryLower) {
+                if (!p.sku.toLowerCase().includes(searchQueryLower) && !p.name.toLowerCase().includes(searchQueryLower)) return false;
+            }
+
             if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) return false;
             if (!showOOS && p.stockLevel <= 0) return false;
             if (brandFilter !== 'All' && p.brand !== brandFilter) return false;
@@ -433,11 +442,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
         }
 
         return aggregatedData;
-    }, [products, debouncedSearch, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, showInactive, showOOS]);
+    }, [products, debouncedSearch, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, showInactive, showOOS]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, showInactive, showOOS]);
+    }, [searchQuery, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, showInactive, showOOS]);
 
     useEffect(() => {
         setSubCatFilter('All');
@@ -462,15 +471,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
 
     const handleMouseLeave = () => {
         setHoveredProduct(null);
-    };
-
-    const getRunwayBin = (days: number, stockLevel: number) => {
-        if (stockLevel <= 0) return { label: 'Out of Stock', color: 'bg-slate-100 text-slate-500 border-slate-200' };
-        if (days <= 14) return { label: '2 Weeks', color: 'bg-red-100 text-red-800 border-red-200' };
-        if (days <= 28) return { label: '4 Weeks', color: 'bg-amber-100 text-amber-800 border-amber-200' };
-        if (days <= 84) return { label: '12 Weeks', color: 'bg-green-100 text-green-800 border-green-200' };
-        if (days <= 168) return { label: '24 Weeks', color: 'bg-teal-100 text-teal-800 border-teal-200' };
-        return { label: '24 Weeks +', color: 'bg-blue-100 text-blue-800 border-blue-200' };
     };
 
     const handleExport = (platform: string = 'All') => {
@@ -563,8 +563,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
     };
 
     const isContextFiltered = platformFilters.length > 0 || managerFilter !== 'All';
-    const changedCount = 0;
-    const isButtonDisabled = true;
 
     // Helper for filter pills
     const FilterDropdown = ({ label, icon: Icon, value, onChange, options, themeColor }: any) => (
@@ -748,17 +746,13 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                     {/* Top Row: Search + Main Filters */}
                     <div className="flex flex-col lg:flex-row gap-4">
                         {/* Search - Flexible Width */}
-                        <div className="flex-1 relative min-w-[250px]">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
-                                <Search className="w-5 h-5 text-gray-400" />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Search SKU or Product Name..."
-                                value={searchQuery}
-                                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-sm bg-white/50 backdrop-blur-sm relative z-0"
-                                style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                        <div className="flex-1 min-w-[250px]">
+                            <TagSearchInput 
+                                tags={searchTags}
+                                onTagsChange={(tags) => { setSearchTags(tags); setCurrentPage(1); }}
+                                onInputChange={(val) => { setSearchQuery(val); setCurrentPage(1); }}
+                                placeholder="Search SKUs or Name..."
+                                themeColor={themeColor}
                             />
                         </div>
 

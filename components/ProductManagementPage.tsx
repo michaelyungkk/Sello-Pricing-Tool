@@ -1,8 +1,9 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail } from '../types';
-import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart } from 'lucide-react';
+import { TagSearchInput } from './TagSearchInput';
+import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart, PieChart as PieIcon, AlertTriangle, Activity } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
-import ShipmentUploadModal from './ShipmentUploadModal';
 import ProductList from './ProductList';
 
 interface ProductManagementPageProps {
@@ -11,6 +12,7 @@ interface ProductManagementPageProps {
     promotions?: PromotionEvent[];
     priceHistoryMap?: Map<string, PriceLog[]>;
     onOpenMappingModal: () => void;
+    // Optional handlers left for compatibility if needed, but UI trigger removed
     onOpenSales?: () => void;
     onOpenInventory?: () => void;
     onOpenReturns?: () => void;
@@ -24,6 +26,7 @@ interface ProductManagementPageProps {
 
 type Tab = 'dashboard' | 'catalog' | 'pricing' | 'shipments';
 type DateRange = 'yesterday' | '7d' | '30d' | 'custom';
+type AlertType = 'margin' | 'velocity' | 'stock' | 'dead' | null;
 
 const VAT = 1.20;
 
@@ -33,10 +36,6 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     promotions = [],
     priceHistoryMap = new Map(),
     onOpenMappingModal,
-    onOpenSales,
-    onOpenInventory,
-    onOpenReturns,
-    onOpenCA,
     onAnalyze,
     dateLabels,
     onUpdateProduct,
@@ -45,57 +44,9 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('dashboard');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
-    const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
     
     // Lifted State for Shipment Search (Cross-Link Capability)
     const [shipmentSearchTags, setShipmentSearchTags] = useState<string[]>([]);
-
-    const handleShipmentUpdate = (updates: { sku: string, shipments: ShipmentDetail[] }[]) => {
-        const updateMap = new Map(updates.map(u => [u.sku, u.shipments]));
-
-        products.forEach(p => {
-            if (updateMap.has(p.sku)) {
-                const newShipmentsData = updateMap.get(p.sku)!;
-
-                let currentShipments = p.shipments ? [...p.shipments] : [];
-
-                newShipmentsData.forEach(newS => {
-                    const idx = currentShipments.findIndex(s => s.containerId === newS.containerId);
-                    if (idx >= 0) {
-                        currentShipments[idx] = newS;
-                    } else {
-                        currentShipments.push(newS);
-                    }
-                });
-
-                // Recalculate Incoming Stock
-                const incoming = currentShipments.reduce((sum, s) => sum + s.quantity, 0);
-
-                // Recalculate Lead Time based on EARLIEST incoming ETA
-                const now = new Date().toISOString().split('T')[0];
-                const futureShipments = currentShipments
-                    .filter(s => s.eta && s.eta >= now)
-                    .sort((a, b) => (a.eta! > b.eta! ? 1 : -1));
-
-                let newLeadTime = p.leadTimeDays;
-                if (futureShipments.length > 0 && futureShipments[0].eta) {
-                    const arrival = new Date(futureShipments[0].eta);
-                    const diffTime = Math.abs(arrival.getTime() - new Date().getTime());
-                    newLeadTime = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                }
-
-                if (onUpdateProduct) {
-                    onUpdateProduct({
-                        ...p,
-                        shipments: currentShipments,
-                        incomingStock: incoming,
-                        leadTimeDays: newLeadTime
-                    });
-                }
-            }
-        });
-        setIsShipmentModalOpen(false);
-    };
 
     const handleViewShipments = (sku: string) => {
         setShipmentSearchTags([sku]);
@@ -120,7 +71,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         <LayoutDashboard className="w-4 h-4" />
-                        Overview
+                        Decision Engine
                     </button>
 
                     <button
@@ -155,13 +106,9 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                     <DashboardView
                         products={products}
                         priceHistoryMap={priceHistoryMap}
+                        pricingRules={pricingRules}
                         themeColor={themeColor}
-                        onOpenSales={onOpenSales}
-                        onOpenInventory={onOpenInventory}
-                        onOpenReturns={onOpenReturns}
-                        onOpenCA={onOpenCA}
-                        onOpenMapping={onOpenMappingModal}
-                        onOpenShipment={() => setIsShipmentModalOpen(true)}
+                        onAnalyze={onAnalyze}
                     />
                 )}
 
@@ -170,7 +117,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                         products={products}
                         onAnalyze={onAnalyze}
                         onEditAliases={setSelectedProductForDrawer}
-                        onViewShipments={handleViewShipments} // Pass handler
+                        onViewShipments={handleViewShipments}
                         dateLabels={dateLabels}
                         pricingRules={pricingRules}
                         themeColor={themeColor}
@@ -210,15 +157,6 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                     themeColor={themeColor}
                 />
             )}
-
-            {/* Modals */}
-            {isShipmentModalOpen && (
-                <ShipmentUploadModal
-                    products={products}
-                    onClose={() => setIsShipmentModalOpen(false)}
-                    onConfirm={handleShipmentUpdate}
-                />
-            )}
         </div>
     );
 };
@@ -226,43 +164,39 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
 const DashboardView = ({
     products,
     priceHistoryMap,
+    pricingRules,
     themeColor,
-    onOpenSales,
-    onOpenInventory,
-    onOpenReturns,
-    onOpenCA,
-    onOpenMapping,
-    onOpenShipment
+    onAnalyze,
 }: {
     products: Product[],
     priceHistoryMap: Map<string, PriceLog[]>,
+    pricingRules: PricingRules,
     themeColor: string,
-    onOpenSales?: () => void,
-    onOpenInventory?: () => void,
-    onOpenReturns?: () => void,
-    onOpenCA?: () => void,
-    onOpenMapping?: () => void,
-    onOpenShipment?: () => void
+    onAnalyze: (product: Product) => void,
 }) => {
-    // Flatten map for global dashboard statistics if needed
-    const priceHistory = useMemo(() => Array.from(priceHistoryMap.values()).flat(), [priceHistoryMap]);
     const [range, setRange] = useState<DateRange>('yesterday');
-
-    // Updated: Range State
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
-
     const [showDatePicker, setShowDatePicker] = useState(false);
-    const [topSellerMetric, setTopSellerMetric] = useState<'units' | 'rev'>('units');
+    const [platformScope, setPlatformScope] = useState<string>('All');
+    const [selectedAlert, setSelectedAlert] = useState<AlertType>(null);
+    
+    // Pagination for Workbench
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 10;
 
-    // KPI Calculations (Snapshot - Always current)
-    const totalProducts = products.length;
-    const totalStock = products.reduce((sum, p) => sum + p.stockLevel, 0);
-    const totalIncoming = products.reduce((sum, p) => sum + (p.incomingStock || 0), 0);
-    const totalValue = products.reduce((sum, p) => sum + (p.stockLevel * (p.costPrice || 0)), 0);
+    // Reset pagination on filter change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [selectedAlert, range, platformScope]);
 
-    // Dynamic Filter Logic based on Range
-    const { filteredSales, prevFilteredSales, platformSales, categorySales, daysMultiplier, periodLabel } = useMemo(() => {
+    // Helper to get platform color from settings with fallback
+    const getPlatformColor = (configKey: string, fallback: string) => {
+        return pricingRules[configKey]?.color || fallback;
+    };
+
+    // --- 1. Filter Logic based on Range & Scope ---
+    const { processedData, periodLabel, dateRange } = useMemo(() => {
         let startDate = new Date();
         let endDate = new Date();
         let days = 1;
@@ -275,217 +209,202 @@ const DashboardView = ({
             label = startDate.toLocaleDateString();
         } else if (range === '7d') {
             startDate.setDate(startDate.getDate() - 7);
+            endDate.setDate(endDate.getDate() - 1); // Exclude today
             days = 7;
             label = 'Last 7 Days';
         } else if (range === '30d') {
             startDate.setDate(startDate.getDate() - 30);
+            endDate.setDate(endDate.getDate() - 1); // Exclude today
             days = 30;
             label = 'Last 30 Days';
         } else if (range === 'custom') {
             startDate = new Date(customStart);
             endDate = new Date(customEnd);
-            if (startDate > endDate) {
-                const temp = startDate;
-                startDate = endDate;
-                endDate = temp;
-            }
+            if (startDate > endDate) { const temp = startDate; startDate = endDate; endDate = temp; }
             const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
             days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
             label = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
         }
 
-        const sStr = startDate.toISOString().split('T')[0];
-        const eStr = endDate.toISOString().split('T')[0];
-
-        // Previous Period Logic for Growth
+        // Previous Period Logic (for velocity comparison)
         const prevStart = new Date(startDate);
         const prevEnd = new Date(startDate);
         prevEnd.setDate(prevEnd.getDate() - 1);
         prevStart.setDate(prevStart.getDate() - days);
 
+        // Convert to YYYY-MM-DD
+        const sStr = startDate.toISOString().split('T')[0];
+        const eStr = endDate.toISOString().split('T')[0];
         const psStr = prevStart.toISOString().split('T')[0];
         const peStr = prevEnd.toISOString().split('T')[0];
 
-        const salesMap: Record<string, { units: number, revenue: number }> = {};
-        const prevSalesMap: Record<string, { units: number, revenue: number }> = {};
-        const platSalesMap: Record<string, number> = {};
-        const catSalesMap: Record<string, number> = {};
+        // Process Products
+        const data = products.map(p => {
+            const logs = priceHistoryMap.get(p.sku) || [];
+            
+            // Filter logs by Scope (Platform)
+            const scopeLogs = platformScope === 'All' 
+                ? logs 
+                : logs.filter(l => l.platform === platformScope || (platformScope !== 'All' && l.platform?.includes(platformScope)));
 
-        // Helper Map for SKU -> Category
-        const skuToCat: Record<string, string> = {};
-        products.forEach(p => skuToCat[p.sku] = p.category || 'Uncategorized');
+            // Calculate Period Stats
+            let curUnits = 0; let curRev = 0; let curProfit = 0;
+            let prevUnits = 0;
 
-        if (priceHistory && priceHistory.length > 0) {
-            // Current Period
-            priceHistory.forEach(l => {
+            scopeLogs.forEach(l => {
                 const d = l.date.split('T')[0];
                 if (d >= sStr && d <= eStr) {
-                    if (!salesMap[l.sku]) salesMap[l.sku] = { units: 0, revenue: 0 };
-                    salesMap[l.sku].units += l.velocity;
-                    salesMap[l.sku].revenue += (l.velocity * l.price);
-
-                    const plat = l.platform || 'General';
-                    platSalesMap[plat] = (platSalesMap[plat] || 0) + l.velocity;
-
-                    const cat = skuToCat[l.sku] || 'Uncategorized';
-                    catSalesMap[cat] = (catSalesMap[cat] || 0) + l.velocity;
+                    curUnits += l.velocity;
+                    curRev += (l.velocity * l.price);
+                    // Use stored profit or estimate from margin
+                    curProfit += (l.profit || (l.velocity * l.price * (l.margin / 100)));
                 } else if (d >= psStr && d <= peStr) {
-                    if (!prevSalesMap[l.sku]) prevSalesMap[l.sku] = { units: 0, revenue: 0 };
-                    prevSalesMap[l.sku].units += l.velocity;
-                    prevSalesMap[l.sku].revenue += (l.velocity * l.price);
+                    prevUnits += l.velocity;
                 }
             });
-        }
 
-        return {
-            filteredSales: salesMap,
-            prevFilteredSales: prevSalesMap,
-            platformSales: platSalesMap,
-            categorySales: catSalesMap,
-            daysMultiplier: days,
-            periodLabel: label
-        };
-    }, [products, priceHistory, range, customStart, customEnd]);
+            // Calculate Net Margin % for the period
+            // If Revenue is 0, we can't calc margin from sales. 
+            // Fallback: Use Product's current calculated margin if available, otherwise 0.
+            const netMargin = curRev > 0 ? (curProfit / curRev) * 100 : 0;
 
-    const topSellers = useMemo(() => {
-        const items = products.map(p => {
-            const stats = filteredSales[p.sku] || { units: 0, revenue: 0 };
-            return { ...p, periodUnits: stats.units, periodRevenue: stats.revenue };
+            // Velocity Change
+            const velocityChange = prevUnits > 0 ? ((curUnits - prevUnits) / prevUnits) * 100 : (curUnits > 0 ? 100 : 0);
+
+            // Platform Specific Stock/Price (Context)
+            let displayPrice = p.currentPrice;
+            if (platformScope !== 'All') {
+                const channel = p.channels.find(c => c.platform === platformScope);
+                if (channel && channel.price) displayPrice = channel.price;
+            }
+
+            return {
+                ...p,
+                periodUnits: curUnits,
+                periodRevenue: curRev,
+                periodProfit: curProfit,
+                periodMargin: netMargin,
+                prevPeriodUnits: prevUnits,
+                velocityChange,
+                displayPrice
+            };
         });
 
-        return items
-            .sort((a, b) => topSellerMetric === 'units' ? b.periodUnits - a.periodUnits : b.periodRevenue - a.periodRevenue)
-            .slice(0, 5)
-            .filter(p => topSellerMetric === 'units' ? p.periodUnits > 0 : p.periodRevenue > 0);
-    }, [products, filteredSales, topSellerMetric]);
+        return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate } };
+    }, [products, priceHistoryMap, range, customStart, customEnd, platformScope]);
 
-    const categoryData = useMemo(() => {
-        return Object.entries(categorySales)
-            .map(([name, value]) => ({ name, value: Math.round(Number(value)) }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 10);
-    }, [categorySales]);
+    // --- 2. Alert Buckets Logic ---
+    const alerts = useMemo(() => {
+        return {
+            // Margin Thieves: Active Items with < 10% Margin
+            margin: processedData.filter(p => p.periodUnits > 0 && p.periodMargin < 10),
+            
+            // Velocity Crashes: Active (prev) items dropped > 30%
+            velocity: processedData.filter(p => p.prevPeriodUnits > 2 && p.velocityChange < -30),
+            
+            // Stock Risks: Runway < Lead Time (Global Stock used as fallback if platform stock not specific)
+            stock: processedData.filter(p => {
+                const dailyVel = p.periodUnits / (range === 'yesterday' ? 1 : range === '7d' ? 7 : 30); // Approx
+                if (dailyVel <= 0) return false;
+                const runway = p.stockLevel / dailyVel;
+                return runway < p.leadTimeDays && p.stockLevel > 0;
+            }),
 
-    const platformData = useMemo(() => {
-        const data = Object.entries(platformSales).map(([name, value]) => ({ name, value: Math.round(Number(value)) }));
-        const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe', '#00C49F'];
-        return data
-            .sort((a, b) => b.value - a.value)
-            .map((d, i) => ({ ...d, color: colors[i % colors.length] }));
-    }, [platformSales]);
+            // Dead Stock: > £200 Value AND 0 Sales in Period
+            dead: processedData.filter(p => p.stockLevel * (p.costPrice || 0) > 200 && p.periodUnits === 0)
+        };
+    }, [processedData, range]);
 
-    const missingAliases = products.filter(p => !p.channels || p.channels.length === 0 || p.channels.every(c => !c.skuAlias)).length;
-    const missingCosts = products.filter(p => !p.costPrice || p.costPrice === 0).length;
+    // --- 3. Workbench Data ---
+    const workbenchData = useMemo(() => {
+        if (!selectedAlert) {
+            // Default: Top Movers by Revenue
+            return processedData.filter(p => p.periodRevenue > 0).sort((a, b) => b.periodRevenue - a.periodRevenue).slice(0, 50);
+        }
+        return alerts[selectedAlert].sort((a, b) => {
+            if (selectedAlert === 'margin') return a.periodMargin - b.periodMargin; // Lowest margin first
+            if (selectedAlert === 'velocity') return a.velocityChange - b.velocityChange; // Biggest drop first
+            if (selectedAlert === 'stock') return a.stockLevel - b.stockLevel; // Lowest stock first
+            if (selectedAlert === 'dead') return (b.stockLevel * (b.costPrice || 0)) - (a.stockLevel * (a.costPrice || 0)); // Highest value first
+            return 0;
+        });
+    }, [selectedAlert, alerts, processedData]);
 
-    const risingStars = useMemo(() => {
-        return products
-            .map(p => {
-                const currentStats = filteredSales[p.sku] || { units: 0, revenue: 0 };
-                const prevStats = prevFilteredSales[p.sku] || { units: 0, revenue: 0 };
+    const totalPages = Math.ceil(workbenchData.length / ITEMS_PER_PAGE);
+    const paginatedData = workbenchData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-                const currentUnits = currentStats.units;
-                const prevUnits = prevStats.units;
+    // --- 4. Market Intelligence Data ---
+    const platformTrendData = useMemo(() => {
+        // Daily breakdown for the selected range
+        const days = [];
+        for (let d = new Date(dateRange.start); d <= dateRange.end; d.setDate(d.getDate() + 1)) {
+            days.push(new Date(d).toISOString().split('T')[0]);
+        }
 
-                const growth = prevUnits > 0 ? ((currentUnits - prevUnits) / prevUnits) * 100 : (currentUnits > 0 ? 100 : 0);
+        return days.map(day => {
+            const entry: any = { day: day.slice(5) }; // MM-DD
+            
+            products.forEach(p => {
+                const logs = priceHistoryMap.get(p.sku) || [];
+                logs.filter(l => l.date.startsWith(day)).forEach(l => {
+                    const plat = l.platform?.toLowerCase() || '';
+                    let key = 'Others';
+                    
+                    if (plat.includes('amazon') && plat.includes('fbm')) key = 'Amazon FBM';
+                    else if (plat.includes('ebay')) key = 'eBay';
+                    else if (plat.includes('the range')) key = 'The Range';
+                    else if (plat.includes('tesco')) key = 'Tesco';
+                    else if (plat.includes('debenhams')) key = 'Debenhams';
+                    else if (plat.includes('wayfair')) key = 'Wayfair';
+                    
+                    // Note: Amazon FBA and others fall into 'Others' as per instruction to group the rest
+                    
+                    entry[key] = (entry[key] || 0) + (l.price * l.velocity);
+                });
+            });
+            return entry;
+        });
+    }, [products, priceHistoryMap, dateRange]);
 
-                return { ...p, growth, periodUnits: currentUnits, prevPeriodUnits: prevUnits };
-            })
-            .filter(p => (p.growth > 5 && p.periodUnits > 1) || (p.periodUnits > 5 && p.prevPeriodUnits === 0))
-            .sort((a, b) => b.growth - a.growth)
-            .slice(0, 4);
-    }, [products, filteredSales, prevFilteredSales]);
+    const categoryProfitData = useMemo(() => {
+        const catMap: Record<string, number> = {};
+        processedData.forEach(p => {
+            const cat = p.category || 'Uncategorized';
+            catMap[cat] = (catMap[cat] || 0) + p.periodProfit;
+        });
+        return Object.entries(catMap)
+            .map(([name, profit]) => ({ name, profit: Math.round(profit) }))
+            .sort((a, b) => b.profit - a.profit)
+            .slice(0, 8); // Top 8
+    }, [processedData]);
+
+    const formattedDateRange = useMemo(() => {
+        const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+        return `${dateRange.start.toLocaleDateString('en-GB', options)} - ${dateRange.end.toLocaleDateString('en-GB', options)}`;
+    }, [dateRange]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Quick Actions / Data Hub Section */}
-            <div className="bg-custom-glass rounded-xl border border-custom-glass p-3 shadow-sm flex items-center gap-3">
-                <div className="flex-shrink-0 pl-2">
-                    <Database className="w-5 h-5 text-indigo-600" />
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 flex-1">
-                    <button
-                        onClick={onOpenSales}
-                        className="p-2 bg-white/50 border border-indigo-100 rounded-xl hover:border-indigo-400 hover:bg-white transition-all group text-left flex items-center gap-2"
-                    >
-                        <FileBarChart className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform flex-shrink-0" />
-                        <div className="font-bold text-xs text-gray-900 truncate">Import Sales</div>
-                    </button>
-
-                    <button
-                        onClick={onOpenInventory}
-                        className="p-2 bg-white/50 border border-blue-100 rounded-xl hover:border-blue-400 hover:bg-white transition-all group text-left flex items-center gap-2"
-                    >
-                        <Layers className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform flex-shrink-0" />
-                        <div className="font-bold text-xs text-gray-900 truncate">Update Inventory</div>
-                    </button>
-
-                    <button
-                        onClick={onOpenReturns}
-                        className="p-2 bg-white/50 border border-red-100 rounded-xl hover:border-red-400 hover:bg-white transition-all group text-left flex items-center gap-2"
-                    >
-                        <RotateCcw className="w-4 h-4 text-red-600 group-hover:scale-110 transition-transform flex-shrink-0" />
-                        <div className="font-bold text-xs text-gray-900 truncate">Import Refunds</div>
-                    </button>
-
-                    <button
-                        onClick={onOpenCA}
-                        className="p-2 bg-white/50 border border-purple-100 rounded-xl hover:border-purple-400 hover:bg-white transition-all group text-left flex items-center gap-2"
-                    >
-                        <Upload className="w-4 h-4 text-purple-600 group-hover:scale-110 transition-transform flex-shrink-0" />
-                        <div className="font-bold text-xs text-gray-900 truncate">CA Report</div>
-                    </button>
-
-                    <button
-                        onClick={onOpenMapping}
-                        className="p-2 bg-white/50 border border-amber-100 rounded-xl hover:border-amber-400 hover:bg-white transition-all group text-left flex items-center gap-2"
-                    >
-                        <LinkIcon className="w-4 h-4 text-amber-600 group-hover:scale-110 transition-transform flex-shrink-0" />
-                        <div className="font-bold text-xs text-gray-900 truncate">SKU Mapping</div>
-                    </button>
-
-                    <button
-                        onClick={onOpenShipment}
-                        className="p-2 bg-white/50 border border-indigo-100 rounded-xl hover:border-indigo-400 hover:bg-white transition-all group text-left flex items-center gap-2"
-                    >
-                        <Ship className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform flex-shrink-0" />
-                        <div className="font-bold text-xs text-gray-900 truncate">Shipment Import</div>
-                    </button>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
-                    <div className="text-gray-500 text-xs font-bold uppercase mb-1">Total Products</div>
-                    <div className="flex justify-between items-end">
-                        <div className="text-2xl font-bold text-gray-900">{totalProducts}</div>
-                        <Package className="w-5 h-5 text-gray-300 mb-1" />
-                    </div>
-                </div>
-                <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
-                    <div className="text-gray-500 text-xs font-bold uppercase mb-1">Stock on Hand</div>
-                    <div className="flex justify-between items-end">
-                        <div className="text-2xl font-bold text-gray-900">{totalStock.toLocaleString()}</div>
-                        <div className="text-xs text-gray-400 mb-1">Units</div>
-                    </div>
-                </div>
-                <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
-                    <div className="text-gray-500 text-xs font-bold uppercase mb-1">Incoming Stock</div>
-                    <div className="flex justify-between items-end">
-                        <div className="text-2xl font-bold text-indigo-600">+{totalIncoming.toLocaleString()}</div>
-                        <Ship className="w-5 h-5 text-indigo-100 mb-1" />
-                    </div>
-                </div>
-                <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
-                    <div className="text-gray-500 text-xs font-bold uppercase mb-1">Inventory Value</div>
-                    <div className="flex justify-between items-end">
-                        <div className="text-2xl font-bold text-gray-900">£{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-                        <div className="text-xs text-gray-400 mb-1">COGS</div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 relative z-30">
+            
+            {/* 1. CONTROL DECK */}
+            <div className="flex flex-col md:flex-row justify-between items-center bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm gap-4 relative z-30">
                 <div className="flex items-center gap-2">
+                    {/* Platform Scope */}
+                    <div className="relative">
+                        <select 
+                            value={platformScope} 
+                            onChange={(e) => setPlatformScope(e.target.value)}
+                            className="appearance-none bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold py-2 pl-4 pr-10 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="All">Global View (All)</option>
+                            {Object.keys(pricingRules).map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-indigo-600 pointer-events-none" />
+                    </div>
+
+                    <div className="h-8 w-px bg-gray-300 mx-2"></div>
+
+                    {/* Date Picker */}
                     <div className="relative">
                         <button
                             onClick={() => setShowDatePicker(!showDatePicker)}
@@ -495,282 +414,291 @@ const DashboardView = ({
                         </button>
                         {showDatePicker && (
                             <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-4 z-50 animate-in fade-in slide-in-from-top-2 w-64">
-                                <label className="text-xs font-bold text-gray-500 uppercase block mb-3">Select Date Range</label>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-3">Custom Range</label>
                                 <div className="space-y-3">
-                                    <div>
-                                        <span className="text-[10px] text-gray-400 font-bold">START DATE</span>
-                                        <input
-                                            type="date"
-                                            value={customStart}
-                                            onChange={(e) => {
-                                                setCustomStart(e.target.value);
-                                                setRange('custom');
-                                            }}
-                                            className="border border-gray-300 rounded px-2 py-1.5 text-sm w-full mt-1"
-                                        />
-                                    </div>
-                                    <div>
-                                        <span className="text-[10px] text-gray-400 font-bold">END DATE</span>
-                                        <input
-                                            type="date"
-                                            value={customEnd}
-                                            onChange={(e) => {
-                                                setCustomEnd(e.target.value);
-                                                setRange('custom');
-                                            }}
-                                            min={customStart}
-                                            className="border border-gray-300 rounded px-2 py-1.5 text-sm w-full mt-1"
-                                        />
-                                    </div>
+                                    <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setRange('custom'); }} className="border rounded px-2 py-1.5 text-sm w-full" />
+                                    <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setRange('custom'); }} min={customStart} className="border rounded px-2 py-1.5 text-sm w-full" />
                                 </div>
-                                <div className="mt-3 flex justify-end">
-                                    <button
-                                        onClick={() => setShowDatePicker(false)}
-                                        className="text-xs text-indigo-600 font-bold hover:underline"
-                                    >
-                                        Close
-                                    </button>
-                                </div>
+                                <div className="mt-3 flex justify-end"><button onClick={() => setShowDatePicker(false)} className="text-xs text-indigo-600 font-bold">Close</button></div>
                             </div>
                         )}
                     </div>
 
                     <div className="flex bg-gray-100 p-1 rounded-lg">
-                        <button
-                            onClick={() => setRange('yesterday')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${range === 'yesterday' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Yesterday
-                        </button>
-                        <button
-                            onClick={() => setRange('7d')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${range === '7d' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Last 7 Days
-                        </button>
-                        <button
-                            onClick={() => setRange('30d')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${range === '30d' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Last 30 Days
-                        </button>
+                        {['yesterday', '7d', '30d'].map((r: any) => (
+                            <button
+                                key={r}
+                                onClick={() => setRange(r)}
+                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${range === r ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                {r === 'yesterday' ? 'Yesterday' : r === '7d' ? '7 Days' : '30 Days'}
+                            </button>
+                        ))}
                     </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50/50 px-3 py-1.5 rounded-lg border border-gray-100">
-                    <Clock className="w-4 h-4" />
-                    View: <span className="font-bold text-gray-900">{periodLabel}</span>
+
+                    {/* Date Range Label - Added here */}
+                    <div className="ml-3 flex flex-col justify-center">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-0.5">Period</span>
+                        <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
+                            {formattedDateRange}
+                        </span>
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="flex items-center gap-2">
-                            <div className="p-1.5 bg-indigo-50 rounded text-indigo-600"><TrendingUp className="w-4 h-4" /></div>
-                            <h3 className="font-bold text-gray-900">Top Sellers</h3>
-                        </div>
-                        <div className="flex gap-1 text-[10px] bg-gray-100 p-1 rounded">
-                            <button
-                                onClick={() => setTopSellerMetric('units')}
-                                className={`px-2 py-0.5 rounded shadow-sm font-medium transition-all ${topSellerMetric === 'units' ? 'bg-white text-gray-800' : 'text-gray-500'}`}
-                            >
-                                Units
-                            </button>
-                            <button
-                                onClick={() => setTopSellerMetric('rev')}
-                                className={`px-2 py-0.5 rounded shadow-sm font-medium transition-all ${topSellerMetric === 'rev' ? 'bg-white text-gray-800' : 'text-gray-500'}`}
-                            >
-                                £ Rev
-                            </button>
-                        </div>
-                    </div>
+            {/* 2. ALERT CARDS (Decision Layer) */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <AlertCard 
+                    title="Margin Thieves" 
+                    count={alerts.margin.length} 
+                    icon={AlertTriangle} 
+                    color="red" 
+                    isActive={selectedAlert === 'margin'} 
+                    onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} 
+                    desc="Net Margin < 10%"
+                />
+                <AlertCard 
+                    title="Velocity Crashes" 
+                    count={alerts.velocity.length} 
+                    icon={TrendingDown} 
+                    color="amber" 
+                    isActive={selectedAlert === 'velocity'} 
+                    onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')}
+                    desc="Vol. Drop > 30%" 
+                />
+                <AlertCard 
+                    title="Stockout Risk" 
+                    count={alerts.stock.length} 
+                    icon={Clock} 
+                    color="purple" 
+                    isActive={selectedAlert === 'stock'} 
+                    onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} 
+                    desc="Runway < Lead Time"
+                />
+                <AlertCard 
+                    title="Dead Stock" 
+                    count={alerts.dead.length} 
+                    icon={Package} 
+                    color="gray" 
+                    isActive={selectedAlert === 'dead'} 
+                    onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} 
+                    desc=">£200 Value, 0 Sales"
+                />
+            </div>
 
-                    {topSellers.length === 0 ? (
-                        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">No sales data available for this period.</div>
-                    ) : (
-                        <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-                            {topSellers.map((p, idx) => {
-                                const maxVal = topSellerMetric === 'units' ? topSellers[0].periodUnits : topSellers[0].periodRevenue;
-                                const currentVal = topSellerMetric === 'units' ? p.periodUnits : p.periodRevenue;
-                                const displayVal = topSellerMetric === 'units' ? Math.round(currentVal).toLocaleString() : `£${Math.round(currentVal).toLocaleString()}`;
+            {/* 3. ACTION WORKBENCH */}
+            <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg overflow-hidden flex flex-col min-h-[400px]">
+                <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                        {selectedAlert ? (
+                            <>
+                                <span className={`w-2 h-2 rounded-full ${selectedAlert === 'margin' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                                Priority Actions: {selectedAlert === 'margin' ? 'Fix Margins' : selectedAlert === 'velocity' ? 'Investigate Drops' : selectedAlert === 'stock' ? 'Replenish' : 'Liquidation'}
+                            </>
+                        ) : (
+                            <><Activity className="w-4 h-4 text-indigo-500" /> Top Movers (Overview)</>
+                        )}
+                    </h3>
+                    <span className="text-xs text-gray-500">{workbenchData.length} SKUs require attention</span>
+                </div>
+                
+                <div className="flex-1 overflow-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50 sticky top-0 z-10 backdrop-blur-sm">
+                            <tr>
+                                <th className="p-4">Product</th>
+                                <th className="p-4 text-right">Price (Inc VAT)</th>
+                                {selectedAlert === 'margin' && <th className="p-4 text-right">Cost (Inc VAT)</th>}
+                                <th className="p-4 text-right">{selectedAlert === 'velocity' ? 'Prev Qty' : 'Period Sales'}</th>
+                                <th className="p-4 text-right">{selectedAlert === 'velocity' ? 'Curr Qty' : 'Period Profit'}</th>
+                                <th className="p-4 text-right">
+                                    {selectedAlert === 'velocity' ? '% Change' : 'Net Margin %'}
+                                </th>
+                                <th className="p-4 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100/50">
+                            {paginatedData.map(p => (
+                                <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                    <td className="p-4">
+                                        <div className="font-bold text-gray-900">{p.sku}</div>
+                                        <div className="text-xs text-gray-500 truncate max-w-[200px]">{p.name}</div>
+                                    </td>
+                                    <td className="p-4 text-right">£{(p.displayPrice * VAT).toFixed(2)}</td>
+                                    
+                                    {selectedAlert === 'margin' && (
+                                        <td className="p-4 text-right text-gray-500">£{((p.costPrice || 0) * VAT).toFixed(2)}</td>
+                                    )}
 
-                                return (
-                                    <div key={p.id} className="group">
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="font-medium text-gray-700 truncate max-w-[180px]" title={p.name}>{idx + 1}. {p.sku}</span>
-                                            <span className="font-bold text-gray-900">{displayVal}</span>
-                                        </div>
-                                        <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                            <div
-                                                className="h-full rounded-full transition-all duration-500 group-hover:bg-indigo-500"
-                                                style={{ width: `${(currentVal / maxVal) * 100}%`, backgroundColor: themeColor }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                                    <td className="p-4 text-right text-gray-600">
+                                        {selectedAlert === 'velocity' ? p.prevPeriodUnits : `£${p.periodRevenue.toFixed(0)}`}
+                                    </td>
+                                    <td className="p-4 text-right font-medium">
+                                        {selectedAlert === 'velocity' ? p.periodUnits : `£${p.periodProfit.toFixed(0)}`}
+                                    </td>
+                                    <td className="p-4 text-right">
+                                        {selectedAlert === 'velocity' ? (
+                                            <span className="text-red-600 font-bold">{p.velocityChange.toFixed(0)}%</span>
+                                        ) : (
+                                            <span className={`font-bold ${p.periodMargin < 10 ? 'text-red-600' : 'text-green-600'}`}>
+                                                {p.periodMargin.toFixed(1)}%
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="p-4 text-right">
+                                        <button 
+                                            onClick={() => onAnalyze(p)}
+                                            className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors"
+                                        >
+                                            Analyze AI
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {workbenchData.length === 0 && (
+                                <tr>
+                                    <td colSpan={7} className="p-12 text-center text-gray-400 italic">
+                                        Excellent work! No items match this alert criteria.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
 
-                <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1.5 bg-blue-50 rounded text-blue-600"><BarChart2 className="w-4 h-4" /></div>
-                        <h3 className="font-bold text-gray-900">Units Sold by Category</h3>
+                {/* Pagination Footer */}
+                {workbenchData.length > ITEMS_PER_PAGE && (
+                    <div className="p-3 border-t border-custom-glass bg-gray-50/50 flex items-center justify-between">
+                        <div className="text-xs text-gray-500">
+                            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, workbenchData.length)} of {workbenchData.length}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="p-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <span className="text-xs font-medium text-gray-700">
+                                Page {currentPage} of {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="p-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex-1 min-h-0 -ml-4">
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                            <BarChart data={categoryData} layout="vertical" margin={{ top: 20, right: 30, left: 40, bottom: 5 }}>
+                )}
+            </div>
+
+            {/* 4. MARKET INTELLIGENCE (Charts) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Platform Trends */}
+                <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[350px]">
+                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-blue-600" /> Platform Revenue Trend
+                    </h3>
+                    <div className="flex-1 min-h-0 -ml-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={platformTrendData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <XAxis dataKey="day" tick={{fontSize: 10}} />
+                                <YAxis 
+                                    tick={{fontSize: 10}} 
+                                    tickFormatter={(value) => `£${value.toLocaleString()}`}
+                                />
+                                <RechartsTooltip 
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                    formatter={(value: number) => '£' + value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                />
+                                <Legend wrapperStyle={{ fontSize: '12px' }} />
+                                {/* Colors are dynamically fetched from settings or fallback to standard ones */}
+                                <Line type="monotone" dataKey="Amazon FBM" stroke={getPlatformColor('Amazon(UK) FBM', '#E68A00')} strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="eBay" stroke={getPlatformColor('eBay', '#E53238')} strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="The Range" stroke={getPlatformColor('The Range', '#2C3E50')} strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="Tesco" stroke={getPlatformColor('Tesco', '#00539F')} strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="Debenhams" stroke={getPlatformColor('Debenhams', '#1B4D3E')} strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="Wayfair" stroke={getPlatformColor('Wayfair', '#7F187F')} strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="Others" stroke="#9CA3AF" strokeWidth={2} dot={false} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Category Profit */}
+                <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[350px]">
+                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <PieIcon className="w-4 h-4 text-green-600" /> Net Profit by Category
+                    </h3>
+                    <div className="flex-1 min-h-0 -ml-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={categoryProfitData} layout="vertical">
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                                 <XAxis type="number" hide />
-                                <YAxis
-                                    dataKey="name"
-                                    type="category"
-                                    width={100}
-                                    tick={{ fontSize: 10, fill: '#6b7280' }}
-                                    interval={0}
+                                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} />
+                                <RechartsTooltip 
+                                    cursor={{fill: 'transparent'}}
+                                    formatter={(val: number) => [`£${val.toLocaleString()}`, 'Net Profit']}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                                 />
-                                <RechartsTooltip
-                                    cursor={{ fill: 'transparent' }}
-                                    formatter={(val: any) => [Math.round(Number(val)), 'Units Sold']}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
-                                />
-                                <Bar dataKey="value" fill="#94a3b8" radius={[0, 4, 4, 0]} barSize={16}>
-                                    {categoryData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={index === 0 ? themeColor : '#94a3b8'} />
-                                    ))}
-                                </Bar>
+                                <Bar dataKey="profit" fill={themeColor} radius={[0, 4, 4, 0]} barSize={20} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
-                    <div className="text-center">
-                        <div className="text-[10px] text-gray-400 mt-2 font-medium flex justify-center items-center gap-4">
-                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-indigo-500 rounded-full" style={{ backgroundColor: themeColor }}></span> MAX: {Math.round(Number(categoryData[0]?.value || 0))}</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-gray-400 rounded-full"></span> AVG: {(categoryData.reduce((a, b) => a + Number(b.value), 0) / (categoryData.length || 1)).toFixed(0)}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="p-1.5 bg-purple-50 rounded text-purple-600"><Globe className="w-4 h-4" /></div>
-                        <h3 className="font-bold text-gray-900">Sales by Platform</h3>
-                    </div>
-                    <div className="flex-1 min-h-0 relative">
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                            <PieChart>
-                                <Pie
-                                    data={platformData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={90}
-                                    paddingAngle={2}
-                                    dataKey="value"
-                                    cornerRadius={4}
-                                >
-                                    {platformData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                                    ))}
-                                </Pie>
-                                <RechartsTooltip
-                                    formatter={(val: any) => [Math.round(Number(val)), 'Volume']}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <div className="text-center">
-                                <span className="block text-3xl font-bold text-gray-800">{platformData.reduce((a, b) => a + Number(b.value), 0)}</span>
-                                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Listings</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex flex-wrap justify-center gap-3 mt-4 px-4">
-                        {platformData.map(d => (
-                            <div key={d.name} className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></span>
-                                <span className="text-[10px] font-bold text-gray-600">{d.name}</span>
-                            </div>
-                        ))}
-                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-center">
-                    <div className="flex items-center gap-2 mb-6">
-                        <div className="p-1.5 bg-red-50 rounded text-red-600"><AlertCircle className="w-4 h-4" /></div>
-                        <h3 className="font-bold text-gray-900">Catalogue Health</h3>
-                    </div>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center p-4 bg-red-50/50 rounded-lg border border-red-100">
-                            <span className="text-sm font-medium text-gray-700">Missing Aliases</span>
-                            <span className="text-xl font-bold text-red-600">{missingAliases}</span>
-                        </div>
-                        <div className="flex justify-between items-center p-4 bg-amber-50/50 rounded-lg border border-amber-100">
-                            <span className="text-sm font-medium text-gray-700">Missing Costs</span>
-                            <span className="text-xl font-bold text-amber-600">{missingCosts}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="md:col-span-2 bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm flex flex-col">
-                    <div className="flex items-center gap-2 mb-4">
-                        <div className="p-1.5 bg-green-50 rounded text-green-600"><TrendingUp className="w-4 h-4" /></div>
-                        <h3 className="font-bold text-gray-900">Rising Stars ({range === 'yesterday' ? 'Yesterday' : periodLabel})</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {risingStars.map(product => (
-                            <div key={product.id} className="p-4 rounded-lg border border-gray-100 bg-gray-50 flex justify-between items-center hover:bg-white hover:shadow-sm transition-all">
-                                <div>
-                                    <div className="font-bold text-gray-900 text-sm uppercase">{product.sku}</div>
-                                    <div className="text-xs text-gray-500 truncate max-w-[200px] mt-0.5">{product.name}</div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="inline-flex items-center px-2 py-1 rounded text-xs font-bold bg-green-100 text-green-700">
-                                        +{product.growth.toFixed(0)}%
-                                    </div>
-                                    <div className="text-[10px] text-gray-400 mt-1">
-                                        {Math.round(product.prevPeriodUnits)} → {Math.round(product.periodUnits)} units
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                        {risingStars.length === 0 && (
-                            <div className="col-span-2 text-center text-sm text-gray-400 py-8">
-                                No significant positive trends detected in this period.
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };
 
-const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }: { products: Product[], themeColor: string, initialTags?: string[], onTagsChange?: (tags: string[]) => void }) => {
-    // --- STATE for Multi-Search Tag Input ---
-    const [inputValue, setInputValue] = useState('');
-
-    // Use props directly as source of truth
-    const searchTags = initialTags;
-
-    // Wrapper to update parent
-    const updateTags = (newTags: string[]) => {
-        if (onTagsChange) {
-            onTagsChange(newTags);
-        }
+const AlertCard = ({ title, count, icon: Icon, color, isActive, onClick, desc }: any) => {
+    const colorStyles = {
+        red: isActive ? 'bg-red-600 text-white border-red-700' : 'bg-white hover:border-red-300 border-transparent',
+        amber: isActive ? 'bg-amber-500 text-white border-amber-600' : 'bg-white hover:border-amber-300 border-transparent',
+        purple: isActive ? 'bg-purple-600 text-white border-purple-700' : 'bg-white hover:border-purple-300 border-transparent',
+        gray: isActive ? 'bg-gray-700 text-white border-gray-800' : 'bg-white hover:border-gray-300 border-transparent',
     };
 
+    const textStyles = {
+        red: isActive ? 'text-red-100' : 'text-red-600',
+        amber: isActive ? 'text-amber-100' : 'text-amber-600',
+        purple: isActive ? 'text-purple-100' : 'text-purple-600',
+        gray: isActive ? 'text-gray-300' : 'text-gray-500',
+    };
+
+    return (
+        <button 
+            onClick={onClick}
+            className={`p-4 rounded-xl shadow-sm border transition-all duration-200 flex flex-col items-start text-left ${colorStyles[color as keyof typeof colorStyles]} ${!isActive && 'hover:shadow-md hover:-translate-y-1'}`}
+        >
+            <div className="flex justify-between w-full items-start mb-2">
+                <span className={`font-bold text-sm ${isActive ? 'text-white' : 'text-gray-600'}`}>{title}</span>
+                <Icon className={`w-5 h-5 ${textStyles[color as keyof typeof textStyles]}`} />
+            </div>
+            <div className="text-3xl font-bold mb-1">{count}</div>
+            <div className={`text-[10px] font-medium uppercase tracking-wide opacity-80 ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                {desc}
+            </div>
+        </button>
+    );
+};
+
+const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }: { products: Product[], themeColor: string, initialTags?: string[], onTagsChange?: (tags: string[]) => void }) => {
+    const [inputValue, setInputValue] = useState('');
+    const searchTags = initialTags;
+    const updateTags = (newTags: string[]) => { if (onTagsChange) onTagsChange(newTags); };
+
     const containerMap = useMemo(() => {
-        const map: Record<string, { id: string, eta: string, status: string, totalQty: number, items: { sku: string, qty: number }[] }> = {};
+        const map: Record<string, any> = {};
         products.forEach(p => {
             if (p.shipments) {
                 p.shipments.forEach(s => {
-                    if (!map[s.containerId]) {
-                        map[s.containerId] = { id: s.containerId, eta: s.eta || '', status: s.status, totalQty: 0, items: [] };
-                    }
+                    if (!map[s.containerId]) map[s.containerId] = { id: s.containerId, eta: s.eta || '', status: s.status, totalQty: 0, items: [] };
                     map[s.containerId].totalQty += s.quantity;
                     map[s.containerId].items.push({ sku: p.sku, qty: s.quantity });
                     if (s.eta) map[s.containerId].eta = s.eta;
@@ -778,205 +706,146 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
                 });
             }
         });
-        return Object.values(map).sort((a, b) => {
+        return Object.values(map).sort((a:any, b:any) => {
+            // Sort dates ascending, pushing empty ETAs to the end
+            if (!a.eta && !b.eta) return 0;
             if (!a.eta) return 1;
             if (!b.eta) return -1;
             return a.eta.localeCompare(b.eta);
         });
     }, [products]);
 
-    // Flatten logic for Table View
     const allShipmentItems = useMemo(() => {
         const items: any[] = [];
         products.forEach(p => {
             if (p.shipments) {
+                // Collect aliases for this product
+                const aliases = p.channels.flatMap(c => c.skuAlias ? c.skuAlias.split(',') : []).map(a => a.trim().toLowerCase());
+                
                 p.shipments.forEach(s => {
-                    items.push({
-                        id: `${p.sku}-${s.containerId}`,
-                        sku: p.sku,
-                        name: p.name,
-                        containerId: s.containerId,
-                        status: s.status,
-                        eta: s.eta,
-                        quantity: s.quantity
+                    items.push({ 
+                        id: `${p.sku}-${s.containerId}`, 
+                        sku: p.sku, 
+                        name: p.name, 
+                        containerId: s.containerId, 
+                        status: s.status, 
+                        eta: s.eta, 
+                        quantity: s.quantity,
+                        aliases // Add aliases to item
                     });
                 });
             }
         });
-        return items.sort((a, b) => {
-            if (!a.eta) return 1;
-            if (!b.eta) return -1;
-            return a.eta.localeCompare(b.eta);
-        });
+        return items;
     }, [products]);
 
-    // --- FILTER LOGIC ---
     const filteredTableData = useMemo(() => {
-        if (searchTags.length === 0) return [];
+        // If no tags and no input, return nothing (or everything? currently logic says return [] if empty, lets keep consistent)
+        if (searchTags.length === 0 && !inputValue.trim()) return [];
+        
         return allShipmentItems.filter(item => {
-            const matchesContainer = searchTags.some(tag => item.containerId.toLowerCase().includes(tag.toLowerCase()));
-            const matchesSku = searchTags.some(tag => item.sku.toLowerCase().includes(tag.toLowerCase()));
-            return matchesContainer || matchesSku;
+            const checkTerm = (term: string) => {
+                const t = term.toLowerCase();
+                return item.containerId.toLowerCase().includes(t) || 
+                       item.sku.toLowerCase().includes(t) ||
+                       (item.aliases && item.aliases.some((a: string) => a.includes(t)));
+            };
+
+            const matchesTag = searchTags.length > 0 && searchTags.some(tag => checkTerm(tag));
+            const matchesInput = inputValue.trim().length > 0 && checkTerm(inputValue);
+
+            return matchesTag || matchesInput;
         });
-    }, [allShipmentItems, searchTags]);
+    }, [allShipmentItems, searchTags, inputValue]);
 
-    // --- INPUT HANDLERS ---
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const val = inputValue.trim();
-            if (val) {
-                if (!searchTags.includes(val)) {
-                    updateTags([...searchTags, val]);
-                }
-                setInputValue('');
-            }
-        } else if (e.key === 'Backspace' && !inputValue && searchTags.length > 0) {
-            updateTags(searchTags.slice(0, -1));
-        }
-    };
+    // Calculate how many tags matched at least one item
+    const foundTagsCount = useMemo(() => {
+        if (searchTags.length === 0) return 0;
+        const lowerTags = searchTags.map(t => t.toLowerCase().trim());
+        return lowerTags.filter(tag => 
+            allShipmentItems.some(item => 
+                item.sku.toLowerCase().includes(tag) || 
+                item.containerId.toLowerCase().includes(tag) ||
+                (item.aliases && item.aliases.some((a: string) => a.includes(tag)))
+            )
+        ).length;
+    }, [searchTags, allShipmentItems]);
 
-    const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-        e.preventDefault();
-        const text = e.clipboardData.getData('text');
-        if (!text) return;
-
-        // Split by newlines or commas
-        const newTags = text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-        const uniqueTags = new Set([...searchTags, ...newTags]);
-        updateTags(Array.from(uniqueTags));
-    };
-
-    const removeTag = (tagToRemove: string) => {
-        updateTags(searchTags.filter(tag => tag !== tagToRemove));
-    };
-
-    const getBadgeStyle = (status: string) => {
-        const lower = status.toLowerCase();
-        if (lower.includes('to be shipped')) return 'bg-blue-100 text-blue-700 border-blue-200';
-        if (lower.includes('shipped out') || lower.includes('shipped')) return 'bg-green-100 text-green-700 border-green-200';
-        return 'bg-gray-100 text-gray-600 border-gray-200';
-    };
-
-    // Helper to check if a SKU row should be highlighted
-    const isHighlighted = (text: string) => {
-        if (searchTags.length === 0) return false;
-        return searchTags.some(tag => text.toLowerCase().includes(tag.toLowerCase()));
+    const getStatusStyle = (status: string) => {
+        if (!status) return 'bg-gray-100 text-gray-800 border-gray-200';
+        const s = status.toLowerCase();
+        if (s.includes('shipped') && !s.includes('to be')) return 'bg-blue-100 text-blue-800 border-blue-200'; // Shipped Out
+        if (s.includes('arrived') || s.includes('delivered') || s.includes('cleared')) return 'bg-green-100 text-green-800 border-green-200';
+        if (s.includes('pending') || s.includes('to be')) return 'bg-amber-100 text-amber-800 border-amber-200';
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     };
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            
-            {/* Multi-Search Tag Input */}
             <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
                 <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Filter Shipments</label>
-                <div 
-                    className="flex flex-wrap items-center gap-2 p-2 border border-gray-300 rounded-lg bg-white/50 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all min-h-[42px]"
-                    onClick={() => document.getElementById('shipment-search-input')?.focus()}
-                >
-                    <Search className="w-4 h-4 text-gray-400 ml-1" />
-                    {searchTags.map(tag => (
-                        <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200 animate-in zoom-in duration-200">
-                            {tag}
-                            <button
-                                onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
-                                className="hover:text-red-500 rounded-full hover:bg-red-50 p-0.5 transition-colors"
-                            >
-                                <X className="w-3 h-3" />
-                            </button>
-                        </span>
-                    ))}
-                    <input
-                        id="shipment-search-input"
-                        type="text"
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        onPaste={handlePaste}
-                        placeholder={searchTags.length === 0 ? "Paste SKUs or Container IDs..." : ""}
-                        className="flex-1 min-w-[120px] outline-none text-sm bg-transparent placeholder-gray-400 text-gray-700"
-                    />
-                </div>
-                <p className="text-[10px] text-gray-400 mt-2">
-                    Tip: Paste a column from Excel to search multiple SKUs at once. Press Enter to add a tag.
-                </p>
+                <TagSearchInput 
+                    tags={searchTags}
+                    onTagsChange={updateTags}
+                    onInputChange={setInputValue}
+                    placeholder="Search SKUs, Aliases, or Container IDs..."
+                    themeColor={themeColor}
+                />
             </div>
-
-            {searchTags.length > 0 ? (
-                // TABLE VIEW FOR ACTIVE SEARCH
-                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-medium">
-                            <tr>
-                                <th className="px-4 py-3">SKU</th>
-                                <th className="px-4 py-3">Product Name</th>
-                                <th className="px-4 py-3">Container ID</th>
-                                <th className="px-4 py-3">Status</th>
-                                <th className="px-4 py-3">ETA</th>
-                                <th className="px-4 py-3 text-right">Quantity</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100/50">
-                            {filteredTableData.map((row) => (
-                                <tr key={row.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-4 py-3 font-mono font-bold text-gray-900">
-                                        <span className={isHighlighted(row.sku) ? 'bg-yellow-100 px-1 rounded' : ''}>{row.sku}</span>
-                                    </td>
-                                    <td className="px-4 py-3 text-xs text-gray-500 max-w-[300px] truncate" title={row.name}>{row.name}</td>
-                                    <td className="px-4 py-3 font-medium text-indigo-600">
-                                        <span className={isHighlighted(row.containerId) ? 'bg-yellow-100 px-1 rounded' : ''}>{row.containerId}</span>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase border ${getBadgeStyle(row.status)}`}>{row.status}</span>
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-700">{row.eta ? new Date(row.eta).toLocaleDateString() : 'Pending'}</td>
-                                    <td className="px-4 py-3 text-right font-bold text-gray-900">{row.quantity}</td>
-                                </tr>
-                            ))}
-                            {filteredTableData.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="p-8 text-center text-gray-500 italic">No incoming shipments found for your search.</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            ) : (
-                // CARD VIEW FOR DEFAULT OVERVIEW
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {containerMap.map(c => (
-                        <div key={c.id} className="bg-custom-glass rounded-xl border border-custom-glass shadow-sm overflow-hidden flex flex-col transition-all duration-300">
-                            <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-start">
-                                <div>
-                                    <h3 className="font-bold text-gray-900 flex items-center gap-2"><Ship className="w-4 h-4 text-indigo-600" />{c.id}</h3>
-                                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-2"><Calendar className="w-3 h-3" />ETA: {c.eta ? new Date(c.eta).toLocaleDateString() : 'Pending'}</div>
-                                </div>
-                                <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase border ${getBadgeStyle(c.status)}`}>{c.status}</span>
+            {(searchTags.length > 0 || inputValue.trim().length > 0) ? (
+                <div className="space-y-3">
+                    {searchTags.length > 0 && (
+                        <div className="flex items-center justify-between px-1">
+                            <div className={`text-sm font-medium px-3 py-1.5 rounded-lg border inline-flex items-center gap-2 shadow-sm ${foundTagsCount === searchTags.length ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                {foundTagsCount === searchTags.length ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                                <span>Found shipments for <strong>{foundTagsCount}</strong> of <strong>{searchTags.length}</strong> searched items</span>
                             </div>
-                            <div className="p-4 flex-1">
-                                <div className="flex justify-between items-center mb-2 text-xs font-bold text-gray-500 uppercase"><span>Contents</span><span>{c.totalQty} Units</span></div>
-                                <div className="max-h-40 overflow-y-auto pr-1 space-y-1 custom-scrollbar">
-                                    {c.items.map((item, idx) => (
-                                        <div 
-                                            key={idx} 
-                                            className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0 rounded px-1 transition-colors hover:bg-gray-50"
-                                        >
-                                            <span className="font-mono truncate max-w-[180px] text-gray-700" title={item.sku}>
-                                                {item.sku}
-                                            </span>
-                                            <span className="font-medium">{item.qty}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    {containerMap.length === 0 && (
-                        <div className="col-span-full p-12 text-center text-gray-400 bg-custom-glass rounded-xl border border-dashed border-custom-glass">
-                            <Ship className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                            No active shipments found.
                         </div>
                     )}
+                    <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase font-medium text-gray-500">
+                                <tr><th className="px-4 py-3">SKU</th><th className="px-4 py-3">Container</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">ETA</th><th className="px-4 py-3 text-right">Qty</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100/50">
+                                {filteredTableData.map(row => (
+                                    <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
+                                        <td className="px-4 py-3 font-mono font-bold">{row.sku}</td>
+                                        <td className="px-4 py-3 text-indigo-600">{row.containerId}</td>
+                                        <td className="px-4 py-3"><span className={`px-2 py-1 rounded border text-[10px] uppercase font-bold ${getStatusStyle(row.status)}`}>{row.status}</span></td>
+                                        <td className="px-4 py-3">{row.eta || <span className="text-gray-400 italic">Pending</span>}</td>
+                                        <td className="px-4 py-3 text-right font-bold">{row.quantity}</td>
+                                    </tr>
+                                ))}
+                                {filteredTableData.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="p-8 text-center text-gray-400">
+                                            No shipments found matching your search.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {containerMap.map((c:any) => (
+                        <div key={c.id} className="bg-custom-glass rounded-xl border border-custom-glass shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+                            <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-start">
+                                <div>
+                                    <h3 className="font-bold text-gray-900 flex items-center gap-2"><Ship className="w-4 h-4 text-indigo-600"/>{c.id}</h3>
+                                    <div className="text-xs text-gray-500 mt-1">ETA: {c.eta || 'Pending'}</div>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded border ${getStatusStyle(c.status)}`}>{c.status}</span>
+                            </div>
+                            <div className="p-4 flex-1 space-y-1 max-h-40 overflow-y-auto">
+                                {c.items.map((item:any, idx:number) => (
+                                    <div key={idx} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0"><span className="font-mono text-gray-700">{item.sku}</span><span className="font-medium">{item.qty}</span></div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
@@ -985,204 +854,134 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
 
 const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { products: Product[], pricingRules: PricingRules, promotions: PromotionEvent[], themeColor: string }) => {
     const [search, setSearch] = useState('');
-    const [showInactive, setShowInactive] = useState(false);
+    const [searchTags, setSearchTags] = useState<string[]>([]);
     const platforms = Object.keys(pricingRules);
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 50;
+    
+    const filtered = products.filter(p => {
+        const matchesTerm = (term: string) => {
+            const t = term.toLowerCase();
+            return p.sku.toLowerCase().includes(t) || 
+                   p.name.toLowerCase().includes(t) ||
+                   p.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
+        };
 
-    const filtered = products.filter((p: Product) => {
-        if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) return false;
-        return p.sku.toLowerCase().includes(search.toLowerCase()) || p.name.toLowerCase().includes(search.toLowerCase());
+        if (searchTags.length > 0) {
+            const matchesTag = searchTags.some(tag => matchesTerm(tag));
+            const matchesText = search.trim().length > 0 ? matchesTerm(search) : true;
+            return matchesTag && matchesText;
+        }
+        return matchesTerm(search);
     });
-
-    useEffect(() => { setCurrentPage(1); }, [search, showInactive]);
-
-    const totalPages = Math.ceil(filtered.length / itemsPerPage);
-    const paginatedProducts = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    const emptyRows = Math.max(0, itemsPerPage - paginatedProducts.length);
+    
+    // Helper to find active promo
+    const getActivePromo = (sku: string, platform: string) => {
+        const today = new Date().toISOString().split('T')[0];
+        return promotions.find(p => 
+            p.status === 'ACTIVE' && 
+            p.platform === platform && 
+            p.startDate <= today && 
+            p.endDate >= today &&
+            p.items.some(i => i.sku === sku)
+        );
+    };
 
     return (
         <div className="space-y-4 h-full flex flex-col">
-            <div className="flex items-center gap-4 bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
-                    <input type="text" placeholder="Search product matrix..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white/50" />
-                </div>
-                <div className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 min-w-[140px]">
-                    <span className="text-xs font-bold text-gray-500 uppercase mr-2">Show Inactive</span>
-                    <button onClick={() => setShowInactive(!showInactive)} className="text-gray-500 hover:text-indigo-600 focus:outline-none" style={showInactive ? { color: themeColor } : {}}>
-                        {showInactive ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-                    </button>
-                </div>
+            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
+                <TagSearchInput 
+                    tags={searchTags}
+                    onTagsChange={setSearchTags}
+                    onInputChange={setSearch}
+                    placeholder="Search matrix (SKU or Alias)..."
+                    themeColor={themeColor}
+                />
             </div>
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex-1 flex flex-col">
-                <div className="overflow-auto flex-1">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass sticky top-0 z-10 shadow-sm">
-                            <tr>
-                                <th className="p-4 sticky left-0 z-20 backdrop-blur-md bg-white/80">SKU</th>
-                                <th className="p-4 text-right sticky left-[120px] z-20 border-r border-gray-200 backdrop-blur-md bg-white/80">CA Price</th>
-                                {platforms.map(platform => <th key={platform} className="p-4 text-center">{platform}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100/50">
-                            {paginatedProducts.map(p => (
-                                <tr key={p.id} className="hover:bg-gray-50/50">
-                                    <td className="p-4 font-mono font-bold text-gray-900 sticky left-0 z-10 bg-white/50 backdrop-blur-sm">{p.sku}</td>
-                                    <td className="p-4 text-right font-medium sticky left-[120px] z-10 border-r border-gray-100 bg-white/50 backdrop-blur-sm">
-                                        {p.caPrice ? <span className="text-purple-700 font-bold">£{p.caPrice.toFixed(2)}</span> : <span className="text-gray-300">-</span>}
-                                    </td>
-                                    {platforms.map(platform => {
-                                        const channel = p.channels.find(c => c.platform === platform);
-                                        
-                                        // Look for active promotion matching SKU and Platform
-                                        const activePromo = promotions.find(promo => 
-                                            promo.status === 'ACTIVE' && 
-                                            (promo.platform === platform || promo.platform === 'All') &&
-                                            promo.items.some(item => item.sku === p.sku)
-                                        );
-                                        const promoItem = activePromo ? activePromo.items.find(item => item.sku === p.sku) : null;
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-auto flex-1">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-gray-50/50 font-bold border-b border-gray-200 sticky top-0 z-10">
+                        <tr>
+                            <th className="p-4 bg-white/90 backdrop-blur sticky left-0 z-20 min-w-[200px] border-r border-gray-100">Product Reference</th>
+                            <th className="p-4 bg-white/90 backdrop-blur sticky left-[200px] z-20 w-[100px] text-right border-r border-gray-100">CA Price</th>
+                            {platforms.map(p => <th key={p} className="p-4 text-center min-w-[140px]">{p}</th>)}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100/50">
+                        {filtered.slice(0, 50).map(p => (
+                            <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
+                                <td className="p-4 sticky left-0 bg-white/50 backdrop-blur-sm z-10 border-r border-gray-100">
+                                    <div className="font-mono font-bold text-gray-900">{p.sku}</div>
+                                    <div className="text-xs text-gray-500 truncate max-w-[180px]">{p.name}</div>
+                                </td>
+                                <td className="p-4 sticky left-[200px] bg-white/50 backdrop-blur-sm z-10 text-right font-medium text-purple-600 border-r border-gray-100">
+                                    {p.caPrice ? `£${p.caPrice.toFixed(2)}` : '-'}
+                                </td>
+                                {platforms.map(platform => {
+                                    const channel = p.channels.find(c => c.platform === platform);
+                                    const promo = getActivePromo(p.sku, platform);
+                                    const promoItem = promo?.items.find(i => i.sku === p.sku);
+                                    
+                                    // Price logic: Channel Price -> Product Current Price
+                                    const rawPrice = channel?.price || p.currentPrice;
+                                    const displayPrice = rawPrice * VAT;
+                                    const velocity = channel?.velocity || 0;
 
-                                        return (
-                                            <td key={platform} className="p-4 text-center">
-                                                {channel ? (
-                                                    <div className="flex flex-col items-center justify-center min-h-[3rem]">
-                                                        {promoItem ? (
-                                                            <>
-                                                                <div className="flex items-center gap-1 mb-0.5" title={`Active Campaign: ${activePromo?.name}`}>
-                                                                    <span className="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded text-xs border border-red-100 whitespace-nowrap">
-                                                                        £{promoItem.promoPrice.toFixed(2)}
-                                                                    </span>
-                                                                </div>
-                                                                <span className="text-[10px] text-gray-400 line-through">
-                                                                    £{((channel.price || p.currentPrice) * VAT).toFixed(2)}
-                                                                </span>
-                                                            </>
-                                                        ) : (
-                                                            <span className="font-bold text-gray-700">
-                                                                £{((channel.price || p.currentPrice) * VAT).toFixed(2)}
+                                    return (
+                                        <td key={platform} className="p-4 text-center align-top">
+                                            {channel ? (
+                                                <div className="flex flex-col items-center gap-1">
+                                                    {promoItem ? (
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-xs text-gray-400 line-through">£{displayPrice.toFixed(2)}</span>
+                                                            <span className="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">
+                                                                £{promoItem.promoPrice.toFixed(2)}
                                                             </span>
-                                                        )}
-                                                        <span className="text-[10px] text-gray-400 mt-0.5">{channel.velocity.toFixed(1)}/day</span>
-                                                    </div>
-                                                ) : <span className="text-gray-300">-</span>}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            ))}
-                            {emptyRows > 0 && Array.from({ length: emptyRows }).map((_, idx) => (
-                                <tr key={`empty-${idx}`} className="h-[69px]"><td className="p-4 sticky left-0 z-10 bg-white/50">&nbsp;</td><td className="p-4 sticky left-[120px] z-10 border-r border-gray-100 bg-white/50">&nbsp;</td>{platforms.map(p => <td key={p} className="p-4">&nbsp;</td>)}</tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                {filtered.length > 0 && (
-                    <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6">
-                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                            <div><p className="text-sm text-gray-700">Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filtered.length)}</span> of <span className="font-medium">{filtered.length}</span> results</p></div>
-                            <div>
-                                {totalPages > 1 && (
-                                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                        <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
-                                        <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {currentPage} of {totalPages}</span>
-                                        <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
-                                    </nav>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                                                            <span className="text-[10px] text-red-500 mt-0.5">Active Promo</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="font-bold text-gray-900">£{displayPrice.toFixed(2)}</span>
+                                                    )}
+                                                    
+                                                    {velocity > 0 && (
+                                                        <span className="text-xs text-gray-500 flex items-center gap-1 mt-1 bg-gray-100 px-1.5 py-0.5 rounded">
+                                                            <Activity className="w-3 h-3" /> {velocity.toFixed(1)}/day
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-300">-</span>
+                                            )}
+                                        </td>
+                                    )
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
 };
 
-const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { product: Product, pricingRules: PricingRules, onClose: () => void, onSave: (p: Product) => void, themeColor: string }) => {
+const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: any) => {
     const [platformTags, setPlatformTags] = useState<{ platform: string; tags: string[] }[]>(() => {
-        const existing = product.channels.map(c => ({
-            platform: c.platform,
-            tags: c.skuAlias ? c.skuAlias.split(',').map(s => s.trim()).filter(Boolean) : []
-        }));
-        Object.keys(pricingRules).forEach(pKey => {
-            if (!existing.find(e => e.platform === pKey)) {
-                existing.push({ platform: pKey, tags: [] });
-            }
-        });
+        const existing = product.channels.map((c:any) => ({ platform: c.platform, tags: c.skuAlias ? c.skuAlias.split(',').map((s:string) => s.trim()).filter(Boolean) : [] }));
+        Object.keys(pricingRules).forEach(pKey => { if (!existing.find((e:any) => e.platform === pKey)) existing.push({ platform: pKey, tags: [] }); });
         return existing;
     });
-
     const [inputValues, setInputValues] = useState<Record<string, string>>({});
 
-    const handleInputChange = (platform: string, value: string) => {
-        if (value.includes(',')) {
-            const parts = value.split(',').map(s => s.trim()).filter(Boolean);
-            if (parts.length > 0) {
-                addTags(platform, parts);
-                setInputValues(prev => ({ ...prev, [platform]: '' }));
-            }
-        } else {
-            setInputValues(prev => ({ ...prev, [platform]: value }));
-        }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent, platform: string) => {
-        const val = inputValues[platform]?.trim();
-        if ((e.key === 'Enter') && val) {
-            e.preventDefault();
-            addTags(platform, [val]);
-            setInputValues(prev => ({ ...prev, [platform]: '' }));
-        } else if (e.key === 'Backspace' && !val) {
-            const current = platformTags.find(p => p.platform === platform);
-            if (current && current.tags.length > 0) {
-                removeTag(platform, current.tags.length - 1);
-            }
-        }
-    };
-
     const addTags = (platform: string, newTags: string[]) => {
-        setPlatformTags(prev => prev.map(p => {
-            if (p.platform === platform) {
-                const updated = [...p.tags];
-                newTags.forEach(t => {
-                    if (!updated.includes(t)) updated.push(t);
-                });
-                return { ...p, tags: updated };
-            }
-            return p;
-        }));
+        setPlatformTags(prev => prev.map(p => p.platform === platform ? { ...p, tags: [...new Set([...p.tags, ...newTags])] } : p));
     };
-
-    const removeTag = (platform: string, index: number) => {
-        setPlatformTags(prev => prev.map(p => {
-            if (p.platform === platform) {
-                const newTags = [...p.tags];
-                newTags.splice(index, 1);
-                return { ...p, tags: newTags };
-            }
-            return p;
-        }));
-    };
-
+    
     const handleSave = () => {
         const updatedChannels = [...product.channels];
-
         platformTags.forEach(pt => {
             const aliasString = pt.tags.join(', ');
             const idx = updatedChannels.findIndex(c => c.platform === pt.platform);
-
-            if (idx >= 0) {
-                updatedChannels[idx] = { ...updatedChannels[idx], skuAlias: aliasString };
-            } else if (aliasString) {
-                updatedChannels.push({
-                    platform: pt.platform,
-                    manager: pricingRules[pt.platform]?.manager || 'Unassigned',
-                    velocity: 0,
-                    skuAlias: aliasString
-                });
-            }
+            if (idx >= 0) updatedChannels[idx] = { ...updatedChannels[idx], skuAlias: aliasString };
+            else if (aliasString) updatedChannels.push({ platform: pt.platform, manager: 'Unassigned', velocity: 0, skuAlias: aliasString });
         });
-
         onSave({ ...product, channels: updatedChannels });
         onClose();
     };
@@ -1190,57 +989,41 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: { p
     return (
         <div className="fixed inset-0 z-50 flex justify-end">
             <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="bg-white w-full max-w-md h-full shadow-2xl relative flex flex-col animate-in slide-in-from-right duration-300">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <div><h3 className="font-bold text-lg text-gray-900">Manage Aliases</h3><p className="text-xs text-gray-500 font-mono mt-1">{product.sku}</p></div>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
+            <div className="bg-white w-full max-w-md h-full shadow-2xl relative flex flex-col animate-in slide-in-from-right">
+                <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+                    <h3 className="font-bold text-lg">Manage Aliases</h3>
+                    <button onClick={onClose}><X className="w-5 h-5" /></button>
                 </div>
                 <div className="p-6 flex-1 overflow-y-auto space-y-6">
-                    <div className="text-sm text-gray-600 bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3">
-                        <div className="p-1 bg-blue-100 rounded h-fit text-blue-600"><LinkIcon className="w-4 h-4" /></div>
-                        <div>
-                            <p className="font-semibold text-blue-900 text-xs mb-1 uppercase">How Aliases Work</p>
-                            Map platform-specific SKUs to this Master SKU. Type an alias and press <strong>Enter</strong> or <strong>Comma</strong> to add it.
-                        </div>
-                    </div>
-
-                    {platformTags.map((item) => (
-                        <div key={item.platform} className="flex flex-col gap-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">{item.platform}</label>
-                            <div
-                                className="flex flex-wrap items-center gap-2 p-2 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all min-h-[42px]"
-                                onClick={() => document.getElementById(`input-${item.platform}`)?.focus()}
-                            >
-                                {item.tags.map((tag, idx) => (
-                                    <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100 animate-in fade-in zoom-in duration-200">
-                                        {tag}
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); removeTag(item.platform, idx); }}
-                                            className="hover:text-red-500 rounded-full hover:bg-red-50 p-0.5 transition-colors"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
+                    {platformTags.map(item => (
+                        <div key={item.platform}>
+                            <label className="text-xs font-bold text-gray-500 uppercase">{item.platform}</label>
+                            <div className="flex flex-wrap gap-2 p-2 border rounded-lg mt-1 focus-within:ring-2 focus-within:ring-indigo-500">
+                                {item.tags.map((tag:string, i:number) => (
+                                    <span key={i} className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs flex items-center gap-1">
+                                        {tag} <button onClick={() => setPlatformTags(prev => prev.map(p => p.platform === item.platform ? { ...p, tags: p.tags.filter((_, idx) => idx !== i) } : p))}><X className="w-3 h-3" /></button>
                                     </span>
                                 ))}
-                                <input
-                                    id={`input-${item.platform}`}
-                                    type="text"
+                                <input 
+                                    type="text" 
+                                    className="flex-1 min-w-[80px] outline-none text-sm" 
+                                    placeholder="Add alias..." 
                                     value={inputValues[item.platform] || ''}
-                                    onChange={(e) => handleInputChange(item.platform, e.target.value)}
-                                    onKeyDown={(e) => handleKeyDown(e, item.platform)}
-                                    placeholder={item.tags.length === 0 ? "Type SKU alias..." : ""}
-                                    className="flex-1 min-w-[80px] outline-none text-sm bg-transparent placeholder-gray-400 text-gray-700"
+                                    onChange={e => setInputValues({...inputValues, [item.platform]: e.target.value})}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && inputValues[item.platform]) {
+                                            addTags(item.platform, [inputValues[item.platform]]);
+                                            setInputValues({...inputValues, [item.platform]: ''});
+                                        }
+                                    }}
                                 />
                             </div>
                         </div>
                     ))}
                 </div>
-                <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
-                    <button onClick={handleSave} className="px-6 py-2 text-white font-medium rounded-lg shadow-md hover:opacity-90 transition-colors flex items-center gap-2" style={{ backgroundColor: themeColor }}>
-                        <Save className="w-4 h-4" />
-                        Save Changes
-                    </button>
+                <div className="p-4 border-t flex justify-end gap-2">
+                    <button onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-50">Cancel</button>
+                    <button onClick={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Save</button>
                 </div>
             </div>
         </div>

@@ -1,11 +1,11 @@
 
 import React, { useState, useRef } from 'react';
-import { Upload, X, FileText, Check, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Upload, X, FileText, Check, AlertCircle, Loader2, RefreshCw, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface CAUploadModalProps {
     onClose: () => void;
-    onConfirm: (data: { sku: string; caPrice: number }[]) => void;
+    onConfirm: (data: { sku: string; caPrice: number }[], reportDate: string) => void;
 }
 
 const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => {
@@ -14,6 +14,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => 
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [skippedCount, setSkippedCount] = useState(0);
+    const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]); // Default to today
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleDrag = (e: React.DragEvent) => {
@@ -142,7 +143,24 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => 
                     <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
                 </div>
 
-                <div className="p-6">
+                <div className="p-6 space-y-6">
+                    {/* Date Selection */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-indigo-600" />
+                            Report Date
+                        </label>
+                        <input 
+                            type="date" 
+                            value={reportDate} 
+                            onChange={(e) => setReportDate(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                            Set this to the date the file was generated. This date will be recorded in the Price Change Log.
+                        </p>
+                    </div>
+
                     {isProcessing ? (
                         <div className="flex flex-col items-center py-10">
                             <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
@@ -214,7 +232,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => 
                     <button onClick={onClose} className="px-4 py-2 text-gray-700">Cancel</button>
                     {validItems.length > 0 && (
                         <button
-                            onClick={() => onConfirm(validItems)}
+                            onClick={() => onConfirm(validItems, reportDate)}
                             className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                         >
                             Update CA Prices

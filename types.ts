@@ -31,6 +31,17 @@ export interface RefundLog {
   orderId?: string;
 }
 
+export interface PriceChangeRecord {
+  id: string;
+  sku: string;
+  productName: string;
+  date: string;          // ISO Date of the change detection (upload time)
+  oldPrice: number;      // Previous CA Price
+  newPrice: number;      // New CA Price
+  changeType: 'INCREASE' | 'DECREASE';
+  percentChange: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -177,6 +188,7 @@ export interface StrategyConfig {
     medStockWeeks: number; // e.g. 24
     minMarginPercent: number; // e.g. 25
     adjustmentPercent: number; // e.g. 5
+    adjustmentFixed?: number; // e.g. 1 (GBP) - Added for fixed decrease
     includeNewProducts?: boolean; // Override to include new products in decrease logic
   };
   safety: {

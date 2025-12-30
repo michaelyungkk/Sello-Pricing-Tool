@@ -278,6 +278,23 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
             rows.forEach(row => {
                 if (!row[skuIdx]) return;
+
+                const parseVal = (idx: number) => {
+                    if (idx === -1 || row[idx] === undefined || row[idx] === null || row[idx] === '') return 0;
+                    const val = row[idx];
+                    if (typeof val === 'number') return val;
+                    // Robust numeric parsing
+                    const str = String(val).replace(/[^\d.-]/g, '').trim();
+                    const v = parseFloat(str);
+                    return isNaN(v) ? 0 : v;
+                };
+
+                const rev = parseVal(revIdx);
+
+                // --- CRITICAL FIX: IGNORE ZERO/NEGATIVE REVENUE ---
+                // Strictly ignore non-sales (replacements, transfers) to fix Weighted Average Price.
+                if (rev <= 0.001) return;
+
                 const rawSku = String(row[skuIdx]).trim();
                 const rawSkuUpper = rawSku.toUpperCase();
 
@@ -289,24 +306,12 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     if (directMatch) masterSku = directMatch.sku;
                 }
 
-                const parseVal = (idx: number) => {
-                    if (idx === -1 || row[idx] === undefined || row[idx] === null || row[idx] === '') return 0;
-                    const val = row[idx];
-                    if (typeof val === 'number') return val;
-                    // Robust numeric parsing: remove currency symbols, spaces, but keep minus and dots
-                    const str = String(val).replace(/[^\d.-]/g, '').trim();
-                    const v = parseFloat(str);
-                    return isNaN(v) ? 0 : v;
-                };
-
-                const price = parseVal(revIdx);
-
                 if (!masterSku) {
                     if (!currentUnknownSkus[rawSku]) {
                         currentUnknownSkus[rawSku] = { count: 0, revenue: 0, masterSku: null };
                     }
                     currentUnknownSkus[rawSku].count++;
-                    currentUnknownSkus[rawSku].revenue += price;
+                    currentUnknownSkus[rawSku].revenue += rev;
                     skipCount++;
                     return;
                 }
@@ -331,7 +336,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 };
 
                 const qty = parseVal(qtyIdx);
-                const rev = parseVal(revIdx);
+                // rev is already parsed above
                 const profit = parseVal(profitIdx);
                 const netPm = parsePercent(netPmIdx);
 
@@ -358,8 +363,17 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                 discoveredPlatforms.add(platformName);
 
-                // Check Exclusion Rules
-                const isExcluded = pricingRules[platformName]?.isExcluded;
+                // Check Exclusion Rules (Robust & Case-Insensitive)
+                let isExcluded = false;
+                if (pricingRules[platformName]?.isExcluded) {
+                    isExcluded = true;
+                } else {
+                    const normPlat = platformName.toLowerCase().trim();
+                    const matchedKey = Object.keys(pricingRules).find(k => k.toLowerCase().trim() === normPlat);
+                    if (matchedKey && pricingRules[matchedKey].isExcluded) {
+                        isExcluded = true;
+                    }
+                }
 
                 // --- Overall Aggregation ---
                 if (!aggregated[masterSku]) aggregated[masterSku] = {
@@ -393,9 +407,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     item.fees.sub += parseVal(subIdx);
                     item.fees.wms += parseVal(wmsIdx);
                     item.fees.cogs += parseVal(cogsIdx);
-                    // If no profit col provided but fees/cat mapping exist, we might want to calc it, 
-                    // but for now we trust the profitIdx mapping.
-
+                    
                     if (catIdx !== -1 && row[catIdx]) item.category = String(row[catIdx]).trim();
 
                     // --- LOGISTICS CALIBRATION ---
@@ -458,7 +470,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);
 
                     // Improved Logic: If profit is missing but NetPM exists, derive profit immediately
-                    // This prevents 'Volume Weighted Average' errors (34.8% vs 35.0%)
                     if (profit === 0 && netPm !== 0 && rev !== 0) {
                         dailyAggregated[dailyKey].totalProfit += rev * (netPm / 100);
                     } else {
@@ -493,13 +504,11 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 const avgPrice = weight > 0 ? bucket.totalRevenue / weight : 0;
 
                 // NEW LOGIC: Calculate Margin based on Total Profit / Total Revenue if available
-                // This ensures "Financial Margin" is preserved rather than just averaging the % column
                 let finalMargin = 0;
                 if (profitIdx !== -1 && bucket.totalRevenue > 0) {
                     finalMargin = (bucket.totalProfit / bucket.totalRevenue) * 100;
                 } else {
                     // Fallback: Weighted Averages of the % column
-                    // bucket.netPmSum is (netPm% * qty)
                     finalMargin = weight > 0 ? bucket.netPmSum / weight : 0;
                 }
 
@@ -510,25 +519,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         price: isNaN(avgPrice) ? 0 : avgPrice,
                         velocity: isNaN(bucket.totalQty) ? 0 : bucket.totalQty,
                         platform: bucket.platform,
-                        orderId: bucket.orderId // Pass through Order ID
+                        orderId: bucket.orderId
                     };
-
-                    // Extract Order ID from key if present (format: sku|date|platform|orderId)
-                    const keyParts = bucket.sku && bucket.date && bucket.platform ? [] : []; // dummy check
-                    // Actually, we can check if the dailyKey contained a 4th element, but simple logic is:
-                    // If this "bucket" came from a key with Order ID, it represents ONE transaction (usually).
-                    // We don't have the key directly here (values iteration), so we rely on the fact that 
-                    // if we grouped by OrderID, this bucket is unique to that order.
-                    // Wait, we need to pass orderId to the payload.
-                    // Let's attach orderId to the bucket object itself in step 414.
-
-                    // RETROACTIVE FIX: I need to update the bucket definition first. 
-                    // Since I can't easily change the type definition in this Replace call without context,
-                    // I will just rely on the key structure? No, I iterate Object.values.
-                    // I must check if I can modify the bucket creation.
-                    // I will assume the 'orderId' property will be added to the bucket in the next chunk.
-                    // For now, I'll delete this specific chunk and do it properly in the next tool call because I missed updating the Interface for dailyAggregated.
-
 
                     if (!isNaN(finalMargin)) {
                         payload.margin = Number(finalMargin.toFixed(4));
@@ -679,15 +671,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
     const analyzeWithResolutions = () => {
         setIsProcessing(true);
         setTimeout(() => {
-            // Apply current unknownSkus manual mappings back into a "temp" alias lookups
-            // The logic in analyzeData already checks 'learnedAliases', so we can 
-            // inject our new resolutions there.
-
-            // Actually, analyzeData is a pure-ish function inside the component.
-            // I'll update it to accept an optional resolutions object or just re-run it
-            // because I'll be passing a combined list eventually.
-
-            // For now, let's just make analyzeData respect the manual state.
             analyzeData(rawHeaders, rawRows, mapping);
             setIsProcessing(false);
         }, 500);
@@ -891,14 +874,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                             }
                                         });
 
-                                        // We "hack" the analyzeData call by pretending these are learned aliases
-                                        // But we MUST also ensure handleSalesImport receives the updatedProducts 
-                                        // that have these aliases. Actually, handleUpdateProductAliases handles it.
-
-                                        // Let's just re-run analyzeData but with a modified aliasMap logic or by 
-                                        // passing a secondary override map.
-
-                                        // Simpler: Just resolve them into a set and call analyze again.
                                         analyzeWithResolutions();
                                     }}
                                     className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md transition-all flex items-center gap-2"

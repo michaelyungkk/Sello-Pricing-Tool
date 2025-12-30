@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent, PromotionItem, PriceLog, LogisticsRule } from '../types';
+import { TagSearchInput } from './TagSearchInput';
 import { Plus, ChevronRight, Search, Trash2, ArrowLeft, CheckCircle, Check, Download, Calendar, Lock, Unlock, LayoutDashboard, List, Calculator, Edit2, AlertCircle, Save, X, RotateCcw, Eye, EyeOff, ArrowUpDown, ChevronUp, ChevronDown, Upload, FileText, Loader2, RefreshCw, TrendingUp, TrendingDown, Target, ShoppingBag, Coins, Truck, Info, HelpCircle, Archive, Zap, Clock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -96,7 +97,95 @@ const MarginTooltip = ({ details, marginStandard, promoPrice, rect }: any) => {
     );
 };
 
-// --- SUB-VIEWS ---
+// --- MODALS ---
+
+const PromoUploadModal = ({ products, themeColor, onClose, onConfirm }: { products: Product[], themeColor: string, onClose: () => void, onConfirm: (items: any[]) => void }) => {
+    const [dragActive, setDragActive] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFile = (file: File) => {
+        setIsProcessing(true);
+        setError(null);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = e.target?.result;
+                let rows: any[] = [];
+                if (file.name.endsWith('.xlsx')) {
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    rows = XLSX.utils.sheet_to_json(sheet);
+                } else {
+                    // Simple CSV
+                    const text = data as string;
+                    rows = text.split('\n').map(r => {
+                        const [sku, price] = r.split(',');
+                        return { sku: sku?.trim(), price: price?.trim() };
+                    }).filter(r => r.sku);
+                }
+
+                const parsed = rows.map((r: any) => {
+                    // Try to find keys loosely
+                    const skuKey = Object.keys(r).find(k => k.toLowerCase().includes('sku'));
+                    const priceKey = Object.keys(r).find(k => k.toLowerCase().includes('price'));
+                    
+                    const sku = skuKey ? r[skuKey] : r[0] || r['sku'] || r['SKU'];
+                    const price = priceKey ? r[priceKey] : r[1] || r['price'] || r['Price'];
+
+                    return {
+                        sku: String(sku).trim(),
+                        price: parseFloat(String(price).replace(/[^0-9.]/g, '')) || 0
+                    };
+                }).filter(i => i.sku && i.price > 0 && products.some(p => p.sku === i.sku));
+
+                if (parsed.length === 0) throw new Error("No valid products found in file.");
+                onConfirm(parsed);
+            } catch (err: any) {
+                setError(err.message || "Failed to parse file.");
+            } finally {
+                setIsProcessing(false);
+            }
+        };
+        if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file);
+        else reader.readAsText(file);
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-gray-900">Batch Upload Items</h3>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+                </div>
+                
+                <div 
+                    className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:bg-gray-50'}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                    onDragLeave={() => setDragActive(false)}
+                    onDrop={(e) => { e.preventDefault(); setDragActive(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}
+                >
+                    <input ref={fileInputRef} type="file" className="hidden" accept=".csv,.xlsx" onChange={(e) => e.target.files && handleFile(e.target.files[0])} />
+                    {isProcessing ? (
+                        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                    ) : (
+                        <>
+                            <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                            <p className="text-sm font-medium text-gray-900">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-indigo-600 hover:underline">Browse</button></p>
+                            <p className="text-xs text-gray-500 mt-1">Columns: SKU, Promo Price</p>
+                        </>
+                    )}
+                </div>
+                {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+                
+                <div className="flex justify-end mt-4">
+                    <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-900">Cancel</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: any) => {
     const [formData, setFormData] = useState({
@@ -258,7 +347,7 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
                             <tr
                                 key={promo.id}
                                 onClick={() => onSelectPromo(promo.id)}
-                                className="hover:bg-gray-50/50 cursor-pointer transition-colors"
+                                className="even:bg-gray-50/30 hover:bg-gray-100/50 cursor-pointer transition-colors"
                             >
                                 <td className="p-4 font-bold text-gray-900">{promo.name}</td>
                                 <td className="p-4">
@@ -478,7 +567,7 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
                             }
 
                             return (
-                                <tr key={item.sku} className="hover:bg-gray-50/50">
+                                <tr key={item.sku} className="even:bg-gray-50/30 hover:bg-gray-100/50">
                                     <td className="p-4 font-bold text-gray-900">{item.sku}</td>
                                     <td className="p-4 text-right">
                                         {product?.caPrice ? (
@@ -831,8 +920,13 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
     }, [promotions]);
 
     const filteredRows = allRows.filter(row => {
+        const product = products.find(p => p.sku === row.sku);
+        const matchesAlias = product?.channels.some(c => c.skuAlias?.toLowerCase().includes(searchQuery.toLowerCase()));
+        
         const matchesSearch = row.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            row.eventName.toLowerCase().includes(searchQuery.toLowerCase());
+            row.eventName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            matchesAlias;
+            
         const matchesPlatform = platformFilter === 'All Platforms' || row.platform === platformFilter;
         return matchesSearch && matchesPlatform;
     });
@@ -848,7 +942,7 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
                     <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
                     <input
                         type="text"
-                        placeholder="Filter by SKU or Event Name..."
+                        placeholder="Filter by SKU, Alias or Event Name..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 bg-white/50"
@@ -883,7 +977,7 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
                         {filteredRows.map(row => (
-                            <tr key={row.id} className="hover:bg-gray-50/50">
+                            <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
                                 <td className="p-4 font-bold text-gray-700">{row.sku}</td>
                                 <td className="p-4 text-gray-600">{row.eventName}</td>
                                 <td className="p-4">
@@ -935,6 +1029,7 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
     themeColor: string
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchTags, setSearchTags] = useState<string[]>([]);
     const [selectedCategory, setSelectedCategory] = useState('All Categories');
     const [bulkRule, setBulkRule] = useState<{ type: 'PERCENTAGE' | 'FIXED', value: number }>({ type: 'PERCENTAGE', value: 10 });
     const [selectedSkus, setSelectedSkus] = useState<Set<string>>(new Set());
@@ -952,7 +1047,23 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                 const isSoldOnPlatform = p.channels.some(c => c.platform === currentPromo.platform);
                 if (!isSoldOnPlatform) return false;
             }
-            const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase());
+            
+            const matchesTerm = (term: string) => {
+                const t = term.toLowerCase();
+                return p.sku.toLowerCase().includes(t) || 
+                       p.name.toLowerCase().includes(t) || 
+                       p.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
+            };
+
+            let matchSearch = true;
+            if (searchTags.length > 0) {
+                const matchesTag = searchTags.some(tag => matchesTerm(tag));
+                const matchesText = searchQuery ? matchesTerm(searchQuery) : true;
+                matchSearch = matchesTag && matchesText;
+            } else {
+                matchSearch = matchesTerm(searchQuery);
+            }
+
             const matchCat = selectedCategory === 'All Categories' || p.category === selectedCategory;
             return matchSearch && matchCat;
         }).map(p => {
@@ -965,7 +1076,7 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
             }
             return p;
         });
-    }, [products, searchQuery, selectedCategory, existingSkuSet, currentPromo.platform, showInactive]);
+    }, [products, searchQuery, searchTags, selectedCategory, existingSkuSet, currentPromo.platform, showInactive]);
 
     const uniqueCategories = useMemo(() => {
         const cats = new Set(products.map(p => p.category || 'Uncategorized'));
@@ -1062,171 +1173,192 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
             if (validRural.length === 0 && validStandard.length > 0) ruralPostage = validStandard[0].price;
         }
 
-        const otherCosts = (product.costPrice || 0) + (product.subscriptionFee || 0) + (product.wmsFee || 0) + (product.otherFee || 0);
-        const profitStandard = netRevenue - commissionCost - standardPostage - otherCosts;
-        const profitRural = netRevenue - commissionCost - ruralPostage - otherCosts;
-        const marginStandard = promoPrice > 0 ? (profitStandard / promoPrice) * 100 : 0;
-        const marginRural = promoPrice > 0 ? (profitRural / promoPrice) * 100 : 0;
-
-        return { marginStandard, marginRural, profitStandard, details: { netRevenue, commissionCost, standardPostage, ruralPostage, otherCosts, commissionRate, weight, profitStandard } };
+        const otherCosts = (product.costPrice || 0) + (product.sellingFee || 0) + (product.adsFee || 0) + (product.otherFee || 0) + (product.subscriptionFee || 0) + (product.wmsFee || 0);
+        
+        const totalCosts = commissionCost + standardPostage + otherCosts;
+        const netProfit = netRevenue - totalCosts;
+        const margin = netRevenue > 0 ? (netProfit / netRevenue) * 100 : -100;
+        
+        return {
+            margin,
+            netProfit,
+            netRevenue,
+            commissionCost,
+            standardPostage,
+            otherCosts,
+            commissionRate
+        };
     };
 
     const handleConfirm = () => {
-        const items: PromotionItem[] = Array.from(selectedSkus).map((sku: string) => {
-            const product = products.find(p => p.sku === sku)!;
+        const items = Array.from(selectedSkus).map(sku => {
+            const product = products.find(p => p.sku === sku);
+            if (!product) return null;
             const promoPrice = calculatePromoPrice(product);
+            
+            // Store basePrice as Gross
+            let basePrice = product.currentPrice * VAT;
+            if (currentPromo.platform !== 'All') {
+                const channel = product.channels.find(c => c.platform === currentPromo.platform);
+                if (channel && channel.price) basePrice = channel.price * VAT;
+            }
+            if (product.caPrice) basePrice = product.caPrice;
+
             return {
                 sku,
-                // Store basePrice as Gross for consistency with promoPrice
-                basePrice: product.currentPrice * VAT,
-                discountType: bulkRule.type,
-                discountValue: bulkRule.value,
-                promoPrice
+                basePrice: Number(basePrice.toFixed(2)),
+                promoPrice,
+                discountType: 'FIXED',
+                discountValue: 0
             };
-        });
+        }).filter(Boolean) as PromotionItem[];
+        
         onConfirm(items);
     };
 
     return (
-        <div className="space-y-6 h-[calc(100vh-150px)] flex flex-col relative">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <button onClick={onCancel} className="text-gray-500 hover:text-gray-700 flex items-center gap-1 text-sm font-medium transition-colors">
-                        <ArrowLeft className="w-4 h-4" /> Cancel
-                    </button>
-                    <div>
-                        <h2 className="text-xl font-bold text-gray-900 ml-2">Add Products to {currentPromo.name}</h2>
-                        {currentPromo.platform !== 'All' && (
-                            <p className="text-xs text-indigo-600 ml-2 font-medium">Filtering for: {currentPromo.platform}</p>
-                        )}
+        <div className="space-y-6 pb-20 animate-in slide-in-from-right">
+            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div className="flex-1 flex gap-4 w-full">
+                    <div className="flex-1">
+                        <TagSearchInput 
+                            tags={searchTags}
+                            onTagsChange={setSearchTags}
+                            onInputChange={setSearchQuery}
+                            placeholder="Search products by SKU or Alias..."
+                            themeColor={themeColor}
+                        />
                     </div>
-                </div>
-                <button
-                    onClick={handleConfirm}
-                    disabled={selectedSkus.size === 0}
-                    className="px-6 py-2 text-white rounded-lg font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all hover:opacity-90"
-                    style={{ backgroundColor: themeColor }}
-                >
-                    <CheckCircle className="w-4 h-4" />
-                    Add {selectedSkus.size} Products
-                </button>
-            </div>
-
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-wrap items-end gap-4 relative z-20">
-                <div className="flex-1 min-w-[200px]">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">Search</label>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                        <input type="text" placeholder="Search SKU..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-opacity-50 bg-white/50" style={{ '--tw-ring-color': themeColor } as React.CSSProperties} />
-                    </div>
-                </div>
-                <div className="w-48">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">Category</label>
-                    <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm bg-white/50 focus:ring-2 focus:ring-opacity-50" style={{ '--tw-ring-color': themeColor } as React.CSSProperties}>
+                    <select 
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="px-4 py-2 border rounded-lg bg-white/50"
+                    >
                         <option>All Categories</option>
-                        {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                        {uniqueCategories.map(c => <option key={c}>{c}</option>)}
                     </select>
                 </div>
-                <div className="pl-4 border-l border-gray-200 flex flex-col justify-end">
-                    <label className="text-xs font-bold text-indigo-600 uppercase tracking-wide mb-1 block">Bulk Discount Rule</label>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-700">% Off</span>
-                        <input type="number" value={bulkRule.value} onChange={(e) => { setBulkRule({ ...bulkRule, value: parseFloat(e.target.value) }); setPriceOverrides({}); }} className="w-16 border-gray-300 rounded-lg text-sm py-1.5 px-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/50" />
-                    </div>
-                </div>
-                <div className="flex flex-col justify-end">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">Show Inactive</label>
-                    <button onClick={() => setShowInactive(!showInactive)} className={`flex items-center justify-center w-10 h-9 rounded-lg border transition-colors ${showInactive ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white/50 border-gray-300 text-gray-400'}`} title="Show products with 0 stock and 0 sales">
-                        {showInactive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                    </button>
-                </div>
-            </div>
-
-            <div className="flex-1 bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex flex-col min-h-0 backdrop-blur-custom">
-                <div className="overflow-auto flex-1">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50/50 text-gray-700 font-bold sticky top-0 z-10 shadow-sm border-b border-gray-200/50">
-                            <tr>
-                                <th className="p-4 w-10"><input type="checkbox" onChange={toggleAll} checked={selectedSkus.size > 0 && selectedSkus.size === filteredProducts.length} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /></th>
-                                <th className="p-4">SKU / Category</th>
-                                <th className="p-4 text-right">Platform Price</th>
-                                <th className="p-4 text-right">Optimal</th>
-                                <th className="p-4 text-right">CA Price</th>
-                                <th className="p-4 text-right bg-indigo-50/80 text-indigo-900 backdrop-blur-sm">Promo Price</th>
-                                <th className="p-4 text-right">Min Price</th>
-                                <th className="p-4 text-right">Proj. Margin</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100/50">
-                            {filteredProducts.map((p) => {
-                                const isSelected = selectedSkus.has(p.sku);
-                                const promoPrice = calculatePromoPrice(p);
-                                const isOverridden = priceOverrides[p.sku] !== undefined;
-                                const { marginStandard, marginRural, details } = calculateDynamicMargin(p, promoPrice);
-                                const isRuralNegative = marginRural < 0;
-
-                                return (
-                                    <tr key={p.id} onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT') { handleRowClick(p.sku); } }} className={`cursor-pointer hover:bg-gray-50/50 transition-colors`} style={isSelected ? { backgroundColor: `${themeColor}08` } : {}}>
-                                        <td className="p-4"><input type="checkbox" checked={isSelected} readOnly className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /></td>
-                                        <td className="p-4">
-                                            <div className="font-bold text-gray-900" onClick={(e) => e.stopPropagation()}>{p.sku}</div>
-                                            <div className="inline-block mt-1 px-2 py-0.5 bg-gray-100/80 text-gray-600 text-xs rounded border border-gray-200">{p.category || 'Uncategorized'}</div>
-                                        </td>
-                                        <td className="p-4 text-right font-medium text-gray-900">£{(p.currentPrice * VAT).toFixed(2)}</td>
-                                        <td className="p-4 text-right text-indigo-600 font-medium">{p.optimalPrice ? `☆ £${(p.optimalPrice * VAT).toFixed(2)}` : '-'}</td>
-                                        <td className="p-4 text-right">
-                                            {p.caPrice ? (
-                                                <span className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded border border-purple-100">
-                                                    £{p.caPrice.toFixed(2)}
-                                                </span>
-                                            ) : (
-                                                <span className="text-gray-300">-</span>
-                                            )}
-                                        </td>
-                                        <td className="p-4 text-right bg-indigo-50/30">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <span className="text-gray-400 text-xs">£</span>
-                                                <input type="number" step="0.01" value={promoPrice} onClick={(e) => e.stopPropagation()} onChange={(e) => handlePriceOverride(p.sku, e.target.value)} className={`w-20 px-1 py-1 text-right text-base font-bold bg-transparent border-b border-dashed focus:border-indigo-500 focus:outline-none focus:bg-white/80 ${isOverridden ? 'text-indigo-600 border-indigo-300' : 'text-gray-900 border-gray-300'}`} />
-                                                {isOverridden && (<button onClick={(e) => { e.stopPropagation(); const newO = { ...priceOverrides }; delete newO[p.sku]; setPriceOverrides(newO); }} className="text-gray-400 hover:text-indigo-600" title="Reset to calculated price"><RotateCcw className="w-3 h-3" /></button>)}
-                                            </div>
-                                        </td>
-                                        <td className="p-4 text-right text-gray-400">{p.floorPrice ? `£${p.floorPrice}` : '-'}</td>
-                                        <td className="p-4 text-right relative">
-                                            <div className="flex items-center justify-end gap-2 group/margin" onMouseEnter={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setHoveredMargin({ id: p.id, rect }); }} onMouseLeave={() => setHoveredMargin(null)}>
-                                                {isRuralNegative && (<span title="Negative margin in Rural/Zone areas"><AlertCircle className="w-4 h-4 text-red-500 animate-pulse" /></span>)}
-                                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${marginStandard > 15 ? 'bg-green-100 text-green-700' : marginStandard > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{marginStandard.toFixed(1)}%</span>
-                                            </div>
-                                            {hoveredMargin?.id === p.id && (<MarginTooltip details={details} marginStandard={marginStandard} promoPrice={promoPrice} rect={hoveredMargin.rect} />)}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {filteredProducts.length === 0 && (<tr><td colSpan={9} className="p-12 text-center text-gray-500">{products.length > 0 ? `No products found. (Showing only products selling on ${currentPromo.platform})` : "No products available."}</td></tr>)}
-                        </tbody>
-                    </table>
+                
+                <div className="flex items-center gap-3 bg-gray-100 p-2 rounded-lg">
+                    <span className="text-xs font-bold uppercase text-gray-500">Bulk Rule:</span>
+                    <select 
+                        value={bulkRule.type}
+                        onChange={(e) => setBulkRule({...bulkRule, type: e.target.value as any})}
+                        className="text-sm bg-transparent border-none focus:ring-0 font-medium"
+                    >
+                        <option value="PERCENTAGE">Percentage Off</option>
+                        <option value="FIXED">Fixed Amount Off</option>
+                    </select>
+                    <input 
+                        type="number" 
+                        value={bulkRule.value}
+                        onChange={(e) => setBulkRule({...bulkRule, value: parseFloat(e.target.value)})}
+                        className="w-16 px-2 py-1 rounded border text-center font-bold"
+                    />
                 </div>
             </div>
-        </div>
-    );
-};
 
-const PromoUploadModal = ({ products, onClose, onConfirm, themeColor }: { products: Product[], onClose: () => void, onConfirm: (items: any[]) => void, themeColor: string }) => {
-    const [dragActive, setDragActive] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [parsedItems, setParsedItems] = useState<any[] | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const handleFile = (file: File) => { setIsProcessing(true); setError(null); setTimeout(() => { const reader = new FileReader(); reader.onload = (e) => { try { const data = e.target?.result; const workbook = XLSX.read(data, { type: file.name.endsWith('.xlsx') ? 'array' : 'string' }); const sheet = workbook.Sheets[workbook.SheetNames[0]]; const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]; parseRows(rows); } catch (err) { setError("Failed to parse file. Please ensure valid CSV or Excel format."); } finally { setIsProcessing(false); } }; if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file); else reader.readAsText(file); }, 100); };
-    const parseRows = (rows: any[][]) => { if (rows.length < 2) { setError("File is empty."); return; } const headers = rows[0].map(h => String(h).trim().toLowerCase()); const skuIdx = headers.findIndex(h => h.includes('sku')); const priceIdx = headers.findIndex(h => h.includes('price') || h.includes('promo')); if (skuIdx === -1 || priceIdx === -1) { setError("Missing required columns: 'SKU' and 'Price' (or 'Promo Price')."); return; } const results: any[] = []; const skuResolver: Record<string, string> = {}; products.forEach(p => { skuResolver[p.sku.toUpperCase()] = p.sku; p.channels.forEach(c => { if (c.skuAlias) { skuResolver[c.skuAlias.toUpperCase()] = p.sku; } }); }); for (let i = 1; i < rows.length; i++) { const row = rows[i]; if (!row[skuIdx]) continue; const rawSku = String(row[skuIdx]).trim(); const price = parseFloat(String(row[priceIdx])); const masterSku = skuResolver[rawSku.toUpperCase()]; const isValid = !!masterSku && !isNaN(price) && price > 0; results.push({ sku: masterSku || rawSku, price, isValid, originalSku: rawSku }); } setParsedItems(results); };
-    const validItems = parsedItems?.filter(i => i.isValid) || [];
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center"><h3 className="font-bold text-gray-900">Batch Upload Promo Prices</h3><button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button></div>
-                <div className="p-6 flex-1 overflow-y-auto">
-                    {!parsedItems ? (<div className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-colors ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'}`} onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }} onDragOver={(e) => { e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]); }}><input ref={fileInputRef} type="file" className="hidden" accept=".csv, .xlsx" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />{isProcessing ? (<Loader2 className="w-8 h-8 animate-spin text-gray-400 mb-2" />) : (<><Upload className="w-8 h-8 text-gray-400 mb-2" /><p className="text-sm font-medium">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-indigo-600 underline">Browse</button></p><p className="text-xs text-gray-500 mt-2">Required Columns: SKU, Promo Price</p></>)}{error && <p className="text-red-500 text-xs mt-3">{error}</p>}</div>) : (<div className="space-y-4"><div className="flex justify-between items-center text-sm"><span className="text-green-600 font-bold">{validItems.length} Valid</span><button onClick={() => setParsedItems(null)} className="text-gray-500 flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Reset</button></div><div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto"><table className="w-full text-sm text-left"><thead className="bg-gray-50"><tr><th className="p-2">SKU (Resolved)</th><th className="p-2 text-right">Price</th><th className="p-2 text-right">Status</th></tr></thead><tbody className="divide-y">{parsedItems.map((item, i) => (<tr key={i} className={!item.isValid ? 'bg-red-50' : ''}><td className="p-2">{item.sku}{item.originalSku !== item.sku && <span className="text-xs text-gray-400 block">via {item.originalSku}</span>}</td><td className="p-2 text-right">{item.price || '-'}</td><td className="p-2 text-right">{item.isValid ? <Check className="w-4 h-4 text-green-500 ml-auto" /> : <AlertCircle className="w-4 h-4 text-red-500 ml-auto" />}</td></tr>))}</tbody></table></div></div>)}
-                </div>
-                <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg">Cancel</button>{validItems.length > 0 && (<button onClick={() => onConfirm(validItems)} className="px-6 py-2 text-white rounded-lg shadow-md hover:opacity-90" style={{ backgroundColor: themeColor }}>Import {validItems.length} Items</button>)}</div>
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-gray-50/50 font-bold border-b border-gray-200">
+                        <tr>
+                            <th className="p-4 w-10">
+                                <input 
+                                    type="checkbox" 
+                                    checked={selectedSkus.size === filteredProducts.length && filteredProducts.length > 0}
+                                    onChange={toggleAll}
+                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                            </th>
+                            <th className="p-4">Product</th>
+                            <th className="p-4 text-right">CA/Base Price</th>
+                            <th className="p-4 text-right">Stock</th>
+                            <th className="p-4 text-right w-32">Promo Price</th>
+                            <th className="p-4 text-right">Proj. Margin</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100/50">
+                        {filteredProducts.map(p => {
+                            const promoPrice = calculatePromoPrice(p);
+                            const marginDetails = calculateDynamicMargin(p, promoPrice);
+                            
+                            // Determine Base Price display
+                            let basePrice = p.currentPrice * VAT;
+                            if (p.caPrice) basePrice = p.caPrice;
+
+                            return (
+                                <tr key={p.sku} className={`hover:bg-gray-50/50 ${selectedSkus.has(p.sku) ? 'bg-indigo-50/30' : ''}`}>
+                                    <td className="p-4">
+                                        <input 
+                                            type="checkbox"
+                                            checked={selectedSkus.has(p.sku)}
+                                            onChange={() => handleRowClick(p.sku)}
+                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                    </td>
+                                    <td className="p-4">
+                                        <div className="font-bold text-gray-900">{p.sku}</div>
+                                        <div className="text-xs text-gray-500 truncate max-w-[200px]">{p.name}</div>
+                                    </td>
+                                    <td className="p-4 text-right text-gray-600">
+                                        £{basePrice.toFixed(2)}
+                                    </td>
+                                    <td className="p-4 text-right font-mono">
+                                        {p.stockLevel}
+                                    </td>
+                                    <td className="p-4 text-right">
+                                        <input 
+                                            type="number"
+                                            value={priceOverrides[p.sku] || promoPrice}
+                                            onChange={(e) => handlePriceOverride(p.sku, e.target.value)}
+                                            className="w-24 text-right px-2 py-1 border rounded focus:ring-2 focus:ring-indigo-500 font-bold"
+                                            style={{ color: themeColor }}
+                                        />
+                                    </td>
+                                    <td 
+                                        className="p-4 text-right font-mono cursor-help"
+                                        onMouseEnter={(e) => setHoveredMargin({ id: p.sku, rect: e.currentTarget.getBoundingClientRect() })}
+                                        onMouseLeave={() => setHoveredMargin(null)}
+                                    >
+                                        <span className={marginDetails.margin > 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                                            {marginDetails.margin.toFixed(1)}%
+                                        </span>
+                                        {hoveredMargin?.id === p.sku && (
+                                            <MarginTooltip 
+                                                details={{
+                                                    netRevenue: marginDetails.netRevenue,
+                                                    commissionRate: marginDetails.commissionRate,
+                                                    commissionCost: marginDetails.commissionCost,
+                                                    standardPostage: marginDetails.standardPostage,
+                                                    otherCosts: marginDetails.otherCosts,
+                                                    profitStandard: marginDetails.netProfit
+                                                }}
+                                                marginStandard={marginDetails.margin}
+                                                promoPrice={promoPrice}
+                                                rect={hoveredMargin.rect}
+                                            />
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur border-t border-gray-200 flex justify-end gap-3 z-40 md:pl-72">
+                <button onClick={onCancel} className="px-6 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium">
+                    Cancel
+                </button>
+                <button 
+                    onClick={handleConfirm}
+                    disabled={selectedSkus.size === 0}
+                    className="px-6 py-2 text-white rounded-lg font-medium shadow-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    style={{ backgroundColor: themeColor }}
+                >
+                    <Plus className="w-4 h-4" />
+                    Add {selectedSkus.size} Products
+                </button>
             </div>
         </div>
     );

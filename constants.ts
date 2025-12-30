@@ -50,6 +50,7 @@ export const DEFAULT_STRATEGY_RULES: StrategyConfig = {
     medStockWeeks: 24,
     minMarginPercent: 25,
     adjustmentPercent: 5,
+    adjustmentFixed: 1, // Default 1 GBP decrease minimum
     includeNewProducts: false
   },
   safety: {
