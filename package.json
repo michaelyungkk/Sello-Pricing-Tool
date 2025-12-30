@@ -15,7 +15,8 @@
     "lucide-react": "^0.344.0",
     "recharts": "^2.12.2",
     "@google/genai": "*",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "idb-keyval": "^6.2.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.64",
