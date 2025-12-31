@@ -1,4 +1,5 @@
 
+
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -112,6 +113,19 @@ export interface Product {
   // Dynamic Metrics (Calculated on the fly)
   returnRate?: number; // % of units returned vs sold
   totalRefunded?: number; // Total value refunded in current period
+  
+  // Transient Data
+  _trendData?: { velocityChange: number };
+}
+
+// FIX: Added missing AnalysisResult interface for Gemini service responses.
+export interface AnalysisResult {
+  productId: string;
+  recommendedPrice: number;
+  percentageChange: number;
+  daysRemaining: number;
+  status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock';
+  reasoning: string;
 }
 
 export interface PriceLog {
@@ -122,6 +136,7 @@ export interface PriceLog {
   velocity: number; // Sales per day at this price
   margin: number; // Net % at this price
   profit?: number; // Absolute profit value
+  adsSpend?: number; // Optional: Daily Ad Spend specifically for this SKU/Date
   platform?: string; // Platform specific tag (optional to support legacy data)
   orderId?: string; // Optional: Unique Order ID for transaction-level tracking
 }
@@ -133,6 +148,7 @@ export interface HistoryPayload {
   velocity: number;
   margin?: number;
   profit?: number;
+  adsSpend?: number;
   platform?: string;
   orderId?: string;
 }
@@ -143,22 +159,6 @@ export interface ShipmentLog {
   service: string;
   cost: number;
   date: string;
-}
-
-export interface AnalysisResult {
-  productId: string;
-  recommendedPrice: number;
-  percentageChange: number;
-  daysRemaining: number;
-  status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock';
-  reasoning: string;
-}
-
-export interface ChartDataPoint {
-  day: number;
-  projectedStockCurrentPrice: number;
-  projectedStockNewPrice: number | null;
-  replenishmentThreshold: number;
 }
 
 export type Platform = string;

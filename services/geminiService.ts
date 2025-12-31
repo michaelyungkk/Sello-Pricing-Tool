@@ -6,17 +6,15 @@ import { Product, AnalysisResult, PlatformConfig } from "../types";
 // Initialize the Gemini AI client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const analyzePriceAdjustment = async (product: Product, platformRule: PlatformConfig): Promise<AnalysisResult> => {
+export const analyzePriceAdjustment = async (product: Product, platformRule: PlatformConfig, context?: string): Promise<AnalysisResult> => {
   // FIX: Upgraded model to gemini-3-pro-preview for better arithmetic reasoning capabilities.
   const modelId = "gemini-3-pro-preview"; // Using flash for speed and arithmetic reasoning
 
   const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General');
 
-  const ruleDescription = `
-    Platform Configuration for ${platformName}:
-    - Strategic Markup/Margin Adjustment: ${platformRule.markup > 0 ? '+' : ''}${platformRule.markup}% (Apply this to the base valuation)
-    - Platform Commission Fee: ${platformRule.commission}% (This fee is deducted from the sale price. Ensure the recommended price accounts for this cost while maintaining velocity)
-  `;
+  const primaryGoal = context === 'margin'
+    ? `The primary goal is to resolve a critical low margin issue on this platform. The current price of £${product.currentPrice} is not profitable enough given the costs. Your recommendation should prioritize increasing the price to improve the margin. Balance this against sales velocity; we want to be more profitable, not stall sales completely.`
+    : `The primary goal is to optimize inventory runway. We need to ensure we do not run out of stock before the replenishment arrives, but also avoid holding too much stock if sales are slow.`;
 
   const prompt = `
     Act as a senior inventory and pricing analyst for an ecommerce business.
@@ -24,27 +22,27 @@ export const analyzePriceAdjustment = async (product: Product, platformRule: Pla
     Current Scenario:
     Product: ${product.name}
     Platform: ${platformName}
-    Current Price: £${product.currentPrice}
+    Current Price: £${product.currentPrice.toFixed(2)} (Gross, VAT inclusive)
+    Cost of Goods (COGS): £${(product.costPrice || 0).toFixed(2)} (Net, VAT exclusive)
     Current Stock Level: ${product.stockLevel} units
-    Average Daily Sales Velocity: ${product.averageDailySales} units/day
-    Replenishment Lead Time: ${product.leadTimeDays} days (when new stock arrives)
+    Average Daily Sales Velocity: ${product.averageDailySales.toFixed(2)} units/day
+    Replenishment Lead Time: ${product.leadTimeDays} days
 
-    Strategic Rules:
-    ${ruleDescription}
+    Primary Goal:
+    ${primaryGoal}
 
-    Goal:
-    We need to ensure we do not run out of stock before the replenishment arrives. 
-    However, we also don't want to hold too much stock if sales are too slow.
-    
+    Strategic Rules & Costs for ${platformName}:
+    - Platform Commission Fee: ${platformRule.commission}% of the gross selling price.
+    - Other known costs per unit (VAT exclusive):
+      - Average Ad Fee: £${(product.adsFee || 0).toFixed(2)}
+      - Average Postage: £${(product.postage || 0).toFixed(2)}
+      - WMS/Other Fees: £${((product.wmsFee || 0) + (product.otherFee || 0)).toFixed(2)}
+
     Task:
-    1. Calculate "Days of Stock Remaining" (Stock / Daily Sales).
-    2. Compare "Days of Stock Remaining" vs "Replenishment Lead Time".
-    3. Incorporate the Platform Pricing Policy into your final recommendation. 
-       - The Commission % represents a COST. 
-       - The Markup % represents a STRATEGY.
-    4. If Stock Days < Lead Time: We are at risk of stockout. Increase price to slow sales, maximizing margin on remaining units.
-    5. If Stock Days > Lead Time (significantly, e.g., > 2x): We are overstocked. Consider holding or lowering price to boost velocity.
-    6. If Stock Days ≈ Lead Time (+/- 20%): Keep price stable (but ensure platform rule is respected if current price deviates significantly).
+    1. Analyze the situation based on the Primary Goal.
+    2. If the goal is to fix margin, calculate the current net margin and determine a new price that achieves a healthier margin (e.g., above 10-15%) while considering market elasticity.
+    3. If the goal is inventory optimization, calculate "Days of Stock Remaining" (Stock / Daily Sales) and compare it against "Replenishment Lead Time".
+    4. Provide a clear reasoning for your recommendation, explaining the trade-offs.
 
     Return a JSON object with the recommended price, the percentage change, the calculated days remaining, a status (Critical, Warning, Healthy, Overstock), and a short strategic reasoning sentence.
   `;

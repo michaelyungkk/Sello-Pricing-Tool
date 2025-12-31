@@ -1,15 +1,15 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules } from '../types';
+import { VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
-import { Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List, Ship } from 'lucide-react';
+import { Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart } from 'lucide-react';
 
 interface ProductListProps {
     products: Product[];
-    onAnalyze: (product: Product) => void;
     onEditAliases?: (product: Product) => void;
     onViewShipments?: (sku: string) => void; // New Callback
+    onViewElasticity?: (product: Product) => void; // New Callback for Elasticity
     dateLabels?: { current: string, last: string };
     pricingRules?: PricingRules;
     themeColor: string;
@@ -18,10 +18,14 @@ interface ProductListProps {
 type SortKey = keyof Product | 'estNewPrice';
 
 const RecommendationTooltip = ({ product, rect }: { product: Product, rect: DOMRect }) => {
+    // Add Scroll Offset to ensure fixed position works correctly on scrolled pages
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+    
     const style: React.CSSProperties = {
-        position: 'fixed',
-        top: `${rect.top}px`,
-        left: `${rect.left + rect.width / 2}px`,
+        position: 'absolute',
+        top: `${rect.top + scrollY}px`,
+        left: `${rect.left + rect.width / 2 + scrollX}px`,
         transform: 'translate(-50%, -100%) translateY(-8px)',
         zIndex: 9999,
         pointerEvents: 'none'
@@ -49,7 +53,7 @@ const RecommendationTooltip = ({ product, rect }: { product: Product, rect: DOMR
                         <span className="text-right text-gray-200">{product.recommendation}</span>
 
                         <span className="text-gray-400">Runway:</span>
-                        <span className="text-right text-gray-200">{product.daysRemaining > 900 ? '> 2 Years' : `${product.daysRemaining.toFixed(0)} Days`}</span>
+                        <span className="text-right text-gray-200">{product.daysRemaining > 730 ? '> 2 Years' : `${(product.daysRemaining / 7).toFixed(1)} Weeks`}</span>
 
                         <span className="text-gray-400">Lead Time:</span>
                         <span className="text-right text-gray-200">{product.leadTimeDays} Days</span>
@@ -74,9 +78,9 @@ const RecommendationTooltip = ({ product, rect }: { product: Product, rect: DOMR
 interface ProductRowProps {
     product: Product;
     themeColor: string;
-    onAnalyze: (p: Product) => void;
     onEditAliases?: (p: Product) => void;
     onViewShipments?: (sku: string) => void;
+    onViewElasticity?: (p: Product) => void;
     hoveredProduct: { id: string; rect: DOMRect } | null;
     handleMouseEnter: (id: string, e: React.MouseEvent) => void;
     handleMouseLeave: () => void;
@@ -85,29 +89,25 @@ interface ProductRowProps {
 const ProductRow = React.memo(({
     product,
     themeColor,
-    onAnalyze,
     onEditAliases,
     onViewShipments,
+    onViewElasticity,
     handleMouseEnter,
     handleMouseLeave
 }: ProductRowProps) => {
-    const isOOS = product.recommendation === 'Out of Stock';
-    const isMonitoring = product.status === 'Warning' && product.recommendation.includes('Monitor');
+    // Apply 20% VAT Uplift for Display using shared constant
+    const currentPriceWithVat = (product.currentPrice || 0) * VAT_MULTIPLIER;
+    const oldPriceWithVat = product.oldPrice ? product.oldPrice * VAT_MULTIPLIER : null;
+    const optimalPriceWithVat = product.optimalPrice ? product.optimalPrice * VAT_MULTIPLIER : null;
 
-    // Apply 20% VAT Uplift for Display
-    const VAT = 1.20;
-    const currentPriceWithVat = (product.currentPrice || 0) * VAT;
-    const oldPriceWithVat = product.oldPrice ? product.oldPrice * VAT : null;
-    const optimalPriceWithVat = product.optimalPrice ? product.optimalPrice * VAT : null;
-
+    const runwayWeeks = product.daysRemaining / 7;
     const runwayBin = {
-        label: product.daysRemaining > 730 ? '> 2 Years' : `${Math.round(product.daysRemaining)} Days`,
+        label: runwayWeeks > 104 ? '> 2 Years' : `${runwayWeeks.toFixed(1)} Weeks`,
         color: product.status === 'Critical' ? 'bg-red-50 text-red-600 border-red-200' :
             product.status === 'Overstock' ? 'bg-orange-50 text-orange-600 border-orange-200' :
                 product.status === 'Warning' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-green-50 text-green-600 border-green-200'
     };
 
-    const isLowStock = product.stockLevel <= 10 && product.stockLevel > 0;
     const isHighReturns = product.returnRate !== undefined && product.returnRate > 5;
 
     return (
@@ -143,7 +143,7 @@ const ProductRow = React.memo(({
             </td>
             <td className="px-4 py-3 text-right">
                 {product.caPrice ? (
-                    <div className="flex items-center justify-end gap-1 font-bold text-purple-600" title="Channel Advisor Reference Price">
+                    <div className="font-bold text-purple-600 font-mono" title="Channel Advisor Reference Price">
                         £{product.caPrice.toFixed(2)}
                     </div>
                 ) : (
@@ -170,14 +170,18 @@ const ProductRow = React.memo(({
                 </div>
             </td>
 
-            <td className="px-4 py-3 text-right">
+            <td 
+                className="px-4 py-3 text-right cursor-help"
+                onMouseEnter={(e) => handleMouseEnter(product.id, e)}
+                onMouseLeave={handleMouseLeave}
+            >
                 <div className="flex flex-col items-end gap-1.5">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded border text-xs font-bold whitespace-nowrap ${runwayBin.color}`}>
                         {runwayBin.label}
                     </span>
                     <div className="flex items-center gap-1">
-                        {(product as any)._trendData?.velocityChange < -0.2 && <TrendingDown className="w-3 h-3 text-red-400" />}
-                        {(product as any)._trendData?.velocityChange > 0.2 && <TrendingUp className="w-3 h-3 text-green-400" />}
+                        {product._trendData?.velocityChange && product._trendData.velocityChange < -0.2 && <TrendingDown className="w-3 h-3 text-red-400" />}
+                        {product._trendData?.velocityChange && product._trendData.velocityChange > 0.2 && <TrendingUp className="w-3 h-3 text-green-400" />}
                         <span className="text-xs font-semibold text-gray-700">
                             {product.averageDailySales.toFixed(1)} / day
                         </span>
@@ -192,36 +196,17 @@ const ProductRow = React.memo(({
                     </div>
                 ) : <span className="text-gray-300">-</span>}
             </td>
-            <td
-                className="px-4 py-3 cursor-help"
-                onMouseEnter={(e) => handleMouseEnter(product.id, e)}
-                onMouseLeave={handleMouseLeave}
-            >
-                <div className="flex flex-col gap-1">
-                    <div className={`flex items-center gap-2 font-semibold ${isOOS ? 'text-gray-500' :
-                        isMonitoring ? 'text-blue-600' :
-                            product.status === 'Critical' ? 'text-red-600' :
-                                product.status === 'Overstock' ? 'text-orange-600' : 'text-green-600'
-                        }`}>
-                        {isOOS && <AlertCircle className="w-4 h-4" />}
-                        {isMonitoring && <Clock className="w-4 h-4" />}
-                        {!isOOS && !isMonitoring && product.status === 'Critical' && <TrendingUp className="w-4 h-4" />}
-                        {!isOOS && !isMonitoring && product.status === 'Overstock' && <TrendingDown className="w-4 h-4" />}
-                        {!isOOS && !isMonitoring && product.status === 'Healthy' && <CheckCircle className="w-4 h-4" />}
-
-                        <span className="border-b border-dashed border-current pb-0.5 text-xs truncate max-w-[160px]">
-                            {product.recommendation}
-                        </span>
-                    </div>
-                    {isLowStock && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600 border border-red-200 self-start ml-6">
-                            Low Stock ({product.stockLevel})
-                        </span>
-                    )}
-                </div>
-            </td>
             <td className="px-4 py-3 text-right">
                 <div className="flex items-center justify-end gap-2">
+                    {onViewElasticity && (
+                        <button
+                            onClick={() => onViewElasticity(product)}
+                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1 rounded hover:bg-indigo-50"
+                            title="View Price Elasticity Chart"
+                        >
+                            <LineChart className="w-4 h-4" />
+                        </button>
+                    )}
                     {onEditAliases && (
                         <button
                             onClick={() => onEditAliases(product)}
@@ -237,7 +222,7 @@ const ProductRow = React.memo(({
     );
 });
 
-const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAliases, onViewShipments, dateLabels, pricingRules, themeColor }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onViewShipments, onViewElasticity, dateLabels, pricingRules, themeColor }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -473,73 +458,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
         setHoveredProduct(null);
     };
 
-    const handleExport = (platform: string = 'All') => {
-        const cleanChar = (val: any) => {
-            if (val === null || val === undefined) return '';
-            const str = String(val).replace(/[\r\n]+/g, ' ');
-            return `"${str.replace(/"/g, '""')}"`;
-        };
-
-        const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost', 'Return Rate %'];
-        const rows: (string | number)[][] = [];
-
-        filteredProducts.forEach(p => {
-            const commonData = [
-                cleanChar(p.sku),
-                cleanChar(p.name),
-                cleanChar(p.brand || ''),
-                cleanChar(p.category || ''),
-                cleanChar(p.subcategory || ''),
-                (p.currentPrice || 0).toFixed(2),
-                p.stockLevel,
-                p.averageDailySales.toFixed(2),
-                p.daysRemaining.toFixed(0),
-                cleanChar(p.status),
-                p.costPrice ? p.costPrice.toFixed(2) : '0.00',
-                (p.returnRate || 0).toFixed(2)
-            ];
-
-            if (platform === 'All') {
-                rows.push([cleanChar(p.sku), ...commonData]);
-            } else {
-                const normalize = (s: string) => s.toLowerCase().trim();
-                const targetPlatform = normalize(platform);
-                let channel = p.channels.find(c => normalize(c.platform) === targetPlatform);
-                if (!channel) {
-                    channel = p.channels.find(c => normalize(c.platform).includes(targetPlatform) || targetPlatform.includes(normalize(c.platform)));
-                }
-
-                if (channel && channel.skuAlias) {
-                    const aliases = channel.skuAlias.split(',').map(s => s.trim()).filter(Boolean);
-                    if (aliases.length > 0) {
-                        aliases.forEach(alias => {
-                            rows.push([cleanChar(alias), ...commonData]);
-                        });
-                    } else {
-                        rows.push([cleanChar(p.sku), ...commonData]);
-                    }
-                } else {
-                    rows.push([cleanChar(p.sku), ...commonData]);
-                }
-            }
-        });
-
-        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = url;
-        const filename = platform === 'All' ? 'inventory_export_master.csv' : `inventory_export_${platform.toLowerCase().replace(/\s+/g, '_')}.csv`;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-            if (document.body.contains(link)) document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 60000);
-        setIsExportMenuOpen(false);
-    };
+    // ... (rest of ProductList)
+    
+    // ... [Same Export logic as before] ...
+    
+    // ... [Same Render logic as before] ...
 
     const SortHeader = ({ label, sortKey, alignRight = false, subLabel, width }: { label: string, sortKey: SortKey, alignRight?: boolean, subLabel?: string, width?: string }) => {
         const isActive = sortConfig?.key === sortKey;
@@ -669,9 +592,82 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
         );
     };
 
+    // Helper for export logic (same as before)
+    const handleExport = (platform: string = 'All') => {
+        // ... (existing export logic from previous file content)
+        const cleanChar = (val: any) => {
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/[\r\n]+/g, ' ');
+            return `"${str.replace(/"/g, '""')}"`;
+        };
+
+        const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost', 'Return Rate %'];
+        const rows: (string | number)[][] = [];
+
+        filteredProducts.forEach(p => {
+            const commonData = [
+                cleanChar(p.sku),
+                cleanChar(p.name),
+                cleanChar(p.brand || ''),
+                cleanChar(p.category || ''),
+                cleanChar(p.subcategory || ''),
+                (p.currentPrice || 0).toFixed(2),
+                p.stockLevel,
+                p.averageDailySales.toFixed(2),
+                p.daysRemaining.toFixed(0),
+                cleanChar(p.status),
+                p.costPrice ? p.costPrice.toFixed(2) : '0.00',
+                (p.returnRate || 0).toFixed(2)
+            ];
+
+            if (platform === 'All') {
+                rows.push([cleanChar(p.sku), ...commonData]);
+            } else {
+                const normalize = (s: string) => s.toLowerCase().trim();
+                const targetPlatform = normalize(platform);
+                let channel = p.channels.find(c => normalize(c.platform) === targetPlatform);
+                if (!channel) {
+                    channel = p.channels.find(c => normalize(c.platform).includes(targetPlatform) || targetPlatform.includes(normalize(c.platform)));
+                }
+
+                if (channel && channel.skuAlias) {
+                    const aliases = channel.skuAlias.split(',').map(s => s.trim()).filter(Boolean);
+                    if (aliases.length > 0) {
+                        aliases.forEach(alias => {
+                            rows.push([cleanChar(alias), ...commonData]);
+                        });
+                    } else {
+                        rows.push([cleanChar(p.sku), ...commonData]);
+                    }
+                } else {
+                    rows.push([cleanChar(p.sku), ...commonData]);
+                }
+            }
+        });
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        const filename = platform === 'All' ? 'inventory_export_master.csv' : `inventory_export_${platform.toLowerCase().replace(/\s+/g, '_')}.csv`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+            if (document.body.contains(link)) document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 60000);
+        setIsExportMenuOpen(false);
+    };
+
+    // Calculate tooltip product safely
+    const tooltipProduct = hoveredProduct ? filteredProducts.find(p => p.id === hoveredProduct.id) : null;
+
     return (
         <div className="space-y-4">
-            {/* Simulation & Action Bar - Updated with bg-custom-glass */}
+            {/* Simulation & Action Bar */}
             <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative overflow-hidden backdrop-blur-custom">
                 <div className="flex items-center gap-6 w-full xl:w-auto">
                     <div className="flex items-center gap-2">
@@ -740,7 +736,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                 </div>
             </div>
 
-            {/* Filters Toolbar - Updated with bg-custom-glass */}
+            {/* Filters Toolbar */}
             <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg flex flex-col backdrop-blur-custom relative z-20">
                 <div className="p-4 space-y-4">
                     {/* Top Row: Search + Main Filters */}
@@ -756,7 +752,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                             />
                         </div>
 
-                        {/* Primary Filters - Grid/Flex for neat alignment */}
+                        {/* Primary Filters */}
                         <div className="flex flex-wrap gap-3 items-center">
                             <FilterDropdown
                                 label="Brand"
@@ -924,7 +920,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                                 <SortHeader label="Inventory" sortKey="stockLevel" alignRight width="w-[120px]" />
                                 <SortHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" alignRight width="w-[140px]" />
                                 <SortHeader label="Returns" sortKey="returnRate" alignRight width="w-[100px]" />
-                                <SortHeader label={isContextFiltered ? "Rec. (Filt.)" : "Recommendation"} sortKey="status" width="min-w-[180px]" />
                                 <th className="px-4 py-3 font-semibold text-right w-[60px]">Action</th>
                             </tr>
                         </thead>
@@ -934,9 +929,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                                     key={product.id}
                                     product={product}
                                     themeColor={themeColor}
-                                    onAnalyze={onAnalyze}
                                     onEditAliases={onEditAliases}
                                     onViewShipments={onViewShipments} // Pass handler down
+                                    onViewElasticity={onViewElasticity} // Pass Elasticity Handler
                                     hoveredProduct={hoveredProduct}
                                     handleMouseEnter={handleMouseEnter}
                                     handleMouseLeave={handleMouseLeave}
@@ -944,7 +939,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                             )}
                             {filteredProducts.length === 0 && (
                                 <tr>
-                                    <td colSpan={10} className="p-8 text-center text-gray-500">
+                                    <td colSpan={9} className="p-8 text-center text-gray-500">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <p>No products found matching your filters.</p>
                                             {products.length > 0 && !showInactive && (
@@ -981,7 +976,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                                     className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"
                                 >
                                     <option value={10}>10</option>
-                                    <option value={20}>20</option>
+                                    <option value={25}>25</option>
                                     <option value={50}>50</option>
                                     <option value={100}>100</option>
                                 </select>
@@ -1014,9 +1009,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAnalyze, onEditAl
                 )}
             </div>
 
-            {hoveredProduct && (
+            {tooltipProduct && hoveredProduct && (
                 <RecommendationTooltip
-                    product={filteredProducts.find(p => p.id === hoveredProduct.id)!}
+                    product={tooltipProduct}
                     rect={hoveredProduct.rect}
                 />
             )}

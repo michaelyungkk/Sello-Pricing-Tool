@@ -183,16 +183,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         else reader.readAsText(file);
     };
 
-    const getFridayWeekStart = (date: Date) => {
-        const d = new Date(date);
-        d.setHours(0, 0, 0, 0);
-        const day = d.getDay(); // 0 Sun, 1 Mon, 2 Tue, 3 Wed, 4 Thu, 5 Fri, 6 Sat
-        // Target: Friday (5).
-        const diff = (day + 2) % 7;
-        d.setDate(d.getDate() - diff);
-        return d.toISOString().split('T')[0];
-    };
-
     const analyzeData = (headers: string[], rows: any[][], map: ColumnMapping) => {
         try {
             const getIdx = (col?: string) => col ? headers.indexOf(col) : -1;
@@ -240,7 +230,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 totalQty: number,
                 totalRevenue: number,
                 netPmSum: number,
-                totalProfit: number, // New: Absolute profit for this daily bucket
+                totalProfit: number, // Absolute profit for this daily bucket
+                totalAds: number, // New: Aggregate daily ad spend
                 platform: string,
                 orderId?: string; // New: optional orderId
             }> = {};
@@ -290,10 +281,11 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 };
 
                 const rev = parseVal(revIdx);
+                const adsCost = parseVal(adsIdx);
 
-                // --- CRITICAL FIX: IGNORE ZERO/NEGATIVE REVENUE ---
-                // Strictly ignore non-sales (replacements, transfers) to fix Weighted Average Price.
-                if (rev <= 0.001) return;
+                // --- CRITICAL FIX: IGNORE ZERO REVENUE UNLESS IT'S AN AD-ONLY ROW ---
+                // We allow 0 revenue if there is ad spend attached (so we capture TACoS properly)
+                if (rev <= 0.001 && adsCost <= 0.001) return;
 
                 const rawSku = String(row[skuIdx]).trim();
                 const rawSkuUpper = rawSku.toUpperCase();
@@ -400,7 +392,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     // Aggregating Fees (only for included retail channels)
                     const postageCost = parseVal(postIdx);
                     item.fees.selling += parseVal(sellingIdx);
-                    item.fees.ads += parseVal(adsIdx);
+                    item.fees.ads += adsCost;
                     item.fees.postage += postageCost;
                     item.fees.extra += parseVal(extraIdx);
                     item.fees.other += parseVal(otherIdx);
@@ -448,6 +440,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                     // --- Daily Aggregation for History (INCLUSIVE: show all platforms) ---
                     // If Order ID exists, include it in key to prevent aggregation (keep transaction level)
+                    // If rev=0 and ads>0, it's a daily summary line usually, so no order ID.
                     const dailyKey = orderId
                         ? `${masterSku}|${dateStr}|${platformName}|${orderId}`
                         : `${masterSku}|${dateStr}|${platformName}`;
@@ -460,12 +453,15 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                             totalRevenue: 0,
                             netPmSum: 0,
                             totalProfit: 0,
+                            totalAds: 0,
                             platform: platformName,
                             orderId: orderId || undefined // Store orderId if present
                         };
                     }
                     dailyAggregated[dailyKey].totalQty += qty;
                     dailyAggregated[dailyKey].totalRevenue += rev;
+                    dailyAggregated[dailyKey].totalAds += adsCost;
+                    
                     const dailyWeight = Math.abs(qty) || 0;
                     dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);
 
@@ -512,14 +508,16 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     finalMargin = weight > 0 ? bucket.netPmSum / weight : 0;
                 }
 
-                if (bucket.totalQty !== 0) {
+                // Push payload if there was ANY activity (Qty OR Ad Spend)
+                if (bucket.totalQty !== 0 || bucket.totalAds > 0) {
                     const payload: HistoryPayload = {
                         sku: bucket.sku,
                         date: bucket.date,
                         price: isNaN(avgPrice) ? 0 : avgPrice,
                         velocity: isNaN(bucket.totalQty) ? 0 : bucket.totalQty,
                         platform: bucket.platform,
-                        orderId: bucket.orderId
+                        orderId: bucket.orderId,
+                        adsSpend: bucket.totalAds > 0 ? Number(bucket.totalAds.toFixed(4)) : undefined
                     };
 
                     if (!isNaN(finalMargin)) {
@@ -610,7 +608,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         price: avgPrice,
                         velocity: newVelocity,
                         margin: 0,
-                        platform: primaryPlatform
+                        platform: primaryPlatform,
+                        adsSpend: data.fees.ads > 0 ? data.fees.ads : undefined
                     });
                 }
             });

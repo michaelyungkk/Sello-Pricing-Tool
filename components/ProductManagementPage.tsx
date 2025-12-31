@@ -1,9 +1,9 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail } from '../types';
+import { createPortal } from 'react-dom';
+import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail, PriceChangeRecord } from '../types';
 import { TagSearchInput } from './TagSearchInput';
-import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart, PieChart as PieIcon, AlertTriangle, Activity } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
+import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart, PieChart as PieIcon, AlertTriangle, Activity, Megaphone, Coins, Wrench } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, ComposedChart, Legend } from 'recharts';
 import ProductList from './ProductList';
 
 interface ProductManagementPageProps {
@@ -11,15 +11,17 @@ interface ProductManagementPageProps {
     pricingRules: PricingRules;
     promotions?: PromotionEvent[];
     priceHistoryMap?: Map<string, PriceLog[]>;
+    priceChangeHistory?: PriceChangeRecord[]; // Added for Elasticity
     onOpenMappingModal: () => void;
     // Optional handlers left for compatibility if needed, but UI trigger removed
     onOpenSales?: () => void;
     onOpenInventory?: () => void;
     onOpenReturns?: () => void;
     onOpenCA?: () => void;
-    onAnalyze: (product: Product) => void;
+    onAnalyze: (product: Product, context?: string) => void;
     dateLabels: { current: string, last: string };
     onUpdateProduct?: (product: Product) => void;
+    onViewElasticity?: (product: Product) => void; // Added for Elasticity
     themeColor: string;
     headerStyle: React.CSSProperties;
 }
@@ -35,10 +37,12 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     pricingRules,
     promotions = [],
     priceHistoryMap = new Map(),
+    priceChangeHistory = [], // Default to empty array
     onOpenMappingModal,
     onAnalyze,
     dateLabels,
     onUpdateProduct,
+    onViewElasticity, // Handler passed from App
     themeColor,
     headerStyle
 }) => {
@@ -115,9 +119,9 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                 {activeTab === 'catalog' && (
                     <ProductList
                         products={products}
-                        onAnalyze={onAnalyze}
                         onEditAliases={setSelectedProductForDrawer}
                         onViewShipments={handleViewShipments}
+                        onViewElasticity={onViewElasticity}
                         dateLabels={dateLabels}
                         pricingRules={pricingRules}
                         themeColor={themeColor}
@@ -161,6 +165,13 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     );
 };
 
+interface ToxicPlatform {
+    name: string;
+    margin: number;
+    revenue: number;
+    velocity: number;
+}
+
 const DashboardView = ({
     products,
     priceHistoryMap,
@@ -172,34 +183,35 @@ const DashboardView = ({
     priceHistoryMap: Map<string, PriceLog[]>,
     pricingRules: PricingRules,
     themeColor: string,
-    onAnalyze: (product: Product) => void,
+    onAnalyze: (product: Product, context?: string) => void,
 }) => {
-    const [range, setRange] = useState<DateRange>('yesterday');
+    const [range, setRange] = useState<DateRange>('30d');
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [platformScope, setPlatformScope] = useState<string>('All');
-    const [selectedAlert, setSelectedAlert] = useState<AlertType>(null);
     
-    // Pagination for Workbench
+    // Slide State (0: Operations, 1: Financial, 2: Inventory)
+    const [currentSlide, setCurrentSlide] = useState(0);
+    
+    const [selectedAlert, setSelectedAlert] = useState<AlertType>(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 10;
+    const [itemsPerPage, setItemsPerPage] = useState(25);
 
     // Reset pagination on filter change
     useEffect(() => {
         setCurrentPage(1);
     }, [selectedAlert, range, platformScope]);
 
-    // Helper to get platform color from settings with fallback
-    const getPlatformColor = (configKey: string, fallback: string) => {
-        return pricingRules[configKey]?.color || fallback;
-    };
+    // --- CAROUSEL NAVIGATION ---
+    const nextSlide = () => setCurrentSlide(prev => (prev + 1) % 3);
+    const prevSlide = () => setCurrentSlide(prev => (prev - 1 + 3) % 3);
 
-    // --- 1. Filter Logic based on Range & Scope ---
-    const { processedData, periodLabel, dateRange } = useMemo(() => {
+    // --- DATA LOGIC ---
+    const { processedData, periodLabel, dateRange, periodDays } = useMemo(() => {
         let startDate = new Date();
         let endDate = new Date();
-        let days = 1;
+        let days = 30;
         let label = '';
 
         if (range === 'yesterday') {
@@ -209,12 +221,12 @@ const DashboardView = ({
             label = startDate.toLocaleDateString();
         } else if (range === '7d') {
             startDate.setDate(startDate.getDate() - 7);
-            endDate.setDate(endDate.getDate() - 1); // Exclude today
+            endDate.setDate(endDate.getDate() - 1);
             days = 7;
             label = 'Last 7 Days';
         } else if (range === '30d') {
             startDate.setDate(startDate.getDate() - 30);
-            endDate.setDate(endDate.getDate() - 1); // Exclude today
+            endDate.setDate(endDate.getDate() - 1);
             days = 30;
             label = 'Last 30 Days';
         } else if (range === 'custom') {
@@ -226,56 +238,88 @@ const DashboardView = ({
             label = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
         }
 
-        // Previous Period Logic (for velocity comparison)
         const prevStart = new Date(startDate);
         const prevEnd = new Date(startDate);
         prevEnd.setDate(prevEnd.getDate() - 1);
         prevStart.setDate(prevStart.getDate() - days);
 
-        // Convert to YYYY-MM-DD
         const sStr = startDate.toISOString().split('T')[0];
         const eStr = endDate.toISOString().split('T')[0];
         const psStr = prevStart.toISOString().split('T')[0];
         const peStr = prevEnd.toISOString().split('T')[0];
 
-        // Process Products
         const data = products.map(p => {
             const logs = priceHistoryMap.get(p.sku) || [];
-            
-            // Filter logs by Scope (Platform)
             const scopeLogs = platformScope === 'All' 
                 ? logs 
                 : logs.filter(l => l.platform === platformScope || (platformScope !== 'All' && l.platform?.includes(platformScope)));
 
-            // Calculate Period Stats
-            let curUnits = 0; let curRev = 0; let curProfit = 0;
+            let curUnits = 0; let curRev = 0; let curProfit = 0; let curAdSpend = 0;
             let prevUnits = 0;
+            const platformBreakdown: Record<string, { rev: number, profit: number, units: number }> = {};
 
             scopeLogs.forEach(l => {
                 const d = l.date.split('T')[0];
                 if (d >= sStr && d <= eStr) {
                     curUnits += l.velocity;
                     curRev += (l.velocity * l.price);
-                    // Use stored profit or estimate from margin
-                    curProfit += (l.profit || (l.velocity * l.price * (l.margin / 100)));
+                    
+                    const dailyAds = l.adsSpend !== undefined ? l.adsSpend : (p.adsFee || 0) * l.velocity;
+                    curAdSpend += dailyAds;
+
+                    if (l.profit !== undefined) {
+                        curProfit += l.profit;
+                    } else {
+                        curProfit += (l.velocity * l.price * (l.margin / 100));
+                    }
+
+                    // --- Platform Scanning Logic ---
+                    // Only active if Global scope is selected, to identify hidden risks
+                    if (platformScope === 'All') {
+                        const pName = l.platform || 'Unknown';
+                        if (!platformBreakdown[pName]) platformBreakdown[pName] = { rev: 0, profit: 0, units: 0 };
+                        
+                        platformBreakdown[pName].rev += (l.velocity * l.price);
+                        platformBreakdown[pName].units += l.velocity;
+                        if (l.profit !== undefined) {
+                            platformBreakdown[pName].profit += l.profit;
+                        } else {
+                            platformBreakdown[pName].profit += (l.velocity * l.price * (l.margin / 100));
+                        }
+                    }
+
                 } else if (d >= psStr && d <= peStr) {
                     prevUnits += l.velocity;
                 }
             });
 
-            // Calculate Net Margin % for the period
-            // If Revenue is 0, we can't calc margin from sales. 
-            // Fallback: Use Product's current calculated margin if available, otherwise 0.
             const netMargin = curRev > 0 ? (curProfit / curRev) * 100 : 0;
-
-            // Velocity Change
             const velocityChange = prevUnits > 0 ? ((curUnits - prevUnits) / prevUnits) * 100 : (curUnits > 0 ? 100 : 0);
-
-            // Platform Specific Stock/Price (Context)
+            
             let displayPrice = p.currentPrice;
             if (platformScope !== 'All') {
                 const channel = p.channels.find(c => c.platform === platformScope);
                 if (channel && channel.price) displayPrice = channel.price;
+            }
+
+            // Determine toxic platforms
+            const toxicPlatforms: ToxicPlatform[] = [];
+            if (platformScope === 'All') {
+                Object.entries(platformBreakdown).forEach(([plat, stats]) => {
+                    if (stats.rev > 0) {
+                        const m = (stats.profit / stats.rev) * 100;
+                        // Toxic Threshold: < 5% Margin AND significant revenue (> £10)
+                        if (m < 5 && stats.rev > 10) {
+                            toxicPlatforms.push({
+                                name: plat,
+                                margin: m,
+                                revenue: stats.rev,
+                                velocity: stats.units / days
+                            });
+                        }
+                    }
+                });
+                toxicPlatforms.sort((a,b) => a.margin - b.margin); // Worst margins first
             }
 
             return {
@@ -283,113 +327,149 @@ const DashboardView = ({
                 periodUnits: curUnits,
                 periodRevenue: curRev,
                 periodProfit: curProfit,
+                periodAdSpend: curAdSpend,
                 periodMargin: netMargin,
                 prevPeriodUnits: prevUnits,
                 velocityChange,
-                displayPrice
+                displayPrice,
+                toxicPlatforms // Array of toxic platforms
             };
         });
 
-        return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate } };
+        return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, periodDays: days };
     }, [products, priceHistoryMap, range, customStart, customEnd, platformScope]);
 
-    // --- 2. Alert Buckets Logic ---
-    const alerts = useMemo(() => {
-        return {
-            // Margin Thieves: Active Items with < 10% Margin
-            margin: processedData.filter(p => p.periodUnits > 0 && p.periodMargin < 10),
-            
-            // Velocity Crashes: Active (prev) items dropped > 30%
-            velocity: processedData.filter(p => p.prevPeriodUnits > 2 && p.velocityChange < -30),
-            
-            // Stock Risks: Runway < Lead Time (Global Stock used as fallback if platform stock not specific)
-            stock: processedData.filter(p => {
-                const dailyVel = p.periodUnits / (range === 'yesterday' ? 1 : range === '7d' ? 7 : 30); // Approx
-                if (dailyVel <= 0) return false;
-                const runway = p.stockLevel / dailyVel;
-                return runway < p.leadTimeDays && p.stockLevel > 0;
-            }),
+    // --- ALERTS (SLIDE 1) ---
+    const alerts = useMemo(() => ({
+        // Modified Margin Logic: Global < 10% OR Specific Toxic Platform Detected
+        margin: processedData.filter(p => (p.periodUnits > 0 && p.periodMargin < 10) || p.toxicPlatforms.length > 0),
+        velocity: processedData.filter(p => p.prevPeriodUnits > 2 && p.velocityChange < -30),
+        stock: processedData.filter(p => {
+            const dailyVel = p.periodUnits / (range === 'yesterday' ? 1 : range === '7d' ? 7 : 30);
+            if (dailyVel <= 0) return false;
+            const runway = p.stockLevel / dailyVel;
+            return runway < p.leadTimeDays && p.stockLevel > 0;
+        }),
+        dead: processedData.filter(p => p.stockLevel * (p.costPrice || 0) > 200 && p.periodUnits === 0)
+    }), [processedData, range]);
 
-            // Dead Stock: > £200 Value AND 0 Sales in Period
-            dead: processedData.filter(p => p.stockLevel * (p.costPrice || 0) > 200 && p.periodUnits === 0)
-        };
-    }, [processedData, range]);
-
-    // --- 3. Workbench Data ---
     const workbenchData = useMemo(() => {
-        if (!selectedAlert) {
-            // Default: Top Movers by Revenue
-            return processedData.filter(p => p.periodRevenue > 0).sort((a, b) => b.periodRevenue - a.periodRevenue).slice(0, 50);
-        }
+        if (!selectedAlert) return processedData.filter(p => p.periodRevenue > 0).sort((a, b) => b.periodRevenue - a.periodRevenue).slice(0, 50);
         return alerts[selectedAlert].sort((a, b) => {
-            if (selectedAlert === 'margin') return a.periodMargin - b.periodMargin; // Lowest margin first
-            if (selectedAlert === 'velocity') return a.velocityChange - b.velocityChange; // Biggest drop first
-            if (selectedAlert === 'stock') return a.stockLevel - b.stockLevel; // Lowest stock first
-            if (selectedAlert === 'dead') return (b.stockLevel * (b.costPrice || 0)) - (a.stockLevel * (a.costPrice || 0)); // Highest value first
+            if (selectedAlert === 'margin') return a.periodMargin - b.periodMargin; // Sort by global margin primarily
+            if (selectedAlert === 'velocity') return a.velocityChange - b.velocityChange;
+            if (selectedAlert === 'stock') return a.stockLevel - b.stockLevel;
+            if (selectedAlert === 'dead') return (b.stockLevel * (b.costPrice || 0)) - (a.stockLevel * (a.costPrice || 0));
             return 0;
         });
     }, [selectedAlert, alerts, processedData]);
 
-    const totalPages = Math.ceil(workbenchData.length / ITEMS_PER_PAGE);
-    const paginatedData = workbenchData.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+    const paginatedData = workbenchData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const totalPages = Math.ceil(workbenchData.length / itemsPerPage);
 
-    // --- 4. Market Intelligence Data ---
-    const platformTrendData = useMemo(() => {
-        // Daily breakdown for the selected range
+    const handleToxicAnalysis = (product: any, toxic: ToxicPlatform) => {
+        // Construct a temporary context-aware product for the AI
+        // This overrides global stats with platform-specific stats
+        
+        // Find channel price
+        const channel = product.channels.find((c: any) => c.platform === toxic.name);
+        const channelPrice = channel ? channel.price : product.currentPrice;
+
+        const contextProduct = {
+            ...product,
+            platform: toxic.name, // Force platform context
+            currentPrice: channelPrice || product.currentPrice,
+            averageDailySales: toxic.velocity, // Use specific platform velocity
+            // We keep stockLevel global as stock is usually shared, but velocity is specific
+        };
+        
+        onAnalyze(contextProduct, 'margin');
+    };
+
+    const handleExport = () => {
+        const clean = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+        const headers = ['SKU', 'Name', 'Price (Inc VAT)', 'Period Sales', 'Period Profit', 'Net Margin %', 'Velocity Change %', 'Toxic Platform Info'];
+        
+        const rows = workbenchData.map(p => [
+            clean(p.sku),
+            clean(p.name),
+            (p.displayPrice * VAT).toFixed(2),
+            p.periodRevenue.toFixed(2),
+            p.periodProfit.toFixed(2),
+            p.periodMargin.toFixed(2) + '%',
+            p.velocityChange.toFixed(0) + '%',
+            p.toxicPlatforms && p.toxicPlatforms.length > 0 ? clean(`${p.toxicPlatforms[0].name}: ${p.toxicPlatforms[0].margin.toFixed(1)}%`) : ''
+        ]);
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        const filename = `decision_engine_export_${selectedAlert || 'overview'}_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => { if (document.body.contains(link)) document.body.removeChild(link); }, 60000);
+    };
+
+    // ... [FinancialStats and InventoryStats useMemo remain unchanged]
+    // Re-included for completeness of the component file structure
+    const financialStats = useMemo(() => {
+        const totalRevenue = processedData.reduce((acc, p) => acc + p.periodRevenue, 0);
+        const totalProfit = processedData.reduce((acc, p) => acc + p.periodProfit, 0);
+        const totalAdSpend = processedData.reduce((acc, p) => acc + p.periodAdSpend, 0);
+        const tacos = totalRevenue > 0 ? (totalAdSpend / totalRevenue) * 100 : 0;
         const days = [];
         for (let d = new Date(dateRange.start); d <= dateRange.end; d.setDate(d.getDate() + 1)) {
             days.push(new Date(d).toISOString().split('T')[0]);
         }
-
-        return days.map(day => {
-            const entry: any = { day: day.slice(5) }; // MM-DD
-            
+        const chartData = days.map(day => {
+            let dayRev = 0; let dayAds = 0; let dayProfit = 0;
             products.forEach(p => {
                 const logs = priceHistoryMap.get(p.sku) || [];
                 logs.filter(l => l.date.startsWith(day)).forEach(l => {
-                    const plat = l.platform?.toLowerCase() || '';
-                    let key = 'Others';
-                    
-                    if (plat.includes('amazon') && plat.includes('fbm')) key = 'Amazon FBM';
-                    else if (plat.includes('ebay')) key = 'eBay';
-                    else if (plat.includes('the range')) key = 'The Range';
-                    else if (plat.includes('tesco')) key = 'Tesco';
-                    else if (plat.includes('debenhams')) key = 'Debenhams';
-                    else if (plat.includes('wayfair')) key = 'Wayfair';
-                    
-                    // Note: Amazon FBA and others fall into 'Others' as per instruction to group the rest
-                    
-                    entry[key] = (entry[key] || 0) + (l.price * l.velocity);
+                    dayRev += (l.price * l.velocity);
+                    dayAds += (l.adsSpend !== undefined ? l.adsSpend : (p.adsFee || 0) * l.velocity);
+                    if (l.profit !== undefined) dayProfit += l.profit;
+                    else dayProfit += (l.velocity * l.price * (l.margin / 100));
                 });
             });
-            return entry;
+            return { day: day.slice(5), revenue: dayRev, ads: dayAds, profit: dayProfit };
         });
-    }, [products, priceHistoryMap, dateRange]);
+        return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
+    }, [processedData, dateRange, priceHistoryMap, products]);
 
-    const categoryProfitData = useMemo(() => {
-        const catMap: Record<string, number> = {};
+    const inventoryStats = useMemo(() => {
+        let totalStockValue = 0; let deadStockValue = 0; let lostRevenue = 0;
+        const runwayDistribution = { '< 2w': 0, '2-4w': 0, '4-12w': 0, '12w+': 0, 'OOS': 0 };
         processedData.forEach(p => {
-            const cat = p.category || 'Uncategorized';
-            catMap[cat] = (catMap[cat] || 0) + p.periodProfit;
+            const stockVal = p.stockLevel * (p.costPrice || 0);
+            totalStockValue += stockVal;
+            if (p.periodUnits === 0) deadStockValue += stockVal;
+            const dailyVel = p.periodUnits / periodDays;
+            const runway = dailyVel > 0 ? p.stockLevel / dailyVel : 999;
+            if (p.stockLevel <= 0) runwayDistribution['OOS']++;
+            else if (runway < 14) runwayDistribution['< 2w']++;
+            else if (runway < 28) runwayDistribution['2-4w']++;
+            else if (runway < 84) runwayDistribution['4-12w']++;
+            else runwayDistribution['12w+']++;
+            if (runway < p.leadTimeDays && dailyVel > 0) {
+                const daysOOS = p.leadTimeDays - runway;
+                lostRevenue += (daysOOS * dailyVel * (p.currentPrice || 0));
+            }
         });
-        return Object.entries(catMap)
-            .map(([name, profit]) => ({ name, profit: Math.round(profit) }))
-            .sort((a, b) => b.profit - a.profit)
-            .slice(0, 8); // Top 8
-    }, [processedData]);
-
-    const formattedDateRange = useMemo(() => {
-        const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-        return `${dateRange.start.toLocaleDateString('en-GB', options)} - ${dateRange.end.toLocaleDateString('en-GB', options)}`;
-    }, [dateRange]);
+        const chartData = Object.entries(runwayDistribution).map(([name, value]) => ({ name, value }));
+        return { totalStockValue, deadStockValue, lostRevenue, chartData };
+    }, [processedData, range]);
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
             
             {/* 1. CONTROL DECK */}
             <div className="flex flex-col md:flex-row justify-between items-center bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm gap-4 relative z-30">
                 <div className="flex items-center gap-2">
-                    {/* Platform Scope */}
                     <div className="relative">
                         <select 
                             value={platformScope} 
@@ -404,7 +484,6 @@ const DashboardView = ({
 
                     <div className="h-8 w-px bg-gray-300 mx-2"></div>
 
-                    {/* Date Picker */}
                     <div className="relative">
                         <button
                             onClick={() => setShowDatePicker(!showDatePicker)}
@@ -436,222 +515,341 @@ const DashboardView = ({
                         ))}
                     </div>
 
-                    {/* Date Range Label - Added here */}
                     <div className="ml-3 flex flex-col justify-center">
                         <span className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-0.5">Period</span>
                         <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
-                            {formattedDateRange}
+                            {periodLabel}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* 2. ALERT CARDS (Decision Layer) */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <AlertCard 
-                    title="Margin Thieves" 
-                    count={alerts.margin.length} 
-                    icon={AlertTriangle} 
-                    color="red" 
-                    isActive={selectedAlert === 'margin'} 
-                    onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} 
-                    desc="Net Margin < 10%"
-                />
-                <AlertCard 
-                    title="Velocity Crashes" 
-                    count={alerts.velocity.length} 
-                    icon={TrendingDown} 
-                    color="amber" 
-                    isActive={selectedAlert === 'velocity'} 
-                    onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')}
-                    desc="Vol. Drop > 30%" 
-                />
-                <AlertCard 
-                    title="Stockout Risk" 
-                    count={alerts.stock.length} 
-                    icon={Clock} 
-                    color="purple" 
-                    isActive={selectedAlert === 'stock'} 
-                    onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} 
-                    desc="Runway < Lead Time"
-                />
-                <AlertCard 
-                    title="Dead Stock" 
-                    count={alerts.dead.length} 
-                    icon={Package} 
-                    color="gray" 
-                    isActive={selectedAlert === 'dead'} 
-                    onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} 
-                    desc=">£200 Value, 0 Sales"
-                />
-            </div>
-
-            {/* 3. ACTION WORKBENCH */}
-            <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg overflow-hidden flex flex-col min-h-[400px]">
-                <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
-                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                        {selectedAlert ? (
-                            <>
-                                <span className={`w-2 h-2 rounded-full ${selectedAlert === 'margin' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
-                                Priority Actions: {selectedAlert === 'margin' ? 'Fix Margins' : selectedAlert === 'velocity' ? 'Investigate Drops' : selectedAlert === 'stock' ? 'Replenish' : 'Liquidation'}
-                            </>
-                        ) : (
-                            <><Activity className="w-4 h-4 text-indigo-500" /> Top Movers (Overview)</>
-                        )}
-                    </h3>
-                    <span className="text-xs text-gray-500">{workbenchData.length} SKUs require attention</span>
-                </div>
-                
-                <div className="flex-1 overflow-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50 sticky top-0 z-10 backdrop-blur-sm">
-                            <tr>
-                                <th className="p-4">Product</th>
-                                <th className="p-4 text-right">Price (Inc VAT)</th>
-                                {selectedAlert === 'margin' && <th className="p-4 text-right">Cost (Inc VAT)</th>}
-                                <th className="p-4 text-right">{selectedAlert === 'velocity' ? 'Prev Qty' : 'Period Sales'}</th>
-                                <th className="p-4 text-right">{selectedAlert === 'velocity' ? 'Curr Qty' : 'Period Profit'}</th>
-                                <th className="p-4 text-right">
-                                    {selectedAlert === 'velocity' ? '% Change' : 'Net Margin %'}
-                                </th>
-                                <th className="p-4 text-right">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100/50">
-                            {paginatedData.map(p => (
-                                <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
-                                    <td className="p-4">
-                                        <div className="font-bold text-gray-900">{p.sku}</div>
-                                        <div className="text-xs text-gray-500 truncate max-w-[200px]">{p.name}</div>
-                                    </td>
-                                    <td className="p-4 text-right">£{(p.displayPrice * VAT).toFixed(2)}</td>
-                                    
-                                    {selectedAlert === 'margin' && (
-                                        <td className="p-4 text-right text-gray-500">£{((p.costPrice || 0) * VAT).toFixed(2)}</td>
-                                    )}
-
-                                    <td className="p-4 text-right text-gray-600">
-                                        {selectedAlert === 'velocity' ? p.prevPeriodUnits : `£${p.periodRevenue.toFixed(0)}`}
-                                    </td>
-                                    <td className="p-4 text-right font-medium">
-                                        {selectedAlert === 'velocity' ? p.periodUnits : `£${p.periodProfit.toFixed(0)}`}
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        {selectedAlert === 'velocity' ? (
-                                            <span className="text-red-600 font-bold">{p.velocityChange.toFixed(0)}%</span>
-                                        ) : (
-                                            <span className={`font-bold ${p.periodMargin < 10 ? 'text-red-600' : 'text-green-600'}`}>
-                                                {p.periodMargin.toFixed(1)}%
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <button 
-                                            onClick={() => onAnalyze(p)}
-                                            className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors"
-                                        >
-                                            Analyze AI
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {workbenchData.length === 0 && (
-                                <tr>
-                                    <td colSpan={7} className="p-12 text-center text-gray-400 italic">
-                                        Excellent work! No items match this alert criteria.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+            {/* CAROUSEL WRAPPER */}
+            <div>
+                {/* SLIDE INDICATORS */}
+                <div className="flex justify-center gap-2 mb-4">
+                    {[0, 1, 2].map(idx => (
+                        <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${currentSlide === idx ? 'w-8 bg-indigo-600' : 'w-2 bg-gray-300'}`} />
+                    ))}
                 </div>
 
-                {/* Pagination Footer */}
-                {workbenchData.length > ITEMS_PER_PAGE && (
-                    <div className="p-3 border-t border-custom-glass bg-gray-50/50 flex items-center justify-between">
-                        <div className="text-xs text-gray-500">
-                            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, workbenchData.length)} of {workbenchData.length}
+                {/* SLIDE 1: OPERATIONS */}
+                {currentSlide === 0 && (
+                    <div className="animate-in fade-in slide-in-from-right-8 duration-300">
+                        <div className="flex items-stretch gap-4 mb-6">
+                            <button 
+                                onClick={prevSlide}
+                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
+                            >
+                                <ChevronLeft className="w-6 h-6" />
+                            </button>
+                            {/* ALERT CARDS */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
+                                <AlertCard title="Margin Thieves" count={alerts.margin.length} icon={AlertTriangle} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc="Net Margin < 10% (Scan all)" />
+                                <AlertCard title="Velocity Crashes" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc="Vol. Drop > 30%" />
+                                <AlertCard title="Stockout Risk" count={alerts.stock.length} icon={Clock} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Runway < Lead Time" />
+                                <AlertCard title="Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc=">£200 Value, 0 Sales" />
+                            </div>
+                            <button 
+                                onClick={nextSlide}
+                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
+                            >
+                                <ChevronRight className="w-6 h-6" />
+                            </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                className="p-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+
+                        {/* WORKBENCH TABLE */}
+                        <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg overflow-hidden flex flex-col min-h-[400px]">
+                            <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
+                                <div className="flex items-center gap-4">
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                        {selectedAlert ? (
+                                            <>
+                                                <span className={`w-2 h-2 rounded-full ${selectedAlert === 'margin' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                                                Priority Actions: {selectedAlert === 'margin' ? 'Fix Margins' : selectedAlert === 'velocity' ? 'Investigate Drops' : selectedAlert === 'stock' ? 'Replenish' : 'Liquidation'}
+                                            </>
+                                        ) : (
+                                            <><Activity className="w-4 h-4 text-indigo-500" /> Top Movers (Overview)</>
+                                        )}
+                                    </h3>
+                                    <span className="text-xs text-gray-500">{workbenchData.length} SKUs require attention</span>
+                                </div>
+                                <button
+                                    onClick={handleExport}
+                                    className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"
+                                    title="Export current view to CSV"
+                                >
+                                    <Download className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <div className="flex-1 overflow-auto">
+                                <table className="w-full text-left text-sm whitespace-nowrap">
+                                    <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50 sticky top-0 z-10 backdrop-blur-sm">
+                                        <tr>
+                                            <th className="p-4">Product</th>
+                                            <th className="p-4 text-right">Price (Inc VAT)</th>
+                                            
+                                            {selectedAlert === null && <>
+                                                <th className="p-4 text-right">CA Price</th>
+                                                <th className="p-4 text-right">Qty Sold</th>
+                                                <th className="p-4 text-right">Period Sales</th>
+                                                <th className="p-4 text-right">Period Profit</th>
+                                                <th className="p-4 text-right">Net Margin %</th>
+                                                <th className="p-4 text-right">Inventory</th>
+                                            </>}
+                                            
+                                            {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && <>
+                                                {selectedAlert === 'margin' && <th className="p-4 text-right">Cost (Inc VAT)</th>}
+                                                <th className="p-4 text-right">Period Sales</th>
+                                                <th className="p-4 text-right">Period Profit</th>
+                                                <th className="p-4 text-right">Net Margin %</th>
+                                            </>}
+
+                                            {selectedAlert === 'velocity' && <>
+                                                <th className="p-4 text-right">Prev Qty</th>
+                                                <th className="p-4 text-right">Curr Qty</th>
+                                                <th className="p-4 text-right">% Change</th>
+                                            </>}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100/50">
+                                        {paginatedData.map(p => (
+                                            <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                                <td className="p-4">
+                                                    <div className="font-bold text-gray-900">{p.sku}</div>
+                                                    <div className="text-xs text-gray-500 truncate max-w-[200px]">{p.name}</div>
+                                                </td>
+                                                <td className="p-4 text-right">£{(p.displayPrice * VAT).toFixed(2)}</td>
+                                                
+                                                {/* Top Movers Columns */}
+                                                {selectedAlert === null && (
+                                                    <>
+                                                        <td className="p-4 text-right font-bold text-purple-600">
+                                                            {p.caPrice ? `£${(p.caPrice * VAT).toFixed(2)}` : '-'}
+                                                        </td>
+                                                        <td className="p-4 text-right font-medium text-gray-800">{p.periodUnits}</td>
+                                                        <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
+                                                        <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
+                                                        <td className="p-4 text-right">
+                                                            <span className={`font-bold ${p.periodMargin < 10 ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
+                                                        </td>
+                                                        <td className="p-4 text-right font-bold text-gray-800">{p.stockLevel}</td>
+                                                    </>
+                                                )}
+
+                                                {/* Margin/Stock/Dead Alert Columns */}
+                                                {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && (
+                                                    <>
+                                                        {selectedAlert === 'margin' && <td className="p-4 text-right text-gray-500">£{((p.costPrice || 0) * VAT).toFixed(2)}</td>}
+                                                        <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
+                                                        <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
+                                                        <td className="p-4 text-right">
+                                                            <div className="flex flex-col items-end gap-1">
+                                                                <span className={`font-bold ${p.periodMargin < 10 ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
+                                                                {selectedAlert === 'margin' && p.toxicPlatforms && p.toxicPlatforms.length > 0 && (
+                                                                    <button
+                                                                        onClick={() => handleToxicAnalysis(p, p.toxicPlatforms[0])}
+                                                                        className="flex items-center gap-1 text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded border border-red-200 font-bold hover:bg-red-100 hover:border-red-300 transition-all shadow-sm"
+                                                                        title={`Click to analyze ${p.toxicPlatforms[0].name} specifically`}
+                                                                    >
+                                                                        <Wrench className="w-3 h-3" />
+                                                                        {p.toxicPlatforms[0].name}: {p.toxicPlatforms[0].margin.toFixed(1)}%
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </>
+                                                )}
+
+                                                {/* Velocity Alert Columns */}
+                                                {selectedAlert === 'velocity' && (
+                                                    <>
+                                                        <td className="p-4 text-right text-gray-600">{p.prevPeriodUnits}</td>
+                                                        <td className="p-4 text-right font-medium">{p.periodUnits}</td>
+                                                        <td className="p-4 text-right">
+                                                            <span className="text-red-600 font-bold">{p.velocityChange.toFixed(0)}%</span>
+                                                        </td>
+                                                    </>
+                                                )}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                           {workbenchData.length > itemsPerPage && (
+                                <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <p className="text-sm text-gray-700">
+                                                Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, workbenchData.length)}</span> of <span className="font-medium">{workbenchData.length}</span> results
+                                            </p>
+                                            <select
+                                                value={itemsPerPage}
+                                                onChange={(e) => {
+                                                    setItemsPerPage(Number(e.target.value));
+                                                    setCurrentPage(1);
+                                                }}
+                                                className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"
+                                            >
+                                                <option value={10}>10</option>
+                                                <option value={25}>25</option>
+                                                <option value={50}>50</option>
+                                                <option value={100}>100</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            {totalPages > 1 && (
+                                                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                                    <button
+                                                        onClick={() => setCurrentPage(p => Math.max(1, p-1))}
+                                                        disabled={currentPage === 1}
+                                                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                                    >
+                                                        <ChevronLeft className="h-5 w-5" />
+                                                    </button>
+                                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                                        Page {currentPage} of {totalPages}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))}
+                                                        disabled={currentPage === totalPages}
+                                                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                                    >
+                                                        <ChevronRight className="h-5 w-5" />
+                                                    </button>
+                                                </nav>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* SLIDE 2: FINANCIAL HEALTH */}
+                {currentSlide === 1 && (
+                    <div className="animate-in fade-in slide-in-from-right-8 duration-300">
+                        <div className="flex items-stretch gap-4 mb-6">
+                             <button 
+                                onClick={prevSlide}
+                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
                             >
-                                <ChevronLeft className="w-4 h-4" />
+                                <ChevronLeft className="w-6 h-6" />
                             </button>
-                            <span className="text-xs font-medium text-gray-700">
-                                Page {currentPage} of {totalPages}
-                            </span>
-                            <button
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages}
-                                className="p-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            {/* FINANCIAL METRICS */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
+                                <MetricCard title="Total Revenue" value={`£${financialStats.totalRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={DollarSign} color="blue" />
+                                <MetricCard title="True Net Profit" value={`£${financialStats.totalProfit.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Coins} color="green" />
+                                <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Megaphone} color="purple" />
+                                <MetricCard title="TACoS %" value={`${financialStats.tacos.toFixed(1)}%`} icon={PieIcon} color="orange" desc="Total Advertising Cost of Sales" />
+                            </div>
+                             <button 
+                                onClick={nextSlide}
+                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
                             >
-                                <ChevronRight className="w-4 h-4" />
+                                <ChevronRight className="w-6 h-6" />
                             </button>
+                        </div>
+
+                        {/* COMPOSED CHART */}
+                        <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <Activity className="w-4 h-4 text-blue-600" /> Financial Performance
+                            </h3>
+                            <div className="flex-1 min-h-0 -ml-2">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={financialStats.chartData}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                        <XAxis dataKey="day" tick={{fontSize: 10}} />
+                                        <YAxis yAxisId="left" tick={{fontSize: 10}} tickFormatter={(val) => `£${val}`} />
+                                        <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10}} tickFormatter={(val) => `£${val}`} />
+                                        <RechartsTooltip 
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                            formatter={(value: number) => '£' + value.toLocaleString()}
+                                        />
+                                        <Legend wrapperStyle={{ fontSize: '12px' }} />
+                                        <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#93c5fd" barSize={20} radius={[4, 4, 0, 0]} />
+                                        <Line yAxisId="right" type="monotone" dataKey="ads" name="Ad Spend" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                                        <Line yAxisId="right" type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={2} dot={false} />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* SLIDE 3: INVENTORY RISK */}
+                {currentSlide === 2 && (
+                    <div className="animate-in fade-in slide-in-from-right-8 duration-300">
+                        <div className="flex items-stretch gap-4 mb-6">
+                            <button 
+                                onClick={prevSlide}
+                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
+                            >
+                                <ChevronLeft className="w-6 h-6" />
+                            </button>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                                <MetricCard title="Total Stock Value" value={`£${inventoryStats.totalStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Package} color="blue" desc="Based on Cost Price" />
+                                <MetricCard title="Dead Stock Value" value={`£${inventoryStats.deadStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={AlertTriangle} color="gray" desc="0 Sales in Period" />
+                                <MetricCard title="Projected Lost Revenue" value={`£${inventoryStats.lostRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={TrendingDown} color="red" desc="Due to Stockouts" />
+                            </div>
+                             <button 
+                                onClick={nextSlide}
+                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
+                            >
+                                <ChevronRight className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-purple-600" /> Stock Runway Distribution
+                            </h3>
+                            <div className="flex-1 min-h-0 -ml-2">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={inventoryStats.chartData} layout="horizontal">
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                                        <XAxis dataKey="name" tick={{fontSize: 12, fontWeight: 600}} />
+                                        <YAxis tick={{fontSize: 10}} />
+                                        <RechartsTooltip cursor={{fill: 'transparent'}} />
+                                        <Bar dataKey="value" name="SKU Count" fill="#818cf8" radius={[4, 4, 0, 0]} barSize={40}>
+                                            {inventoryStats.chartData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.name === 'OOS' || entry.name === '< 2w' ? '#f87171' : entry.name === '2-4w' ? '#fbbf24' : '#34d399'} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
                 )}
             </div>
+        </div>
+    );
+};
 
-            {/* 4. MARKET INTELLIGENCE (Charts) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Platform Trends */}
-                <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[350px]">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-blue-600" /> Platform Revenue Trend
-                    </h3>
-                    <div className="flex-1 min-h-0 -ml-2">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={platformTrendData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                <XAxis dataKey="day" tick={{fontSize: 10}} />
-                                <YAxis 
-                                    tick={{fontSize: 10}} 
-                                    tickFormatter={(value) => `£${value.toLocaleString()}`}
-                                />
-                                <RechartsTooltip 
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                    formatter={(value: number) => '£' + value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                />
-                                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                                {/* Colors are dynamically fetched from settings or fallback to standard ones */}
-                                <Line type="monotone" dataKey="Amazon FBM" stroke={getPlatformColor('Amazon(UK) FBM', '#E68A00')} strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="eBay" stroke={getPlatformColor('eBay', '#E53238')} strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="The Range" stroke={getPlatformColor('The Range', '#2C3E50')} strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="Tesco" stroke={getPlatformColor('Tesco', '#00539F')} strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="Debenhams" stroke={getPlatformColor('Debenhams', '#1B4D3E')} strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="Wayfair" stroke={getPlatformColor('Wayfair', '#7F187F')} strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="Others" stroke="#9CA3AF" strokeWidth={2} dot={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
+// ... [AlertCard, ShipmentsView, PriceMatrixView, AliasDrawer remain unchanged]
+const MetricCard = ({ title, value, icon: Icon, color, desc }: any) => {
+    const colorStyles = {
+        blue: 'bg-blue-50 text-blue-700',
+        green: 'bg-green-50 text-green-700',
+        purple: 'bg-purple-50 text-purple-700',
+        orange: 'bg-orange-50 text-orange-700',
+        red: 'bg-red-50 text-red-700',
+        gray: 'bg-gray-50 text-gray-700'
+    };
 
-                {/* Category Profit */}
-                <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[350px]">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <PieIcon className="w-4 h-4 text-green-600" /> Net Profit by Category
-                    </h3>
-                    <div className="flex-1 min-h-0 -ml-2">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={categoryProfitData} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                                <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 10}} />
-                                <RechartsTooltip 
-                                    cursor={{fill: 'transparent'}}
-                                    formatter={(val: number) => [`£${val.toLocaleString()}`, 'Net Profit']}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                />
-                                <Bar dataKey="profit" fill={themeColor} radius={[0, 4, 4, 0]} barSize={20} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
+    return (
+        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-start justify-between">
+            <div>
+                <span className="text-xs font-bold text-gray-500 uppercase">{title}</span>
+                <div className="text-2xl font-bold text-gray-900 mt-1">{value}</div>
+                {desc && <div className="text-[10px] text-gray-400 mt-1">{desc}</div>}
             </div>
-
+            <div className={`p-2 rounded-lg ${colorStyles[color as keyof typeof colorStyles]}`}>
+                <Icon className="w-5 h-5" />
+            </div>
         </div>
     );
 };
@@ -689,7 +887,11 @@ const AlertCard = ({ title, count, icon: Icon, color, isActive, onClick, desc }:
 };
 
 const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }: { products: Product[], themeColor: string, initialTags?: string[], onTagsChange?: (tags: string[]) => void }) => {
+    // ... [Content identical to previous version, omitted for brevity but assumed present]
+    // Re-implementing for correctness in output
     const [inputValue, setInputValue] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(25);
     const searchTags = initialTags;
     const updateTags = (newTags: string[]) => { if (onTagsChange) onTagsChange(newTags); };
 
@@ -707,7 +909,6 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
             }
         });
         return Object.values(map).sort((a:any, b:any) => {
-            // Sort dates ascending, pushing empty ETAs to the end
             if (!a.eta && !b.eta) return 0;
             if (!a.eta) return 1;
             if (!b.eta) return -1;
@@ -719,9 +920,7 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
         const items: any[] = [];
         products.forEach(p => {
             if (p.shipments) {
-                // Collect aliases for this product
                 const aliases = p.channels.flatMap(c => c.skuAlias ? c.skuAlias.split(',') : []).map(a => a.trim().toLowerCase());
-                
                 p.shipments.forEach(s => {
                     items.push({ 
                         id: `${p.sku}-${s.containerId}`, 
@@ -731,7 +930,7 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
                         status: s.status, 
                         eta: s.eta, 
                         quantity: s.quantity,
-                        aliases // Add aliases to item
+                        aliases 
                     });
                 });
             }
@@ -740,9 +939,7 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
     }, [products]);
 
     const filteredTableData = useMemo(() => {
-        // If no tags and no input, return nothing (or everything? currently logic says return [] if empty, lets keep consistent)
         if (searchTags.length === 0 && !inputValue.trim()) return [];
-        
         return allShipmentItems.filter(item => {
             const checkTerm = (term: string) => {
                 const t = term.toLowerCase();
@@ -750,15 +947,22 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
                        item.sku.toLowerCase().includes(t) ||
                        (item.aliases && item.aliases.some((a: string) => a.includes(t)));
             };
-
             const matchesTag = searchTags.length > 0 && searchTags.some(tag => checkTerm(tag));
             const matchesInput = inputValue.trim().length > 0 && checkTerm(inputValue);
-
             return matchesTag || matchesInput;
         });
     }, [allShipmentItems, searchTags, inputValue]);
 
-    // Calculate how many tags matched at least one item
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTags, inputValue]);
+    
+    const paginatedTableData = useMemo(() => {
+        return filteredTableData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    }, [filteredTableData, currentPage, itemsPerPage]);
+
+    const totalPages = Math.ceil(filteredTableData.length / itemsPerPage);
+
     const foundTagsCount = useMemo(() => {
         if (searchTags.length === 0) return 0;
         const lowerTags = searchTags.map(t => t.toLowerCase().trim());
@@ -774,7 +978,7 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
     const getStatusStyle = (status: string) => {
         if (!status) return 'bg-gray-100 text-gray-800 border-gray-200';
         const s = status.toLowerCase();
-        if (s.includes('shipped') && !s.includes('to be')) return 'bg-blue-100 text-blue-800 border-blue-200'; // Shipped Out
+        if (s.includes('shipped') && !s.includes('to be')) return 'bg-blue-100 text-blue-800 border-blue-200';
         if (s.includes('arrived') || s.includes('delivered') || s.includes('cleared')) return 'bg-green-100 text-green-800 border-green-200';
         if (s.includes('pending') || s.includes('to be')) return 'bg-amber-100 text-amber-800 border-amber-200';
         return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -808,7 +1012,7 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
                                 <tr><th className="px-4 py-3">SKU</th><th className="px-4 py-3">Container</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">ETA</th><th className="px-4 py-3 text-right">Qty</th></tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100/50">
-                                {filteredTableData.map(row => (
+                                {paginatedTableData.map(row => (
                                     <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
                                         <td className="px-4 py-3 font-mono font-bold">{row.sku}</td>
                                         <td className="px-4 py-3 text-indigo-600">{row.containerId}</td>
@@ -826,6 +1030,39 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
                                 )}
                             </tbody>
                         </table>
+                         {filteredTableData.length > 0 && (
+                            <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6">
+                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <p className="text-sm text-gray-700">
+                                            Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredTableData.length)}</span> of <span className="font-medium">{filteredTableData.length}</span> results
+                                        </p>
+                                        <select
+                                            value={itemsPerPage}
+                                            onChange={(e) => {
+                                                setItemsPerPage(Number(e.target.value));
+                                                setCurrentPage(1);
+                                            }}
+                                            className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"
+                                        >
+                                            <option value={10}>10</option>
+                                            <option value={25}>25</option>
+                                            <option value={50}>50</option>
+                                            <option value={100}>100</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        {totalPages > 1 && (
+                                            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
+                                                <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {currentPage} of {totalPages}</span>
+                                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
+                                            </nav>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                         )}
                     </div>
                 </div>
             ) : (
@@ -853,11 +1090,14 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
 };
 
 const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { products: Product[], pricingRules: PricingRules, promotions: PromotionEvent[], themeColor: string }) => {
+    // ... [Identical to previous]
     const [search, setSearch] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(25);
     const platforms = Object.keys(pricingRules);
     
-    const filtered = products.filter(p => {
+    const filtered = useMemo(() => products.filter(p => {
         const matchesTerm = (term: string) => {
             const t = term.toLowerCase();
             return p.sku.toLowerCase().includes(t) || 
@@ -871,9 +1111,16 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
             return matchesTag && matchesText;
         }
         return matchesTerm(search);
-    });
+    }), [products, search, searchTags]);
     
-    // Helper to find active promo
+    useEffect(() => { setCurrentPage(1); }, [search, searchTags]);
+
+    const paginatedProducts = useMemo(() => {
+        return filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    }, [filtered, currentPage, itemsPerPage]);
+    
+    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+    
     const getActivePromo = (sku: string, platform: string) => {
         const today = new Date().toISOString().split('T')[0];
         return promotions.find(p => 
@@ -906,7 +1153,7 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
-                        {filtered.slice(0, 50).map(p => (
+                        {paginatedProducts.map(p => (
                             <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
                                 <td className="p-4 sticky left-0 bg-white/50 backdrop-blur-sm z-10 border-r border-gray-100">
                                     <div className="font-mono font-bold text-gray-900">{p.sku}</div>
@@ -920,7 +1167,6 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
                                     const promo = getActivePromo(p.sku, platform);
                                     const promoItem = promo?.items.find(i => i.sku === p.sku);
                                     
-                                    // Price logic: Channel Price -> Product Current Price
                                     const rawPrice = channel?.price || p.currentPrice;
                                     const displayPrice = rawPrice * VAT;
                                     const velocity = channel?.velocity || 0;
@@ -957,12 +1203,46 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
                         ))}
                     </tbody>
                 </table>
+                 {filtered.length > itemsPerPage && (
+                    <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6 sticky bottom-0">
+                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-4">
+                                <p className="text-sm text-gray-700">
+                                    Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filtered.length)}</span> of <span className="font-medium">{filtered.length}</span> results
+                                </p>
+                                <select
+                                    value={itemsPerPage}
+                                    onChange={(e) => {
+                                        setItemsPerPage(Number(e.target.value));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                            </div>
+                            <div>
+                                {totalPages > 1 && (
+                                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
+                                        <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {currentPage} of {totalPages}</span>
+                                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
+                                    </nav>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
 };
 
 const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: any) => {
+    // ... [Identical to previous]
     const [platformTags, setPlatformTags] = useState<{ platform: string; tags: string[] }[]>(() => {
         const existing = product.channels.map((c:any) => ({ platform: c.platform, tags: c.skuAlias ? c.skuAlias.split(',').map((s:string) => s.trim()).filter(Boolean) : [] }));
         Object.keys(pricingRules).forEach(pKey => { if (!existing.find((e:any) => e.platform === pKey)) existing.push({ platform: pKey, tags: [] }); });

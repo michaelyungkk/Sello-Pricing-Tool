@@ -1,9 +1,7 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES } from './constants';
-import { Product, AnalysisResult, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback, RefundLog, ShipmentDetail, HistoryPayload, PriceChangeRecord } from './types';
+import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from './constants';
+import { Product, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback, RefundLog, ShipmentDetail, HistoryPayload, PriceChangeRecord, AnalysisResult } from './types';
 import ProductList from './components/ProductList';
-import AnalysisModal from './components/AnalysisModal';
 import BatchUploadModal, { BatchUpdateItem } from './components/BatchUploadModal';
 import SalesImportModal from './components/SalesImportModal';
 import SettingsPage from './components/SettingsPage';
@@ -18,8 +16,11 @@ import StrategyPage from './components/StrategyPage';
 import ReturnsUploadModal from './components/ReturnsUploadModal';
 import CAUploadModal from './components/CAUploadModal';
 import ShipmentUploadModal from './components/ShipmentUploadModal';
+import PriceElasticityModal from './components/PriceElasticityModal'; // New Import
+import AnalysisModal from './components/AnalysisModal';
+import ToolboxPage from './components/ToolboxPage'; // New Import for Tools
 import { analyzePriceAdjustment } from './services/geminiService';
-import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package, Download, Calculator, RotateCcw, List, UploadCloud, ChevronDown, Ship, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Settings, Bell, Upload, FileBarChart, DollarSign, BookOpen, Tag, Wifi, WifiOff, Database, CheckCircle, ArrowRight, Package, Download, Calculator, RotateCcw, List, UploadCloud, ChevronDown, Ship, Link as LinkIcon, Loader2, Wrench } from 'lucide-react';
 import { get, set, del } from 'idb-keyval';
 
 // --- LOGIC HELPERS ---
@@ -218,19 +219,72 @@ const App: React.FC = () => {
         }
     };
 
-    // --- EFFECTS FOR SYNC ---
-    useEffect(() => { syncToStorage('sello_products', products); }, [products, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_rules', pricingRules); }, [pricingRules, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_logistics', logisticsRules); }, [logisticsRules, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_strategy', strategyRules); }, [strategyRules, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_price_history', priceHistory); }, [priceHistory, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_refund_history', refundHistory); }, [refundHistory, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_shipment_history', shipmentHistory); }, [shipmentHistory, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_promotions', promotions); }, [promotions, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_user_profile', userProfile); }, [userProfile, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_velocity_setting', velocityLookback); }, [velocityLookback, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_learned_aliases', learnedAliases); }, [learnedAliases, isDataLoaded]);
-    useEffect(() => { syncToStorage('sello_price_change_history', priceChangeHistory); }, [priceChangeHistory, isDataLoaded]);
+    // --- EFFECTS FOR SYNC WITH DEBOUNCE ---
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        const handler = setTimeout(() => { syncToStorage('sello_products', products); }, 1000);
+        return () => clearTimeout(handler);
+    }, [products, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        syncToStorage('sello_rules', pricingRules);
+    }, [pricingRules, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        syncToStorage('sello_logistics', logisticsRules);
+    }, [logisticsRules, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        syncToStorage('sello_strategy', strategyRules);
+    }, [strategyRules, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        const handler = setTimeout(() => { syncToStorage('sello_price_history', priceHistory); }, 2000);
+        return () => clearTimeout(handler);
+    }, [priceHistory, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        const handler = setTimeout(() => { syncToStorage('sello_refund_history', refundHistory); }, 1000);
+        return () => clearTimeout(handler);
+    }, [refundHistory, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        const handler = setTimeout(() => { syncToStorage('sello_shipment_history', shipmentHistory); }, 1000);
+        return () => clearTimeout(handler);
+    }, [shipmentHistory, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        syncToStorage('sello_promotions', promotions);
+    }, [promotions, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        syncToStorage('sello_user_profile', userProfile);
+    }, [userProfile, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        syncToStorage('sello_velocity_setting', velocityLookback);
+    }, [velocityLookback, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        const handler = setTimeout(() => { syncToStorage('sello_learned_aliases', learnedAliases); }, 1000);
+        return () => clearTimeout(handler);
+    }, [learnedAliases, isDataLoaded]);
+
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        const handler = setTimeout(() => { syncToStorage('sello_price_change_history', priceChangeHistory); }, 1000);
+        return () => clearTimeout(handler);
+    }, [priceChangeHistory, isDataLoaded]);
 
     // --- BACKGROUND STYLES ---
     useEffect(() => {
@@ -340,9 +394,9 @@ const App: React.FC = () => {
         const prevWindowStart = anchorTime - (lookbackDays * 2 * 24 * 60 * 60 * 1000);
         const prevWindowEnd = currentWindowStart;
 
-        setProducts(prevProducts => {
+        setProducts((prevProducts: Product[]) => {
             let hasChanges = false;
-            const updated = prevProducts.map(p => {
+            const updated = prevProducts.map((p: Product) => {
                 const skuLogs = priceHistoryMap.get(p.sku) || [];
                 const skuRefunds = refundHistoryMap.get(p.sku) || [];
 
@@ -380,6 +434,8 @@ const App: React.FC = () => {
                 const revR = Number(p.returnRate) || 0;
                 const totalR = Number(p.totalRefunded) || 0;
 
+                const velocityChange = prevV > 0 ? ((newAvgDaily - prevV) / prevV) : 0;
+
                 if (Math.abs(newAvgDaily - currentV) > 0.001 || Math.abs(newPrevDaily - prevV) > 0.001 || Math.abs(returnRate - revR) > 0.01 || Math.abs(totalRefunded - totalR) > 0.01) {
                     hasChanges = true;
                     return {
@@ -387,7 +443,8 @@ const App: React.FC = () => {
                         averageDailySales: Number(newAvgDaily.toFixed(2)) || 0,
                         previousDailySales: Number(newPrevDaily.toFixed(2)) || 0,
                         returnRate: isNaN(returnRate) ? 0 : Number(returnRate.toFixed(2)),
-                        totalRefunded: Number(totalRefunded.toFixed(2)) || 0
+                        totalRefunded: Number(totalRefunded.toFixed(2)) || 0,
+                        _trendData: { velocityChange }
                     };
                 }
                 return p;
@@ -401,9 +458,9 @@ const App: React.FC = () => {
         if (!isDataLoaded || priceHistory.length === 0) return;
         const { current, last } = weekRanges;
 
-        setProducts(prevProducts => {
+        setProducts((prevProducts: Product[]) => {
             let hasChanges = false;
-            const updated = prevProducts.map(p => {
+            const updated = prevProducts.map((p: Product) => {
                 const skuLogs = priceHistoryMap.get(p.sku) || [];
                 const getAvg = (start: Date, end: Date) => {
                     const logs = skuLogs.filter(l => {
@@ -439,9 +496,7 @@ const App: React.FC = () => {
     }, [priceHistoryMap, weekRanges, isDataLoaded, pricingRules]);
 
     // --- STATE MANAGEMENT ---
-    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [selectedElasticityProduct, setSelectedElasticityProduct] = useState<Product | null>(null); // New State
     
     // Global Modals State
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -451,8 +506,12 @@ const App: React.FC = () => {
     const [isReturnsModalOpen, setIsReturnsModalOpen] = useState(false);
     const [isCAUploadModalOpen, setIsCAUploadModalOpen] = useState(false);
     const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
+// FIX: Add state for analysis modal
+const [selectedAnalysisProduct, setSelectedAnalysisProduct] = useState<Product | null>(null);
+const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
 
-    const [currentView, setCurrentView] = useState<'dashboard' | 'strategy' | 'products' | 'settings' | 'costs' | 'definitions' | 'promotions'>('products');
+    const [currentView, setCurrentView] = useState<'dashboard' | 'strategy' | 'products' | 'settings' | 'costs' | 'definitions' | 'promotions' | 'tools'>('products');
 
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const fileRestoreRef = useRef<HTMLInputElement>(null);
@@ -468,479 +527,361 @@ const App: React.FC = () => {
         };
     }, []);
 
-    // Promo status update check
-    useEffect(() => {
-        if (!isDataLoaded) return;
-        const today = new Date().toISOString().split('T')[0];
-        setPromotions(prevPromos => {
-            let updatesNeeded = false;
-            const updated = prevPromos.map(p => {
-                let status: 'UPCOMING' | 'ACTIVE' | 'ENDED' = p.status;
-                if (today < p.startDate) status = 'UPCOMING';
-                else if (today > p.endDate) status = 'ENDED';
-                else status = 'ACTIVE';
-
-                if (status !== p.status) {
-                    updatesNeeded = true;
-                    return { ...p, status };
-                }
-                return p;
-            });
-            return updatesNeeded ? updated : prevPromos;
-        });
-    }, [isDataLoaded]);
-
-    // --- GLOBAL HANDLERS ---
-
-    const handleRestoreData = (data: any) => {
-        try {
-            const safeProducts = data.products ? JSON.parse(JSON.stringify(data.products)) : [];
-            const safeRules = data.rules ? JSON.parse(JSON.stringify(data.rules)) : JSON.parse(JSON.stringify(DEFAULT_PRICING_RULES));
-            const safeLogistics = data.logistics ? JSON.parse(JSON.stringify(data.logistics)) : JSON.parse(JSON.stringify(DEFAULT_LOGISTICS_RULES));
-            const safeHistory = data.history ? JSON.parse(JSON.stringify(data.history)) : [];
-            const safeRefunds = data.refunds ? JSON.parse(JSON.stringify(data.refunds)) : [];
-            const safePromotions = data.promotions ? JSON.parse(JSON.stringify(data.promotions)) : [];
-            const safeShipments = data.shipmentHistory ? JSON.parse(JSON.stringify(data.shipmentHistory)) : [];
-            const safePriceChanges = data.priceChangeHistory ? JSON.parse(JSON.stringify(data.priceChangeHistory)) : [];
-            const safeVelocity = data.velocitySetting || '30';
-
-            const enrichedProducts = safeProducts.map((p: Product) => ({
-                ...p,
-                optimalPrice: calculateOptimalPrice(p.sku, safeHistory)
-            }));
-
-            setProducts(enrichedProducts);
-            setPricingRules(safeRules);
-            setLogisticsRules(safeLogistics);
-            setPriceHistory(safeHistory);
-            setRefundHistory(safeRefunds);
-            setShipmentHistory(safeShipments);
-            setPromotions(safePromotions);
-            setPriceChangeHistory(safePriceChanges);
-            setLearnedAliases(data.learnedAliases || {});
-            setVelocityLookback(safeVelocity);
-            alert("Database restored successfully!");
-        } catch (e) {
-            alert("An error occurred while loading data. Please check your backup file.");
-        }
+    const handleViewElasticity = (product: Product) => {
+        setSelectedElasticityProduct(product);
     };
 
+    // --- HANDLERS ---
+
+// FIX: Add handler for AI analysis
+const handleAnalyze = async (product: Product, context?: string) => {
+    const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General');
+    const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false };
+
+    setSelectedAnalysisProduct(product);
+    setAnalysisResult(null);
+    setIsAnalysisLoading(true);
+    
+    try {
+        const result = await analyzePriceAdjustment(product, platformRule, context);
+        setAnalysisResult(result);
+    } catch (error) {
+        console.error("Analysis failed in App:", error);
+    } finally {
+        setIsAnalysisLoading(false);
+    }
+};
+
+const handleApplyPrice = (productId: string, newPrice: number) => {
+    setProducts(prev => {
+        const newProducts = [...prev];
+        const productIndex = newProducts.findIndex(p => p.id === productId);
+        if (productIndex > -1) {
+            const product = newProducts[productIndex];
+            const oldPrice = product.caPrice || (product.currentPrice * VAT_MULTIPLIER);
+            
+            const change: PriceChangeRecord = {
+                id: `chg-${Date.now()}-${product.sku}`,
+                sku: product.sku,
+                productName: product.name,
+                date: new Date().toISOString().split('T')[0],
+                oldPrice: oldPrice,
+                newPrice: newPrice,
+                changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE',
+                percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100
+            };
+            setPriceChangeHistory(prevHistory => [...prevHistory, change]);
+
+            newProducts[productIndex] = {
+                ...product,
+                caPrice: newPrice,
+                lastUpdated: new Date().toISOString().split('T')[0]
+            };
+        }
+        return newProducts;
+    });
+
+    setSelectedAnalysisProduct(null);
+    setAnalysisResult(null);
+};
     const handleExportBackup = () => {
-        const backupData = {
+        const backup = {
             products,
-            rules: pricingRules,
-            logistics: logisticsRules,
-            history: priceHistory,
-            refunds: refundHistory,
+            pricingRules,
+            logisticsRules,
+            strategyRules,
+            priceHistory,
+            refundHistory,
             shipmentHistory,
             promotions,
-            priceChangeHistory,
             learnedAliases,
-            velocitySetting: velocityLookback,
-            timestamp: new Date().toISOString()
+            priceChangeHistory,
+            velocityLookback,
+            userProfile
         };
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.style.display = 'none';
         a.href = url;
-        const filename = `sello_uk_hub_backup_${new Date().toISOString().slice(0, 10)}.json`;
-        a.download = filename;
-        document.body.appendChild(a);
+        a.download = `sello_backup_${new Date().toISOString().slice(0,10)}.json`;
         a.click();
-        setTimeout(() => {
-            if (document.body.contains(a)) document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 30000);
+        URL.revokeObjectURL(url);
     };
 
     const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (ev) => {
             try {
-                const json = JSON.parse(event.target?.result as string);
-                handleRestoreData(json);
+                const data = JSON.parse(ev.target?.result as string);
+                if (data.products) setProducts(data.products);
+                if (data.pricingRules) setPricingRules(data.pricingRules);
+                if (data.logisticsRules) setLogisticsRules(data.logisticsRules);
+                if (data.strategyRules) setStrategyRules(data.strategyRules);
+                if (data.priceHistory) setPriceHistory(data.priceHistory);
+                if (data.refundHistory) setRefundHistory(data.refundHistory);
+                if (data.shipmentHistory) setShipmentHistory(data.shipmentHistory);
+                if (data.promotions) setPromotions(data.promotions);
+                if (data.learnedAliases) setLearnedAliases(data.learnedAliases);
+                if (data.priceChangeHistory) setPriceChangeHistory(data.priceChangeHistory);
+                if (data.velocityLookback) setVelocityLookback(data.velocityLookback);
+                if (data.userProfile) setUserProfile(data.userProfile);
+                alert("Backup restored successfully.");
             } catch (err) {
-                alert("Invalid backup file format.");
+                console.error(err);
+                alert("Failed to restore backup.");
             }
         };
         reader.readAsText(file);
-        e.target.value = '';
-    };
-
-    const handleAnalyze = async (product: Product) => {
-        setSelectedProduct(product);
-        setAnalysis(null);
-        setIsAnalyzing(true);
-        const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'Unknown');
-        const platformRule = pricingRules[platformName] || { markup: 0, commission: 0, manager: 'Unassigned' };
-        const result = await analyzePriceAdjustment(product, platformRule);
-        setAnalysis(result);
-        setIsAnalyzing(false);
-    };
-
-    const handleApplyPrice = (productId: string, newPrice: number) => {
-        const product = products.find(p => p.id === productId);
-        if (!product) return;
-        const newLog: PriceLog = {
-            id: Math.random().toString(36).substr(2, 9),
-            sku: product.sku,
-            date: new Date().toISOString(),
-            price: newPrice,
-            velocity: product.averageDailySales,
-            margin: calculateMargin(product, newPrice)
-        };
-        const updatedHistory = [...priceHistory, newLog];
-        setPriceHistory(updatedHistory);
-        const optimal = calculateOptimalPrice(product.sku, updatedHistory);
-        setProducts(prev => prev.map(p =>
-            p.id === productId ? {
-                ...p,
-                oldPrice: p.currentPrice,
-                currentPrice: newPrice,
-                lastUpdated: new Date().toISOString().split('T')[0],
-                optimalPrice: optimal
-            } : p
-        ));
-        setSelectedProduct(null);
-        setAnalysis(null);
-    };
-
-    const handleBatchUpdate = (updates: BatchUpdateItem[]) => {
-        const newProducts: Product[] = [];
-        const existingSkuSet = new Set(products.map(p => p.sku));
-        updates.forEach(item => {
-            if (!existingSkuSet.has(item.sku)) {
-                newProducts.push({
-                    id: `p-${item.sku}-${Date.now()}`,
-                    sku: item.sku,
-                    name: item.name || item.sku,
-                    brand: item.brand,
-                    category: item.category || 'Uncategorized',
-                    subcategory: item.subcategory,
-                    stockLevel: item.stock || 0,
-                    costPrice: item.cost || 0,
-                    inventoryStatus: item.inventoryStatus,
-                    cartonDimensions: item.cartonDimensions,
-                    currentPrice: 0,
-                    averageDailySales: 0,
-                    channels: [],
-                    leadTimeDays: 30,
-                    status: 'Healthy',
-                    recommendation: 'Maintain',
-                    daysRemaining: 999,
-                    lastUpdated: new Date().toISOString().split('T')[0]
-                });
-            }
-        });
-        const updatedExisting = products.map(p => {
-            const update = updates.find(u => u.sku === p.sku);
-            if (update) {
-                return {
-                    ...p,
-                    name: update.name || p.name,
-                    brand: update.brand || p.brand,
-                    category: update.category || p.category,
-                    subcategory: update.subcategory || p.subcategory,
-                    stockLevel: update.stock !== undefined ? update.stock : p.stockLevel,
-                    costPrice: update.cost !== undefined ? update.cost : p.costPrice,
-                    inventoryStatus: update.inventoryStatus || p.inventoryStatus,
-                    cartonDimensions: update.cartonDimensions || p.cartonDimensions,
-                    lastUpdated: new Date().toISOString().split('T')[0]
-                };
-            }
-            return p;
-        });
-        setProducts([...updatedExisting, ...newProducts]);
-        setIsUploadModalOpen(false);
-    };
-
-    const handleSalesImport = (updatedProducts: Product[], _dl?: any, historyPayload?: HistoryPayload[], shipmentLogs?: ShipmentLog[], discoveredPlatforms?: string[]) => {
-        try {
-            const newLogs: PriceLog[] = [];
-            if (historyPayload && Array.isArray(historyPayload)) {
-                historyPayload.forEach(item => {
-                    const product = products.find(p => p.sku === item.sku) || updatedProducts.find(p => p.sku === item.sku);
-                    const safePrice = Number(item.price) || 0;
-                    const safeVelocity = Number(item.velocity) || 0;
-                    const safeMargin = item.margin !== undefined && !isNaN(Number(item.margin)) ? Number(item.margin) : calculateMargin(product!, safePrice);
-                    if (item.sku) {
-                        newLogs.push({
-                            id: `hist-${item.sku}-${item.date}-${Math.random().toString(36).substr(2, 5)}`,
-                            sku: String(item.sku),
-                            date: item.date || new Date().toISOString().split('T')[0],
-                            price: safePrice,
-                            velocity: safeVelocity,
-                            margin: Number(safeMargin.toFixed(2)),
-                            profit: item.profit ? Number(item.profit.toFixed(2)) : undefined,
-                            platform: item.platform || 'General',
-                            orderId: item.orderId
-                        });
-                    }
-                });
-            }
-
-            let updatedHistory = [...priceHistory];
-            if (newLogs.length > 0) {
-                const getKey = (l: PriceLog) => `${l.sku}|${l.date}|${l.platform}|${l.orderId || ''}`;
-                const skuDatesWithOrders = new Set<string>();
-                newLogs.forEach(l => { if (l.orderId) skuDatesWithOrders.add(`${l.sku}|${l.date}`); });
-                const newLogKeys = new Set(newLogs.map(l => getKey(l)));
-                updatedHistory = priceHistory.filter(l => {
-                    if (newLogKeys.has(getKey(l))) return false;
-                    if (!l.orderId && skuDatesWithOrders.has(`${l.sku}|${l.date}`)) return false;
-                    return true;
-                });
-                updatedHistory = [...updatedHistory, ...newLogs];
-                setPriceHistory(updatedHistory);
-            }
-
-            if (shipmentLogs && Array.isArray(shipmentLogs) && shipmentLogs.length > 0) {
-                setShipmentHistory(prev => [...prev, ...shipmentLogs]);
-            }
-
-            const optimalPricesMap = new Map<string, number>();
-            updatedProducts.forEach(p => optimalPricesMap.set(p.sku, calculateOptimalPrice(p.sku, updatedHistory)));
-            const updateMap = new Map(updatedProducts.map(p => [p.sku, p]));
-
-            setProducts(prev => prev.map(existing => {
-                const update = updateMap.get(existing.sku);
-                if (update) {
-                    const optimal = optimalPricesMap.get(existing.sku) || 0;
-                    const mergedChannels = [...existing.channels];
-                    update.channels.forEach(newC => {
-                        const idx = mergedChannels.findIndex(c => c.platform === newC.platform);
-                        if (idx !== -1) mergedChannels[idx] = { ...mergedChannels[idx], ...newC };
-                        else mergedChannels.push(newC);
-                    });
-                    return {
-                        ...existing,
-                        ...update,
-                        channels: mergedChannels,
-                        optimalPrice: Number(optimal) || 0,
-                        lastUpdated: new Date().toISOString().split('T')[0]
-                    };
-                }
-                return existing;
-            }));
-
-            if (discoveredPlatforms && Array.isArray(discoveredPlatforms)) {
-                setPricingRules(prevRules => {
-                    const newRules = { ...prevRules };
-                    let hasChanges = false;
-                    discoveredPlatforms.forEach(plat => {
-                        if (plat && !newRules[plat]) {
-                            const parentKey = Object.keys(newRules).find(k => plat.includes(k));
-                            const parent = parentKey ? newRules[parentKey] : null;
-                            newRules[plat] = {
-                                markup: parent?.markup || 0,
-                                commission: parent?.commission || 0,
-                                manager: parent?.manager || 'Unassigned',
-                                color: parent?.color || '#374151',
-                                isExcluded: parent?.isExcluded || false
-                            };
-                            hasChanges = true;
-                        }
-                    });
-                    return hasChanges ? newRules : prevRules;
-                });
-            }
-            setIsSalesImportModalOpen(false);
-        } catch (error: any) {
-            alert("An error occurred during import: " + (error.message || "Unknown error"));
-        }
-    };
-
-    const handleShipmentUpdate = (updates: { sku: string, shipments: ShipmentDetail[] }[]) => {
-        const updateMap = new Map(updates.map(u => [u.sku, u.shipments]));
-        setProducts(prev => prev.map(p => {
-            if (updateMap.has(p.sku)) {
-                const newShipmentsData = updateMap.get(p.sku)!;
-                let currentShipments = p.shipments ? [...p.shipments] : [];
-                newShipmentsData.forEach(newS => {
-                    const idx = currentShipments.findIndex(s => s.containerId === newS.containerId);
-                    if (idx >= 0) currentShipments[idx] = newS;
-                    else currentShipments.push(newS);
-                });
-                const incoming = currentShipments.reduce((sum, s) => sum + s.quantity, 0);
-                const now = new Date().toISOString().split('T')[0];
-                const futureShipments = currentShipments.filter(s => s.eta && s.eta >= now).sort((a, b) => (a.eta! > b.eta! ? 1 : -1));
-                let newLeadTime = p.leadTimeDays;
-                if (futureShipments.length > 0 && futureShipments[0].eta) {
-                    const arrival = new Date(futureShipments[0].eta);
-                    const diffTime = Math.abs(arrival.getTime() - new Date().getTime());
-                    newLeadTime = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                }
-                return { ...p, shipments: currentShipments, incomingStock: incoming, leadTimeDays: newLeadTime };
-            }
-            return p;
-        }));
-        setIsShipmentModalOpen(false);
-    };
-
-    const handleUpdateCosts = (updates: any[]) => {
-        setProducts(prev => prev.map(p => {
-            const update = updates.find((u: any) => u.sku === p.sku);
-            if (update) {
-                const changes = { ...update };
-                if (changes.cost !== undefined) { changes.costPrice = changes.cost; delete changes.cost; }
-                return { ...p, ...changes };
-            }
-            return p;
-        }));
-        setIsCostUploadModalOpen(false);
-    };
-
-    const handleUpdateMappings = (mappings: SkuMapping[], mode: 'merge' | 'replace', platform: string) => {
-        setProducts(prev => {
-            let tempProducts = prev;
-            if (mode === 'replace') {
-                tempProducts = tempProducts.map(p => ({
-                    ...p,
-                    channels: p.channels.map(c => c.platform === platform ? { ...c, skuAlias: undefined } : c)
-                }));
-            }
-            return tempProducts.map(p => {
-                const myMappings = mappings.filter(m => m.masterSku === p.sku);
-                if (myMappings.length === 0) return p;
-                const updatedChannels = [...p.channels];
-                const newAliases = new Set(myMappings.map(m => m.alias));
-                const existingChannelIndex = updatedChannels.findIndex(c => c.platform === platform);
-                if (existingChannelIndex !== -1) {
-                    const currentChannel = updatedChannels[existingChannelIndex];
-                    if (mode === 'merge' && currentChannel.skuAlias) currentChannel.skuAlias.split(',').forEach(a => newAliases.add(a.trim()));
-                    updatedChannels[existingChannelIndex] = { ...currentChannel, skuAlias: Array.from(newAliases).join(', ') };
-                } else {
-                    updatedChannels.push({ platform: platform, manager: 'Unassigned', velocity: 0, skuAlias: Array.from(newAliases).join(', ') });
-                }
-                return { ...p, channels: updatedChannels };
-            });
-        });
-        setLearnedAliases(prev => {
-            const next = { ...prev };
-            let hasChanges = false;
-            mappings.forEach(m => {
-                const aliasUpper = m.alias.toUpperCase();
-                if (aliasUpper !== m.masterSku.toUpperCase() && next[aliasUpper] !== m.masterSku) {
-                    next[aliasUpper] = m.masterSku;
-                    hasChanges = true;
-                }
-            });
-            return hasChanges ? next : prev;
-        });
-        setIsMappingModalOpen(false);
-    };
-
-    const handleResetData = () => {
-        setPriceHistory([]); 
-        setShipmentHistory([]); 
-        setRefundHistory([]); 
-        setPriceChangeHistory([]);
-        setAnalysis(null);
-        // Explicitly wipe prices to prevent stale data
-        setProducts(prev => prev.map(p => ({ 
-            ...p, 
-            averageDailySales: 0, 
-            previousDailySales: 0, 
-            returnRate: 0, 
-            totalRefunded: 0,
-            currentPrice: 0, 
-            oldPrice: 0,
-            optimalPrice: 0
-        })));
-    };
-
-    const handleRefundImport = (newRefunds: RefundLog[]) => {
-        setRefundHistory(prev => {
-            const existingIds = new Set(prev.map(r => r.id));
-            const uniqueNewRefunds = newRefunds.filter(r => !existingIds.has(r.id));
-            return [...prev, ...uniqueNewRefunds];
-        });
-        setIsReturnsModalOpen(false);
-    };
-
-    const handleCAUpdate = (updates: { sku: string; caPrice: number }[], reportDate: string = new Date().toISOString().split('T')[0]) => {
-        const priceMap = new Map<string, number>();
-        updates.forEach(u => priceMap.set(u.sku.trim().toUpperCase(), u.caPrice));
-        
-        // 1. Detect Changes and Create Log Records
-        const newChanges: PriceChangeRecord[] = [];
-        // Use the reportDate provided by the user for historical accuracy
-        const changeDate = reportDate;
-
-        // Helper to find match logic (copied from product mapping logic)
-        const findNewPriceForProduct = (p: Product): number | undefined => {
-            const masterSkuNorm = p.sku.trim().toUpperCase();
-            if (priceMap.has(masterSkuNorm)) return priceMap.get(masterSkuNorm);
-            
-            if (p.channels) {
-                for (const channel of p.channels) {
-                    if (channel.skuAlias) {
-                        const aliases = channel.skuAlias.split(',').map(a => a.trim().toUpperCase());
-                        const match = aliases.find(a => priceMap.has(a));
-                        if (match) return priceMap.get(match);
-                    }
-                }
-            }
-            
-            // Check direct suffix pattern matches from priceMap keys
-            for (const [reportSku, price] of priceMap.entries()) {
-                if (reportSku.startsWith(masterSkuNorm + '_')) return price;
-            }
-            
-            // Check if master matches a suffix stripped priceMap key
-            const masterStripped = masterSkuNorm.replace(/_[0-9]+$/, '');
-            if (masterStripped !== masterSkuNorm && priceMap.has(masterStripped)) return priceMap.get(masterStripped);
-            
-            return undefined;
-        };
-
-        const updatedProducts = products.map(p => {
-            const newPrice = findNewPriceForProduct(p);
-            
-            if (newPrice !== undefined) {
-                const oldPrice = p.caPrice || 0;
-                
-                // Record Change if different and significant
-                if (oldPrice > 0 && Math.abs(newPrice - oldPrice) > 0.01) {
-                    const changeType = newPrice > oldPrice ? 'INCREASE' : 'DECREASE';
-                    const percentChange = ((newPrice - oldPrice) / oldPrice) * 100;
-                    
-                    newChanges.push({
-                        id: `pc-${p.sku}-${changeDate}-${Math.random().toString(36).substr(2, 5)}`,
-                        sku: p.sku,
-                        productName: p.name,
-                        date: changeDate, // Use the user-provided date
-                        oldPrice,
-                        newPrice,
-                        changeType,
-                        percentChange
-                    });
-                }
-                return { ...p, caPrice: newPrice };
-            }
-            return p;
-        });
-
-        if (newChanges.length > 0) {
-            setPriceChangeHistory(prev => [...newChanges, ...prev]);
-        }
-
-        setProducts(updatedProducts);
-        setIsCAUploadModalOpen(false);
+        if (fileRestoreRef.current) fileRestoreRef.current.value = '';
     };
 
     const handleUpdateProduct = (updatedProduct: Product) => {
         setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
     };
 
-    const handleAddPromotion = (promo: PromotionEvent) => setPromotions(prev => [promo, ...prev]);
-    const handleUpdatePromotion = (updatedPromo: PromotionEvent) => setPromotions(prev => prev.map(p => p.id === updatedPromo.id ? updatedPromo : p));
-    const handleDeletePromotion = (id: string) => setPromotions(prev => prev.filter(p => p.id !== id));
+    const handleUpdateCosts = (updates: any[]) => {
+        setProducts(prev => prev.map(p => {
+            const update = updates.find(u => u.sku === p.sku);
+            if (update) {
+                return { 
+                    ...p, 
+                    costPrice: update.cost !== undefined ? update.cost : p.costPrice,
+                    floorPrice: update.floorPrice !== undefined ? update.floorPrice : p.floorPrice,
+                    ceilingPrice: update.ceilingPrice !== undefined ? update.ceilingPrice : p.ceilingPrice,
+                };
+            }
+            return p;
+        }));
+        setIsCostUploadModalOpen(false);
+    };
 
-    // --- UI HELPERS ---
+    const handleAddPromotion = (promo: PromotionEvent) => {
+        setPromotions(prev => [...prev, promo]);
+    };
+
+    const handleUpdatePromotion = (updatedPromo: PromotionEvent) => {
+        setPromotions(prev => prev.map(p => p.id === updatedPromo.id ? updatedPromo : p));
+    };
+
+    const handleDeletePromotion = (id: string) => {
+        setPromotions(prev => prev.filter(p => p.id !== id));
+    };
+
+    const handleBatchUpdate = (data: BatchUpdateItem[]) => {
+        setProducts(prev => {
+            // Create a map for fast lookup
+            const productMap = new Map(prev.map(p => [p.sku, p]));
+            const newProducts: Product[] = [];
+
+            data.forEach(item => {
+                const existing = productMap.get(item.sku);
+                if (existing) {
+                    // Update existing
+                    const updated = { ...existing };
+                    if (item.stock !== undefined) updated.stockLevel = item.stock;
+                    if (item.cost !== undefined) updated.costPrice = item.cost;
+                    if (item.name) updated.name = item.name;
+                    if (item.category) updated.category = item.category;
+                    if (item.subcategory) updated.subcategory = item.subcategory;
+                    if (item.brand) updated.brand = item.brand;
+                    if (item.cartonDimensions) updated.cartonDimensions = item.cartonDimensions;
+                    if (item.inventoryStatus) updated.inventoryStatus = item.inventoryStatus;
+                    productMap.set(item.sku, updated);
+                } else {
+                    // Create new
+                    const newP: Product = {
+                        id: `prod-${Date.now()}-${Math.random().toString(36).substr(2,9)}`,
+                        sku: item.sku,
+                        name: item.name || 'New Product',
+                        stockLevel: item.stock || 0,
+                        costPrice: item.cost || 0,
+                        currentPrice: 0,
+                        averageDailySales: 0,
+                        leadTimeDays: 30,
+                        status: 'Healthy',
+                        recommendation: 'New',
+                        daysRemaining: 999,
+                        category: item.category || 'Uncategorized',
+                        subcategory: item.subcategory,
+                        brand: item.brand,
+                        channels: [],
+                        lastUpdated: new Date().toISOString().split('T')[0],
+                        cartonDimensions: item.cartonDimensions,
+                        inventoryStatus: item.inventoryStatus || 'New Product'
+                    };
+                    newProducts.push(newP);
+                }
+            });
+
+            return [...Array.from(productMap.values()), ...newProducts];
+        });
+        setIsUploadModalOpen(false);
+    };
+
+    const handleResetData = () => {
+        setPriceHistory([]);
+        setRefundHistory([]);
+        setShipmentHistory([]);
+        setPriceChangeHistory([]);
+        setProducts(prev => prev.map(p => ({
+            ...p,
+            averageDailySales: 0,
+            previousDailySales: 0,
+            returnRate: 0,
+            totalRefunded: 0
+        })));
+        setIsSalesImportModalOpen(false);
+    };
+
+    const handleSalesImport = (updatedProducts: Product[], dateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: ShipmentLog[], discoveredPlatforms?: string[]) => {
+        // 1. Update Products (Metrics)
+        setProducts(updatedProducts);
+        
+        // 2. Append History
+        if (historyPayload && historyPayload.length > 0) {
+            const newLogs: PriceLog[] = historyPayload.map(h => ({
+                id: `hist-${Math.random().toString(36).substr(2,9)}`,
+                ...h,
+                margin: h.margin || 0
+            }));
+            setPriceHistory(prev => [...prev, ...newLogs]);
+        }
+
+        // 3. Append Shipments
+        if (newShipmentLogs && newShipmentLogs.length > 0) {
+            setShipmentHistory(prev => [...prev, ...newShipmentLogs]);
+        }
+
+        // 4. Update Platforms in Rules if new ones found
+        if (discoveredPlatforms && discoveredPlatforms.length > 0) {
+            setPricingRules(prev => {
+                const newRules: PricingRules = { ...(prev as any) };
+                let changed = false;
+                discoveredPlatforms.forEach(p => {
+                    if (!newRules[p]) {
+                        newRules[p] = { markup: 0, commission: 0, manager: 'Unassigned', color: '#6b7280' };
+                        changed = true;
+                    }
+                });
+                return changed ? newRules : prev;
+            });
+        }
+
+        setIsSalesImportModalOpen(false);
+    };
+
+    const handleUpdateMappings = (mappings: SkuMapping[], mode: 'merge' | 'replace', platform: string) => {
+        setProducts(prev => {
+            return prev.map(p => {
+                let channels = [...p.channels];
+                
+                if (mode === 'replace') {
+                    const idx = channels.findIndex(c => c.platform === platform);
+                    if (idx >= 0) {
+                        channels[idx] = { ...channels[idx], skuAlias: '' };
+                    }
+                }
+
+                // Find mappings for this product
+                const myMappings = mappings.filter(m => m.masterSku === p.sku && m.platform === platform);
+                
+                if (myMappings.length > 0) {
+                    const newAliases = myMappings.map(m => m.alias);
+                    const idx = channels.findIndex(c => c.platform === platform);
+                    if (idx >= 0) {
+                        const existing = channels[idx].skuAlias ? channels[idx].skuAlias!.split(',').map(s=>s.trim()) : [];
+                        const merged = Array.from(new Set([...existing, ...newAliases])).join(', ');
+                        channels[idx] = { ...channels[idx], skuAlias: merged };
+                    } else {
+                        channels.push({
+                            platform: platform,
+                            manager: 'Unassigned',
+                            velocity: 0,
+                            skuAlias: newAliases.join(', ')
+                        });
+                    }
+                }
+                
+                return { ...p, channels };
+            });
+        });
+        
+        // Also update Learned Aliases
+        if (mappings.length > 0) {
+            setLearnedAliases(prev => {
+                const next: Record<string, string> = { ...(prev as any) };
+                mappings.forEach(m => {
+                    next[m.alias.toUpperCase()] = m.masterSku;
+                });
+                return next;
+            });
+        }
+
+        setIsMappingModalOpen(false);
+    };
+
+    const handleRefundImport = (refunds: RefundLog[]) => {
+        // Filter out existing by ID
+        setRefundHistory(prev => {
+            const existingIds = new Set(prev.map(r => r.id));
+            const newRefunds = refunds.filter(r => !existingIds.has(r.id));
+            return [...prev, ...newRefunds];
+        });
+        setIsReturnsModalOpen(false);
+    };
+
+    const handleCAUpdate = (data: { sku: string; caPrice: number }[], reportDate: string) => {
+        const changes: PriceChangeRecord[] = [];
+        
+        setProducts(prev => prev.map(p => {
+            const update = data.find(d => d.sku === p.sku);
+            if (update) {
+                // Check if price changed
+                const oldPrice = p.caPrice || 0;
+                const newPrice = update.caPrice;
+                
+                if (Math.abs(newPrice - oldPrice) > 0.01) {
+                    // Record change
+                    changes.push({
+                        id: `chg-${Date.now()}-${p.sku}`,
+                        sku: p.sku,
+                        productName: p.name,
+                        date: reportDate, // Use the report date selected by user
+                        oldPrice,
+                        newPrice,
+                        changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE',
+                        percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100
+                    });
+                }
+
+                return { ...p, caPrice: update.caPrice };
+            }
+            return p;
+        }));
+
+        if (changes.length > 0) {
+            setPriceChangeHistory(prev => [...prev, ...changes]);
+        }
+
+        setIsCAUploadModalOpen(false);
+    };
+
+    const handleShipmentUpdate = (updates: { sku: string; shipments: ShipmentDetail[] }[]) => {
+        setProducts(prev => prev.map(p => {
+            const update = updates.find(u => u.sku === p.sku);
+            if (update) {
+                // Calculate total incoming
+                const totalIncoming = update.shipments.reduce((sum, s) => sum + s.quantity, 0);
+                return { ...p, shipments: update.shipments, incomingStock: totalIncoming };
+            }
+            return p;
+        }));
+        setIsShipmentModalOpen(false);
+    };
+
+    // ... (UI Helpers) ...
     const hasInventory = products.length > 0;
     const headerTextColor = userProfile.textColor || '#111827';
     const textShadowStyle = userProfile.backgroundImage && userProfile.backgroundImage !== 'none' ? { textShadow: '0 1px 3px rgba(0,0,0,0.3)' } : {};
@@ -949,7 +890,7 @@ const App: React.FC = () => {
     const glassBlur = userProfile.glassBlur ?? 10;
     const ambientOpacityFraction = (userProfile.ambientGlassOpacity ?? 15) / 100;
 
-    // --- QUICK UPLOAD MENU COMPONENT ---
+    // ... (QuickUploadMenu) ...
     const QuickUploadMenu = () => {
         const [isOpen, setIsOpen] = useState(false);
         const menuRef = useRef<HTMLDivElement>(null);
@@ -1054,6 +995,7 @@ const App: React.FC = () => {
                             { id: 'strategy', icon: Calculator, label: 'Strategy Engine' },
                             { id: 'costs', icon: DollarSign, label: 'Cost Management' },
                             { id: 'promotions', icon: Tag, label: 'Promotions' },
+                            { id: 'tools', icon: Wrench, label: 'Toolbox' },
                             { id: 'settings', icon: Settings, label: 'Configuration' },
                             { id: 'definitions', icon: BookOpen, label: 'Definitions' }
                         ].map((item) => {
@@ -1088,10 +1030,10 @@ const App: React.FC = () => {
                     <header className="flex justify-between items-center mb-8">
                         <div>
                             <h1 className="text-2xl font-bold transition-colors" style={headerStyle}>
-                                {currentView === 'products' ? 'Business Overview' : currentView === 'dashboard' ? 'Master Catalogue' : currentView === 'strategy' ? 'Pricing Strategy Engine' : currentView === 'costs' ? 'Product Costs & Limits' : currentView === 'definitions' ? 'Definitions & Formulas' : currentView === 'promotions' ? 'Promotion Management' : 'Settings'}
+                                {currentView === 'products' ? 'Business Overview' : currentView === 'dashboard' ? 'Master Catalogue' : currentView === 'strategy' ? 'Pricing Strategy Engine' : currentView === 'costs' ? 'Product Costs & Limits' : currentView === 'definitions' ? 'Definitions & Formulas' : currentView === 'promotions' ? 'Promotion Management' : currentView === 'tools' ? 'Automation Toolbox' : 'Settings'}
                             </h1>
                             <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
-                                {currentView === 'dashboard' ? 'Manage SKUs, review velocities, and calculate strategies.' : currentView === 'strategy' ? 'Define and apply rule-based pricing logic.' : currentView === 'products' ? 'Manage Master SKUs and platform aliases.' : currentView === 'costs' ? 'Set cost prices, and define minimum/maximum price guardrails.' : currentView === 'definitions' ? 'Reference guide for calculations and logic.' : currentView === 'promotions' ? 'Plan, execute, and track sales events across platforms.' : 'Manage platform fees, logistics rates, and user settings.'}
+                                {currentView === 'dashboard' ? 'Manage SKUs, review velocities, and calculate strategies.' : currentView === 'strategy' ? 'Define and apply rule-based pricing logic.' : currentView === 'products' ? 'Manage Master SKUs and platform aliases.' : currentView === 'costs' ? 'Set cost prices, and define minimum/maximum price guardrails.' : currentView === 'definitions' ? 'Reference guide for calculations and logic.' : currentView === 'promotions' ? 'Plan, execute, and track sales events across platforms.' : currentView === 'tools' ? 'Access specialized tools to automate complex tasks.' : 'Manage platform fees, logistics rates, and user settings.'}
                             </p>
                         </div>
                         <div className="flex items-center gap-4">
@@ -1136,18 +1078,21 @@ const App: React.FC = () => {
                                     pricingRules={pricingRules}
                                     promotions={promotions}
                                     priceHistoryMap={priceHistoryMap}
+                                    priceChangeHistory={priceChangeHistory} // PASS HISTORY
                                     onOpenMappingModal={() => setIsMappingModalOpen(true)}
-                                    onAnalyze={handleAnalyze}
                                     dateLabels={dynamicDateLabels}
                                     onUpdateProduct={handleUpdateProduct}
+                                    onViewElasticity={handleViewElasticity} // PASS HANDLER
                                     themeColor={userProfile.themeColor}
                                     headerStyle={headerStyle}
+                                    onAnalyze={handleAnalyze}
                                 />
                             )
                         )}
                         {currentView === 'strategy' && (<StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); setCurrentView('products'); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} promotions={promotions} priceChangeHistory={priceChangeHistory} />)}
                         {currentView === 'costs' && (<CostManagementPage products={products} onUpdateCosts={handleUpdateCosts} onOpenUpload={() => setIsCostUploadModalOpen(true)} logisticsRules={logisticsRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} />)}
                         {currentView === 'promotions' && (<PromotionPage products={products} pricingRules={pricingRules} logisticsRules={logisticsRules} promotions={promotions} priceHistoryMap={priceHistoryMap} onAddPromotion={handleAddPromotion} onUpdatePromotion={handleUpdatePromotion} onDeletePromotion={handleDeletePromotion} themeColor={userProfile.themeColor} headerStyle={headerStyle} />)}
+                        {currentView === 'tools' && (<ToolboxPage promotions={promotions} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} />)}
                         {currentView === 'definitions' && (<DefinitionsPage headerStyle={headerStyle} />)}
                         {currentView === 'settings' && (<SettingsPage currentRules={pricingRules} onSave={(newRules, newVelocity) => { setPricingRules(newRules); setVelocityLookback(newVelocity); }} logisticsRules={logisticsRules} onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }} products={products} shipmentHistory={shipmentHistory} themeColor={userProfile.themeColor} headerStyle={headerStyle} />)}
                     </div>
@@ -1160,17 +1105,29 @@ const App: React.FC = () => {
                 {isReturnsModalOpen && <ReturnsUploadModal onClose={() => setIsReturnsModalOpen(false)} onConfirm={handleRefundImport} />}
                 {isCAUploadModalOpen && <CAUploadModal onClose={() => setIsCAUploadModalOpen(false)} onConfirm={handleCAUpdate} />}
                 {isShipmentModalOpen && <ShipmentUploadModal products={products} onClose={() => setIsShipmentModalOpen(false)} onConfirm={handleShipmentUpdate} />}
-                
-                {selectedProduct && (
-                    <AnalysisModal
-                        product={selectedProduct}
-                        analysis={analysis}
-                        isLoading={isAnalyzing}
-                        onClose={() => setSelectedProduct(null)}
-                        onApplyPrice={handleApplyPrice}
-                        themeColor={userProfile.themeColor}
+
+                {selectedElasticityProduct && (
+                    <PriceElasticityModal
+                        product={selectedElasticityProduct}
+                        priceHistory={priceHistory}
+                        priceChangeHistory={priceChangeHistory}
+                        onClose={() => setSelectedElasticityProduct(null)}
                     />
                 )}
+{/* FIX: Render analysis modal */}
+{selectedAnalysisProduct && (
+    <AnalysisModal
+        product={selectedAnalysisProduct}
+        analysis={analysisResult}
+        isLoading={isAnalysisLoading}
+        onClose={() => {
+            setSelectedAnalysisProduct(null);
+            setAnalysisResult(null);
+        }}
+        onApplyPrice={handleApplyPrice}
+        themeColor={userProfile.themeColor}
+    />
+)}
             </div>
         </>
     );

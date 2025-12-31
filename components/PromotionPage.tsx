@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent, PromotionItem, PriceLog, LogisticsRule } from '../types';
 import { TagSearchInput } from './TagSearchInput';
-import { Plus, ChevronRight, Search, Trash2, ArrowLeft, CheckCircle, Check, Download, Calendar, Lock, Unlock, LayoutDashboard, List, Calculator, Edit2, AlertCircle, Save, X, RotateCcw, Eye, EyeOff, ArrowUpDown, ChevronUp, ChevronDown, Upload, FileText, Loader2, RefreshCw, TrendingUp, TrendingDown, Target, ShoppingBag, Coins, Truck, Info, HelpCircle, Archive, Zap, Clock } from 'lucide-react';
+import { Plus, ChevronRight, Search, Trash2, ArrowLeft, CheckCircle, Check, Download, Calendar, Lock, Unlock, LayoutDashboard, List, Calculator, Edit2, AlertCircle, Save, X, RotateCcw, Eye, EyeOff, ArrowUpDown, ChevronUp, ChevronDown, Upload, FileText, Loader2, RefreshCw, TrendingUp, TrendingDown, Target, ShoppingBag, Coins, Truck, Info, HelpCircle, Archive, Zap, Clock, Star } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface PromotionPageProps {
@@ -898,6 +898,7 @@ const PromoPerformanceHeader = ({ promo, products, priceHistoryMap, themeColor }
 
 const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: PromotionEvent[], products: Product[], themeColor: string }) => {
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchTags, setSearchTags] = useState<string[]>([]);
     const [platformFilter, setPlatformFilter] = useState('All Platforms');
 
     const allRows = useMemo(() => {
@@ -921,45 +922,89 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
 
     const filteredRows = allRows.filter(row => {
         const product = products.find(p => p.sku === row.sku);
-        const matchesAlias = product?.channels.some(c => c.skuAlias?.toLowerCase().includes(searchQuery.toLowerCase()));
         
-        const matchesSearch = row.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            row.eventName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-            matchesAlias;
+        const matchesTerm = (term: string) => {
+            const t = term.toLowerCase();
+            return row.sku.toLowerCase().includes(t) ||
+                   row.eventName.toLowerCase().includes(t) ||
+                   (product?.channels.some(c => c.skuAlias?.toLowerCase().includes(t)) || false);
+        };
+
+        if (searchTags.length > 0) {
+            const matchesTag = searchTags.some(tag => matchesTerm(tag));
+            const matchesText = searchQuery ? matchesTerm(searchQuery) : true;
+            if (!(matchesTag && matchesText)) return false;
+        } else if (searchQuery) {
+            if (!matchesTerm(searchQuery)) return false;
+        }
             
         const matchesPlatform = platformFilter === 'All Platforms' || row.platform === platformFilter;
-        return matchesSearch && matchesPlatform;
+        return matchesPlatform;
     });
 
     const formatDate = (date: Date) => {
         return date.toLocaleDateString('en-GB');
     };
 
+    const handleExport = () => {
+        const clean = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+        const headers = ['SKU', 'Event Name', 'Platform', 'Promo Price', 'Start Date', 'End Date', 'Status'];
+        const rows = filteredRows.map(r => [
+            clean(r.sku),
+            clean(r.eventName),
+            clean(r.platform),
+            r.promoPrice.toFixed(2),
+            r.startDate.toLocaleDateString(),
+            r.endDate.toLocaleDateString(),
+            clean(r.status)
+        ]);
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        const filename = `all_promotions_export_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => { if (document.body.contains(link)) document.body.removeChild(link); URL.revokeObjectURL(url); }, 60000);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex gap-4 bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
                 <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
-                    <input
-                        type="text"
+                    <TagSearchInput 
+                        tags={searchTags}
+                        onTagsChange={setSearchTags}
+                        onInputChange={setSearchQuery}
                         placeholder="Filter by SKU, Alias or Event Name..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 bg-white/50"
-                        style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                        themeColor={themeColor}
                     />
                 </div>
-                <div className="w-48">
-                    <select
-                        value={platformFilter}
-                        onChange={(e) => setPlatformFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white/50"
+                <div className="flex items-center gap-2">
+                    <div className="w-48">
+                        <select
+                            value={platformFilter}
+                            onChange={(e) => setPlatformFilter(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white/50"
+                        >
+                            <option>All Platforms</option>
+                            {Array.from(new Set(promotions.map(p => p.platform))).sort().map(p => (
+                                <option key={p} value={p}>{p}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <button
+                        onClick={handleExport}
+                        className="px-3 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                        title="Export filtered list to CSV"
                     >
-                        <option>All Platforms</option>
-                        {Array.from(new Set(promotions.map(p => p.platform))).sort().map(p => (
-                            <option key={p} value={p}>{p}</option>
-                        ))}
-                    </select>
+                        <Download className="w-4 h-4" />
+                        Export
+                    </button>
                 </div>
             </div>
 
@@ -1173,7 +1218,7 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
             if (validRural.length === 0 && validStandard.length > 0) ruralPostage = validStandard[0].price;
         }
 
-        const otherCosts = (product.costPrice || 0) + (product.sellingFee || 0) + (product.adsFee || 0) + (product.otherFee || 0) + (product.subscriptionFee || 0) + (product.wmsFee || 0);
+        const otherCosts = (product.costPrice || 0) + (product.adsFee || 0) + (product.otherFee || 0) + (product.subscriptionFee || 0) + (product.wmsFee || 0);
         
         const totalCosts = commissionCost + standardPostage + otherCosts;
         const netProfit = netRevenue - totalCosts;
@@ -1218,49 +1263,94 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
 
     return (
         <div className="space-y-6 pb-20 animate-in slide-in-from-right">
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass flex flex-col md:flex-row gap-4 items-center justify-between">
-                <div className="flex-1 flex gap-4 w-full">
+            {/* Header with Title and Back Arrow */}
+            <div className="flex items-center gap-2 mb-2">
+                <button onClick={onCancel} className="text-gray-500 hover:text-gray-700">
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                    <h2 className="text-xl font-bold text-gray-900">Add Products to {currentPromo.name}</h2>
+                    <p className="text-sm text-indigo-600 font-medium">Filtering for: {currentPromo.platform}</p>
+                </div>
+                <div className="flex-1"></div>
+                <button 
+                    onClick={handleConfirm}
+                    disabled={selectedSkus.size === 0}
+                    className="px-6 py-2 text-white rounded-lg font-medium shadow-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    style={{ backgroundColor: themeColor }}
+                >
+                    <Check className="w-4 h-4" />
+                    Add {selectedSkus.size} Products
+                </button>
+            </div>
+
+            {/* Controls Bar */}
+            <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col xl:flex-row gap-4 items-center justify-between shadow-sm">
+                <div className="flex-1 flex flex-col md:flex-row gap-4 w-full">
+                    {/* Search Area */}
                     <div className="flex-1">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Search</label>
                         <TagSearchInput 
                             tags={searchTags}
                             onTagsChange={setSearchTags}
                             onInputChange={setSearchQuery}
-                            placeholder="Search products by SKU or Alias..."
+                            placeholder="Search SKU, Name or Alias..."
                             themeColor={themeColor}
                         />
                     </div>
-                    <select 
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="px-4 py-2 border rounded-lg bg-white/50"
-                    >
-                        <option>All Categories</option>
-                        {uniqueCategories.map(c => <option key={c}>{c}</option>)}
-                    </select>
+
+                    {/* Category Dropdown */}
+                    <div className="flex flex-col min-w-[200px]">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Category</label>
+                        <select 
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
+                        >
+                            <option>All Categories</option>
+                            {uniqueCategories.map(c => <option key={c}>{c}</option>)}
+                        </select>
+                    </div>
                 </div>
                 
-                <div className="flex items-center gap-3 bg-gray-100 p-2 rounded-lg">
-                    <span className="text-xs font-bold uppercase text-gray-500">Bulk Rule:</span>
-                    <select 
-                        value={bulkRule.type}
-                        onChange={(e) => setBulkRule({...bulkRule, type: e.target.value as any})}
-                        className="text-sm bg-transparent border-none focus:ring-0 font-medium"
-                    >
-                        <option value="PERCENTAGE">Percentage Off</option>
-                        <option value="FIXED">Fixed Amount Off</option>
-                    </select>
-                    <input 
-                        type="number" 
-                        value={bulkRule.value}
-                        onChange={(e) => setBulkRule({...bulkRule, value: parseFloat(e.target.value)})}
-                        className="w-16 px-2 py-1 rounded border text-center font-bold"
-                    />
+                {/* Bulk Rules */}
+                <div className="flex items-end gap-6 bg-gray-50/50 p-2 rounded-lg border border-gray-100">
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-indigo-600 uppercase mb-1">Bulk Discount Rule</label>
+                        <div className="flex items-center">
+                            <select 
+                                value={bulkRule.type}
+                                onChange={(e) => setBulkRule({...bulkRule, type: e.target.value as any})}
+                                className="text-sm bg-transparent border-none focus:ring-0 font-medium pr-1 pl-0 text-gray-700"
+                            >
+                                <option value="PERCENTAGE">% Off</option>
+                                <option value="FIXED">£ Off</option>
+                            </select>
+                            <input 
+                                type="number" 
+                                value={bulkRule.value}
+                                onChange={(e) => setBulkRule({...bulkRule, value: parseFloat(e.target.value)})}
+                                className="w-16 px-2 py-1 rounded border border-gray-300 text-center font-bold text-sm"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col items-center pb-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Show Inactive</label>
+                        <button 
+                            onClick={() => setShowInactive(!showInactive)}
+                            className={`p-1.5 rounded transition-colors ${showInactive ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}
+                        >
+                            {showInactive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+            {/* Table */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
                 <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-gray-50/50 font-bold border-b border-gray-200">
+                    <thead className="bg-gray-50 font-bold border-b border-gray-200 text-gray-500 uppercase text-xs tracking-wider">
                         <tr>
                             <th className="p-4 w-10">
                                 <input 
@@ -1270,57 +1360,108 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                 />
                             </th>
-                            <th className="p-4">Product</th>
-                            <th className="p-4 text-right">CA/Base Price</th>
-                            <th className="p-4 text-right">Stock</th>
-                            <th className="p-4 text-right w-32">Promo Price</th>
+                            <th className="p-4">SKU / Title</th>
+                            <th className="p-4 text-right">Platform Price</th>
+                            <th className="p-4 text-right">Optimal</th>
+                            <th className="p-4 text-right text-purple-600">CA Price</th>
+                            <th className="p-4 text-right bg-indigo-50/30 border-l border-indigo-100 w-32">Promo Price</th>
+                            <th className="p-4 text-right">Min Price</th>
                             <th className="p-4 text-right">Proj. Margin</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100/50">
+                    <tbody className="divide-y divide-gray-100">
                         {filteredProducts.map(p => {
                             const promoPrice = calculatePromoPrice(p);
                             const marginDetails = calculateDynamicMargin(p, promoPrice);
                             
                             // Determine Base Price display
                             let basePrice = p.currentPrice * VAT;
-                            if (p.caPrice) basePrice = p.caPrice;
+                            if (currentPromo.platform !== 'All') {
+                                const channel = p.channels.find(c => c.platform === currentPromo.platform);
+                                if (channel && channel.price) basePrice = channel.price * VAT;
+                            }
+
+                            // Optimal Price (Visual Only)
+                            const optimal = p.optimalPrice ? p.optimalPrice * VAT : null;
+                            const caPrice = p.caPrice;
+                            const minPrice = p.floorPrice ? p.floorPrice * VAT : null;
 
                             return (
-                                <tr key={p.sku} className={`hover:bg-gray-50/50 ${selectedSkus.has(p.sku) ? 'bg-indigo-50/30' : ''}`}>
+                                <tr 
+                                    key={p.sku} 
+                                    className={`group hover:bg-gray-50/80 transition-colors cursor-pointer ${selectedSkus.has(p.sku) ? 'bg-indigo-50/20' : ''}`}
+                                    onClick={(e) => {
+                                        const target = e.target as HTMLElement;
+                                        if (['INPUT', 'BUTTON', 'TEXTAREA'].includes(target.tagName)) return;
+                                        if (window.getSelection()?.toString()) return;
+                                        handleRowClick(p.sku);
+                                    }}
+                                >
                                     <td className="p-4">
                                         <input 
                                             type="checkbox"
                                             checked={selectedSkus.has(p.sku)}
-                                            onChange={() => handleRowClick(p.sku)}
-                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRowClick(p.sku);
+                                            }}
+                                            onChange={() => {}}
+                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                                         />
                                     </td>
                                     <td className="p-4">
                                         <div className="font-bold text-gray-900">{p.sku}</div>
-                                        <div className="text-xs text-gray-500 truncate max-w-[200px]">{p.name}</div>
+                                        <div 
+                                            className="text-xs text-gray-600 font-medium my-1 select-text"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {p.name}
+                                        </div>
+                                        {p.subcategory && (
+                                            <span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded border border-gray-200">
+                                                {p.subcategory}
+                                            </span>
+                                        )}
                                     </td>
-                                    <td className="p-4 text-right text-gray-600">
+                                    <td className="p-4 text-right font-medium text-gray-700">
                                         £{basePrice.toFixed(2)}
                                     </td>
-                                    <td className="p-4 text-right font-mono">
-                                        {p.stockLevel}
+                                    <td className="p-4 text-right">
+                                        {optimal ? (
+                                            <div className="flex items-center justify-end gap-1 text-indigo-600 font-medium">
+                                                <Star className="w-3 h-3 fill-indigo-100" /> £{optimal.toFixed(2)}
+                                            </div>
+                                        ) : <span className="text-gray-300">-</span>}
                                     </td>
                                     <td className="p-4 text-right">
-                                        <input 
-                                            type="number"
-                                            value={priceOverrides[p.sku] || promoPrice}
-                                            onChange={(e) => handlePriceOverride(p.sku, e.target.value)}
-                                            className="w-24 text-right px-2 py-1 border rounded focus:ring-2 focus:ring-indigo-500 font-bold"
-                                            style={{ color: themeColor }}
-                                        />
+                                        {caPrice ? (
+                                            <span className="text-purple-600 font-bold font-mono">
+                                                £{caPrice.toFixed(2)}
+                                            </span>
+                                        ) : <span className="text-gray-300">-</span>}
+                                    </td>
+                                    <td className="p-4 text-right bg-indigo-50/30 border-l border-indigo-100">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <span className="text-gray-400 text-xs">£</span>
+                                            <input 
+                                                type="number"
+                                                value={priceOverrides[p.sku] || promoPrice}
+                                                onChange={(e) => handlePriceOverride(p.sku, e.target.value)}
+                                                className="w-20 text-right font-bold bg-transparent border-none focus:ring-0 p-0 text-gray-900"
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        </div>
+                                        <div className="h-px bg-gray-300 border-dashed w-full mt-1"></div>
+                                    </td>
+                                    <td className="p-4 text-right text-gray-400 text-xs">
+                                        {minPrice ? `£${minPrice.toFixed(2)}` : '-'}
                                     </td>
                                     <td 
-                                        className="p-4 text-right font-mono cursor-help"
+                                        className="p-4 text-right cursor-help"
                                         onMouseEnter={(e) => setHoveredMargin({ id: p.sku, rect: e.currentTarget.getBoundingClientRect() })}
                                         onMouseLeave={() => setHoveredMargin(null)}
                                     >
-                                        <span className={marginDetails.margin > 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                                        <span className={`px-2 py-1 rounded text-xs font-bold border ${marginDetails.margin > 20 ? 'bg-green-100 text-green-700 border-green-200' : marginDetails.margin > 0 ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
                                             {marginDetails.margin.toFixed(1)}%
                                         </span>
                                         {hoveredMargin?.id === p.sku && (
@@ -1344,21 +1485,6 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                         })}
                     </tbody>
                 </table>
-            </div>
-
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur border-t border-gray-200 flex justify-end gap-3 z-40 md:pl-72">
-                <button onClick={onCancel} className="px-6 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium">
-                    Cancel
-                </button>
-                <button 
-                    onClick={handleConfirm}
-                    disabled={selectedSkus.size === 0}
-                    className="px-6 py-2 text-white rounded-lg font-medium shadow-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    style={{ backgroundColor: themeColor }}
-                >
-                    <Plus className="w-4 h-4" />
-                    Add {selectedSkus.size} Products
-                </button>
             </div>
         </div>
     );

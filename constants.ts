@@ -1,6 +1,8 @@
 
 import { Product, PriceLog, PromotionEvent, PricingRules, LogisticsRule, StrategyConfig } from './types';
 
+export const VAT_MULTIPLIER = 1.20;
+
 export const DEFAULT_PRICING_RULES: PricingRules = {
   'Amazon(UK) FBA': { markup: 0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900', isExcluded: true },
   'Amazon(UK) FBM': { markup: 0, commission: 15.0, manager: 'Bella Qin', color: '#E68A00' },

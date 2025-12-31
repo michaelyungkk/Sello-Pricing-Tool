@@ -1,7 +1,7 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, FeeBounds, LogisticsRule } from '../types';
+import { VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
 import { Search, Save, Upload, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Info, Download, X, Eye, EyeOff } from 'lucide-react';
 
@@ -48,8 +48,6 @@ interface BreakdownData {
     netProfit: number;
 }
 
-const VAT = 1.20;
-
 const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpdateCosts, onOpenUpload, logisticsRules = [], themeColor, headerStyle }) => {
     const [search, setSearch] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
@@ -69,13 +67,13 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 50;
+    const [itemsPerPage, setItemsPerPage] = useState(25);
 
     const handleInputChange = (sku: string, field: keyof Omit<CostUpdate, 'sku'>, val: string) => {
         const num = parseFloat(val);
         // COGS is now fixed, so we only handle Floor/Ceiling which are Gross inputs
         const internalVal = (field === 'floorPrice' || field === 'ceilingPrice') 
-            ? (isNaN(num) ? 0 : num / VAT)
+            ? (isNaN(num) ? 0 : num / VAT_MULTIPLIER)
             : (isNaN(num) ? 0 : num);
 
         setEditedCosts(prev => {
@@ -224,13 +222,13 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
     };
 
     const FeeCell = ({ value, bounds }: { value: number | undefined, bounds?: FeeBounds }) => {
-        const val = (value || 0) * VAT;
+        const val = (value || 0) * VAT_MULTIPLIER;
         if (val === 0) return <span className="text-gray-300">-</span>;
-        const isOutlier = bounds && (bounds.max * VAT) > 0 && val > ((bounds.max * VAT) * 1.05);
+        const isOutlier = bounds && (bounds.max * VAT_MULTIPLIER) > 0 && val > ((bounds.max * VAT_MULTIPLIER) * 1.05);
 
         const handleMouseEnter = (e: React.MouseEvent) => {
             if (bounds && (bounds.min > 0 || bounds.max > 0)) {
-                const upliftedBounds = { min: bounds.min * VAT, max: bounds.max * VAT };
+                const upliftedBounds = { min: bounds.min * VAT_MULTIPLIER, max: bounds.max * VAT_MULTIPLIER };
                 setActiveTooltip({
                     type: 'fee',
                     rect: e.currentTarget.getBoundingClientRect(),
@@ -314,8 +312,8 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                 const edits = editedCosts[product.sku] || {};
                                 const cogs = edits.costPrice ?? product.costPrice ?? 0;
                                 
-                                const floor = (edits.floorPrice ?? product.floorPrice ?? 0) * VAT;
-                                const ceiling = (edits.ceilingPrice ?? product.ceilingPrice ?? 0) * VAT;
+                                const floor = (edits.floorPrice ?? product.floorPrice ?? 0) * VAT_MULTIPLIER;
+                                const ceiling = (edits.ceilingPrice ?? product.ceilingPrice ?? 0) * VAT_MULTIPLIER;
 
                                 const totalCost = getTotalCost(product, edits);
                                 const netProfit = (product.currentPrice + (product.extraFreight || 0)) - totalCost;
@@ -340,7 +338,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                         type: 'margin',
                                         rect: e.currentTarget.getBoundingClientRect(),
                                         data: {
-                                            type, sellPriceGross: product.currentPrice * VAT, vatAmount: product.currentPrice * 0.20,
+                                            type, sellPriceGross: product.currentPrice * VAT_MULTIPLIER, vatAmount: product.currentPrice * 0.20,
                                             netRevenue: product.currentPrice, cogs, wms: product.wmsFee || 0, other: product.otherFee || 0,
                                             estLogistics, sellingFee: product.sellingFee, adsFee: product.adsFee, postage: product.postage,
                                             subFee: product.subscriptionFee, extraFreight: product.extraFreight,
@@ -356,15 +354,15 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                             <div className="font-bold text-gray-900">{product.sku}</div>
                                             {product.subcategory && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 mt-1">{product.subcategory}</span>}
                                         </td>
-                                        <td className="px-2 py-2 text-right text-gray-600 font-medium">£{(product.currentPrice * VAT).toFixed(2)}</td>
+                                        <td className="px-2 py-2 text-right text-gray-600 font-medium">£{(product.currentPrice * VAT_MULTIPLIER).toFixed(2)}</td>
                                         <td className="px-2 py-2 text-right">
                                             {product.caPrice ? (
-                                                <span className="font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 text-xs">£{product.caPrice.toFixed(2)}</span>
+                                                <span className="font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100 text-xs font-mono">£{product.caPrice.toFixed(2)}</span>
                                             ) : (
                                                 <span className="text-gray-300">-</span>
                                             )}
                                         </td>
-                                        <td className="px-2 py-2 text-right text-gray-600 font-mono">£{(cogs * VAT).toFixed(2)}</td>
+                                        <td className="px-2 py-2 text-right text-gray-600 font-mono">£{(cogs * VAT_MULTIPLIER).toFixed(2)}</td>
                                         <td className="px-2 py-2 text-right bg-blue-50/30">{renderInput('floorPrice', floor, '-')}</td>
                                         <td className="px-2 py-2 text-right bg-blue-50/30">{renderInput('ceilingPrice', ceiling, '-')}</td>
                                         <td className="px-2 py-2 text-right bg-gray-50/30"><FeeCell value={product.sellingFee} bounds={product.feeBounds?.sellingFee} /></td>
@@ -374,7 +372,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                                         <td className="px-2 py-2 text-right bg-gray-50/30 border-l border-gray-100"><FeeCell value={product.subscriptionFee} bounds={product.feeBounds?.subscriptionFee} /></td>
                                         <td className="px-2 py-2 text-right bg-gray-50/30"><FeeCell value={product.wmsFee} bounds={product.feeBounds?.wmsFee} /></td>
                                         <td className="px-2 py-2 text-right bg-gray-50/30"><FeeCell value={product.otherFee} bounds={product.feeBounds?.otherFee} /></td>
-                                        <td className="px-2 py-2 text-right sticky right-[130px] bg-indigo-50/80 backdrop-blur-md z-20 border-l border-indigo-200 cursor-help min-w-[130px]" onMouseEnter={(e) => handleMouseEnterMargin(e, 'gross')} onMouseLeave={() => setActiveTooltip(null)}><div className="flex flex-col items-end"><span className={`font-mono font-bold ${grossMargin < 0 ? 'text-red-600' : grossMargin < 20 ? 'text-yellow-600' : 'text-indigo-600'}`}>{grossMargin.toFixed(1)}%</span><span className="text-[10px] text-indigo-400 font-medium">£{grossProfit.toFixed(2)}</span></div></td>
+                                        <td className="px-2 py-2 text-right sticky right-[130px] top-0 w-[130px] min-w-[130px] bg-indigo-50/80 backdrop-blur-md z-20 border-l border-indigo-200 cursor-help min-w-[130px]" onMouseEnter={(e) => handleMouseEnterMargin(e, 'gross')} onMouseLeave={() => setActiveTooltip(null)}><div className="flex flex-col items-end"><span className={`font-mono font-bold ${grossMargin < 0 ? 'text-red-600' : grossMargin < 20 ? 'text-yellow-600' : 'text-indigo-600'}`}>{grossMargin.toFixed(1)}%</span><span className="text-[10px] text-indigo-400 font-medium">£{grossProfit.toFixed(2)}</span></div></td>
                                         <td className="px-2 py-2 text-right sticky right-0 bg-white/80 backdrop-blur-md group-hover:bg-white z-20 border-l border-gray-100 cursor-help min-w-[130px]" onMouseEnter={(e) => handleMouseEnterMargin(e, 'net')} onMouseLeave={() => setActiveTooltip(null)}><div className="flex flex-col items-end"><span className={`font-mono font-bold ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-yellow-600' : 'text-green-600'}`}>{margin.toFixed(1)}%</span><span className="text-[10px] text-gray-400">£{netProfit.toFixed(2)}</span></div></td>
                                     </tr>
                                 );
@@ -385,7 +383,24 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
                 {filteredAndSorted.length > 0 && (
                     <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6 rounded-b-lg mt-0">
                         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                            <div><p className="text-sm text-gray-700">Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredAndSorted.length)}</span> of <span className="font-medium">{filteredAndSorted.length}</span> results</p></div>
+                            <div className="flex items-center gap-4">
+                                <p className="text-sm text-gray-700">
+                                    Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredAndSorted.length)}</span> of <span className="font-medium">{filteredAndSorted.length}</span> results
+                                </p>
+                                <select
+                                    value={itemsPerPage}
+                                    onChange={(e) => {
+                                        setItemsPerPage(Number(e.target.value));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                            </div>
                             <div>
                                 {totalPages > 1 && (
                                     <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
@@ -409,7 +424,18 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, onUpd
 
 const FeeTooltip = ({ data }: { data: { rect: DOMRect; data: FeeBounds } }) => {
     const { rect, data: bounds } = data;
-    const style: React.CSSProperties = { position: 'fixed', top: `${rect.top}px`, left: `${rect.left + rect.width / 2}px`, transform: 'translate(-50%, -100%) translateY(-8px)', zIndex: 9999, pointerEvents: 'none' };
+    // Add Scroll Offset
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+    
+    const style: React.CSSProperties = { 
+        position: 'absolute', 
+        top: `${rect.top + scrollY}px`, 
+        left: `${rect.left + rect.width / 2 + scrollX}px`, 
+        transform: 'translate(-50%, -100%) translateY(-8px)', 
+        zIndex: 9999, 
+        pointerEvents: 'none' 
+    };
     return createPortal(
         <div style={style}>
             <div className="bg-gray-900 text-white px-3 py-2 rounded shadow-lg text-xs whitespace-nowrap">
@@ -423,7 +449,18 @@ const FeeTooltip = ({ data }: { data: { rect: DOMRect; data: FeeBounds } }) => {
 
 const MarginBreakdownTooltip = ({ data }: { data: { rect: DOMRect; data: BreakdownData } }) => {
     const { rect, data: breakdown } = data;
-    const style: React.CSSProperties = { position: 'fixed', top: `${rect.top}px`, left: `${rect.left}px`, transform: 'translate(-100%, -50%) translateX(-12px)', zIndex: 9999, pointerEvents: 'none' };
+    // Add Scroll Offset
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+
+    const style: React.CSSProperties = { 
+        position: 'absolute', 
+        top: `${rect.top + scrollY}px`, 
+        left: `${rect.left + scrollX}px`, 
+        transform: 'translate(-100%, -50%) translateX(-12px)', 
+        zIndex: 9999, 
+        pointerEvents: 'none' 
+    };
     const isGross = breakdown.type === 'gross';
 
     return createPortal(
@@ -464,7 +501,7 @@ const CostExportModal = ({ products, onClose, themeColor }: { products: Product[
             const totalCost = (p.costPrice || 0) + (p.sellingFee || 0) + (p.adsFee || 0) + (p.postage || 0) + (p.otherFee || 0) + (p.subscriptionFee || 0) + (p.wmsFee || 0);
             const net = (p.currentPrice + (p.extraFreight || 0)) - totalCost;
             const margin = p.currentPrice > 0 ? (net / p.currentPrice) * 100 : 0;
-            return [clean(p.sku), clean(p.name), (p.caPrice || 0).toFixed(2), (p.costPrice ? p.costPrice * VAT : 0).toFixed(2), (p.floorPrice ? p.floorPrice * VAT : 0).toFixed(2), (p.ceilingPrice ? p.ceilingPrice * VAT : 0).toFixed(2), (p.currentPrice * VAT).toFixed(2), margin.toFixed(2) + '%'];
+            return [clean(p.sku), clean(p.name), (p.caPrice || 0).toFixed(2), (p.costPrice ? p.costPrice * VAT_MULTIPLIER : 0).toFixed(2), (p.floorPrice ? p.floorPrice * VAT_MULTIPLIER : 0).toFixed(2), (p.ceilingPrice ? p.ceilingPrice * VAT_MULTIPLIER : 0).toFixed(2), (p.currentPrice * VAT_MULTIPLIER).toFixed(2), margin.toFixed(2) + '%'];
         });
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });

@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord } from '../types';
-import { DEFAULT_STRATEGY_RULES } from '../constants';
+import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
 import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity } from 'lucide-react';
 
@@ -43,9 +43,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [activeTab, setActiveTab] = useState<'ENGINE' | 'HISTORY'>('ENGINE');
     const [filterTab, setFilterTab] = useState<'All' | 'INCREASE' | 'DECREASE' | 'MAINTAIN'>('All');
 
-    // Pagination State
+    // Pagination State (Engine)
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
+
+    // Pagination State (History)
+    const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
+    const [historyItemsPerPage, setHistoryItemsPerPage] = useState(25);
 
     // --- LOGIC HELPERS ---
 
@@ -147,7 +151,6 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         const netPmPercent = recentTotalSales > 0 ? (totalProfit / recentTotalSales) * 100 : 0;
 
         // User Request: Add 20% VAT to Recent stats for Display & Strategy context
-        const VAT_MULTIPLIER = 1.20;
         const averagePrice = rawAveragePrice * VAT_MULTIPLIER;
         const recentTotalSalesWithVat = recentTotalSales * VAT_MULTIPLIER;
 
@@ -303,7 +306,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     };
 
     const historyTableData = useMemo(() => {
-        return priceChangeHistory.map(change => {
+        let data = priceChangeHistory.map(change => {
             const date = new Date(change.date);
             
             // Before: Date - 7d to Date - 1d
@@ -324,11 +327,37 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 velocityChange: preVel > 0 ? ((postVel - preVel) / preVel) * 100 : (postVel > 0 ? 100 : 0)
             };
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [priceChangeHistory, priceHistoryMap]);
+
+        // Filter Logic for History
+        if (searchTags.length > 0 || searchQuery) {
+            data = data.filter(item => {
+                const matchesTerm = (term: string) => {
+                    const t = term.toLowerCase();
+                    return item.sku.toLowerCase().includes(t) || 
+                           item.productName.toLowerCase().includes(t);
+                };
+
+                if (searchTags.length > 0) {
+                    return searchTags.some(tag => matchesTerm(tag));
+                }
+                return matchesTerm(searchQuery);
+            });
+        }
+
+        return data;
+    }, [priceChangeHistory, priceHistoryMap, searchTags, searchQuery]);
+
+    const paginatedHistoryData = useMemo(() => {
+        const start = (historyCurrentPage - 1) * historyItemsPerPage;
+        return historyTableData.slice(start, start + historyItemsPerPage);
+    }, [historyTableData, historyCurrentPage, historyItemsPerPage]);
+
+    const totalHistoryPages = Math.ceil(historyTableData.length / historyItemsPerPage);
 
     // Reset pagination on filter change
     useEffect(() => {
         setCurrentPage(1);
+        setHistoryCurrentPage(1);
     }, [searchQuery, searchTags, activeTab, filterTab, timeWindow, showOOS]);
 
     const uniquePlatforms = useMemo(() => {
@@ -341,7 +370,6 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     }, [products, pricingRules]);
 
     const handleExport = (platform: string = 'All') => {
-        // ... (Export Logic remains unchanged for Strategy view)
         // Helper to sanitize CSV fields
         const clean = (val: any) => {
             if (val === null || val === undefined) return '';
@@ -428,120 +456,125 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
             {activeTab === 'ENGINE' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                    {/* ... (Existing Engine Content) ... */}
                     {/* Controls Row */}
-                    <div className="flex justify-end gap-3 items-center relative z-20">
-                        <div className="flex items-center gap-3">
-                            <div className="flex bg-gray-100 p-1 rounded-lg">
-                                {['7', '14', '30', '60'].map(d => (
+                    <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative z-20 backdrop-blur-custom">
+                        {/* Left Side: Time Controls */}
+                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
+                            <div className="flex items-center gap-3">
+                                <div className="flex bg-gray-100 p-1 rounded-lg">
+                                    {['7', '14', '30', '60'].map(d => (
+                                        <button
+                                            key={d}
+                                            onClick={() => setTimeWindow(d as any)}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === d ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            {d}D
+                                        </button>
+                                    ))}
                                     <button
-                                        key={d}
-                                        onClick={() => setTimeWindow(d as any)}
-                                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === d ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        onClick={() => setTimeWindow('CUSTOM')}
+                                        className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 transition-all ${timeWindow === 'CUSTOM' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                     >
-                                        {d}D
+                                        <Calendar className="w-3 h-3" /> Custom
                                     </button>
-                                ))}
-                                <button
-                                    onClick={() => setTimeWindow('CUSTOM')}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 transition-all ${timeWindow === 'CUSTOM' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                >
-                                    <Calendar className="w-3 h-3" /> Custom
-                                </button>
-                            </div>
-                            
-                            <div className="flex flex-col items-start justify-center">
-                                <span className="text-[10px] font-medium text-gray-400 uppercase leading-none mb-0.5">Analyzing Period</span>
-                                <div className="text-xs font-bold text-indigo-600 flex items-center gap-1.5">
-                                    <Calendar className="w-3 h-3" />
-                                    {formattedDateRange}
+                                </div>
+                                
+                                <div className="flex flex-col items-start justify-center pl-2 border-l border-gray-200">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-0.5">Analyzing Period</span>
+                                    <div className="text-xs font-bold text-indigo-600 flex items-center gap-1.5">
+                                        <Calendar className="w-3 h-3" />
+                                        {formattedDateRange}
+                                    </div>
                                 </div>
                             </div>
+
+                            {timeWindow === 'CUSTOM' && (
+                                <div className="flex items-center gap-2 text-sm bg-white/50 p-1 rounded-lg border border-gray-200">
+                                    <input type="date" value={customRange.start} onChange={e => setCustomRange({ ...customRange, start: e.target.value })} className="border-none bg-transparent rounded px-2 py-1 text-xs focus:ring-0" />
+                                    <span className="text-gray-400">-</span>
+                                    <input type="date" value={customRange.end} onChange={e => setCustomRange({ ...customRange, end: e.target.value })} className="border-none bg-transparent rounded px-2 py-1 text-xs focus:ring-0" />
+                                </div>
+                            )}
                         </div>
 
-                        {timeWindow === 'CUSTOM' && (
-                            <div className="flex items-center gap-2 text-sm">
-                                <input type="date" value={customRange.start} onChange={e => setCustomRange({ ...customRange, start: e.target.value })} className="border rounded px-2 py-1" />
-                                <span>-</span>
-                                <input type="date" value={customRange.end} onChange={e => setCustomRange({ ...customRange, end: e.target.value })} className="border rounded px-2 py-1" />
-                            </div>
-                        )}
-
-                        <div className="h-8 w-px bg-gray-300 mx-2"></div>
-
-                        <button
-                            onClick={() => setIncludeIncoming(!includeIncoming)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white/80 text-gray-500 border-gray-300'}`}
-                            title={includeIncoming ? "Including Incoming Stock in Runway Calc" : "Excluding Incoming Stock (Conservative Mode)"}
-                        >
-                            <Ship className="w-4 h-4" />
-                            {includeIncoming ? 'Incoming Included' : 'Incoming Excluded'}
-                        </button>
-
-                        <button
-                            onClick={() => setIsConfigOpen(!isConfigOpen)}
-                            className={`px-4 py-2 rounded-lg font-medium border flex items-center gap-2 transition-all ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white/80 text-indigo-600 border-indigo-200'}`}
-                        >
-                            <Settings className="w-4 h-4" />
-                            {isConfigOpen ? 'Hide Rules' : 'Edit Rules'}
-                        </button>
-
-                        <div className="relative">
+                        {/* Right Side: Actions */}
+                        <div className="flex flex-wrap items-center gap-3 justify-end w-full xl:w-auto">
                             <button
-                                onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-                                className="px-4 py-2 bg-white/80 text-gray-700 border border-gray-300 rounded-lg hover:bg-white flex items-center gap-2"
+                                onClick={() => setIncludeIncoming(!includeIncoming)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                title={includeIncoming ? "Including Incoming Stock in Runway Calc" : "Excluding Incoming Stock (Conservative Mode)"}
                             >
-                                <Download className="w-4 h-4" />
-                                Export Matrix
-                                <ChevronDown className="w-3 h-3 text-gray-400" />
+                                <Ship className="w-4 h-4" />
+                                {includeIncoming ? 'Incoming Included' : 'Incoming Excluded'}
                             </button>
 
-                            {/* Floating Modal for Export */}
-                            {isExportMenuOpen && createPortal(
-                                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
-                                    <div
-                                        className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20"
-                                        onClick={e => e.stopPropagation()}
-                                    >
-                                        <div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50">
-                                            <h3 className="font-bold text-gray-900">Export Strategy</h3>
-                                            <button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200/50 rounded-full transition-colors">
-                                                <X className="w-4 h-4 text-gray-500" />
-                                            </button>
-                                        </div>
+                            <button
+                                onClick={() => setIsConfigOpen(!isConfigOpen)}
+                                className={`px-4 py-2 rounded-lg font-medium border flex items-center gap-2 transition-all text-sm ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                            >
+                                <Settings className="w-4 h-4" />
+                                {isConfigOpen ? 'Hide Rules' : 'Edit Rules'}
+                            </button>
 
-                                        <div className="p-2">
-                                            <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div>
-                                            <button
-                                                onClick={() => handleExport('All')}
-                                                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between group rounded-lg transition-colors"
-                                            >
-                                                <span className="font-medium">Standard (Master SKUs)</span>
-                                                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" />
-                                            </button>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                                    className="px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition-colors shadow-sm"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    Export Matrix
+                                    <ChevronDown className="w-3 h-3 text-gray-400" />
+                                </button>
 
-                                            <div className="my-2 border-t border-gray-100/50"></div>
+                                {/* Floating Modal for Export */}
+                                {isExportMenuOpen && createPortal(
+                                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
+                                        <div
+                                            className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20"
+                                            onClick={e => e.stopPropagation()}
+                                        >
+                                            <div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50">
+                                                <h3 className="font-bold text-gray-900">Export Strategy</h3>
+                                                <button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200/50 rounded-full transition-colors">
+                                                    <X className="w-4 h-4 text-gray-500" />
+                                                </button>
+                                            </div>
 
-                                            <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div>
-                                            <div className="max-h-60 overflow-y-auto">
-                                                {uniquePlatforms.map(platform => (
-                                                    <button
-                                                        key={platform}
-                                                        onClick={() => handleExport(platform)}
-                                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between rounded-lg transition-colors"
-                                                    >
-                                                        <span>{platform}</span>
-                                                        <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span>
-                                                    </button>
-                                                ))}
-                                                {uniquePlatforms.length === 0 && (
-                                                    <div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>
-                                                )}
+                                            <div className="p-2">
+                                                <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div>
+                                                <button
+                                                    onClick={() => handleExport('All')}
+                                                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between group rounded-lg transition-colors"
+                                                >
+                                                    <span className="font-medium">Standard (Master SKUs)</span>
+                                                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" />
+                                                </button>
+
+                                                <div className="my-2 border-t border-gray-100/50"></div>
+
+                                                <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div>
+                                                <div className="max-h-60 overflow-y-auto">
+                                                    {uniquePlatforms.map(platform => (
+                                                        <button
+                                                            key={platform}
+                                                            onClick={() => handleExport(platform)}
+                                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between rounded-lg transition-colors"
+                                                        >
+                                                            <span>{platform}</span>
+                                                            <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span>
+                                                        </button>
+                                                    ))}
+                                                    {uniquePlatforms.length === 0 && (
+                                                        <div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>,
-                                document.body
-                            )}
+                                    </div>,
+                                    document.body
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -853,7 +886,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                                     {safeFormat(row.netPmPercent, 1)}%
                                                 </span>
                                             </td>
-                                            <td className="p-4 text-right font-mono text-purple-600 font-bold">
+                                            <td className="p-4 text-right font-bold text-purple-600 font-mono">
                                                 {row.caPrice ? `£${safeFormat(row.caPrice, 2)}` : '-'}
                                             </td>
                                             <td className="p-4 text-right font-mono font-bold">
@@ -946,6 +979,24 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                     </div>
 
                     <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+                        {/* Search Bar for History */}
+                        <div className="p-4 border-b border-custom-glass bg-gray-50/50">
+                            <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                                <div className="w-full max-w-lg">
+                                    <TagSearchInput 
+                                        tags={searchTags}
+                                        onTagsChange={(tags) => { setSearchTags(tags); setHistoryCurrentPage(1); }}
+                                        onInputChange={(val) => { setSearchQuery(val); setHistoryCurrentPage(1); }}
+                                        placeholder="Search History (SKU or Name)..."
+                                        themeColor={themeColor}
+                                    />
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                    Showing <strong>{historyTableData.length}</strong> records
+                                </div>
+                            </div>
+                        </div>
+
                         <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
                                 <tr>
@@ -959,10 +1010,10 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100/50">
-                                {historyTableData.map((row: any) => (
+                                {paginatedHistoryData.map((row: any) => (
                                     <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
                                         <td className="p-4 text-gray-500 text-xs">
-                                            {new Date(row.date).toLocaleDateString()} <span className="opacity-50">{new Date(row.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                            {new Date(row.date).toLocaleDateString()}
                                         </td>
                                         <td className="p-4">
                                             <div className="font-bold text-gray-900">{row.sku}</div>
@@ -994,15 +1045,64 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                         </td>
                                     </tr>
                                 ))}
-                                {historyTableData.length === 0 && (
+                                {paginatedHistoryData.length === 0 && (
                                     <tr>
                                         <td colSpan={7} className="p-12 text-center text-gray-400">
-                                            No price changes detected yet. Upload a CA Report to start tracking.
+                                            No price changes found.
                                         </td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
+
+                        {/* Pagination Footer for History */}
+                        {historyTableData.length > 0 && (
+                            <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <p className="text-sm text-gray-700">
+                                            Showing <span className="font-medium">{(historyCurrentPage - 1) * historyItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(historyCurrentPage * historyItemsPerPage, historyTableData.length)}</span> of <span className="font-medium">{historyTableData.length}</span> results
+                                        </p>
+                                        <select
+                                            value={historyItemsPerPage}
+                                            onChange={(e) => {
+                                                setHistoryItemsPerPage(Number(e.target.value));
+                                                setHistoryCurrentPage(1);
+                                            }}
+                                            className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"
+                                        >
+                                            <option value={10}>10</option>
+                                            <option value={25}>25</option>
+                                            <option value={50}>50</option>
+                                            <option value={100}>100</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        {totalHistoryPages > 1 && (
+                                            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                                <button
+                                                    onClick={() => setHistoryCurrentPage(prev => Math.max(prev - 1, 1))}
+                                                    disabled={historyCurrentPage === 1}
+                                                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                                                >
+                                                    <ChevronLeft className="h-5 w-5" />
+                                                </button>
+                                                <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                                    Page {historyCurrentPage} of {totalHistoryPages}
+                                                </span>
+                                                <button
+                                                    onClick={() => setHistoryCurrentPage(prev => Math.min(prev + 1, totalHistoryPages))}
+                                                    disabled={historyCurrentPage === totalHistoryPages}
+                                                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                                                >
+                                                    <ChevronRight className="h-5 w-5" />
+                                                </button>
+                                            </nav>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
