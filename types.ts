@@ -196,6 +196,15 @@ export interface StrategyConfig {
   };
 }
 
+// --- SEARCH CONFIGURATION TYPE ---
+export interface SearchConfig {
+  volumeBands: {
+    topPercentile: number; // e.g. 20 (Top 20%)
+    bottomPercentile: number; // e.g. 20 (Bottom 20%)
+  };
+  minAbsoluteFloor: number; // e.g. 10 units
+}
+
 // --- LOGISTICS MODULE TYPES ---
 
 export interface LogisticsRule {
@@ -258,3 +267,13 @@ export interface User {
 }
 
 export type VelocityLookback = '7' | '30' | '60' | '90' | 'ALL';
+
+// --- GLOBAL SEARCH TYPES ---
+
+export type ChipType = 'METRIC' | 'TIME' | 'RANK' | 'FILTER' | 'TEXT' | 'PLATFORM' | 'CONDITION';
+
+export interface SearchChip {
+  type: ChipType;
+  value: string; // The internal value, e.g., 'margin_percent'
+  label: string; // The display label, e.g., 'Margin %'
+}

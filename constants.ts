@@ -1,5 +1,6 @@
 
-import { Product, PriceLog, PromotionEvent, PricingRules, LogisticsRule, StrategyConfig } from './types';
+
+import { Product, PriceLog, PromotionEvent, PricingRules, LogisticsRule, StrategyConfig, SearchConfig } from './types';
 
 export const VAT_MULTIPLIER = 1.20;
 
@@ -58,6 +59,14 @@ export const DEFAULT_STRATEGY_RULES: StrategyConfig = {
   safety: {
     minMarginPercent: 10
   }
+};
+
+export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
+  volumeBands: {
+    topPercentile: 20,
+    bottomPercentile: 20
+  },
+  minAbsoluteFloor: 10
 };
 
 export const INITIAL_PRODUCTS: Product[] = [

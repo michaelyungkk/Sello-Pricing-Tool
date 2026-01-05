@@ -2,7 +2,7 @@
 import React from 'react';
 import { Product, AnalysisResult } from '../types';
 import StockChart from './StockChart';
-import { Check, AlertTriangle, X, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
+import { Check, AlertTriangle, X, TrendingUp, TrendingDown, WifiOff } from 'lucide-react';
 
 interface AnalysisModalProps {
   product: Product;
@@ -15,6 +15,8 @@ interface AnalysisModalProps {
 
 const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoading, onClose, onApplyPrice, themeColor }) => {
   if (!product) return null;
+
+  const isOffline = analysis?.reasoning?.includes('[OFFLINE MODE]');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -96,11 +98,17 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
               </div>
 
               {/* Reasoning */}
-              <div className="bg-white/80 border border-gray-200 rounded-xl p-5 shadow-sm">
+              <div className={`bg-white/80 border rounded-xl p-5 shadow-sm ${isOffline ? 'border-amber-200' : 'border-gray-200'}`}>
                 <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: themeColor }}></span>
-                  AI Strategy Reasoning
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isOffline ? '#d97706' : themeColor }}></span>
+                  {isOffline ? 'Offline Simulation Engine' : 'AI Strategy Reasoning'}
+                  {isOffline && <WifiOff className="w-3.5 h-3.5 text-amber-500" />}
                 </h3>
+                {isOffline && (
+                    <div className="mb-3 text-[10px] uppercase font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block border border-amber-100">
+                        Connection Limit Reached: Using Local Math
+                    </div>
+                )}
                 <p className="text-gray-600 leading-relaxed">{analysis.reasoning}</p>
               </div>
 

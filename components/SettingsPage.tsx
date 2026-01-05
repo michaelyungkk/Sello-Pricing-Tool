@@ -1,11 +1,12 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { PricingRules, Platform, Product, PriceLog, PromotionEvent, LogisticsRule, ShipmentLog, VelocityLookback } from '../types';
-import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Calendar } from 'lucide-react';
+import { PricingRules, Platform, Product, PriceLog, PromotionEvent, LogisticsRule, ShipmentLog, VelocityLookback, SearchConfig } from '../types';
+import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Calendar, Search } from 'lucide-react';
 
 interface SettingsPageProps {
     currentRules: PricingRules;
-    onSave: (rules: PricingRules, velocitySetting: VelocityLookback) => void;
+    onSave: (rules: PricingRules, velocitySetting: VelocityLookback, searchConfig: SearchConfig) => void;
     logisticsRules?: LogisticsRule[];
     onSaveLogistics?: (rules: LogisticsRule[]) => void;
     products: Product[];
@@ -16,12 +17,14 @@ interface SettingsPageProps {
     shipmentHistory?: ShipmentLog[];
     themeColor: string;
     headerStyle: React.CSSProperties;
+    searchConfig?: SearchConfig;
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logisticsRules = [], onSaveLogistics, products, extraData, shipmentHistory = [], themeColor, headerStyle }) => {
-    const [activeTab, setActiveTab] = useState<'platforms' | 'logistics' | 'analysis'>('platforms');
+const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logisticsRules = [], onSaveLogistics, products, extraData, shipmentHistory = [], themeColor, headerStyle, searchConfig: initialSearchConfig }) => {
+    const [activeTab, setActiveTab] = useState<'platforms' | 'logistics' | 'analysis' | 'search'>('platforms');
     const [rules, setRules] = useState<PricingRules>(JSON.parse(JSON.stringify(currentRules)));
     const [logistics, setLogistics] = useState<LogisticsRule[]>(JSON.parse(JSON.stringify(logisticsRules)));
+    const [searchConfig, setSearchConfig] = useState<SearchConfig>(initialSearchConfig ? JSON.parse(JSON.stringify(initialSearchConfig)) : { volumeBands: { topPercentile: 20, bottomPercentile: 20 }, minAbsoluteFloor: 10 });
     const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(() => {
         return (localStorage.getItem('sello_velocity_setting') as VelocityLookback) || (localStorage.getItem('ecompulse_velocity_setting') as VelocityLookback) || '30';
     });
@@ -47,7 +50,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
     useEffect(() => {
         setRules(JSON.parse(JSON.stringify(currentRules)));
         setLogistics(JSON.parse(JSON.stringify(logisticsRules)));
-    }, [currentRules, logisticsRules]);
+        if (initialSearchConfig) setSearchConfig(JSON.parse(JSON.stringify(initialSearchConfig)));
+    }, [currentRules, logisticsRules, initialSearchConfig]);
 
     const handleMarkupChange = (platform: Platform, value: string) => {
         const numValue = parseFloat(value);
@@ -185,7 +189,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
     };
 
     const handleSave = () => {
-        onSave(rules, velocityLookback);
+        onSave(rules, velocityLookback, searchConfig);
         if (onSaveLogistics) onSaveLogistics(logistics);
         setIsSaved(true);
     };
@@ -230,6 +234,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                 >
                     <BarChart2 className="w-4 h-4" />
                     Analysis Logic
+                </button>
+
+                <button
+                    onClick={() => setActiveTab('search')}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'search' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <Search className="w-4 h-4" />
+                    Search Settings
                 </button>
             </div>
 
@@ -551,6 +563,93 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                                 Selecting a shorter window makes the system more responsive to recent trend changes.
                                             </p>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Search Settings Section */}
+                {activeTab === 'search' && (
+                    <div className="space-y-6">
+                        <div>
+                            <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Search Result Settings</h2>
+                            <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
+                                Fine-tune how search results are visualized and banded.
+                            </p>
+                        </div>
+
+                        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
+                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+                                            <BarChart2 className="w-5 h-5" />
+                                        </div>
+                                        <h3 className="font-bold text-gray-900">Volume Distribution Bands</h3>
+                                    </div>
+                                    <p className="text-sm text-gray-500 mb-4">
+                                        Configure the percentile thresholds used to classify sales volume into Top, Middle, and Bottom tiers in the Volume View.
+                                    </p>
+                                    
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Top Band Threshold (%)</label>
+                                            <div className="flex items-center gap-3">
+                                                <input 
+                                                    type="number" 
+                                                    min="1" max="99" 
+                                                    value={searchConfig.volumeBands.topPercentile}
+                                                    onChange={e => setSearchConfig({...searchConfig, volumeBands: {...searchConfig.volumeBands, topPercentile: parseFloat(e.target.value)}})}
+                                                    className="w-20 border rounded p-2 text-sm font-bold text-gray-900"
+                                                />
+                                                <span className="text-sm text-gray-600">The top {searchConfig.volumeBands.topPercentile}% of products by volume</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Bottom Band Threshold (%)</label>
+                                            <div className="flex items-center gap-3">
+                                                <input 
+                                                    type="number" 
+                                                    min="1" max="99" 
+                                                    value={searchConfig.volumeBands.bottomPercentile}
+                                                    onChange={e => setSearchConfig({...searchConfig, volumeBands: {...searchConfig.volumeBands, bottomPercentile: parseFloat(e.target.value)}})}
+                                                    className="w-20 border rounded p-2 text-sm font-bold text-gray-900"
+                                                />
+                                                <span className="text-sm text-gray-600">The bottom {searchConfig.volumeBands.bottomPercentile}% of products by volume</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="p-2 bg-gray-100 rounded-lg text-gray-600">
+                                            <Scale className="w-5 h-5" />
+                                        </div>
+                                        <h3 className="font-bold text-gray-900">Minimum Volume Floor</h3>
+                                    </div>
+                                    <p className="text-sm text-gray-500 mb-4">
+                                        Define the absolute minimum sales quantity required to enable scale coloring. If the max volume in a result set is below this, distribution bands are disabled.
+                                    </p>
+
+                                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                        <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Absolute Floor (Units)</label>
+                                        <div className="flex items-center gap-3">
+                                            <input 
+                                                type="number" 
+                                                min="0"
+                                                value={searchConfig.minAbsoluteFloor}
+                                                onChange={e => setSearchConfig({...searchConfig, minAbsoluteFloor: parseFloat(e.target.value)})}
+                                                className="w-20 border rounded p-2 text-sm font-bold text-gray-900"
+                                            />
+                                            <span className="text-sm text-gray-600">units</span>
+                                        </div>
+                                        <p className="text-xs text-gray-400 mt-2">
+                                            Prevents misleading "Top Performer" badges on low-volume data sets (e.g. daily views).
+                                        </p>
                                     </div>
                                 </div>
                             </div>

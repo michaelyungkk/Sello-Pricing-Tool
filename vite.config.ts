@@ -11,9 +11,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     define: {
       // This ensures process.env.API_KEY is replaced by the actual value during build
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY || ''),
-      // Prevent other process.env access from crashing the browser
-      'process.env': {}
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY || '')
     }
   }
 })
