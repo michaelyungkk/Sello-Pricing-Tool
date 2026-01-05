@@ -43,6 +43,36 @@ export interface PriceChangeRecord {
   percentChange: number;
 }
 
+export interface SkuCostDetail {
+  unitPrice: number; // Derived: sales_amt / sku_qty
+  salesAmt: number;
+  skuQty: number; // Added to store sales quantity from report
+  extraFreight: number;
+  promoRebate: number;
+  cogs: number;
+  cogsPct: number;
+  postage: number;
+  postagePct: number;
+  sellingFee: number;
+  sellingFeePct: number;
+  adsFee: number;
+  adsFeePct: number;
+  otherFee: number;
+  otherFeePct: number;
+  subscriptionFee: number;
+  subscriptionFeePct: number;
+  wmsFee: number;
+  wmsFeePct: number;
+  resendQty: number;
+  resendAmt: number;
+  refundQty: number;
+  refundAmt: number;
+  returnAmtPct: number;
+  profitInclRn: number;
+  profitInclRnPct: number;
+  lastUpdated: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -114,6 +144,9 @@ export interface Product {
   returnRate?: number; // % of units returned vs sold
   totalRefunded?: number; // Total value refunded in current period
   
+  // New: Cost Detail Report Data
+  costDetail?: SkuCostDetail;
+
   // Transient Data
   _trendData?: { velocityChange: number };
 }
