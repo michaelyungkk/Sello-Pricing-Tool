@@ -174,7 +174,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       const p = data.params;
       const matchesKeyword = keywords.some(k => q.includes(k));
       const hasFilter = p?.filters?.some((f: any) => fields.includes(f.field));
-      const hasSort = fields.includes(p?.sort?.field);
+      // Fix: Guard against undefined sort field for strict null checks
+      const hasSort = p?.sort?.field ? fields.includes(p.sort.field) : false;
       return matchesKeyword || hasFilter || hasSort;
   };
 
@@ -193,7 +194,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       ['margin', 'profit', 'netPmPercent']
   ), [data]);
 
-  // FIX: Removed generic 'days' to prevent "Last 7 Days" triggering Inventory View. Added 'days remaining', 'days cover'.
   const isInventoryContext = useMemo(() => checkContext(
       ['stock', 'inventory', 'runway', 'cover', 'days remaining', 'days cover', 'overstock', 'out of stock', 'level'], 
       ['stockLevel', 'daysRemaining']
@@ -262,10 +262,11 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
           // totalQty is essentially the Stock Level in this context aggregation from search processor.
           // item.averageDailySales is the Global Velocity.
           
-          topGroup.globalVelocity = item.averageDailySales || 0;
+          const gVel = item.averageDailySales || 0;
+          topGroup.globalVelocity = gVel;
           topGroup.totalQty = item.stockLevel; // Force Stock Level as Qty
           // Cover = Stock / Global Velocity
-          topGroup.globalCover = topGroup.globalVelocity > 0 ? (item.stockLevel / topGroup.globalVelocity) : 999;
+          topGroup.globalCover = gVel > 0 ? (item.stockLevel / gVel) : 999;
 
           // Build Sub-Groups from Channel Data attached to the item
           if (item.channels && Array.isArray(item.channels)) {
@@ -362,7 +363,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
             
             // Map intent field to aggregated properties
             if (field === 'margin' || field === 'net_margin_pct' || field === 'netPmPercent') {
-                // USER REQUEST: Sort by Net Contribution (Profit) instead of Margin %
                 return (a.totalProfit - b.totalProfit) * dirMult;
             }
             if (field === 'profit' || field === 'net_profit') {
@@ -385,19 +385,16 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
             }
         }
 
-        if (isInventoryContext) return a.totalQty - b.totalQty; // Lowest stock first? Or Critical first usually.
+        if (isInventoryContext) return a.totalQty - b.totalQty;
         if (isVolumeContext) return b.totalQty - a.totalQty;
         if (isAdContext) return b.tacos - a.tacos;
-        if (isMarginContext) return b.totalProfit - a.totalProfit; // Sort by absolute contribution first
+        if (isMarginContext) return b.totalProfit - a.totalProfit;
         return b.totalRevenue - a.totalRevenue;
     });
   }, [data.results, groupBy, isVolumeContext, isAdContext, isMarginContext, isInventoryContext, data.params]);
 
   // --- Volume Distribution Bands Logic ---
-  // USER REQUEST: Apply to all views, not just Volume context
   const volumeContextStats = useMemo(() => {
-      // Removed check: if (!isVolumeContext) return null;
-      
       const quantities = hierarchicalData.map(g => g.totalQty).sort((a, b) => a - b);
       const count = quantities.length;
       if (count === 0) return null;
@@ -408,7 +405,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
           return { isLowVolume: true };
       }
 
-      // Calculate cutoff indices based on user config (e.g. Top 20%, Bottom 20%)
       const bottomCutoffIndex = Math.floor(count * (searchConfig.volumeBands.bottomPercentile / 100));
       const topCutoffIndex = Math.floor(count * (1 - searchConfig.volumeBands.topPercentile / 100));
 
@@ -422,9 +418,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       };
 
       return { isLowVolume: false, getBand };
-  }, [hierarchicalData, searchConfig]); // Removed isVolumeContext dependency
-
-  // ... (handleGroupToggle, handleSubGroupToggle, checkContext - no changes)
+  }, [hierarchicalData, searchConfig]);
 
   const handleGroupToggle = (groupKey: string, e?: React.MouseEvent) => {
       const selection = window.getSelection();
@@ -456,7 +450,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       <div className="space-y-4">
         {hierarchicalData.map(group => {
             let volumeBadge = null;
-            // USER REQUEST: Always display badge if stats available
             if (volumeContextStats) {
                 if (volumeContextStats.isLowVolume) {
                     volumeBadge = <span className="text-[9px] bg-gray-50 text-gray-400 px-1 rounded border border-gray-100">Low Vol</span>;
