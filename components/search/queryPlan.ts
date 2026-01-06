@@ -19,6 +19,7 @@ export interface QueryPlan {
   primaryMetric: string;
   groupBy: "PLATFORM" | "SKU" | "DATE";
   timePreset: TimePreset;
+  customDays?: number; // Supports arbitrary time ranges (e.g. 45 days)
   platforms?: string[];
   filters: QueryFilter[];
   sort: QuerySort;

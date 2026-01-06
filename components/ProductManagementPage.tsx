@@ -436,7 +436,12 @@ const DashboardView = ({
                     else dayProfit += (l.velocity * l.price * (l.margin / 100));
                 });
             });
-            return { day: day.slice(5), revenue: dayRev, ads: dayAds, profit: dayProfit };
+            // Update Date Format Logic Here
+            const [y, m, dStr] = day.split('-');
+            const dateObj = new Date(Number(y), Number(m) - 1, Number(dStr));
+            const displayDate = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            
+            return { day: displayDate, revenue: dayRev, ads: dayAds, profit: dayProfit };
         });
         return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
     }, [processedData, dateRange, priceHistoryMap, products]);
@@ -762,11 +767,32 @@ const DashboardView = ({
                                     <ComposedChart data={financialStats.chartData}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                                         <XAxis dataKey="day" tick={{fontSize: 10}} />
-                                        <YAxis yAxisId="left" tick={{fontSize: 10}} tickFormatter={(val) => `£${val}`} />
-                                        <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10}} tickFormatter={(val) => `£${val}`} />
+                                        <YAxis 
+                                            yAxisId="left" 
+                                            tick={{fontSize: 10, fill: '#6b7280'}} 
+                                            tickFormatter={(val) => `£${val.toLocaleString()}`} 
+                                            label={{ 
+                                                value: 'Revenue', 
+                                                angle: -90, 
+                                                position: 'insideLeft', 
+                                                style: { textAnchor: 'middle', fill: '#93c5fd', fontWeight: 'bold', fontSize: 12 } 
+                                            }}
+                                        />
+                                        <YAxis 
+                                            yAxisId="right" 
+                                            orientation="right" 
+                                            tick={{fontSize: 10, fill: '#6b7280'}} 
+                                            tickFormatter={(val) => `£${val.toLocaleString()}`} 
+                                            label={{ 
+                                                value: 'Profit & Ads', 
+                                                angle: 90, 
+                                                position: 'insideRight', 
+                                                style: { textAnchor: 'middle', fill: '#8b5cf6', fontWeight: 'bold', fontSize: 12 } 
+                                            }}
+                                        />
                                         <RechartsTooltip 
                                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                            formatter={(value: number) => '£' + value.toLocaleString()}
+                                            formatter={(value: number) => '£' + value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
                                         />
                                         <Legend wrapperStyle={{ fontSize: '12px' }} />
                                         <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#93c5fd" barSize={20} radius={[4, 4, 0, 0]} />

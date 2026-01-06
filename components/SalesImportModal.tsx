@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { Product, PricingRules, HistoryPayload, ShipmentLog } from '../types';
-import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search } from 'lucide-react';
+import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search, Hash } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export type { HistoryPayload };
@@ -158,7 +158,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     wmsFee: findMapped(['wmsfee', 'fulfillment', 'pickpack']),
                     profitExclRn: findMapped(['profit_excl_rn', 'netprofit', 'profitamount'], false),
                     profitExclRnPercent: findMapped(['profit_excl_rn%', 'netpm', 'profit%', 'margin%'], true),
-                    outerOrderId: findMapped(['outer_order_id', 'order_id', 'orderid', 'order_no', 'ordernumber'], false)
+                    outerOrderId: findMapped(['outer_order_id', 'order_id', 'orderid', 'order_no', 'ordernumber', 'transaction_id'], false)
                 };
 
                 setMapping(detectedMapping);
@@ -237,6 +237,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             }> = {};
 
             const discoveredPlatforms = new Set<string>();
+            let orderIdsDetectedCount = 0;
 
             let minDate = new Date();
             let maxDate = new Date(0);
@@ -352,6 +353,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 const orderId = (orderIdIdx !== -1 && row[orderIdIdx])
                     ? String(row[orderIdIdx]).trim()
                     : '';
+                
+                if (orderId) orderIdsDetectedCount++;
 
                 discoveredPlatforms.add(platformName);
 
@@ -486,7 +489,10 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 const diffTime = Math.abs(maxDate.getTime() - minDate.getTime());
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // inclusive
                 calculatedPeriod = diffDays;
-                dateLabel = `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`;
+                
+                // Format Date Label to DD Mon YYYY – DD Mon YYYY
+                const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                dateLabel = `${formatDate(minDate)} – ${formatDate(maxDate)}`;
             }
 
             // Build Updates & History
@@ -517,7 +523,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         velocity: isNaN(bucket.totalQty) ? 0 : bucket.totalQty,
                         platform: bucket.platform,
                         orderId: bucket.orderId,
-                        adsSpend: bucket.totalAds > 0 ? Number(bucket.totalAds.toFixed(4)) : undefined
+                        // FIX: Explicitly record ad spend even if 0, to prevent fallback to global averages in dashboard
+                        adsSpend: Number(bucket.totalAds.toFixed(4))
                     };
 
                     if (!isNaN(finalMargin)) {
@@ -609,7 +616,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         velocity: newVelocity,
                         margin: 0,
                         platform: primaryPlatform,
-                        adsSpend: data.fees.ads > 0 ? data.fees.ads : undefined
+                        // FIX: Explicitly record adsSpend for fallback too
+                        adsSpend: data.fees.ads
                     });
                 }
             });
@@ -632,7 +640,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     period: calculatedPeriod,
                     dateLabel,
                     shipmentCount: shipmentLogs.length,
-                    discoveredPlatforms: Array.from(discoveredPlatforms)
+                    discoveredPlatforms: Array.from(discoveredPlatforms),
+                    orderIdsCount: orderIdsDetectedCount // Pass count for UI
                 }
             });
 
@@ -764,6 +773,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 <MappingSelect label="Quantity (sku_quantity)" value={mapping.qty} onChange={(v: string) => mapField('qty', v)} options={rawHeaders} required />
                                 <MappingSelect label="Revenue (sales_amt)" value={mapping.revenue} onChange={(v: string) => mapField('revenue', v)} options={rawHeaders} required />
                                 <MappingSelect label="Date (order_time)" value={mapping.date} onChange={(v: string) => mapField('date', v)} options={rawHeaders} />
+                                <MappingSelect label="Order ID (Optional)" value={mapping.outerOrderId} onChange={(v: string) => mapField('outerOrderId', v)} options={rawHeaders} />
                                 <MappingSelect label="Platform Level 1" value={mapping.platform} onChange={(v: string) => mapField('platform', v)} options={rawHeaders} />
                                 <MappingSelect label="Platform Level 2 (Subsource)" value={mapping.platformLevel2} onChange={(v: string) => mapField('platformLevel2', v)} options={rawHeaders} />
                             </div>
@@ -887,7 +897,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     {step === 'preview' && previewData && (
                         <div className="space-y-6 animate-in zoom-in duration-300">
                             {/* Stats */}
-                            <div className="grid grid-cols-3 gap-4 text-center">
+                            <div className="grid grid-cols-4 gap-4 text-center">
                                 <div className="p-4 bg-green-50 rounded-xl border border-green-100">
                                     <div className="text-2xl font-bold text-green-700">{previewData.stats.matchedSkus}</div>
                                     <div className="text-xs text-green-600 uppercase font-bold">Products Matched</div>
@@ -899,6 +909,10 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
                                     <div className="text-2xl font-bold text-blue-700">{previewData.stats.period} Days</div>
                                     <div className="text-xs text-blue-600 uppercase font-bold">{previewData.stats.dateLabel}</div>
+                                </div>
+                                <div className={`p-4 rounded-xl border ${previewData.stats.orderIdsCount > 0 ? 'bg-teal-50 border-teal-100' : 'bg-gray-50 border-gray-100'}`}>
+                                    <div className={`text-2xl font-bold ${previewData.stats.orderIdsCount > 0 ? 'text-teal-700' : 'text-gray-400'}`}>{previewData.stats.orderIdsCount}</div>
+                                    <div className={`text-xs uppercase font-bold ${previewData.stats.orderIdsCount > 0 ? 'text-teal-600' : 'text-gray-400'}`}>Transactions with IDs</div>
                                 </div>
                             </div>
 
@@ -917,6 +931,11 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 {previewData.stats.shipmentCount > 0 && (
                                     <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-teal-100 text-teal-700 text-xs font-bold border border-teal-200">
                                         <Truck className="w-3 h-3" /> {previewData.stats.shipmentCount} Shipments Logged
+                                    </span>
+                                )}
+                                {previewData.stats.orderIdsCount === 0 && (
+                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200">
+                                        <Hash className="w-3 h-3" /> No Order IDs - Refunds Matching Will Fail
                                     </span>
                                 )}
                             </div>

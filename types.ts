@@ -1,5 +1,4 @@
 
-
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -28,8 +27,15 @@ export interface RefundLog {
   quantity: number;
   amount: number;
   platform?: string;
-  reason?: string;
+  reason?: string; // Primary display reason (fallback/combined)
   orderId?: string;
+  
+  // Extended fields for deep-dive analysis
+  customerReason?: string; // 'Reason for refund'
+  platformReason?: string; // 'Platform after-sales reason'
+  type?: string; // 'After-sales Type'
+  status?: string; // 'After-sales status'
+  remarks?: string; // 'Remarks'
 }
 
 export interface PriceChangeRecord {

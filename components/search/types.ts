@@ -42,8 +42,12 @@ export type PlatformId =
 export type TimePresetId =
   | "LAST_7_DAYS"
   | "LAST_30_DAYS"
+  | "LAST_90_DAYS"
+  | "LAST_180_DAYS"
   | "THIS_MONTH"
-  | "LAST_MONTH";
+  | "LAST_MONTH"
+  | "THIS_YEAR"
+  | "ALL_TIME";
 
 export type SuggestionPriority = "RISK" | "DECLINE" | "INVENTORY" | "OPPORTUNITY" | "HYGIENE";
 

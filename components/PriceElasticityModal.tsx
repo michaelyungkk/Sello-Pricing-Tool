@@ -147,7 +147,7 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
                         <div>
                             <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Latest Price Event</h4>
                             <p className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                {new Date(impactStats.date).toLocaleDateString()}
+                                {new Date(impactStats.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                 <span className={`text-xs px-2 py-0.5 rounded-full border ${impactStats.priceChangePct > 0 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
                                     {impactStats.priceChangePct > 0 ? 'Increased' : 'Decreased'} {Math.abs(impactStats.priceChangePct).toFixed(1)}%
                                 </span>
@@ -206,7 +206,7 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                             <XAxis 
                                 dataKey="date" 
-                                tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
+                                tickFormatter={(val) => new Date(val).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                                 tick={{fontSize: 10, fill: '#9ca3af'}}
                                 axisLine={false}
                                 tickLine={false}
@@ -230,7 +230,7 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
                             />
                             <Tooltip 
                                 contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
-                                labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                                labelFormatter={(label) => new Date(label).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                             />
                             
                             {/* Render Price Change Vertical Lines */}

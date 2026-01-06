@@ -16,16 +16,32 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
   
   // 1. Resolve Time: Use Context First, then Text, then Default
   let selectedTime: TimePreset = "LAST_30_DAYS";
+  let customDays: number | undefined = undefined;
+
+  const daysMatch = lowerText.match(/last\s+(\d+)\s+days?/);
+
   if (context.timePreset) {
       selectedTime = context.timePreset as TimePreset;
+  } else if (daysMatch) {
+      // Arbitrary day support
+      customDays = parseInt(daysMatch[1]);
+      selectedTime = "LAST_30_DAYS"; // Placeholder, will be overridden by customDays in adapter
   } else if (lowerText.includes('last 7')) {
       selectedTime = "LAST_7_DAYS";
   } else if (lowerText.includes('last 30')) {
       selectedTime = "LAST_30_DAYS";
+  } else if (lowerText.includes('last 90')) {
+      selectedTime = "LAST_90_DAYS";
+  } else if (lowerText.includes('last 180') || lowerText.includes('6 months')) {
+      selectedTime = "LAST_180_DAYS";
   } else if (lowerText.includes('this month')) {
       selectedTime = "THIS_MONTH";
   } else if (lowerText.includes('last month')) {
       selectedTime = "LAST_MONTH";
+  } else if (lowerText.includes('this year') || lowerText.includes('ytd') || lowerText.includes('year to date')) {
+      selectedTime = "THIS_YEAR";
+  } else if (lowerText.includes('all time') || lowerText.includes('total history')) {
+      selectedTime = "ALL_TIME";
   }
 
   // 2. Resolve Platforms: Map ID -> Data Name
@@ -40,10 +56,11 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
     primaryMetric: "REVENUE",
     groupBy: "PLATFORM",
     timePreset: selectedTime,
+    customDays: customDays,
     platforms: resolvedPlatforms,
     filters: [],
     sort: { field: "REVENUE", direction: "DESC" },
-    limit: 50,
+    limit: 100, // Increased default from 50 to 100
     viewHint: "SUMMARY_CARDS",
     explain: "Showing overview based on revenue."
   };
@@ -54,42 +71,134 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
       plan.viewHint = "TABLE"; // Tables are better for SKU lists
   }
 
-  // --- 4. Detect Intent / Metrics ---
+  // --- 4. Detect Text Search Term (The Fix) ---
+  // We identify keywords used for logic/commands. Any text NOT matching these is considered a search term.
+  const commandKeywords = [
+      'tacos', 'ad dependency', 'advertising', 'ad spend', 'ads',
+      'profit', 'margin', 'loss', 'negative', 'low', 'high', 'gross', 'net', 'contribution',
+      'stock', 'inventory', 'runway', 'cover', 'days', 'remaining', 'overstock', 'stockout', 'risk', 'excess',
+      'scale', 'winning', 'best', 'top', 'limit', 'show', 'worst', 'bad', 'drop', 'decline', 'wow', 'trend',
+      'return', 'returns', 'refund', 'refunds', 'rate', 'rates', 'rr', // Updated to include plurals
+      'sku', 'product', 'item', 'list', 'table',
+      'last', 'month', 'year', 'ytd', 'this', 'all time', 'history',
+      'amazon', 'ebay', 'range', 'manomano', 'wayfair', 'onbuy', 'groupon', 'tiktok', 'volume', 'sales', 'revenue',
+      // EXPANDED KEYWORDS LIST (Fixes "Name CONTAINS candidate daily velocity" issue)
+      'velocity', 'daily', 'candidate', 'average', 'avg', 'ratio', 'percent', 'pct', 
+      'per', 'unit', 'qty', 'level', 'aged', 'inbound', 'below', 'target', 'dependency', 
+      'strong', 'organic', 'dormant', 'no'
+  ];
+
+  let potentialSearchTerm = lowerText;
+  commandKeywords.forEach(k => {
+      // Remove keywords safely
+      try {
+        potentialSearchTerm = potentialSearchTerm.replace(new RegExp(`\\b${k}\\b`, 'gi'), '');
+      } catch(e) {
+        potentialSearchTerm = potentialSearchTerm.replace(k, '');
+      }
+  });
   
-  // A) TACoS / Ad Dependency / Ad Spend
-  if (lowerText.includes('tacos') || lowerText.includes('ad dependency') || lowerText.includes('advertising cost') || lowerText.includes('ad spend')) {
+  // Clean up numbers often associated with time/limit
+  potentialSearchTerm = potentialSearchTerm.replace(/\b\d+\b/g, '').trim();
+  // Remove special chars often used in logic but allow hyphens/underscores/spaces for SKUs/Names
+  potentialSearchTerm = potentialSearchTerm.replace(/[><=%]/g, '').replace(/\s+/g, ' ').trim();
+
+  // If there is significant text left, apply it as a filter
+  if (potentialSearchTerm.length > 2) {
+      plan.filters.push({ field: "name", op: "CONTAINS", value: potentialSearchTerm });
+      plan.groupBy = "SKU"; // Text search implies specific items, not platform summaries
+      plan.viewHint = "TABLE";
+      plan.explain = `Searching for "${potentialSearchTerm}".`;
+  }
+
+  // --- 5. Detect Intent / Metrics ---
+  
+  // A) DROP / DECLINE LOGIC (Trend Analysis)
+  if (lowerText.includes('drop') || lowerText.includes('decline') || lowerText.includes('down') || lowerText.includes('fall')) {
+      
+      // A1. Volume / Revenue / Sales Drop
+      // We map "Revenue Drop" to Velocity Change as well, as we don't track explicit Revenue Change % currently, 
+      // and volume drops usually drive revenue drops.
+      if (lowerText.includes('volume') || lowerText.includes('revenue') || lowerText.includes('sales') || lowerText.includes('velocity')) {
+          plan.primaryMetric = "VELOCITY_CHANGE";
+          plan.metrics = ["VELOCITY_CHANGE", "REVENUE", "UNITS"];
+          plan.sort = { field: "VELOCITY_CHANGE", direction: "ASC" };
+          // ACTIVE LOGIC: Add explicit filter so user sees "Trend < 0" chip
+          plan.filters.push({ field: "VELOCITY_CHANGE", op: "LT", value: 0 }); 
+          
+          plan.viewHint = "RANKED_LIST";
+          if (!plan.explain.includes("Searching")) plan.explain = "Analyzing negative sales trends (Week-over-Week).";
+      }
+      
+      // A2. Margin Drop
+      // Since we don't track "Margin Change %" historically in the search index yet, we interpret "Margin Drop" 
+      // as "Low Margin" or "Dropped below healthy levels".
+      else if (lowerText.includes('margin') || lowerText.includes('profit') || lowerText.includes('contribution')) {
+          const metric = lowerText.includes('contribution') ? "CMA_PCT" : "NET_MARGIN_PCT";
+          plan.primaryMetric = metric;
+          plan.metrics = [metric, "PROFIT", "REVENUE"];
+          plan.sort = { field: metric, direction: "ASC" };
+          // ACTIVE LOGIC: Add explicit filter so user sees "Margin < 15" chip
+          plan.filters.push({ field: metric, op: "LT", value: 15 });
+          
+          plan.viewHint = "RANKED_LIST";
+          if (!plan.explain.includes("Searching")) plan.explain = "Highlighting products with low or declining margins.";
+      }
+  }
+
+  // B) TACoS / Ad Dependency / Ad Spend
+  else if (lowerText.includes('tacos') || lowerText.includes('ad dependency') || lowerText.includes('advertising') || lowerText.includes('ad spend')) {
       plan.primaryMetric = "TACOS_PCT";
       plan.metrics = ["TACOS_PCT", "ADS_SPEND", "REVENUE", "MER"];
       plan.sort = { field: "TACOS_PCT", direction: "DESC" };
-      plan.viewHint = "RANKED_LIST"; // Ranked list is good for identifying "Top Offenders"
-      plan.explain = "Analyzing Total Advertising Cost of Sales (TACoS).";
+      plan.viewHint = "RANKED_LIST"; 
+      if (!plan.explain.includes("Searching")) plan.explain = "Analyzing Total Advertising Cost of Sales (TACoS).";
 
       // Filter: Only show items with valid ad spend activity
       plan.filters.push({ field: "ADS_SPEND", op: "GT", value: 0 });
 
       // High Dependency Logic
       if (lowerText.includes('high') || lowerText.includes('dependency')) {
-          const threshold = lowerText.includes('very high') ? 25 : 15; // Percent values stored as 0-100 in app
+          const threshold = lowerText.includes('very high') ? 25 : 15; 
           plan.filters.push({ field: "TACOS_PCT", op: "GTE", value: threshold });
-          plan.explain = `Showing items with high ad dependency (TACoS >= ${threshold}%).`;
+          if (!plan.explain.includes("Searching")) plan.explain = `Showing items with high ad dependency (TACoS >= ${threshold}%).`;
       }
   } 
-  // B) Profit / Margin / Loss
+  // C) Contribution Margin Specific (General)
+  else if (lowerText.includes('contribution')) {
+      plan.primaryMetric = "CMA_PCT";
+      plan.metrics = ["CMA_PCT", "PROFIT", "REVENUE", "UNITS"];
+      plan.sort = { field: "CMA_PCT", direction: "DESC" }; // Default to highest contribution
+      
+      if (lowerText.includes('low') || lowerText.includes('bad') || lowerText.includes('negative')) {
+          plan.sort = { field: "CMA_PCT", direction: "ASC" };
+          // Active Logic for "Low"
+          plan.filters.push({ field: "CMA_PCT", op: "LT", value: 10 });
+          if (!plan.explain.includes("Searching")) plan.explain = "Highlighting low contribution margin items.";
+      } else {
+          if (!plan.explain.includes("Searching")) plan.explain = "Analyzing Contribution Margin.";
+      }
+  }
+  // D) Profit / Margin / Loss (General)
   else if (lowerText.includes('profit') || lowerText.includes('margin') || lowerText.includes('loss')) {
       plan.primaryMetric = "NET_MARGIN_PCT";
       plan.metrics = ["NET_MARGIN_PCT", "PROFIT", "REVENUE", "UNITS"];
       plan.sort = { field: "PROFIT", direction: "DESC" };
       
       if (lowerText.includes('low') || lowerText.includes('negative') || lowerText.includes('loss')) {
-          plan.filters.push({ field: "NET_MARGIN_PCT", op: "LT", value: 5 }); // Warning threshold
-          plan.sort = { field: "NET_MARGIN_PCT", direction: "ASC" }; // Show worst first
-          plan.explain = "Highlighting low margin or unprofitable items.";
+          plan.sort = { field: "NET_MARGIN_PCT", direction: "ASC" }; 
+          if (lowerText.includes('loss')) {
+             plan.filters.push({ field: "NET_MARGIN_PCT", op: "LT", value: 0 });
+          } else {
+             plan.filters.push({ field: "NET_MARGIN_PCT", op: "LT", value: 10 });
+          }
           plan.viewHint = "RANKED_LIST";
+          if (!plan.explain.includes("Searching")) plan.explain = "Highlighting profitability issues.";
       } else {
-          plan.explain = "Analyzing profitability.";
+          if (!plan.explain.includes("Searching")) plan.explain = "Analyzing profitability.";
       }
   }
-  // C) Inventory / Stock / Cover / Runway
+  // E) Inventory / Stock / Cover / Runway
   else if (lowerText.includes('stock') || lowerText.includes('inventory') || lowerText.includes('runway') || lowerText.includes('cover')) {
       plan.primaryMetric = "STOCK_COVER_DAYS";
       plan.metrics = ["STOCK_COVER_DAYS", "STOCK_LEVEL", "DAILY_VELOCITY", "REVENUE"];
@@ -97,45 +206,68 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
       plan.viewHint = "TABLE";
       
       if (lowerText.includes('stockout') || lowerText.includes('out of stock') || lowerText.includes('low')) {
-          // Explicit OOS Intent: "Out of stock" OR "Stockout" (without "Risk")
+          // Explicit OOS Intent
           if (lowerText.includes('out of stock') || (lowerText.includes('stockout') && !lowerText.includes('risk'))) {
-              plan.sort = { field: "DAILY_VELOCITY", direction: "DESC" }; // Prioritize high velocity items
+              plan.sort = { field: "DAILY_VELOCITY", direction: "DESC" }; 
               plan.filters.push({ field: "STOCK_LEVEL", op: "LTE", value: 0 });
-              plan.explain = "Showing items currently Out of Stock.";
+              if (!plan.explain.includes("Searching")) plan.explain = "Showing items currently Out of Stock.";
           } else {
               // Risk / Low Stock Intent
               plan.sort = { field: "STOCK_COVER_DAYS", direction: "ASC" };
-              // Add default filter for stockout risk (< 14 days)
               plan.filters.push({ field: "STOCK_COVER_DAYS", op: "LT", value: 14 });
-              // Important: Exclude 0 stock items from "Risk" view
               plan.filters.push({ field: "STOCK_LEVEL", op: "GT", value: 0 });
-              plan.explain = "Highlighting items at risk of stocking out (< 14 days cover), excluding OOS.";
+              if (!plan.explain.includes("Searching")) plan.explain = "Highlighting items at risk of stocking out (< 14 days cover).";
           }
       } else if (lowerText.includes('overstock') || lowerText.includes('excess') || lowerText.includes('high')) {
           plan.sort = { field: "STOCK_COVER_DAYS", direction: "DESC" };
-          // Add default filter for overstock (> 120 days)
           plan.filters.push({ field: "STOCK_COVER_DAYS", op: "GT", value: 120 });
-          plan.explain = "Highlighting potential overstock (> 120 days cover).";
+          if (!plan.explain.includes("Searching")) plan.explain = "Highlighting potential overstock (> 120 days cover).";
       } else {
           // Generic Inventory View
           plan.sort = { field: "STOCK_COVER_DAYS", direction: "ASC" };
-          plan.explain = "Inventory health overview.";
+          if (!plan.explain.includes("Searching")) plan.explain = "Inventory health overview.";
       }
   }
-  // D) Opportunity / Scale / Winning
+  // F) Opportunity / Scale / Winning
   else if (lowerText.includes('scale') || lowerText.includes('winning') || lowerText.includes('best') || lowerText.includes('top')) {
       plan.primaryMetric = "PROFIT"; // Focus on contribution
       plan.metrics = ["PROFIT", "REVENUE", "UNITS", "NET_MARGIN_PCT"];
       plan.sort = { field: "PROFIT", direction: "DESC" };
-      plan.explain = "Highlighting top performing products.";
       plan.viewHint = "RANKED_LIST";
+      if (!plan.explain.includes("Searching")) plan.explain = "Highlighting top performing products.";
   }
-  // E) Returns
-  else if (lowerText.includes('return') || lowerText.includes('refund')) {
-      // Assuming a RETURN_RATE_PCT metric might be added later, for now fallback to standard but note logic
-      // Note: Current schema doesn't have RETURN_RATE_PCT, defaulting to TABLE view of revenue
+  // G) Returns
+  else if (lowerText.includes('return') || lowerText.includes('refund') || lowerText.includes('rr')) {
+      plan.primaryMetric = "RETURN_RATE_PCT";
       plan.viewHint = "TABLE";
-      plan.explain = "Returns analysis (Standard View)";
+      plan.sort = { field: "RETURN_RATE_PCT", direction: "DESC" };
+      
+      // Default Filter Logic: High vs Normal
+      const isHigh = lowerText.includes('high');
+      const threshold = isHigh ? 10 : 5;
+      
+      plan.filters.push({ field: "RETURN_RATE_PCT", op: "GT", value: threshold });
+      
+      if (!plan.explain.includes("Searching")) {
+          plan.explain = isHigh 
+            ? "Analyzing High Returns (> 10%)." 
+            : "Returns analysis (> 5%).";
+      }
+  }
+
+  // --- 6. Extract Explicit Limit ---
+  const limitMatch = lowerText.match(/(?:top|limit|show)\s+(\d+)/);
+  if (limitMatch) {
+      plan.limit = parseInt(limitMatch[1]);
+  } else if (
+      lowerText.includes('all products') || 
+      lowerText.includes('all skus') || 
+      lowerText.includes('show all') || 
+      lowerText.includes('list all') ||
+      lowerText.includes('unlimited')
+  ) {
+      plan.limit = 0; 
+      plan.explain = plan.explain.replace('overview', 'complete list');
   }
 
   // Override view hint if specific structure requested

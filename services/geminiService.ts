@@ -1,9 +1,10 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Product, AnalysisResult, PlatformConfig } from "../types";
+import { Product, AnalysisResult, PlatformConfig, RefundLog, PriceLog, PricingRules } from "../types";
 import { buildQueryPlanFromText } from "../components/search/aiParser";
 import { QueryPlan } from "../components/search/queryPlan";
 
+// ... (Existing imports and Analyze function)
 // Initialize the Gemini AI client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -166,8 +167,6 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
         targetData = 'inventory';
     } else if (plan.primaryMetric === 'RETURN_RATE_PCT') {
         // While returns are conceptually "refunds", often we want transaction data with return rate context
-        // If grouped by SKU, we usually want Inventory or Transaction view.
-        // Let's stick to transactions for performance/kpi view, unless explicit "Refunds" keyword which logic handles separately.
         targetData = 'transactions';
     }
 
@@ -183,6 +182,7 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
         // Map Field Names if needed (Plan ID -> Data Field)
         let field = f.field;
         if (field === 'NET_MARGIN_PCT') field = 'margin';
+        if (field === 'CMA_PCT') field = 'margin'; 
         if (field === 'TACOS_PCT') field = 'tacos';
         if (field === 'ADS_SPEND') field = 'adsSpend';
         if (field === 'SALES_QTY') field = 'velocity';
@@ -190,6 +190,9 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
         if (field === 'NET_PROFIT') field = 'profit';
         if (field === 'STOCK_COVER_DAYS') field = 'daysRemaining';
         if (field === 'STOCK_LEVEL') field = 'stockLevel';
+        // Add velocity change mapping
+        if (field === 'VELOCITY_CHANGE') field = 'velocityChange';
+        if (field === 'RETURN_RATE_PCT') field = 'periodReturnRate'; // Map filter to dynamic period rate
         
         return {
             field,
@@ -199,18 +202,39 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
     });
 
     // 3. Map Time
-    let timeValue = '30d';
-    if (plan.timePreset === 'LAST_7_DAYS') timeValue = '7d';
-    if (plan.timePreset === 'LAST_MONTH') timeValue = '60d'; // Approx
-    // THIS_MONTH and LAST_30_DAYS default to 30d relative for now in this simple adapter
+    // Updated to support extended range logic
+    let timeValue = '30d'; // Default
+    
+    if (plan.customDays) {
+        timeValue = `${plan.customDays}d`;
+    } else if (plan.timePreset === 'LAST_7_DAYS') {
+        timeValue = '7d';
+    } else if (plan.timePreset === 'LAST_MONTH') {
+        timeValue = '60d'; // Approx
+    } else if (plan.timePreset === 'LAST_90_DAYS') {
+        timeValue = '90d';
+    } else if (plan.timePreset === 'LAST_180_DAYS') {
+        timeValue = '180d';
+    } else if (plan.timePreset === 'ALL_TIME') {
+        timeValue = '3650d'; 
+    } else if (plan.timePreset === 'THIS_YEAR') {
+        const now = new Date();
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+        const diffTime = Math.abs(now.getTime() - startOfYear.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        timeValue = `${diffDays}d`;
+    }
 
     // 4. Map Sort
     let sortField = plan.sort.field.toLowerCase();
     if (sortField === 'revenue') sortField = 'revenue';
     if (sortField === 'net_margin_pct') sortField = 'margin';
+    if (sortField === 'cma_pct') sortField = 'margin';
     if (sortField === 'tacos_pct') sortField = 'tacos';
     if (sortField === 'stock_cover_days') sortField = 'daysRemaining';
     if (sortField === 'daily_velocity') sortField = 'averageDailySales';
+    if (sortField === 'velocity_change') sortField = 'velocityChange';
+    if (sortField === 'return_rate_pct') sortField = 'periodReturnRate';
     
     return {
         targetData,
@@ -234,13 +258,9 @@ export const parseSearchQuery = async (query: string): Promise<SearchIntent> => 
   // Simulate minor network delay for UX consistency
   await new Promise(resolve => setTimeout(resolve, 150));
 
-  // Extract Context from Query String (Chips are flattened to string in App.tsx currently)
-  // We can try to extract platform hints or time hints if they are embedded in text
-  const lower = query.toLowerCase();
-  
-  // Basic Context Extraction
+  // Extract Context from Query String
   const context = {
-      selectedPlatforms: [], // Populated by aiParser logic internally via text match if not explicit
+      selectedPlatforms: [], 
       timePreset: undefined
   };
 
@@ -249,7 +269,6 @@ export const parseSearchQuery = async (query: string): Promise<SearchIntent> => 
       return adaptPlanToIntent(plan);
   } catch (e) {
       console.warn("AI Parser failed, falling back to legacy heuristics", e);
-      // Fallback to legacy logic if new parser fails
       return legacyParseSearchQuery(query);
   }
 };
@@ -366,7 +385,11 @@ const legacyParseSearchQuery = (query: string): SearchIntent => {
           'return', 'refund', 'sales', 'revenue', 'profit', 'margin', 'ads', 'spend', 'tacos', 'history', 
           'top', 'limit', 'stock', 'inventory', 'runway', 'velocity', 'sku', 'product', 'days', 'last', 
           'low', 'high', 'overstock', 'loss', 'negative', 'best', 'worst', 'lowest', 'highest', 'dead', 'dormant', 'risk',
-          'cover'
+          'cover',
+          // UPDATED KEYWORDS FOR ROBUSTNESS
+          'velocity', 'daily', 'candidate', 'average', 'avg', 'ratio', 'percent', 'pct', 
+          'per', 'unit', 'qty', 'level', 'aged', 'inbound', 'below', 'target', 'dependency', 
+          'strong', 'organic', 'dormant', 'no', 'winning', 'scale', 'contribution', 'net', 'gross'
       ];
       let remainingText = lower;
       keywords.forEach(k => { 

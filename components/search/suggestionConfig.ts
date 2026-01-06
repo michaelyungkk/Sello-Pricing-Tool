@@ -76,8 +76,11 @@ export const PLATFORM_MAPPING: Record<string, string> = {
 export const TIME_PRESETS_LIST: { id: TimePresetId; label: string }[] = [
   { id: "LAST_7_DAYS", label: "Last 7 Days" },
   { id: "LAST_30_DAYS", label: "Last 30 Days" },
+  { id: "LAST_90_DAYS", label: "Last 90 Days" },
+  { id: "LAST_180_DAYS", label: "Last 180 Days" },
   { id: "THIS_MONTH", label: "This Month" },
-  { id: "LAST_MONTH", label: "Last Month" }
+  { id: "THIS_YEAR", label: "This Year (YTD)" },
+  { id: "ALL_TIME", label: "All Time" }
 ];
 
 // --- D) SMART PAIRINGS (Context -> Recommendation) ---

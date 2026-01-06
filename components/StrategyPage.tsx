@@ -1,4 +1,4 @@
-
+// ... (imports)
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord } from '../types';
@@ -19,6 +19,7 @@ interface StrategyPageProps {
 }
 
 const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [] }) => {
+    // ... (state definitions)
     const [config, setConfig] = useState<StrategyConfig>(() => {
         try {
             return currentConfig ? JSON.parse(JSON.stringify(currentConfig)) : DEFAULT_STRATEGY_RULES;
@@ -97,11 +98,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
             end = new Date(customRange.end);
         }
 
-        const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
-        return `${start.toLocaleDateString(undefined, options)} - ${end.toLocaleDateString(undefined, options)}`;
+        const format = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
+        const sameYear = start.getFullYear() === end.getFullYear();
+        return `${format(start, !sameYear)} – ${format(end, true)}`;
     }, [timeWindow, customRange]);
 
     // 2. Metrics Calculation (now includes historical window)
+// ... (Rest of logic remains unchanged)
     const getMetricsInWindow = (product: Product, windowLimit: Date) => {
         // Upper limit definition
         const upperLimit = new Date();
@@ -370,6 +373,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     }, [products, pricingRules]);
 
     const handleExport = (platform: string = 'All') => {
+// ... (export logic remains same)
         // Helper to sanitize CSV fields
         const clean = (val: any) => {
             if (val === null || val === undefined) return '';
@@ -424,6 +428,46 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         setIsExportMenuOpen(false);
     };
 
+    const handleHistoryExport = () => {
+// ... (export logic remains same)
+        const clean = (val: any) => {
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/[\r\n]+/g, ' '); 
+            return `"${str.replace(/"/g, '""')}"`;
+        };
+
+        const headers = ['Date', 'SKU', 'Product Name', 'Change Type', 'Change %', 'Old Price', 'New Price', 'Pre-Change Avg Daily Vel', 'Post-Change Avg Daily Vel', 'Vel Impact %'];
+        
+        const rows = historyTableData.map(row => [
+            row.date,
+            clean(row.sku),
+            clean(row.productName),
+            row.changeType,
+            row.percentChange.toFixed(2) + '%',
+            row.oldPrice.toFixed(2),
+            row.newPrice.toFixed(2),
+            row.preVel.toFixed(2),
+            row.postVel.toFixed(2),
+            row.velocityChange.toFixed(1) + '%'
+        ]);
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        const filename = `price_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        
+        setTimeout(() => {
+            if (document.body.contains(link)) document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+    };
+
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
             {/* Header & Tabs */}
@@ -456,7 +500,6 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
             {activeTab === 'ENGINE' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                    {/* ... (Existing Engine Content) ... */}
                     {/* Controls Row */}
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative z-20 backdrop-blur-custom">
                         {/* Left Side: Time Controls */}
@@ -991,8 +1034,17 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                         themeColor={themeColor}
                                     />
                                 </div>
-                                <div className="text-xs text-gray-500">
-                                    Showing <strong>{historyTableData.length}</strong> records
+                                <div className="flex items-center gap-4">
+                                    <div className="text-xs text-gray-500">
+                                        Showing <strong>{historyTableData.length}</strong> records
+                                    </div>
+                                    <button
+                                        onClick={handleHistoryExport}
+                                        className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm transition-colors"
+                                    >
+                                        <Download className="w-3.5 h-3.5" />
+                                        Export Log
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1013,7 +1065,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 {paginatedHistoryData.map((row: any) => (
                                     <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
                                         <td className="p-4 text-gray-500 text-xs">
-                                            {new Date(row.date).toLocaleDateString()}
+                                            {new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </td>
                                         <td className="p-4">
                                             <div className="font-bold text-gray-900">{row.sku}</div>
