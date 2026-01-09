@@ -317,9 +317,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                     totalProfit: local.totalProfit,
                     
                     // Strategy Columns (Global)
-                    dailyVelocity: global.dailyVelocity,
-                    runwayDays: rec.runwayDays,
-                    
+                    dailyVelocity: global.dailyVelocity,                   
                     ...rec 
                 };
             })
