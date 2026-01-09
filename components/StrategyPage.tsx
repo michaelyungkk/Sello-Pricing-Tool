@@ -1,7 +1,7 @@
 // ... (imports)
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord } from '../types';
+import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback } from '../types';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
 import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity } from 'lucide-react';
@@ -16,9 +16,10 @@ interface StrategyPageProps {
     priceHistoryMap: Map<string, any[]>;
     promotions: PromotionEvent[];
     priceChangeHistory: PriceChangeRecord[];
+    velocityLookback: VelocityLookback; // Global setting passed down (used for Runway/Velocity)
 }
 
-const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [] }) => {
+const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], velocityLookback }) => {
     // ... (state definitions)
     const [config, setConfig] = useState<StrategyConfig>(() => {
         try {
@@ -35,12 +36,16 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [showOOS, setShowOOS] = useState(false); // OOS Visibility Toggle
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false); // Export Menu State
 
-    // Time Window State
-    const [timeWindow, setTimeWindow] = useState<'7' | '14' | '30' | '60' | 'CUSTOM'>('30');
-    const [customRange, setCustomRange] = useState<{ start: string, end: string }>({
-        start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        end: new Date().toISOString().split('T')[0]
+    // --- Local Time Window State (For "Recent" Columns Only) ---
+    const [selectedWindow, setSelectedWindow] = useState<string>(() => {
+        // Initialize with global setting if it maps to a valid local option, otherwise default to '30'
+        if (['7', '14', '30', '60'].includes(velocityLookback)) return velocityLookback;
+        return '30';
     });
+    const [customStart, setCustomStart] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
+    const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+
     const [activeTab, setActiveTab] = useState<'ENGINE' | 'HISTORY'>('ENGINE');
     const [filterTab, setFilterTab] = useState<'All' | 'INCREASE' | 'DECREASE' | 'MAINTAIN'>('All');
 
@@ -65,72 +70,97 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         return n.toFixed(decimals);
     }
 
-    const getRunwayBin = (days: number, stockLevel: number) => {
-        if (stockLevel <= 0) return { label: 'Out of Stock', color: 'bg-slate-100 text-slate-500 border-slate-200' };
-        if (days <= 14) return { label: '2 Weeks', color: 'bg-red-100 text-red-800 border-red-200' };
-        if (days <= 28) return { label: '4 Weeks', color: 'bg-amber-100 text-amber-800 border-amber-200' };
-        if (days <= 84) return { label: '12 Weeks', color: 'bg-green-100 text-green-800 border-green-200' };
-        if (days <= 168) return { label: '24 Weeks', color: 'bg-teal-100 text-teal-800 border-teal-200' };
-        return { label: '24 Weeks +', color: 'bg-blue-100 text-blue-800 border-blue-200' };
-    };
-
-    // 1. Time Window Filtering Helpers
-    const getWindowDateLimit = () => {
-        const d = new Date();
-        d.setHours(0, 0, 0, 0); // Start of today (Local Time)
-
-        if (timeWindow === 'CUSTOM' && customRange.start) {
-            return new Date(customRange.start + 'T00:00:00');
-        }
-
-        const days = safeNum(parseInt(timeWindow));
-        d.setDate(d.getDate() - (days || 30));
-        return d;
-    };
-
-    const formattedDateRange = useMemo(() => {
-        const start = getWindowDateLimit();
-        let end = new Date();
+    const getRunwayBin = (days: number, stockLevel: number, leadTime: number) => {
+        if (stockLevel <= 0) return { label: 'Out of Stock', color: 'bg-red-50 text-red-600 border-red-200' };
         
-        if (timeWindow !== 'CUSTOM') {
-            end.setDate(end.getDate() - 1);
-        } else if (customRange.end) {
-            end = new Date(customRange.end);
+        if (days > 730) return { label: '> 2 Years', color: 'bg-green-50 text-green-600 border-green-200' };
+
+        let status = 'Healthy';
+        let color = 'bg-green-50 text-green-600 border-green-200';
+
+        if (days < leadTime) {
+            status = 'Critical';
+            color = 'bg-red-50 text-red-600 border-red-200';
+        } else if (days < leadTime * 1.5) {
+            status = 'Warning';
+            color = 'bg-amber-50 text-amber-600 border-amber-200';
+        } else if (days > leadTime * 4) {
+            status = 'Overstock';
+            color = 'bg-orange-50 text-orange-600 border-orange-200';
         }
 
+        const weeks = days / 7;
+        const label = `${weeks.toFixed(1)} Weeks`;
+
+        return { label, color };
+    };
+
+    // Helper: Calculate Date Window based on a string setting
+    const getCalculationWindow = (setting: string, cStart?: string, cEnd?: string) => {
+        const dStart = new Date();
+        dStart.setHours(0, 0, 0, 0);
+        
+        let dEnd = new Date();
+        dEnd.setHours(23, 59, 59, 999);
+        dEnd.setDate(dEnd.getDate() - 1); // Standard: Exclude Today
+
+        let days = 30;
+
+        if (setting === 'Custom' && cStart && cEnd) {
+            dStart.setTime(new Date(cStart).getTime());
+            const customE = new Date(cEnd);
+            customE.setHours(23, 59, 59, 999);
+            dEnd.setTime(customE.getTime());
+            
+            const diff = dEnd.getTime() - dStart.getTime();
+            days = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+        } else if (setting === 'ALL') {
+            dStart.setTime(0); // Epoch
+            // Days calculated dynamically from first log later
+        } else {
+            days = parseInt(setting) || 30;
+            dStart.setDate(dStart.getDate() - days);
+        }
+
+        return { start: dStart, end: dEnd, days };
+    };
+
+    // Label for the LOCAL "Recent" view
+    const formattedDateRange = useMemo(() => {
+        const { start, end } = getCalculationWindow(selectedWindow, customStart, customEnd);
         const format = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
         const sameYear = start.getFullYear() === end.getFullYear();
         return `${format(start, !sameYear)} – ${format(end, true)}`;
-    }, [timeWindow, customRange]);
+    }, [selectedWindow, customStart, customEnd]);
 
-    // 2. Metrics Calculation (now includes historical window)
-// ... (Rest of logic remains unchanged)
-    const getMetricsInWindow = (product: Product, windowLimit: Date) => {
-        // Upper limit definition
-        const upperLimit = new Date();
-        upperLimit.setHours(23, 59, 59, 999);
-
-        // LOGIC FIX: For presets, we strictly exclude today.
-        if (timeWindow !== 'CUSTOM') {
-            upperLimit.setDate(upperLimit.getDate() - 1);
-        } else if (timeWindow === 'CUSTOM' && customRange.end) {
-            const customEnd = new Date(customRange.end + 'T23:59:59');
-            if (!isNaN(customEnd.getTime())) {
-                upperLimit.setTime(customEnd.getTime());
-            }
-        }
-
+    // Core Metrics Calculator
+    const calculateMetrics = (product: Product, setting: string, isLocal: boolean) => {
+        const { start, end, days: fixedDays } = getCalculationWindow(setting, isLocal ? customStart : undefined, isLocal ? customEnd : undefined);
+        
         const skuLogs = priceHistoryMap.get(product.sku) || [];
+        
+        // Filter Logs
         const history = skuLogs.filter((h: any) => {
-            // --- STRICT PLATFORM FILTERING ---
             if (h.platform && pricingRules[h.platform]?.isExcluded) return false;
-
             const logDate = new Date(h.date + 'T00:00:00');
-            return logDate >= windowLimit && logDate <= upperLimit;
+            return logDate >= start && logDate <= end;
         });
 
-        let recentTotalSales = 0;
-        let recentTotalQty = 0;
+        // Calculate Window Length (Handling ALL case)
+        let effectiveDays = fixedDays;
+        if (setting === 'ALL') {
+             if (history.length > 0) {
+                const dates = history.map(l => new Date(l.date).getTime());
+                const min = Math.min(...dates);
+                const max = end.getTime();
+                effectiveDays = Math.max(1, Math.ceil((max - min) / (1000 * 60 * 60 * 24)));
+             } else {
+                 effectiveDays = 30;
+             }
+        }
+
+        let totalSales = 0;
+        let totalQty = 0;
         let weightedPriceSum = 0;
         let totalProfit = 0;
 
@@ -139,8 +169,8 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
             const margin = safeNum(h.margin);
             const estimatedQty = safeNum(h.velocity);
 
-            recentTotalSales += revenue;
-            recentTotalQty += estimatedQty;
+            totalSales += revenue;
+            totalQty += estimatedQty;
             weightedPriceSum += (h.price * estimatedQty);
 
             if (h.profit !== undefined && h.profit !== null) {
@@ -150,26 +180,27 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
             }
         });
 
-        const rawAveragePrice = recentTotalQty > 0 ? weightedPriceSum / recentTotalQty : safeNum(product.currentPrice);
-        const netPmPercent = recentTotalSales > 0 ? (totalProfit / recentTotalSales) * 100 : 0;
+        const rawAvgPrice = totalQty > 0 ? weightedPriceSum / totalQty : safeNum(product.currentPrice);
+        const netPmPercent = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
+        const dailyVelocity = totalQty / effectiveDays;
 
-        // User Request: Add 20% VAT to Recent stats for Display & Strategy context
-        const averagePrice = rawAveragePrice * VAT_MULTIPLIER;
-        const recentTotalSalesWithVat = recentTotalSales * VAT_MULTIPLIER;
+        // Apply VAT for display
+        const averagePrice = rawAvgPrice * VAT_MULTIPLIER;
+        const totalSalesWithVat = totalSales * VAT_MULTIPLIER;
 
         return { 
-            recentTotalSales: recentTotalSalesWithVat, 
-            recentTotalQty, 
+            totalSales: totalSalesWithVat, 
+            totalQty, 
             averagePrice, 
             netPmPercent, 
-            totalProfit 
+            totalProfit,
+            dailyVelocity
         };
     };
 
     // 3. Decision Engine
-    const getRecommendation = (product: Product, metrics: any) => {
-        const { recentTotalQty, averagePrice, netPmPercent } = metrics;
-        const basePrice = safeNum(product.caPrice) || safeNum(averagePrice) || safeNum(product.currentPrice);
+    const getRecommendation = (product: Product, dailyVelocity: number, netPmPercent: number) => {
+        const basePrice = safeNum(product.caPrice) || safeNum(product.currentPrice);
         const effectiveStock = safeNum(product.stockLevel) + (includeIncoming ? safeNum(product.incomingStock) : 0);
 
         // LOGIC FIX: "Past 7 Days Velocity" check inside Strategy also needs to exclude Today to be consistent.
@@ -188,8 +219,8 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
             })
             .reduce((sum: number, h: any) => sum + (safeNum(h.velocity)), 0);
 
-        const weeklyVelocity = safeNum(product.averageDailySales) * 7;
-        const runwayWeeks = weeklyVelocity > 0 ? (effectiveStock / weeklyVelocity) : 999;
+        // Runway is based on GLOBAL Velocity
+        const runwayDays = dailyVelocity > 0 ? (effectiveStock / dailyVelocity) : 999;
 
         let action: 'INCREASE' | 'DECREASE' | 'MAINTAIN' = 'MAINTAIN';
         let adjustedPrice = basePrice;
@@ -209,7 +240,12 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
         const isNew = product.inventoryStatus === 'New Product';
 
-        if (runwayWeeks < safeNum(config.increase.minRunwayWeeks) && effectiveStock > safeNum(config.increase.minStock)) {
+        // CONVERT CONFIG WEEKS TO DAYS FOR COMPARISON (config uses weeks, engine now runs on days)
+        const minRunwayDays = safeNum(config.increase.minRunwayWeeks) * 7;
+        const highStockDays = safeNum(config.decrease.highStockWeeks) * 7;
+        const medStockDays = safeNum(config.decrease.medStockWeeks) * 7;
+
+        if (runwayDays < minRunwayDays && effectiveStock > safeNum(config.increase.minStock)) {
             if (last7Qty > safeNum(config.increase.minVelocity7Days)) {
                 action = 'INCREASE';
                 const increaseAmount = Math.max(
@@ -217,14 +253,14 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                     safeNum(config.increase.adjustmentFixed)
                 );
                 adjustedPrice = applyPsychologicalPricing(basePrice + increaseAmount);
-                reasoning = `Runway < ${config.increase.minRunwayWeeks} wks & P7D Qty > ${config.increase.minVelocity7Days}`;
+                reasoning = `Runway < ${config.increase.minRunwayWeeks} wks (${runwayDays.toFixed(0)}d) & P7D Qty > ${config.increase.minVelocity7Days}`;
             } else {
                 reasoning = `Excluded: P7D Qty (${safeFormat(last7Qty, 0)}) <= Limit (${config.increase.minVelocity7Days})`;
             }
         }
         else if (!isNew || config.decrease.includeNewProducts) {
-            const highStock = runwayWeeks > config.decrease.highStockWeeks;
-            const medStockHighMargin = runwayWeeks > config.decrease.medStockWeeks && netPmPercent > config.decrease.minMarginPercent;
+            const highStock = runwayDays > highStockDays;
+            const medStockHighMargin = runwayDays > medStockDays && netPmPercent > config.decrease.minMarginPercent;
 
             if (highStock || medStockHighMargin) {
                 action = 'DECREASE';
@@ -236,18 +272,17 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 adjustedPrice = applyPsychologicalPricing(basePrice - decreaseAmount);
                 
                 reasoning = highStock
-                    ? `Runway > ${config.decrease.highStockWeeks} wks`
+                    ? `Runway > ${config.decrease.highStockWeeks} wks (${runwayDays.toFixed(0)}d)`
                     : `Runway > ${config.decrease.medStockWeeks} wks & Net PM > ${config.decrease.minMarginPercent}%`;
             }
         }
 
         const safetyViolation = adjustedPrice < floorPrice;
 
-        return { action, adjustedPrice, reasoning, safetyViolation, runwayWeeks, effectiveStock, weeklyVelocity, floorPrice, isNew };
+        return { action, adjustedPrice, reasoning, safetyViolation, runwayDays, effectiveStock, floorPrice, isNew };
     };
 
     const tableData = useMemo(() => {
-        const limit = getWindowDateLimit();
         return products
             .filter(p => {
                 const matchesTerm = (term: string) => {
@@ -263,9 +298,30 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 return matchesTerm(searchQuery);
             })
             .map(p => {
-                const metrics = getMetricsInWindow(p, limit);
-                const rec = getRecommendation(p, metrics);
-                return { ...p, ...metrics, filteredPrice: metrics.averagePrice, ...rec };
+                // 1. Calculate Local Metrics (For Display Columns: Sales, Qty, Margin)
+                const local = calculateMetrics(p, selectedWindow, true);
+                
+                // 2. Calculate Global Metrics (For Velocity, Runway, and Strategy Decision)
+                const global = calculateMetrics(p, velocityLookback, false);
+                
+                // 3. Run Strategy using GLOBAL velocity (but Local Margin for context? Usually Strategy relies on long term margin, but user requested separation. Let's use Global Margin for strategy decision to be safe/consistent with Runway)
+                const rec = getRecommendation(p, global.dailyVelocity, global.netPmPercent);
+                
+                return { 
+                    ...p, 
+                    // Display Columns (Local)
+                    recentTotalSales: local.totalSales,
+                    recentTotalQty: local.totalQty,
+                    averagePrice: local.averagePrice,
+                    netPmPercent: local.netPmPercent,
+                    totalProfit: local.totalProfit,
+                    
+                    // Strategy Columns (Global)
+                    dailyVelocity: global.dailyVelocity,
+                    runwayDays: rec.runwayDays,
+                    
+                    ...rec 
+                };
             })
             .filter(row => {
                 const isOOS = row.effectiveStock <= 0;
@@ -278,7 +334,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 const score = (x: string) => x === 'INCREASE' ? 3 : x === 'DECREASE' ? 2 : 1;
                 return score(b.action) - score(a.action);
             });
-    }, [products, config, searchQuery, searchTags, timeWindow, customRange, priceHistoryMap, includeIncoming, pricingRules, showOOS]);
+    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, includeIncoming, pricingRules, showOOS]);
 
     const filteredAndSortedData = useMemo(() => {
         return tableData.filter(row => filterTab === 'All' || row.action === filterTab);
@@ -361,7 +417,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     useEffect(() => {
         setCurrentPage(1);
         setHistoryCurrentPage(1);
-    }, [searchQuery, searchTags, activeTab, filterTab, timeWindow, showOOS]);
+    }, [searchQuery, searchTags, activeTab, filterTab, selectedWindow, showOOS]);
 
     const uniquePlatforms = useMemo(() => {
         const platformSet = new Set<string>();
@@ -381,7 +437,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
             return `"${str.replace(/"/g, '""')}"`;
         };
 
-        const headers = ['SKU', 'Master SKU', 'Name', 'CA Price', 'New Price', 'Runway (Wks)', 'Inventory', 'Recent Avg Price', 'Recent Sales $', 'Recent Qty', 'Net PM%', 'Is New', 'Action', 'Floor Price', 'Safety Alert', 'Reason'];
+        const headers = ['SKU', 'Master SKU', 'Name', 'CA Price', 'New Price', 'Runway (Days)', 'Inventory', 'Recent Avg Price', 'Recent Sales $', 'Recent Qty', 'Net PM%', 'Is New', 'Action', 'Floor Price', 'Safety Alert', 'Reason'];
         const rows: string[][] = [];
 
         tableData.forEach((r: any) => {
@@ -389,7 +445,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 clean(r.name),
                 safeFormat(r.caPrice, 2),
                 safeFormat(r.adjustedPrice, 2),
-                safeFormat(r.runwayWeeks, 1),
+                safeFormat(r.runwayDays, 0), // Export Days
                 safeFormat(r.effectiveStock, 0),
                 safeFormat(r.averagePrice, 2),
                 safeFormat(r.recentTotalSales, 2),
@@ -502,43 +558,36 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                     {/* Controls Row */}
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative z-20 backdrop-blur-custom">
-                        {/* Left Side: Time Controls */}
+                        {/* Left Side: Time Controls (Restored Local Selection) */}
                         <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
                             <div className="flex items-center gap-3">
+                                {/* Time Selector Buttons */}
                                 <div className="flex bg-gray-100 p-1 rounded-lg">
                                     {['7', '14', '30', '60'].map(d => (
                                         <button
                                             key={d}
-                                            onClick={() => setTimeWindow(d as any)}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === d ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                            onClick={() => { setSelectedWindow(d); setCurrentPage(1); }}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${selectedWindow === d ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                                         >
                                             {d}D
                                         </button>
                                     ))}
                                     <button
-                                        onClick={() => setTimeWindow('CUSTOM')}
-                                        className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1 transition-all ${timeWindow === 'CUSTOM' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        onClick={() => setIsCustomDateModalOpen(true)}
+                                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${selectedWindow === 'Custom' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                                     >
-                                        <Calendar className="w-3 h-3" /> Custom
+                                        <Calendar className="w-3 h-3" />
+                                        Custom
                                     </button>
                                 </div>
-                                
+
                                 <div className="flex flex-col items-start justify-center pl-2 border-l border-gray-200">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-0.5">Analyzing Period</span>
                                     <div className="text-xs font-bold text-indigo-600 flex items-center gap-1.5">
-                                        <Calendar className="w-3 h-3" />
                                         {formattedDateRange}
                                     </div>
                                 </div>
                             </div>
-
-                            {timeWindow === 'CUSTOM' && (
-                                <div className="flex items-center gap-2 text-sm bg-white/50 p-1 rounded-lg border border-gray-200">
-                                    <input type="date" value={customRange.start} onChange={e => setCustomRange({ ...customRange, start: e.target.value })} className="border-none bg-transparent rounded px-2 py-1 text-xs focus:ring-0" />
-                                    <span className="text-gray-400">-</span>
-                                    <input type="date" value={customRange.end} onChange={e => setCustomRange({ ...customRange, end: e.target.value })} className="border-none bg-transparent rounded px-2 py-1 text-xs focus:ring-0" />
-                                </div>
-                            )}
                         </div>
 
                         {/* Right Side: Actions */}
@@ -877,7 +926,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
                                     <tr>
                                         <th className="p-4">Product</th>
-                                        <th className="p-4 text-right">Runway & Vel</th>
+                                        <th className="p-4 text-right">Runway / Velocity</th>
                                         <th className="p-4 text-right">Inventory</th>
                                         <th className="p-4 text-right bg-blue-50/50">Recent Avg Price</th>
                                         <th className="p-4 text-right bg-blue-50/50">Recent Sales $</th>
@@ -904,18 +953,16 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                             <td className="p-4 text-right">
                                                 <div className="flex flex-col items-end gap-1.5">
                                                     {(() => {
-                                                        const runwayBin = getRunwayBin(row.runwayWeeks * 7, row.stockLevel);
+                                                        const runwayBin = getRunwayBin(row.runwayDays, row.stockLevel, row.leadTimeDays);
                                                         return (
-                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[10px] font-bold whitespace-nowrap ${runwayBin.color}`}>
+                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded border text-[10px] font-bold whitespace-nowrap ${runwayBin.color}`}>
                                                                 {runwayBin.label}
                                                             </span>
                                                         );
                                                     })()}
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-[11px] font-semibold text-gray-700">
-                                                            {safeFormat(row.weeklyVelocity / 7, 1)} / day
-                                                        </span>
-                                                    </div>
+                                                    <span className="text-[11px] font-semibold text-gray-700">
+                                                        {safeFormat(row.dailyVelocity, 1)} / day
+                                                    </span>
                                                 </div>
                                             </td>
                                             <td className="p-4 text-right font-mono font-bold text-gray-700">
@@ -1157,6 +1204,52 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* Custom Date Modal */}
+            {isCustomDateModalOpen && createPortal(
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsCustomDateModalOpen(false)}>
+                    <div
+                        className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-gray-200 p-6"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Select Custom Range</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Start Date</label>
+                                <input
+                                    type="date"
+                                    value={customStart}
+                                    onChange={e => setCustomStart(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">End Date</label>
+                                <input
+                                    type="date"
+                                    value={customEnd}
+                                    onChange={e => setCustomEnd(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button onClick={() => setIsCustomDateModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
+                            <button
+                                onClick={() => {
+                                    setSelectedWindow('Custom');
+                                    setIsCustomDateModalOpen(false);
+                                    setCurrentPage(1);
+                                }}
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700"
+                            >
+                                Apply Range
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     );
