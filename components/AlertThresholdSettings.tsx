@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { ThresholdConfig, getThresholdConfig, saveThresholdConfig, resetThresholdConfig, DEFAULT_THRESHOLDS } from '../services/thresholdsConfig';
 import { Save, RefreshCw, AlertTriangle, Activity, Info } from 'lucide-react';
 
 interface AlertThresholdSettingsProps {
     themeColor: string;
+    onSaveComplete?: () => void;
 }
 
 const SETTING_META: Record<keyof ThresholdConfig, { label: string; unit: string; usedBy: string; description: string }> = {
@@ -57,7 +59,7 @@ const SETTING_META: Record<keyof ThresholdConfig, { label: string; unit: string;
     }
 };
 
-const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeColor }) => {
+const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeColor, onSaveComplete }) => {
     const [config, setConfig] = useState<ThresholdConfig>(DEFAULT_THRESHOLDS);
     const [isDirty, setIsDirty] = useState(false);
     const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -79,6 +81,7 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
         saveThresholdConfig(config);
         setIsDirty(false);
         setSavedMessage('Configuration saved successfully.');
+        if (onSaveComplete) onSaveComplete();
         setTimeout(() => setSavedMessage(null), 3000);
     };
 
@@ -88,6 +91,7 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
             setConfig(defaults);
             setIsDirty(false);
             setSavedMessage('Reset to defaults.');
+            if (onSaveComplete) onSaveComplete();
             setTimeout(() => setSavedMessage(null), 3000);
         }
     };

@@ -6,23 +6,24 @@ import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLe
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, ComposedChart, Legend } from 'recharts';
 import ProductList from './ProductList';
 import { getDiagnosisMeta, CanonicalDiagnosisId } from './diagnostics/diagnosisRegistry';
-import { getThresholdConfig } from '../services/thresholdsConfig';
+import { getThresholdConfig, ThresholdConfig } from '../services/thresholdsConfig';
 
 interface ProductManagementPageProps {
     products: Product[];
     pricingRules: PricingRules;
     promotions?: PromotionEvent[];
     priceHistoryMap?: Map<string, PriceLog[]>;
-    refundHistory?: RefundLog[]; // Added Refund Logs
+    refundHistory?: RefundLog[]; 
     priceChangeHistory?: PriceChangeRecord[];
     onOpenMappingModal: () => void;
     onAnalyze: (product: Product, context?: string) => void;
     dateLabels: { current: string, last: string };
     onUpdateProduct?: (product: Product) => void;
     onViewElasticity?: (product: Product) => void;
-    onDeepDive: (sku: string) => void; // New Prop for triggering global search
+    onDeepDive: (sku: string) => void; 
     themeColor: string;
     headerStyle: React.CSSProperties;
+    thresholds?: ThresholdConfig; // New Prop for Reactivity
 }
 
 type Tab = 'dashboard' | 'catalog' | 'pricing' | 'shipments';
@@ -36,7 +37,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     pricingRules,
     promotions = [],
     priceHistoryMap = new Map(),
-    refundHistory = [], // Default
+    refundHistory = [], 
     priceChangeHistory = [],
     onOpenMappingModal,
     onAnalyze,
@@ -45,12 +46,11 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     onViewElasticity,
     onDeepDive,
     themeColor,
-    headerStyle
+    headerStyle,
+    thresholds // Destructure
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('dashboard');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
-    
-    // Lifted State for Shipment Search (Cross-Link Capability)
     const [shipmentSearchTags, setShipmentSearchTags] = useState<string[]>([]);
 
     const handleViewShipments = (sku: string) => {
@@ -60,7 +60,6 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
 
     return (
         <div className="max-w-full mx-auto space-y-6 pb-10 h-full flex flex-col">
-            {/* Header Section */}
             <div>
                 <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Product Management</h2>
                 <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
@@ -68,7 +67,6 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                 </p>
             </div>
 
-            {/* Navigation Tabs (Strict Match with Definitions Page) */}
             <div className="flex justify-between items-end gap-4">
                 <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
                     <button
@@ -105,18 +103,18 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                 </div>
             </div>
 
-            {/* Main Content Area */}
             <div className="flex-1 min-h-0 relative">
                 {activeTab === 'dashboard' && (
                     <DashboardView
                         products={products}
                         priceHistoryMap={priceHistoryMap}
-                        refundHistory={refundHistory} // Pass refunds down
+                        refundHistory={refundHistory}
                         pricingRules={pricingRules}
                         priceChangeHistory={priceChangeHistory}
                         themeColor={themeColor}
                         onAnalyze={onAnalyze}
                         onDeepDive={onDeepDive}
+                        thresholds={thresholds} // Pass Prop
                     />
                 )}
 
@@ -151,7 +149,6 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                 )}
             </div>
 
-            {/* Slide-over Drawer for Aliases - Using Portal recommended */}
             {selectedProductForDrawer && (
                 <AliasDrawer
                     product={selectedProductForDrawer}
@@ -185,6 +182,7 @@ const DashboardView = ({
     themeColor,
     onAnalyze,
     onDeepDive,
+    thresholds: propThresholds // Receive Prop
 }: {
     products: Product[],
     priceHistoryMap: Map<string, PriceLog[]>,
@@ -194,29 +192,26 @@ const DashboardView = ({
     themeColor: string,
     onAnalyze: (product: Product, context?: string) => void,
     onDeepDive: (sku: string) => void,
+    thresholds?: ThresholdConfig
 }) => {
     const [range, setRange] = useState<DateRange>('30d');
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [platformScope, setPlatformScope] = useState<string>('All');
-    
-    // Slide State (0: Operations, 1: Financial, 2: Inventory)
     const [currentSlide, setCurrentSlide] = useState(0);
-    
     const [selectedAlert, setSelectedAlert] = useState<AlertType>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
 
-    // Thresholds
-    const thresholds = useMemo(() => getThresholdConfig(), []);
+    // Fallback if prop is missing (e.g. initial load or parent hasn't updated yet)
+    // IMPORTANT: Dependencies must include propThresholds to trigger re-calc on change
+    const thresholds = useMemo(() => propThresholds || getThresholdConfig(), [propThresholds]);
 
-    // Reset pagination on filter change
     useEffect(() => {
         setCurrentPage(1);
     }, [selectedAlert, range, platformScope]);
 
-    // --- CAROUSEL NAVIGATION ---
     const nextSlide = () => setCurrentSlide(prev => (prev + 1) % 3);
     const prevSlide = () => setCurrentSlide(prev => (prev - 1 + 3) % 3);
 
@@ -229,13 +224,11 @@ const DashboardView = ({
         }
     };
 
-    // --- DATA LOGIC ---
     const { processedData, periodLabel, dateRange, periodDays } = useMemo(() => {
         let startDate = new Date();
         let endDate = new Date();
         let days = 30;
 
-        // Date Logic
         if (range === 'yesterday') {
             startDate.setDate(startDate.getDate() - 1);
             endDate.setDate(endDate.getDate() - 1);
@@ -256,7 +249,6 @@ const DashboardView = ({
             days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
         }
 
-        // Format Label (Strategy Engine Style)
         const format = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
         const sameYear = startDate.getFullYear() === endDate.getFullYear();
         const label = `${format(startDate, !sameYear)} – ${format(endDate, true)}`;
@@ -296,8 +288,6 @@ const DashboardView = ({
                         curProfit += (l.velocity * l.price * (l.margin / 100));
                     }
 
-                    // --- Platform Scanning Logic ---
-                    // Only active if Global scope is selected, to identify hidden risks
                     if (platformScope === 'All') {
                         const pName = l.platform || 'Unknown';
                         if (!platformBreakdown[pName]) platformBreakdown[pName] = { rev: 0, profit: 0, units: 0 };
@@ -325,13 +315,11 @@ const DashboardView = ({
                 if (channel && channel.price) displayPrice = channel.price;
             }
 
-            // Determine toxic platforms
             const toxicPlatforms: ToxicPlatform[] = [];
             if (platformScope === 'All') {
                 Object.entries(platformBreakdown).forEach(([plat, stats]) => {
                     if (stats.rev > 0) {
                         const m = (stats.profit / stats.rev) * 100;
-                        // Toxic Threshold: Margin < configured AND significant revenue (> £10)
                         if (m < (thresholds.marginBelowTargetPct / 2) && stats.rev > 10) {
                             toxicPlatforms.push({
                                 name: plat,
@@ -342,10 +330,9 @@ const DashboardView = ({
                         }
                     }
                 });
-                toxicPlatforms.sort((a,b) => a.margin - b.margin); // Worst margins first
+                toxicPlatforms.sort((a,b) => a.margin - b.margin);
             }
 
-            // --- SIGNALS CALCULATION ---
             const signals: CanonicalDiagnosisId[] = [];
             const dailyVelocity = curUnits / days;
             const runway = dailyVelocity > 0 ? p.stockLevel / dailyVelocity : 999;
@@ -383,17 +370,15 @@ const DashboardView = ({
                 prevPeriodUnits: prevUnits,
                 velocityChange,
                 displayPrice,
-                toxicPlatforms, // Array of toxic platforms
-                signals // Calculated Diagnostic Signals
+                toxicPlatforms,
+                signals
             };
         });
 
         return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, periodDays: days };
-    }, [products, priceHistoryMap, range, customStart, customEnd, platformScope, thresholds]);
+    }, [products, priceHistoryMap, range, customStart, customEnd, platformScope, thresholds]); // thresholds added to dependency
 
-    // --- ALERTS (SLIDE 1) ---
     const alerts = useMemo(() => ({
-        // Modified Margin Logic: Global < Threshold OR Specific Toxic Platform Detected
         margin: processedData.filter(p => (p.periodUnits > 0 && p.periodMargin < thresholds.marginBelowTargetPct) || p.toxicPlatforms.length > 0),
         velocity: processedData.filter(p => p.prevPeriodUnits > 2 && p.velocityChange < -thresholds.velocityCrashPct),
         stock: processedData.filter(p => {
@@ -403,12 +388,12 @@ const DashboardView = ({
             return runway < (p.leadTimeDays * thresholds.stockoutRunwayMultiplier) && p.stockLevel > 0;
         }),
         dead: processedData.filter(p => p.stockLevel * (p.costPrice || 0) > thresholds.deadStockMinValueGBP && p.periodUnits === 0)
-    }), [processedData, range, thresholds]);
+    }), [processedData, range, thresholds]); // thresholds added to dependency
 
     const workbenchData = useMemo(() => {
         if (!selectedAlert) return processedData.filter(p => p.periodRevenue > 0).sort((a, b) => b.periodRevenue - a.periodRevenue).slice(0, 50);
         return alerts[selectedAlert].sort((a, b) => {
-            if (selectedAlert === 'margin') return a.periodMargin - b.periodMargin; // Sort by global margin primarily
+            if (selectedAlert === 'margin') return a.periodMargin - b.periodMargin;
             if (selectedAlert === 'velocity') return a.velocityChange - b.velocityChange;
             if (selectedAlert === 'stock') return a.stockLevel - b.stockLevel;
             if (selectedAlert === 'dead') return (b.stockLevel * (b.costPrice || 0)) - (a.stockLevel * (a.costPrice || 0));
@@ -419,29 +404,9 @@ const DashboardView = ({
     const paginatedData = workbenchData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     const totalPages = Math.ceil(workbenchData.length / itemsPerPage);
 
-    const handleToxicAnalysis = (product: any, toxic: ToxicPlatform) => {
-        // Construct a temporary context-aware product for the AI
-        // This overrides global stats with platform-specific stats
-        
-        // Find channel price
-        const channel = product.channels.find((c: any) => c.platform === toxic.name);
-        const channelPrice = channel ? channel.price : product.currentPrice;
-
-        const contextProduct = {
-            ...product,
-            platform: toxic.name, // Force platform context
-            currentPrice: channelPrice || product.currentPrice,
-            averageDailySales: toxic.velocity, // Use specific platform velocity
-            // We keep stockLevel global as stock is usually shared, but velocity is specific
-        };
-        
-        onAnalyze(contextProduct, 'margin');
-    };
-
     const handleExport = () => {
         const clean = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
         const headers = ['SKU', 'Name', 'Price (Inc VAT)', 'Period Sales', 'Period Profit', 'Net Margin %', 'Velocity Change %', 'Toxic Platform Info'];
-        
         const rows = workbenchData.map(p => [
             clean(p.sku),
             clean(p.name),
@@ -452,7 +417,6 @@ const DashboardView = ({
             p.velocityChange.toFixed(0) + '%',
             p.toxicPlatforms && p.toxicPlatforms.length > 0 ? clean(`${p.toxicPlatforms[0].name}: ${p.toxicPlatforms[0].margin.toFixed(1)}%`) : ''
         ]);
-
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
@@ -486,11 +450,9 @@ const DashboardView = ({
                     else dayProfit += (l.velocity * l.price * (l.margin / 100));
                 });
             });
-            // Update Date Format Logic Here
             const [y, m, dStr] = day.split('-');
             const dateObj = new Date(Number(y), Number(m) - 1, Number(dStr));
             const displayDate = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-            
             return { day: displayDate, revenue: dayRev, ads: dayAds, profit: dayProfit };
         });
         return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
@@ -521,8 +483,6 @@ const DashboardView = ({
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
-            
-            {/* 1. CONTROL DECK */}
             <div className="flex flex-col md:flex-row justify-between items-center bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm gap-4 relative z-30">
                 <div className="flex items-center gap-2">
                     <div className="relative">
@@ -536,9 +496,7 @@ const DashboardView = ({
                         </select>
                         <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-indigo-600 pointer-events-none" />
                     </div>
-
                     <div className="h-8 w-px bg-gray-300 mx-2"></div>
-
                     <div className="relative">
                         <button
                             onClick={() => setShowDatePicker(!showDatePicker)}
@@ -557,7 +515,6 @@ const DashboardView = ({
                             </div>
                         )}
                     </div>
-
                     <div className="flex bg-gray-100 p-1 rounded-lg">
                         {['yesterday', '7d', '30d'].map((r: any) => (
                             <button
@@ -569,7 +526,6 @@ const DashboardView = ({
                             </button>
                         ))}
                     </div>
-
                     <div className="ml-3 flex flex-col justify-center pl-2 border-l border-gray-200">
                         <span className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-0.5">Analyzing Period</span>
                         <span className="text-xs font-bold text-indigo-600 flex items-center gap-1.5">
@@ -580,41 +536,26 @@ const DashboardView = ({
                 </div>
             </div>
 
-            {/* CAROUSEL WRAPPER */}
             <div>
-                {/* SLIDE INDICATORS */}
                 <div className="flex justify-center gap-2 mb-4">
                     {[0, 1, 2].map(idx => (
                         <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${currentSlide === idx ? 'w-8 bg-indigo-600' : 'w-2 bg-gray-300'}`} />
                     ))}
                 </div>
 
-                {/* SLIDE 1: OPERATIONS */}
                 {currentSlide === 0 && (
                     <div className="animate-in fade-in slide-in-from-right-8 duration-300">
                         <div className="flex items-stretch gap-4 mb-6">
-                            <button 
-                                onClick={prevSlide}
-                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
-                            >
-                                <ChevronLeft className="w-6 h-6" />
-                            </button>
-                            {/* ALERT CARDS */}
+                            <button onClick={prevSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
                                 <AlertCard title="Margin Thieves" count={alerts.margin.length} icon={AlertTriangle} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc={`Net Margin < ${thresholds.marginBelowTargetPct}% (Scan all)`} />
                                 <AlertCard title="Velocity Crashes" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`Vol. Drop > ${thresholds.velocityCrashPct}%`} />
                                 <AlertCard title="Stockout Risk" count={alerts.stock.length} icon={Clock} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Runway < Lead Time" />
                                 <AlertCard title="Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc={`>£${thresholds.deadStockMinValueGBP} Value, 0 Sales`} />
                             </div>
-                            <button 
-                                onClick={nextSlide}
-                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
-                            >
-                                <ChevronRight className="w-6 h-6" />
-                            </button>
+                            <button onClick={nextSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
                         </div>
 
-                        {/* WORKBENCH TABLE */}
                         <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg overflow-hidden flex flex-col min-h-[400px]">
                             <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
                                 <div className="flex items-center gap-4">
@@ -630,13 +571,7 @@ const DashboardView = ({
                                     </h3>
                                     <span className="text-xs text-gray-500">{workbenchData.length} SKUs require attention</span>
                                 </div>
-                                <button
-                                    onClick={handleExport}
-                                    className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"
-                                    title="Export current view to CSV"
-                                >
-                                    <Download className="w-4 h-4" />
-                                </button>
+                                <button onClick={handleExport} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200" title="Export current view to CSV"><Download className="w-4 h-4" /></button>
                             </div>
                             <div className="flex-1 overflow-auto">
                                 <table className="w-full text-left text-sm whitespace-nowrap">
@@ -646,7 +581,6 @@ const DashboardView = ({
                                             <th className="p-4">Product</th>
                                             <th className="p-4">Signals</th>
                                             <th className="p-4 text-right">Price (Inc VAT)</th>
-                                            
                                             {selectedAlert === null && <>
                                                 <th className="p-4 text-right">CA Price</th>
                                                 <th className="p-4 text-right">Qty Sold</th>
@@ -655,14 +589,12 @@ const DashboardView = ({
                                                 <th className="p-4 text-right">Net Margin %</th>
                                                 <th className="p-4 text-right">Inventory</th>
                                             </>}
-                                            
                                             {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && <>
                                                 {selectedAlert === 'margin' && <th className="p-4 text-right">Cost (Inc VAT)</th>}
                                                 <th className="p-4 text-right">Period Sales</th>
                                                 <th className="p-4 text-right">Period Profit</th>
                                                 <th className="p-4 text-right">Net Margin %</th>
                                             </>}
-
                                             {selectedAlert === 'velocity' && <>
                                                 <th className="p-4 text-right">Prev Qty</th>
                                                 <th className="p-4 text-right">Curr Qty</th>
@@ -672,18 +604,9 @@ const DashboardView = ({
                                     </thead>
                                     <tbody className="divide-y divide-gray-100/50">
                                         {paginatedData.map(p => (
-                                            <tr 
-                                                key={p.id} 
-                                                className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group"
-                                            >
+                                            <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
                                                 <td className="p-4 text-center">
-                                                    <button 
-                                                        onClick={() => onDeepDive(p.sku)} 
-                                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                                        title="Deep Dive SKU Analysis"
-                                                    >
-                                                        <Search className="w-4 h-4" />
-                                                    </button>
+                                                    <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Deep Dive SKU Analysis"><Search className="w-4 h-4" /></button>
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{p.sku}</div>
@@ -693,38 +616,21 @@ const DashboardView = ({
                                                     <div className="flex flex-wrap gap-1 max-w-[140px]">
                                                         {p.signals.slice(0, 2).map(id => {
                                                             const meta = getDiagnosisMeta(id);
-                                                            return (
-                                                                <span 
-                                                                    key={id} 
-                                                                    onClick={(e) => { e.stopPropagation(); onDeepDive(p.sku); }}
-                                                                    className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${getSignalStyle(meta.priority)}`}
-                                                                    title={meta.description}
-                                                                >
-                                                                    {meta.shortLabel}
-                                                                </span>
-                                                            )
+                                                            return <span key={id} onClick={(e) => { e.stopPropagation(); onDeepDive(p.sku); }} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${getSignalStyle(meta.priority)}`} title={meta.description}>{meta.shortLabel}</span>
                                                         })}
                                                     </div>
                                                 </td>
                                                 <td className="p-4 text-right">£{(p.displayPrice * VAT).toFixed(2)}</td>
-                                                
-                                                {/* Top Movers Columns */}
                                                 {selectedAlert === null && (
                                                     <>
-                                                        <td className="p-4 text-right font-bold text-purple-600">
-                                                            {p.caPrice ? `£${(p.caPrice * VAT).toFixed(2)}` : '-'}
-                                                        </td>
+                                                        <td className="p-4 text-right font-bold text-purple-600">{p.caPrice ? `£${(p.caPrice * VAT).toFixed(2)}` : '-'}</td>
                                                         <td className="p-4 text-right font-medium text-gray-800">{p.periodUnits}</td>
                                                         <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
                                                         <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
-                                                        <td className="p-4 text-right">
-                                                            <span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
-                                                        </td>
+                                                        <td className="p-4 text-right"><span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span></td>
                                                         <td className="p-4 text-right font-bold text-gray-800">{p.stockLevel}</td>
                                                     </>
                                                 )}
-
-                                                {/* Margin/Stock/Dead Alert Columns */}
                                                 {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && (
                                                     <>
                                                         {selectedAlert === 'margin' && <td className="p-4 text-right text-gray-500">£{((p.costPrice || 0) * VAT).toFixed(2)}</td>}
@@ -733,29 +639,15 @@ const DashboardView = ({
                                                         <td className="p-4 text-right">
                                                             <div className="flex flex-col items-end gap-1">
                                                                 <span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
-                                                                {selectedAlert === 'margin' && p.toxicPlatforms && p.toxicPlatforms.length > 0 && (
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleToxicAnalysis(p, p.toxicPlatforms[0]); }}
-                                                                        className="flex items-center gap-1 text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded border border-red-200 font-bold hover:bg-red-100 hover:border-red-300 transition-all shadow-sm z-10 relative"
-                                                                        title={`Click to analyze ${p.toxicPlatforms[0].name} specifically`}
-                                                                    >
-                                                                        <Wrench className="w-3 h-3" />
-                                                                        {p.toxicPlatforms[0].name}: {p.toxicPlatforms[0].margin.toFixed(1)}%
-                                                                    </button>
-                                                                )}
                                                             </div>
                                                         </td>
                                                     </>
                                                 )}
-
-                                                {/* Velocity Alert Columns */}
                                                 {selectedAlert === 'velocity' && (
                                                     <>
                                                         <td className="p-4 text-right text-gray-600">{p.prevPeriodUnits}</td>
                                                         <td className="p-4 text-right font-medium">{p.periodUnits}</td>
-                                                        <td className="p-4 text-right">
-                                                            <span className="text-red-600 font-bold">{p.velocityChange.toFixed(0)}%</span>
-                                                        </td>
+                                                        <td className="p-4 text-right"><span className="text-red-600 font-bold">{p.velocityChange.toFixed(0)}%</span></td>
                                                     </>
                                                 )}
                                             </tr>
@@ -767,43 +659,15 @@ const DashboardView = ({
                                 <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
                                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                                         <div className="flex items-center gap-4">
-                                            <p className="text-sm text-gray-700">
-                                                Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, workbenchData.length)}</span> of <span className="font-medium">{workbenchData.length}</span> results
-                                            </p>
-                                            <select
-                                                value={itemsPerPage}
-                                                onChange={(e) => {
-                                                    setItemsPerPage(Number(e.target.value));
-                                                    setCurrentPage(1);
-                                                }}
-                                                className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"
-                                            >
-                                                <option value={10}>10</option>
-                                                <option value={25}>25</option>
-                                                <option value={50}>50</option>
-                                                <option value={100}>100</option>
-                                            </select>
+                                            <p className="text-sm text-gray-700">Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, workbenchData.length)}</span> of <span className="font-medium">{workbenchData.length}</span> results</p>
+                                            <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
                                         </div>
                                         <div>
                                             {totalPages > 1 && (
                                                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                                                    <button
-                                                        onClick={() => setCurrentPage(p => Math.max(1, p-1))}
-                                                        disabled={currentPage === 1}
-                                                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                                                    >
-                                                        <ChevronLeft className="h-5 w-5" />
-                                                    </button>
-                                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                                                        Page {currentPage} of {totalPages}
-                                                    </span>
-                                                    <button
-                                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))}
-                                                        disabled={currentPage === totalPages}
-                                                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                                                    >
-                                                        <ChevronRight className="h-5 w-5" />
-                                                    </button>
+                                                    <button onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
+                                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {currentPage} of {totalPages}</span>
+                                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
                                                 </nav>
                                             )}
                                         </div>
@@ -814,74 +678,28 @@ const DashboardView = ({
                     </div>
                 )}
 
-                {/* SLIDE 2: FINANCIAL HEALTH */}
                 {currentSlide === 1 && (
                     <div className="animate-in fade-in slide-in-from-right-8 duration-300">
                         <div className="flex items-stretch gap-4 mb-6">
-                             <button 
-                                onClick={prevSlide}
-                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
-                            >
-                                <ChevronLeft className="w-6 h-6" />
-                            </button>
-                            {/* FINANCIAL METRICS */}
+                             <button onClick={prevSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
                                 <MetricCard title="Total Revenue" value={`£${financialStats.totalRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={DollarSign} color="blue" />
                                 <MetricCard title="True Net Profit" value={`£${financialStats.totalProfit.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Coins} color="green" />
-                                <MetricCard 
-                                    title="Total Ad Spend" 
-                                    value={`£${financialStats.totalAdSpend.toLocaleString(undefined, {maximumFractionDigits:0})}`} 
-                                    icon={Megaphone} 
-                                    color="purple"
-                                    desc="Includes Ad-Only Transactions"
-                                />
+                                <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Megaphone} color="purple" desc="Includes Ad-Only Transactions" />
                                 <MetricCard title="TACoS %" value={`${financialStats.tacos.toFixed(1)}%`} icon={PieIcon} color="orange" desc="Total Advertising Cost of Sales" />
                             </div>
-                             <button 
-                                onClick={nextSlide}
-                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
-                            >
-                                <ChevronRight className="w-6 h-6" />
-                            </button>
+                             <button onClick={nextSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
                         </div>
-
-                        {/* COMPOSED CHART */}
                         <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
-                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <Activity className="w-4 h-4 text-blue-600" /> Financial Performance
-                            </h3>
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-600" /> Financial Performance</h3>
                             <div className="flex-1 min-h-0 -ml-2">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <ComposedChart data={financialStats.chartData}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                                         <XAxis dataKey="day" tick={{fontSize: 10}} />
-                                        <YAxis 
-                                            yAxisId="left" 
-                                            tick={{fontSize: 10, fill: '#6b7280'}} 
-                                            tickFormatter={(val) => `£${val.toLocaleString()}`} 
-                                            label={{ 
-                                                value: 'Revenue', 
-                                                angle: -90, 
-                                                position: 'insideLeft', 
-                                                style: { textAnchor: 'middle', fill: '#93c5fd', fontWeight: 'bold', fontSize: 12 } 
-                                            }}
-                                        />
-                                        <YAxis 
-                                            yAxisId="right" 
-                                            orientation="right" 
-                                            tick={{fontSize: 10, fill: '#6b7280'}} 
-                                            tickFormatter={(val) => `£${val.toLocaleString()}`} 
-                                            label={{ 
-                                                value: 'Profit & Ads', 
-                                                angle: 90, 
-                                                position: 'insideRight', 
-                                                style: { textAnchor: 'middle', fill: '#8b5cf6', fontWeight: 'bold', fontSize: 12 } 
-                                            }}
-                                        />
-                                        <RechartsTooltip 
-                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                            formatter={(value: number) => '£' + value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
-                                        />
+                                        <YAxis yAxisId="left" tick={{fontSize: 10, fill: '#6b7280'}} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Revenue', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#93c5fd', fontWeight: 'bold', fontSize: 12 } }} />
+                                        <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fill: '#6b7280'}} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Profit & Ads', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: '#8b5cf6', fontWeight: 'bold', fontSize: 12 } }} />
+                                        <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(value: number) => '£' + value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} />
                                         <Legend wrapperStyle={{ fontSize: '12px' }} />
                                         <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#93c5fd" barSize={20} radius={[4, 4, 0, 0]} />
                                         <Line yAxisId="right" type="monotone" dataKey="ads" name="Ad Spend" stroke="#8b5cf6" strokeWidth={2} dot={false} />
@@ -893,33 +711,19 @@ const DashboardView = ({
                     </div>
                 )}
 
-                {/* SLIDE 3: INVENTORY RISK */}
                 {currentSlide === 2 && (
                     <div className="animate-in fade-in slide-in-from-right-8 duration-300">
                         <div className="flex items-stretch gap-4 mb-6">
-                            <button 
-                                onClick={prevSlide}
-                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
-                            >
-                                <ChevronLeft className="w-6 h-6" />
-                            </button>
+                            <button onClick={prevSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
                                 <MetricCard title="Total Stock Value" value={`£${inventoryStats.totalStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Package} color="blue" desc="Based on Cost Price" />
                                 <MetricCard title="Dead Stock Value" value={`£${inventoryStats.deadStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={AlertTriangle} color="gray" desc="0 Sales in Period" />
                                 <MetricCard title="Projected Lost Revenue" value={`£${inventoryStats.lostRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={TrendingDown} color="red" desc="Due to Stockouts" />
                             </div>
-                             <button 
-                                onClick={nextSlide}
-                                className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
-                            >
-                                <ChevronRight className="w-6 h-6" />
-                            </button>
+                             <button onClick={nextSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
                         </div>
-
                         <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
-                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <Clock className="w-4 h-4 text-purple-600" /> Stock Runway Distribution
-                            </h3>
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-purple-600" /> Stock Runway Distribution</h3>
                             <div className="flex-1 min-h-0 -ml-2">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={inventoryStats.chartData} layout="horizontal">
@@ -943,7 +747,6 @@ const DashboardView = ({
     );
 };
 
-// ... [AlertCard, ShipmentsView, PriceMatrixView, AliasDrawer remain unchanged]
 const MetricCard = ({ title, value, icon: Icon, color, desc }: any) => {
     const colorStyles = {
         blue: 'bg-blue-50 text-blue-700',
@@ -1001,8 +804,6 @@ const AlertCard = ({ title, count, icon: Icon, color, isActive, onClick, desc }:
 };
 
 const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }: { products: Product[], themeColor: string, initialTags?: string[], onTagsChange?: (tags: string[]) => void }) => {
-    // ... [Content identical to previous version, omitted for brevity but assumed present]
-    // Re-implementing for correctness in output
     const [inputValue, setInputValue] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -1204,7 +1005,6 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
 };
 
 const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { products: Product[], pricingRules: PricingRules, promotions: PromotionEvent[], themeColor: string }) => {
-    // ... [Identical to previous]
     const [search, setSearch] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -1356,7 +1156,6 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
 };
 
 const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: any) => {
-    // ... [Identical to previous]
     const [platformTags, setPlatformTags] = useState<{ platform: string; tags: string[] }[]>(() => {
         const existing = product.channels.map((c:any) => ({ platform: c.platform, tags: c.skuAlias ? c.skuAlias.split(',').map((s:string) => s.trim()).filter(Boolean) : [] }));
         Object.keys(pricingRules).forEach(pKey => { if (!existing.find((e:any) => e.platform === pKey)) existing.push({ platform: pKey, tags: [] }); });

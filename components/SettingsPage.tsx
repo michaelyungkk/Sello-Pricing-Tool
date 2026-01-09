@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PricingRules, Platform, Product, PriceLog, PromotionEvent, LogisticsRule, ShipmentLog, VelocityLookback, SearchConfig } from '../types';
 import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Calendar, Search, Megaphone, AlertTriangle } from 'lucide-react';
@@ -19,9 +20,10 @@ interface SettingsPageProps {
     headerStyle: React.CSSProperties;
     searchConfig?: SearchConfig;
     velocityLookback: VelocityLookback;
+    onRefreshThresholds?: () => void; // New callback for sync
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logisticsRules = [], onSaveLogistics, products, extraData, shipmentHistory = [], themeColor, headerStyle, searchConfig: initialSearchConfig, velocityLookback: initialVelocityLookback }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logisticsRules = [], onSaveLogistics, products, extraData, shipmentHistory = [], themeColor, headerStyle, searchConfig: initialSearchConfig, velocityLookback: initialVelocityLookback, onRefreshThresholds }) => {
     const [activeTab, setActiveTab] = useState<'platforms' | 'logistics' | 'analysis' | 'thresholds' | 'search'>('platforms');
     const [rules, setRules] = useState<PricingRules>(JSON.parse(JSON.stringify(currentRules)));
     const [logistics, setLogistics] = useState<LogisticsRule[]>(JSON.parse(JSON.stringify(logisticsRules)));
@@ -613,7 +615,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
 
                 {/* Thresholds Settings Section */}
                 {activeTab === 'thresholds' && (
-                    <AlertThresholdSettings themeColor={themeColor} />
+                    <AlertThresholdSettings themeColor={themeColor} onSaveComplete={onRefreshThresholds} />
                 )}
 
                 {/* Search Settings Section */}

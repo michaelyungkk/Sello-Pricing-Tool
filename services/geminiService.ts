@@ -3,6 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Product, AnalysisResult, PlatformConfig, RefundLog, PriceLog, PricingRules } from "../types";
 import { buildQueryPlanFromText } from "../components/search/aiParser";
 import { QueryPlan } from "../components/search/queryPlan";
+import { ThresholdConfig, DEFAULT_THRESHOLDS } from "../services/thresholdsConfig";
 
 // ... (Existing imports and Analyze function)
 // Initialize the Gemini AI client
@@ -10,13 +11,13 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const MODEL_ID = "gemini-3-pro-preview";
 
-export const analyzePriceAdjustment = async (product: Product, platformRule: PlatformConfig, context?: string): Promise<AnalysisResult> => {
+export const analyzePriceAdjustment = async (product: Product, platformRule: PlatformConfig, context?: string, thresholds: ThresholdConfig = DEFAULT_THRESHOLDS): Promise<AnalysisResult> => {
   const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General');
 
   // --- AI PROMPT CONSTRUCTION ---
   const primaryGoal = context === 'margin'
-    ? `The primary goal is to resolve a critical low margin issue on this platform. The current price of £${product.currentPrice} is not profitable enough given the costs. Your recommendation should prioritize increasing the price to improve the margin. Balance this against sales velocity; we want to be more profitable, not stall sales completely.`
-    : `The primary goal is to optimize inventory runway. We need to ensure we do not run out of stock before the replenishment arrives, but also avoid holding too much stock if sales are slow.`;
+    ? `The primary goal is to resolve a critical low margin issue on this platform. The current price of £${product.currentPrice} is not profitable enough given the costs. Your recommendation should prioritize increasing the price to improve the margin. Balance this against sales velocity; we want to be more profitable, not stall sales completely. The low margin threshold is ${thresholds.marginBelowTargetPct}%.`
+    : `The primary goal is to optimize inventory runway. We need to ensure we do not run out of stock before the replenishment arrives, but also avoid holding too much stock if sales are slow. The stockout risk buffer is ${thresholds.stockoutRunwayMultiplier}x lead time.`;
 
   const prompt = `
     Act as a senior inventory and pricing analyst for an ecommerce business.
@@ -95,19 +96,22 @@ export const analyzePriceAdjustment = async (product: Product, platformRule: Pla
     let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
     let reasoning = "";
 
-    if (daysRemaining < leadTime) {
+    const criticalThreshold = leadTime * thresholds.stockoutRunwayMultiplier;
+    const overstockThreshold = thresholds.overstockDays;
+
+    if (daysRemaining < criticalThreshold) {
         // Stockout Risk: Increase Price to slow down
         status = 'Critical';
         pctChange = 10; // +10%
         newPrice = currentPrice * 1.10;
-        reasoning = `[OFFLINE MODE] Simulated Action: Inventory covers ${daysRemaining.toFixed(0)} days, which is below the lead time of ${leadTime} days. Recommendation: Increase price by 10% to slow velocity and prevent stockout.`;
-    } else if (daysRemaining > leadTime * 4) {
+        reasoning = `[OFFLINE MODE] Simulated Action: Inventory covers ${daysRemaining.toFixed(0)} days, which is below the critical threshold of ${criticalThreshold.toFixed(0)} days. Recommendation: Increase price by 10% to slow velocity and prevent stockout.`;
+    } else if (daysRemaining > overstockThreshold) {
         // Overstock: Decrease Price
         status = 'Overstock';
         pctChange = -5; // -5%
         newPrice = currentPrice * 0.95;
-        reasoning = `[OFFLINE MODE] Simulated Action: Massive overstock detected (${daysRemaining.toFixed(0)} days cover). Recommendation: Decrease price by 5% to boost velocity and free up capital.`;
-    } else if (daysRemaining < leadTime * 1.5) {
+        reasoning = `[OFFLINE MODE] Simulated Action: Massive overstock detected (${daysRemaining.toFixed(0)} days cover > ${overstockThreshold}). Recommendation: Decrease price by 5% to boost velocity and free up capital.`;
+    } else if (daysRemaining < criticalThreshold * 1.5) {
         status = 'Warning';
         reasoning = `[OFFLINE MODE] Simulated Action: Stock levels are tight (${daysRemaining.toFixed(0)} days). Monitor closely, but no immediate price action required.`;
     } else {

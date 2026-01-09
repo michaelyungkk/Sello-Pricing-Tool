@@ -1,8 +1,9 @@
+
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea } from 'recharts';
-import { getThresholdConfig } from '../services/thresholdsConfig';
+import { ThresholdConfig } from '../services/thresholdsConfig';
 
 interface SkuDeepDivePageProps {
     data: {
@@ -18,6 +19,7 @@ interface SkuDeepDivePageProps {
     priceChangeHistory?: PriceChangeRecord[];
     initialTimeWindow?: 'yesterday' | '7d' | '30d' | 'custom';
     focus?: string;
+    thresholds: ThresholdConfig; // REQUIRED: Passed from App state
 }
 
 const calculateQuantiles = (data: number[]) => {
@@ -129,7 +131,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', foot
     );
 };
 
-const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onBack, onViewShipments, priceChangeHistory = [], initialTimeWindow, focus }) => {
+const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onBack, onViewShipments, priceChangeHistory = [], initialTimeWindow, focus, thresholds }) => {
     const { product, allTimeSales, allTimeQty, transactions = [], refunds = [] } = data;
     
     // Analytics State
@@ -147,9 +149,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     
     // Focus Ref for scrolling
     const activeSignalRef = useRef<HTMLDivElement>(null);
-
-    // Thresholds
-    const thresholds = useMemo(() => getThresholdConfig(), []);
 
     useEffect(() => {
         if (focus && activeSignalRef.current) {
@@ -192,7 +191,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     }, [sortedTransactions, txDays]);
 
     const diagnostics = useMemo(() => {
-        // ... (Diagnostics logic)
         const signals = [];
 
         // 1. Stock Health
@@ -204,7 +202,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                     severity: 'High',
                     color: 'text-red-700 bg-red-50 border-red-200', 
                     icon: AlertTriangle, 
-                    desc: `Stock covers ${product.daysRemaining.toFixed(0)} days, which is less than the lead time (${product.leadTimeDays} days).` 
+                    desc: `Stock covers ${product.daysRemaining.toFixed(0)} days, which is less than the lead time buffer (${(product.leadTimeDays * thresholds.stockoutRunwayMultiplier).toFixed(0)} days).` 
                 });
             } else if (product.daysRemaining > thresholds.overstockDays) {
                 signals.push({ 
@@ -656,7 +654,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             <Activity className="w-4 h-4 text-indigo-500" />
                             Diagnostic Signals
                         </h3>
-                        <span className="text-[10px] text-gray-400 italic">Threshold configurable in Settings → Alert and Diagnostic Thresholds</span>
+                        <span className="text-[10px] text-gray-400 italic">Thresholds based on global configuration</span>
                     </div>
                     <div className="flex flex-wrap gap-3">
                         {diagnostics.map((signal, idx) => (

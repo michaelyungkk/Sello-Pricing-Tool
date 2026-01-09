@@ -5,6 +5,7 @@ import { Layers, ListFilter, TrendingDown, ArrowRight, X, ChevronDown, Package, 
 import { SearchIntent } from '../services/geminiService';
 import { isAdsEnabled } from '../services/platformCapabilities';
 import SkuDeepDivePage from './SkuDeepDivePage';
+import { ThresholdConfig } from '../services/thresholdsConfig';
 
 interface SearchResultsPageProps {
   data: { results: any[], query: string, params: SearchIntent, id?: string };
@@ -16,11 +17,11 @@ interface SearchResultsPageProps {
   onRefine: (sessionId: string, newIntent: SearchIntent) => void;
   searchConfig: SearchConfig;
   priceChangeHistory?: PriceChangeRecord[];
+  thresholds: ThresholdConfig; // REQUIRED: Passed from App state
 }
 
 type GroupBy = 'platform' | 'sku';
 
-// ... (Rest of interfaces: SubGroup, TopGroup, FilterChipProps remain unchanged)
 interface SubGroup {
     key: string;
     label: string;
@@ -185,14 +186,21 @@ const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDelete, the
     );
 };
 
-const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, pricingRules, themeColor, headerStyle, timeLabel, onRefine, searchConfig, priceChangeHistory = [] }) => {
+const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, pricingRules, themeColor, headerStyle, timeLabel, onRefine, searchConfig, priceChangeHistory = [], thresholds }) => {
   const [groupBy, setGroupBy] = useState<GroupBy>('platform');
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [expandedSubGroup, setExpandedSubGroup] = useState<string | null>(null);
 
   const isDeepDive = data.params.primaryMetric === 'DEEP_DIVE' && data.results.length > 0;
 
-  // ... (Rest of event handlers and logic same as before)
+  // --- LIVE DATA HYDRATION ---
+  // Map live products for instant lookup to respect global setting changes
+  const liveProductMap = useMemo(() => {
+      const map = new Map<string, Product>();
+      products.forEach(p => map.set(p.sku, p));
+      return map;
+  }, [products]);
+
   const handleFilterUpdate = (index: number, newFilter: any) => {
       const newFilters = [...(data.params.filters || [])];
       newFilters[index] = newFilter;
@@ -283,6 +291,17 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
     data.results.forEach(item => {
       const mainKey = groupBy === 'platform' ? (item.platform || 'Unknown') : item.sku;
       
+      // --- HYDRATION STEP: Lookup Live Metrics ---
+      // We look up the live product to get current settings-dependent values (Velocity, Stock Cover)
+      // This overrides the static snapshot data for these specific fields.
+      const liveProduct = liveProductMap.get(item.sku);
+      if (liveProduct && item.type === 'INVENTORY') {
+          item.averageDailySales = liveProduct.averageDailySales;
+          item.daysRemaining = liveProduct.averageDailySales > 0 ? liveProduct.stockLevel / liveProduct.averageDailySales : 999;
+          item.stockLevel = liveProduct.stockLevel; // In case stock updated via upload
+          item.agedStockPct = liveProduct.stockLevel > 0 && liveProduct.agedStockQty ? (liveProduct.agedStockQty / liveProduct.stockLevel) * 100 : 0;
+      }
+      
       if (!groups[mainKey]) {
         groups[mainKey] = {
           key: mainKey,
@@ -332,6 +351,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       }
 
       if ((isInventoryContext || isAgedContext) && item.type === 'INVENTORY' && groupBy === 'sku') {
+          // Use hydrated values for grouping logic
           const gVel = item.averageDailySales || 0;
           topGroup.globalVelocity = gVel;
           topGroup.totalQty = item.stockLevel;
@@ -554,7 +574,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
         if (isMarginContext) return b.totalProfit - a.totalProfit;
         return b.totalRevenue - a.totalRevenue;
     });
-  }, [data.results, groupBy, isVolumeContext, isAdContext, isMarginContext, isInventoryContext, isReturnContext, isOrganicContext, isAgedContext, isTrendContext, data.params, isDeepDive]);
+  }, [data.results, groupBy, isVolumeContext, isAdContext, isMarginContext, isInventoryContext, isReturnContext, isOrganicContext, isAgedContext, isTrendContext, data.params, isDeepDive, liveProductMap]); 
 
   const volumeContextStats = useMemo(() => {
       const quantities = hierarchicalData.map(g => g.totalQty).sort((a, b) => a - b);
@@ -600,11 +620,21 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
 
   // --- DEEP DIVE EARLY RETURN ---
   if (isDeepDive) {
-      return <SkuDeepDivePage data={data.results[0]} themeColor={themeColor} priceChangeHistory={priceChangeHistory} />;
+      // FIX: Hydrate Deep Dive data with live product metrics
+      // This ensures that if the user changes Velocity Lookback in settings,
+      // the Deep Dive view reflects the new runway/velocity immediately without re-searching.
+      const resultSnapshot = data.results[0];
+      const liveProduct = liveProductMap.get(resultSnapshot.product.sku);
+      
+      const hydratedData = liveProduct ? {
+          ...resultSnapshot,
+          product: liveProduct
+      } : resultSnapshot;
+
+      return <SkuDeepDivePage data={hydratedData} themeColor={themeColor} priceChangeHistory={priceChangeHistory} thresholds={thresholds} />;
   }
 
   const renderContent = () => {
-    // ... (same as existing renderContent implementation)
     if (data.results.length === 0) {
       return (
         <div className="text-center py-20 bg-custom-glass rounded-xl border border-custom-glass">
@@ -617,7 +647,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
     return (
       <div className="space-y-4">
         {hierarchicalData.map(group => {
-            // ... (same implementation for groups)
+            // Volume Context Visuals
             let volumeBadge = null;
             if (volumeContextStats) {
                 if (volumeContextStats.isLowVolume) {
@@ -643,7 +673,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                   className={`w-full p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors cursor-pointer select-text ${expandedGroup === group.key ? 'bg-gray-50/30' : ''}`}
                   onClick={(e) => handleGroupToggle(group.key, e)}
                 >
-                  {/* ... Group Header Rendering ... */}
                   <div className="flex items-center gap-4">
                      <div className={`p-2 rounded-lg text-gray-600 ${groupBy === 'platform' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                         {groupBy === 'platform' ? <Layers className="w-5 h-5" /> : <Package className="w-5 h-5" />}
@@ -655,7 +684,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                   </div>
                   
                   <div className="flex items-center gap-8">
-                    {/* ... Metrics Columns (Units, Revenue, etc) ... */}
                     {/* UNITS COLUMN */}
                     <div className={`text-right hidden sm:block ${isVolumeContext ? 'scale-110 transform origin-right' : 'opacity-70'}`}>
                         <div className={`text-xs ${isVolumeContext ? 'text-indigo-600 font-bold' : 'text-gray-500'}`}>
@@ -713,7 +741,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                             <div className="flex items-center gap-4 bg-gray-50 px-3 py-1 rounded border border-gray-200">
                                 <div className="text-right">
                                     <span className="block text-[9px] text-gray-400 uppercase">Period (Qty)</span>
-                                    <span className={`block font-bold ${(group.periodReturnRate || 0) > 5 ? 'text-red-600' : 'text-gray-800'}`}>
+                                    <span className={`block font-bold ${(group.periodReturnRate || 0) > thresholds.returnRatePct ? 'text-red-600' : 'text-gray-800'}`}>
                                         {(group.periodReturnRate || 0).toFixed(1)}%
                                     </span>
                                 </div>
@@ -754,7 +782,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                     <div className={`font-bold text-lg ${group.totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>
                                         £{group.totalProfit.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
                                     </div>
-                                    <div className={`text-xs flex items-center gap-1 ${group.weightedMargin < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                                    <div className={`text-xs flex items-center gap-1 ${group.weightedMargin < thresholds.marginBelowTargetPct ? 'text-red-400' : 'text-gray-400'}`}>
                                         {group.weightedMargin.toFixed(1)}% 
                                         {isTrendContext && (
                                             <span className={`font-bold ${group.weightedMarginChange > 0 ? 'text-green-500' : 'text-red-500'}`}>
@@ -766,9 +794,9 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                             ) : (
                                 <div className={`font-bold text-lg ${
                                     isInventoryContext
-                                        ? ((group.globalCover || 999) < 14 ? 'text-red-600' : (group.globalCover || 0) > 120 ? 'text-orange-600' : 'text-green-600')
+                                        ? ((group.globalCover || 999) < 14 ? 'text-red-600' : (group.globalCover || 0) > thresholds.overstockDays ? 'text-orange-600' : 'text-green-600')
                                         : isAdContext 
-                                            ? (group.tacos > 25 ? 'text-red-600' : 'text-gray-800')
+                                            ? (group.tacos > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-800')
                                             : isOrganicContext
                                                 ? (group.organicShare !== null && group.organicShare > 80 ? 'text-green-600' : group.organicShare !== null && group.organicShare < 40 ? 'text-red-600' : 'text-gray-800')
                                             : isAgedContext
@@ -804,7 +832,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                         <div className="divide-y divide-gray-100">
                             {(Object.values(group.subGroups) as SubGroup[])
                                 .sort((a, b) => {
-                                    // ... existing sorting logic ...
                                     if (data.params && data.params.sort) {
                                         const { field, direction } = data.params.sort;
                                         const dirMult = direction === 'asc' ? 1 : -1;
@@ -904,7 +931,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                             </div>
                                                             <div className="text-right w-20">
                                                                 <div className="text-xs text-gray-400">Period RR</div>
-                                                                <div className={`text-sm font-bold ${(sub.periodReturnRate || 0) > 5 ? 'text-red-600' : 'text-gray-800'}`}>
+                                                                <div className={`text-sm font-bold ${(sub.periodReturnRate || 0) > thresholds.returnRatePct ? 'text-red-600' : 'text-gray-800'}`}>
                                                                     {(sub.periodReturnRate || 0).toFixed(1)}%
                                                                 </div>
                                                             </div>
@@ -951,7 +978,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                     {isAdContext ? 'TACoS' : isOrganicContext ? 'Organic (Ads)' : isMarginContext ? 'Net Profit' : 'Share %'}
                                                                 </div>
                                                                 <span className={`text-sm font-bold ${
-                                                                    isAdContext ? (sub.tacos > 20 ? 'text-red-600' : 'text-gray-700') :
+                                                                    isAdContext ? (sub.tacos > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-700') :
                                                                     isOrganicContext ? (sub.organicShare !== null && sub.organicShare > 80 ? 'text-green-600' : sub.organicShare !== null && sub.organicShare < 40 ? 'text-red-600' : 'text-gray-700') :
                                                                     isMarginContext ? (sub.totalProfit < 0 ? 'text-red-600' : 'text-green-600') :
                                                                     'text-indigo-600'
@@ -1057,7 +1084,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                                 {isAdContext && (
                                                                                     <td className="p-2 text-right">
                                                                                         {tx.tacos > 0 ? (
-                                                                                            <span className={`${tx.tacos > 15 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                                                                                            <span className={`${tx.tacos > thresholds.highAdDependencyPct ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
                                                                                                 {tx.tacos.toFixed(1)}%
                                                                                             </span>
                                                                                         ) : '-'}
@@ -1093,7 +1120,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                                 {isTrendContext && (
                                                                                     <td className="p-2 text-right">
                                                                                         {tx.velocityChange !== undefined ? (
-                                                                                            <span className={`${tx.velocityChange < -20 ? 'text-red-600' : tx.velocityChange > 20 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                                                            <span className={`${tx.velocityChange < -thresholds.velocityDropPct ? 'text-red-600' : tx.velocityChange > 20 ? 'text-green-600' : 'text-gray-500'}`}>
                                                                                                 {tx.velocityChange > 0 ? '+' : ''}{tx.velocityChange.toFixed(0)}%
                                                                                             </span>
                                                                                         ) : '-'}
@@ -1111,7 +1138,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                                             N/A
                                                                                         </span>
                                                                                     ) : (
-                                                                                        <span className={`${(tx.margin || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                                                        <span className={`${(tx.margin || 0) < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>
                                                                                             {(tx.margin || 0).toFixed(1)}%
                                                                                         </span>
                                                                                     )}
