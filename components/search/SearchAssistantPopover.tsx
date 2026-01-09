@@ -2,13 +2,15 @@
 import React, { useMemo } from 'react';
 import { ChipSelectionState, Suggestion, SuggestionPriority } from './types';
 import { getSuggestions } from './suggestionEngine';
-import { TrendingUp, AlertTriangle, Package, Search, Zap, TrendingDown, DollarSign, Activity, BarChart2, ShoppingBag, Clock, ArrowRight, Filter, Globe } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Package, Search, Zap, TrendingDown, DollarSign, Activity, BarChart2, ShoppingBag, Clock, ArrowRight, Filter, Globe, Tag } from 'lucide-react';
+import { Product } from '../../types';
 
 interface SearchAssistantPopoverProps {
   state: ChipSelectionState;
   onApply: (suggestion: Suggestion) => void;
   onClear: () => void;
   isVisible: boolean;
+  products?: Product[];
 }
 
 const PriorityIcon = ({ priority }: { priority: SuggestionPriority }) => {
@@ -24,13 +26,47 @@ const PriorityIcon = ({ priority }: { priority: SuggestionPriority }) => {
 const KindIcon = ({ kind }: { kind: string }) => {
     if (kind === 'metric') return <BarChart2 className="w-3.5 h-3.5 opacity-50" />;
     if (kind === 'shortcut') return <Zap className="w-3.5 h-3.5 text-yellow-500" />;
+    if (kind === 'sku') return <Tag className="w-3.5 h-3.5 text-indigo-500" />;
     return null;
 }
 
-export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ state, onApply, onClear, isVisible }) => {
-  const suggestions = useMemo(() => getSuggestions(state), [state]);
+export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ state, onApply, onClear, isVisible, products = [] }) => {
+  const suggestions = useMemo(() => getSuggestions(state, products), [state, products]);
 
   if (!isVisible) return null;
+
+  // --- SKU SEARCH MODE RENDER ---
+  if (suggestions.skuSuggestions.length > 0 || (state.searchText.toLowerCase().startsWith('sku:') || state.searchText.toLowerCase().startsWith('sku '))) {
+      return (
+        <div className="absolute top-full left-0 mt-2 w-full max-w-3xl bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
+            <div className="p-4 bg-indigo-50/50 border-b border-indigo-100 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-indigo-600" />
+                <span className="text-xs font-bold text-indigo-700 uppercase">Product Search Mode</span>
+            </div>
+            <div className="p-2">
+                {suggestions.skuSuggestions.length > 0 ? (
+                    <div className="space-y-1">
+                        {suggestions.skuSuggestions.map(s => (
+                            <button
+                                key={s.id}
+                                onClick={() => onApply(s)}
+                                className="w-full flex items-center gap-3 p-3 text-left bg-white hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-lg transition-all group"
+                            >
+                                <div className="font-mono font-bold text-sm text-gray-800">{s.label}</div>
+                                <div className="text-xs text-gray-500 truncate flex-1">{s.description}</div>
+                                <ArrowRight className="w-3 h-3 text-gray-300 group-hover:text-indigo-400" />
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="p-8 text-center text-gray-400 text-sm">
+                        No products found matching "{state.searchText.replace(/^sku[:\s]+/, '')}"
+                    </div>
+                )}
+            </div>
+        </div>
+      );
+  }
 
   return (
     <div className="absolute top-full left-0 mt-2 w-full max-w-3xl bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">

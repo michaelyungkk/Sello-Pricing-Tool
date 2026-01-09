@@ -12,7 +12,9 @@ export type MetricId =
   | "INBOUND_QTY_30D"
   | "ADS_SPEND_PCT"
   | "RETURN_RATE_PCT"
-  | "ORGANIC_SHARE_PCT";
+  | "ORGANIC_SHARE_PCT"
+  | "MARGIN_CHANGE_PCT"
+  | "VELOCITY_CHANGE";
 
 export type ConditionId =
   | "NEGATIVE_LOSS"
@@ -62,7 +64,7 @@ export interface ChipSelectionState {
 export interface Suggestion {
   id: string;
   label: string;
-  kind: "metric" | "condition" | "shortcut" | "platform" | "time";
+  kind: "metric" | "condition" | "shortcut" | "platform" | "time" | "sku";
   priority: SuggestionPriority;
   groupLabel?: string;
   description?: string;

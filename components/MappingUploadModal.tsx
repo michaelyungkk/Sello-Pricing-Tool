@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Product } from '../types';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, Link as LinkIcon, ArrowRight, Search, ChevronDown, ChevronRight, Edit2, GitMerge, Eraser } from 'lucide-react';
@@ -192,47 +193,73 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                 method = 'learned';
             }
             else {
-                // Fuzzy Matching (Suffix Stripping)
-                const stripped = fileSku.replace(/[_ -](UK|US|DE|FR|IT|ES|[0-9]+)$/i, '');
-                const normalizedStripped = normalize(stripped);
+                // Fuzzy Logic
+                
+                // IMPORTANT: Identify Bundles
+                // If a SKU ends in 'x' followed by digits (e.g. HOCAL012x2), it implies a bundle.
+                // Bundles usually have unique inventory levels and should NOT map to the single unit Master SKU automatically.
+                const isBundleSuffix = /x\d+$/i.test(fileSku);
 
-                if (masterSkuSet.has(stripped)) {
-                    masterSku = stripped;
-                    method = 'fuzzy';
-                } else if (masterSkuLookup[normalizedStripped]) {
-                    masterSku = masterSkuLookup[normalizedStripped];
-                    method = 'fuzzy';
-                } else if (learnedAliases[stripped.toUpperCase()]) {
-                    masterSku = learnedAliases[stripped.toUpperCase()];
-                    method = 'learned';
-                } else {
-                    // Fuzzy Matching (Prefix Check)
-                    let bestPrefixMatch = '';
-                    for (const prod of products) {
-                        if (fileSku.startsWith(prod.sku)) {
-                            const remaining = fileSku.slice(prod.sku.length);
-                            if ((remaining.startsWith('-') || remaining.startsWith('_') || remaining === '') && prod.sku.length > bestPrefixMatch.length) {
-                                bestPrefixMatch = prod.sku;
+                if (!isBundleSuffix) {
+                    // Strategy A: Suffix Stripping (e.g. BF1078-D-UK_1 -> BF1078-D-UK)
+                    const stripped = fileSku.replace(/[_ -](UK|US|DE|FR|IT|ES|[0-9]+)$/i, '');
+                    const normalizedStripped = normalize(stripped);
+
+                    if (masterSkuSet.has(stripped)) {
+                        masterSku = stripped;
+                        method = 'fuzzy';
+                    } else if (masterSkuLookup[normalizedStripped]) {
+                        masterSku = masterSkuLookup[normalizedStripped];
+                        method = 'fuzzy';
+                    } else if (learnedAliases[stripped.toUpperCase()]) {
+                        masterSku = learnedAliases[stripped.toUpperCase()];
+                        method = 'learned';
+                    } else {
+                        // Strategy B: Master Prefix Match (e.g. Master: BF1078-D-UK, File: BF1078-D)
+                        // Or File Prefix Match (e.g. Master: BF1078-D, File: BF1078-D-UK_1)
+                        
+                        let bestPrefixMatch = '';
+                        for (const prod of products) {
+                            
+                            // Check if File SKU starts with Master SKU (e.g. Master: ITEM, File: ITEM_1)
+                            if (fileSku.startsWith(prod.sku)) {
+                                const remaining = fileSku.slice(prod.sku.length);
+                                // Safety: Separator must be standard (- or _) or empty. 
+                                // Explicitly disallow 'x' to avoid bundle matching (ITEMx2)
+                                if ((remaining.startsWith('-') || remaining.startsWith('_') || remaining === '') && prod.sku.length > bestPrefixMatch.length) {
+                                    bestPrefixMatch = prod.sku;
+                                }
+                            }
+                            
+                            // Check if Master SKU starts with File SKU (e.g. Master: ITEM-UK, File: ITEM)
+                            // This handles "BF1078-D" (File) -> "BF1078-D-UK" (Master)
+                            if (prod.sku.startsWith(fileSku)) {
+                                const remaining = prod.sku.slice(fileSku.length);
+                                if ((remaining.startsWith('-') || remaining.startsWith('_')) && prod.sku.length > bestPrefixMatch.length) {
+                                    bestPrefixMatch = prod.sku;
+                                }
                             }
                         }
-                    }
-                    if (bestPrefixMatch) {
-                        masterSku = bestPrefixMatch;
-                        method = 'fuzzy';
-                    }
-
-                    if (!masterSku) {
-                        const candidates = products.filter(p => {
-                            if (!p.sku.startsWith(fileSku)) return false;
-                            if (p.sku.length <= fileSku.length) return false;
-                            const separator = p.sku[fileSku.length];
-                            return separator === '-' || separator === '_' || separator === ' ';
-                        });
-
-                        if (candidates.length > 0) {
-                            const ukMatch = candidates.find(p => p.sku.toUpperCase().endsWith('-UK') || p.sku.toUpperCase().endsWith('_UK'));
-                            masterSku = ukMatch ? ukMatch.sku : candidates[0].sku;
+                        
+                        if (bestPrefixMatch) {
+                            masterSku = bestPrefixMatch;
                             method = 'fuzzy';
+                        }
+
+                        // Strategy C: Brute Force Suffix Stripping fallback
+                        if (!masterSku) {
+                            const candidates = products.filter(p => {
+                                if (!p.sku.startsWith(fileSku)) return false;
+                                if (p.sku.length <= fileSku.length) return false;
+                                const separator = p.sku[fileSku.length];
+                                return separator === '-' || separator === '_' || separator === ' ';
+                            });
+
+                            if (candidates.length > 0) {
+                                const ukMatch = candidates.find(p => p.sku.toUpperCase().endsWith('-UK') || p.sku.toUpperCase().endsWith('_UK'));
+                                masterSku = ukMatch ? ukMatch.sku : candidates[0].sku;
+                                method = 'fuzzy';
+                            }
                         }
                     }
                 }

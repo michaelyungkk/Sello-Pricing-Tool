@@ -1,6 +1,7 @@
 
 import { ChipSelectionState, Suggestion, SuggestionPriority, MetricId, ConditionId, PlatformId } from './types';
 import { METRICS, CONDITIONS, SMART_PAIRINGS, PLATFORM_BOOSTS, SHORTCUTS_LIBRARY, PLATFORMS_LIST, TIME_PRESETS_LIST } from './suggestionConfig';
+import { Product } from '../../types';
 
 // Base scores for priorities (Decision-First Ranking)
 const PRIORITY_SCORES: Record<SuggestionPriority, number> = {
@@ -25,14 +26,52 @@ const BOOSTS = {
 /**
  * Main Engine Function
  */
-export function getSuggestions(state: ChipSelectionState): {
+export function getSuggestions(state: ChipSelectionState, products: Product[] = []): {
   metricSuggestions: Suggestion[];
   conditionSuggestions: Suggestion[];
   shortcutSuggestions: Suggestion[];
   platformSuggestions: Suggestion[];
   timeSuggestions: Suggestion[];
+  skuSuggestions: Suggestion[];
 } {
   const searchLower = state.searchText.toLowerCase().trim();
+
+  // --- SKU MODE DETECTION ---
+  if (searchLower.startsWith('sku:') || searchLower.startsWith('sku ')) {
+      const term = searchLower.replace(/^sku[:\s]+/, '').trim();
+      const skuSuggestions: Suggestion[] = [];
+      
+      if (term.length > 0) {
+          const matches = products.filter(p => 
+              p.sku.toLowerCase().includes(term) || 
+              p.name.toLowerCase().includes(term) ||
+              p.channels.some(c => c.skuAlias?.toLowerCase().includes(term))
+          ).slice(0, 15);
+
+          matches.forEach(p => {
+              skuSuggestions.push({
+                  id: p.sku,
+                  label: p.sku,
+                  kind: 'sku',
+                  priority: 'INVENTORY',
+                  groupLabel: 'Products',
+                  description: p.name,
+                  score: 1000,
+                  applies: {} // Handled explicitly in UI
+              });
+          });
+      }
+
+      // Return ONLY SKU suggestions when in this mode to avoid clutter
+      return {
+          metricSuggestions: [],
+          conditionSuggestions: [],
+          shortcutSuggestions: [],
+          platformSuggestions: [],
+          timeSuggestions: [],
+          skuSuggestions
+      };
+  }
 
   // Helper to score based on text match
   const getTextScore = (label: string, description?: string) => {
@@ -227,6 +266,7 @@ export function getSuggestions(state: ChipSelectionState): {
     conditionSuggestions,
     shortcutSuggestions,
     platformSuggestions,
-    timeSuggestions
+    timeSuggestions,
+    skuSuggestions: [] // Default if no SKU logic triggered
   };
 }

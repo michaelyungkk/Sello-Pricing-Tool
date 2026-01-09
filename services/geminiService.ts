@@ -152,6 +152,7 @@ export interface SearchIntent {
     value: string; // '30d' or ISO string
   };
   explanation?: string;
+  primaryMetric?: string;
 }
 
 /**
@@ -192,7 +193,10 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
         if (field === 'STOCK_LEVEL') field = 'stockLevel';
         // Add velocity change mapping
         if (field === 'VELOCITY_CHANGE') field = 'velocityChange';
+        if (field === 'MARGIN_CHANGE_PCT') field = 'MARGIN_CHANGE_PCT'; // Keep special key
         if (field === 'RETURN_RATE_PCT') field = 'periodReturnRate'; // Map filter to dynamic period rate
+        if (field === 'ORGANIC_SHARE_PCT') field = 'organicShare'; // Map filter to organic share
+        if (field === 'AGED_STOCK_PCT') field = 'agedStockPct'; // Map filter to aged stock
         
         return {
             field,
@@ -234,7 +238,10 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
     if (sortField === 'stock_cover_days') sortField = 'daysRemaining';
     if (sortField === 'daily_velocity') sortField = 'averageDailySales';
     if (sortField === 'velocity_change') sortField = 'velocityChange';
+    if (sortField === 'margin_change_pct') sortField = 'MARGIN_CHANGE_PCT'; // Correct mapping for execution engine
     if (sortField === 'return_rate_pct') sortField = 'periodReturnRate';
+    if (sortField === 'organic_share_pct') sortField = 'organicShare';
+    if (sortField === 'aged_stock_pct') sortField = 'agedStockPct';
     
     return {
         targetData,
@@ -245,7 +252,8 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
         },
         limit: plan.limit,
         timeRange: { type: 'relative', value: timeValue },
-        explanation: plan.explain
+        explanation: plan.explain,
+        primaryMetric: plan.primaryMetric
     };
 }
 
@@ -257,6 +265,18 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
 export const parseSearchQuery = async (query: string): Promise<SearchIntent> => {
   // Simulate minor network delay for UX consistency
   await new Promise(resolve => setTimeout(resolve, 150));
+
+  // --- DEEP DIVE INTERCEPT ---
+  if (query.trim().toUpperCase().startsWith('SKU:')) {
+      const sku = query.trim().substring(4).trim();
+      return {
+          targetData: 'inventory',
+          filters: [{ field: 'sku', operator: '=', value: sku }],
+          primaryMetric: 'DEEP_DIVE',
+          limit: 1,
+          explanation: 'SKU Deep Dive Analysis'
+      };
+  }
 
   // Extract Context from Query String
   const context = {

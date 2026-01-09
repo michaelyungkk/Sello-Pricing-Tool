@@ -11,6 +11,7 @@ export interface BatchUpdateItem {
   category?: string;
   subcategory?: string;
   stock?: number;
+  agedStock?: number; // New Field for Aged Stock
   cost?: number;
   inventoryStatus?: string; // New Field for "New Product" logic
   cartonDimensions?: {
@@ -114,9 +115,11 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
         const subIdx = findCol(['subcategory', 'subcat']);
         
         // Specific Fix: Prioritize 'totalinventoryqty' and '库存总量' BEFORE generic 'inventory'.
-        // 'Inventory' often matches 'Inventory Status' column which contains strings, resulting in 0/NaN stock.
         const stockIdx = findCol(['totalinventoryqty', '库存总量', 'stock', 'qty', 'quantity', 'available', 'onhand', '数量']);
         
+        // Detect Aged Stock column
+        const agedStockIdx = findCol(['aged', '90+', '180+', 'oldstock', 'longterm', 'unsellable', '滞销']);
+
         const costIdx = findCol(['cost', 'cogs', 'buyingprice', 'purchaseprice', '成本', '进价', '采购价']);
         
         // Status Column detection (Inventory Status/库存状态)
@@ -152,6 +155,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 category: catIdx !== -1 ? String(row[catIdx]).trim() : undefined,
                 subcategory: subIdx !== -1 ? String(row[subIdx]).trim() : undefined,
                 stock: parseNum(stockIdx),
+                agedStock: parseNum(agedStockIdx),
                 cost: parseNum(costIdx),
                 inventoryStatus: statusIdx !== -1 ? String(row[statusIdx]).trim() : undefined,
             };
@@ -194,7 +198,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
               </div>
               <div>
                   <h2 className="text-xl font-bold text-gray-900">ERP Inventory Import</h2>
-                  <p className="text-xs text-gray-500">Update stock, costs, and product details</p>
+                  <p className="text-xs text-gray-500">Update stock, aged stock, costs, and details</p>
               </div>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
@@ -264,7 +268,8 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                     <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                         <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase flex">
                             <div className="flex-1">Product</div>
-                            <div className="w-24 text-right">Stock</div>
+                            <div className="w-20 text-right">Stock</div>
+                            <div className="w-20 text-right">Aged</div>
                             <div className="w-24 text-right">Cost</div>
                         </div>
                         <div className="max-h-[300px] overflow-y-auto">
@@ -282,8 +287,11 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                                         </div>
                                         {item.name && <div className="text-xs text-gray-500 truncate">{item.name}</div>}
                                     </div>
-                                    <div className="w-24 text-right font-mono text-sm">
+                                    <div className="w-20 text-right font-mono text-sm">
                                         {item.stock !== undefined ? item.stock : '-'}
+                                    </div>
+                                    <div className="w-20 text-right font-mono text-sm text-amber-600 font-bold">
+                                        {item.agedStock !== undefined ? item.agedStock : '-'}
                                     </div>
                                     <div className="w-24 text-right font-mono text-sm text-gray-600">
                                         {item.cost !== undefined ? `£${item.cost.toFixed(2)}` : '-'}

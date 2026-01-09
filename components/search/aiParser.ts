@@ -82,10 +82,12 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
       'sku', 'product', 'item', 'list', 'table',
       'last', 'month', 'year', 'ytd', 'this', 'all time', 'history',
       'amazon', 'ebay', 'range', 'manomano', 'wayfair', 'onbuy', 'groupon', 'tiktok', 'volume', 'sales', 'revenue',
-      // EXPANDED KEYWORDS LIST (Fixes "Name CONTAINS candidate daily velocity" issue)
+      // EXPANDED KEYWORDS LIST
       'velocity', 'daily', 'candidate', 'average', 'avg', 'ratio', 'percent', 'pct', 
       'per', 'unit', 'qty', 'level', 'aged', 'inbound', 'below', 'target', 'dependency', 
-      'strong', 'organic', 'dormant', 'no'
+      'strong', 'organic', 'dormant', 'no', 'old', 'long term', 'stale',
+      // UPDATED: Include new terms to prevent accidental text filtering
+      'share', 'natural', 'change', 'pop', 'growth', 'spike', 'improvement', 'fall', 'down', 'up', 'rise'
   ];
 
   let potentialSearchTerm = lowerText;
@@ -113,36 +115,56 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
 
   // --- 5. Detect Intent / Metrics ---
   
-  // A) DROP / DECLINE LOGIC (Trend Analysis)
-  if (lowerText.includes('drop') || lowerText.includes('decline') || lowerText.includes('down') || lowerText.includes('fall')) {
+  // A) TREND / CHANGE LOGIC (Drop, Decline, Growth, Change, PoP)
+  const isNegativeTrend = lowerText.includes('drop') || lowerText.includes('decline') || lowerText.includes('down') || lowerText.includes('fall') || lowerText.includes('loss');
+  const isPositiveTrend = lowerText.includes('growth') || lowerText.includes('spike') || lowerText.includes('up') || lowerText.includes('increase') || lowerText.includes('rise');
+  const isGeneralTrend = lowerText.includes('trend') || lowerText.includes('change') || lowerText.includes('pop') || lowerText.includes('wow');
+
+  if (isNegativeTrend || isPositiveTrend || isGeneralTrend) {
       
-      // A1. Volume / Revenue / Sales Drop
-      // We map "Revenue Drop" to Velocity Change as well, as we don't track explicit Revenue Change % currently, 
-      // and volume drops usually drive revenue drops.
+      // A1. Volume / Revenue / Sales / Velocity Trends
       if (lowerText.includes('volume') || lowerText.includes('revenue') || lowerText.includes('sales') || lowerText.includes('velocity')) {
           plan.primaryMetric = "VELOCITY_CHANGE";
           plan.metrics = ["VELOCITY_CHANGE", "REVENUE", "UNITS"];
-          plan.sort = { field: "VELOCITY_CHANGE", direction: "ASC" };
-          // ACTIVE LOGIC: Add explicit filter so user sees "Trend < 0" chip
-          plan.filters.push({ field: "VELOCITY_CHANGE", op: "LT", value: 0 }); 
-          
           plan.viewHint = "RANKED_LIST";
-          if (!plan.explain.includes("Searching")) plan.explain = "Analyzing negative sales trends (Week-over-Week).";
+          
+          if (isNegativeTrend) {
+              plan.sort = { field: "VELOCITY_CHANGE", direction: "ASC" };
+              plan.filters.push({ field: "VELOCITY_CHANGE", op: "LT", value: 0 }); 
+              if (!plan.explain.includes("Searching")) plan.explain = "Analyzing negative sales trends (Period-over-Period).";
+          } else if (isPositiveTrend) {
+              plan.sort = { field: "VELOCITY_CHANGE", direction: "DESC" };
+              plan.filters.push({ field: "VELOCITY_CHANGE", op: "GT", value: 0 }); 
+              if (!plan.explain.includes("Searching")) plan.explain = "Analyzing sales growth (Period-over-Period).";
+          } else {
+              // Neutral "Change" or "Trend" - Default to seeing big moves (Growth first usually)
+              plan.sort = { field: "VELOCITY_CHANGE", direction: "DESC" };
+              if (!plan.explain.includes("Searching")) plan.explain = "Analyzing sales velocity trends (Period-over-Period).";
+          }
       }
       
-      // A2. Margin Drop
-      // Since we don't track "Margin Change %" historically in the search index yet, we interpret "Margin Drop" 
-      // as "Low Margin" or "Dropped below healthy levels".
+      // A2. Margin Trends
       else if (lowerText.includes('margin') || lowerText.includes('profit') || lowerText.includes('contribution')) {
-          const metric = lowerText.includes('contribution') ? "CMA_PCT" : "NET_MARGIN_PCT";
+          // KEY FIX: Use MARGIN_CHANGE_PCT instead of NET_MARGIN_PCT for sorting limits
+          const metric = lowerText.includes('contribution') ? "CMA_PCT" : "MARGIN_CHANGE_PCT";
           plan.primaryMetric = metric;
-          plan.metrics = [metric, "PROFIT", "REVENUE"];
-          plan.sort = { field: metric, direction: "ASC" };
-          // ACTIVE LOGIC: Add explicit filter so user sees "Margin < 15" chip
-          plan.filters.push({ field: metric, op: "LT", value: 15 });
-          
+          plan.metrics = [metric, "PROFIT", "REVENUE", "NET_MARGIN_PCT"];
           plan.viewHint = "RANKED_LIST";
-          if (!plan.explain.includes("Searching")) plan.explain = "Highlighting products with low or declining margins.";
+
+          if (isNegativeTrend) {
+              plan.sort = { field: metric, direction: "ASC" };
+              // For margin change, LT 0 means decline
+              plan.filters.push({ field: metric, op: "LT", value: 0 }); 
+              if (!plan.explain.includes("Searching")) plan.explain = "Highlighting products with declining margins.";
+          } else if (isPositiveTrend) {
+              plan.sort = { field: metric, direction: "DESC" };
+              plan.filters.push({ field: metric, op: "GT", value: 0 });
+              if (!plan.explain.includes("Searching")) plan.explain = "Highlighting products with improving margins.";
+          } else {
+              // General Margin Change/Trend
+              plan.sort = { field: metric, direction: "DESC" };
+              if (!plan.explain.includes("Searching")) plan.explain = "Analyzing margin trends (Period-over-Period).";
+          }
       }
   }
 
@@ -198,7 +220,24 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
           if (!plan.explain.includes("Searching")) plan.explain = "Analyzing profitability.";
       }
   }
-  // E) Inventory / Stock / Cover / Runway
+  // E) Aged Stock / Old Stock
+  else if (lowerText.includes('aged') || lowerText.includes('old') || lowerText.includes('long term') || lowerText.includes('stale')) {
+      plan.primaryMetric = "AGED_STOCK_PCT";
+      plan.metrics = ["AGED_STOCK_PCT", "STOCK_LEVEL", "DAILY_VELOCITY", "REVENUE"];
+      plan.groupBy = "SKU";
+      plan.viewHint = "TABLE";
+      plan.sort = { field: "AGED_STOCK_PCT", direction: "DESC" };
+      
+      if (lowerText.includes('high') || lowerText.includes('risk') || lowerText.includes('heavy') || lowerText.includes('bad')) {
+          plan.filters.push({ field: "AGED_STOCK_PCT", op: "GTE", value: 20 });
+          if (!plan.explain.includes("Searching")) plan.explain = "Highlighting high aged stock (> 20%).";
+      } else {
+          // General view, ensure we only show items WITH aged stock
+          plan.filters.push({ field: "AGED_STOCK_PCT", op: "GT", value: 0 });
+          if (!plan.explain.includes("Searching")) plan.explain = "Analyzing Aged Stock levels.";
+      }
+  }
+  // F) Inventory / Stock / Cover / Runway
   else if (lowerText.includes('stock') || lowerText.includes('inventory') || lowerText.includes('runway') || lowerText.includes('cover')) {
       plan.primaryMetric = "STOCK_COVER_DAYS";
       plan.metrics = ["STOCK_COVER_DAYS", "STOCK_LEVEL", "DAILY_VELOCITY", "REVENUE"];
@@ -228,7 +267,7 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
           if (!plan.explain.includes("Searching")) plan.explain = "Inventory health overview.";
       }
   }
-  // F) Opportunity / Scale / Winning
+  // G) Opportunity / Scale / Winning
   else if (lowerText.includes('scale') || lowerText.includes('winning') || lowerText.includes('best') || lowerText.includes('top')) {
       plan.primaryMetric = "PROFIT"; // Focus on contribution
       plan.metrics = ["PROFIT", "REVENUE", "UNITS", "NET_MARGIN_PCT"];
@@ -236,7 +275,7 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
       plan.viewHint = "RANKED_LIST";
       if (!plan.explain.includes("Searching")) plan.explain = "Highlighting top performing products.";
   }
-  // G) Returns
+  // H) Returns
   else if (lowerText.includes('return') || lowerText.includes('refund') || lowerText.includes('rr')) {
       plan.primaryMetric = "RETURN_RATE_PCT";
       plan.viewHint = "TABLE";
@@ -252,6 +291,24 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
           plan.explain = isHigh 
             ? "Analyzing High Returns (> 10%)." 
             : "Returns analysis (> 5%).";
+      }
+  }
+  // I) Organic / Natural Sales
+  else if (lowerText.includes('organic') || lowerText.includes('natural')) {
+      plan.primaryMetric = "ORGANIC_SHARE_PCT";
+      plan.metrics = ["ORGANIC_SHARE_PCT", "REVENUE", "TACOS_PCT", "ADS_SPEND"];
+      plan.sort = { field: "ORGANIC_SHARE_PCT", direction: "DESC" };
+      plan.viewHint = "RANKED_LIST";
+      
+      if (lowerText.includes('strong') || lowerText.includes('high') || lowerText.includes('good')) {
+          plan.filters.push({ field: "ORGANIC_SHARE_PCT", op: "GTE", value: 70 });
+          if (!plan.explain.includes("Searching")) plan.explain = "Showing products with strong organic sales (> 70% share).";
+      } else if (lowerText.includes('low') || lowerText.includes('weak') || lowerText.includes('bad')) {
+          plan.sort = { field: "ORGANIC_SHARE_PCT", direction: "ASC" };
+          plan.filters.push({ field: "ORGANIC_SHARE_PCT", op: "LT", value: 30 });
+          if (!plan.explain.includes("Searching")) plan.explain = "Highlighting products with weak organic share.";
+      } else {
+          if (!plan.explain.includes("Searching")) plan.explain = "Analyzing Organic Share %.";
       }
   }
 

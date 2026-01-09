@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, SkuCostDetail } from '../types';
 import { TagSearchInput } from './TagSearchInput';
@@ -100,13 +99,14 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
     };
 
     const CombinedCell = ({ value, percent, isCurrency = true, highlight = false }: { value: number, percent?: number, isCurrency?: boolean, highlight?: boolean }) => {
-        const displayVal = includeVat && isCurrency ? value * VAT_RATE : value;
+        const safeValue = value ?? 0;
+        const displayVal = includeVat && isCurrency ? safeValue * VAT_RATE : safeValue;
         
         // Logic for flipping: 
         // Normal: Top = Absolute, Bottom = %
         // Flipped: Top = %, Bottom = Absolute
-        const top = showPercentPrimary && percent !== undefined ? `${percent.toFixed(2)}%` : (isCurrency ? `£${displayVal.toFixed(2)}` : displayVal.toFixed(2));
-        const bottom = showPercentPrimary && percent !== undefined ? (isCurrency ? `£${displayVal.toFixed(2)}` : displayVal.toFixed(2)) : (percent !== undefined ? `${percent.toFixed(2)}%` : null);
+        const top = showPercentPrimary && percent !== undefined ? `${(percent ?? 0).toFixed(2)}%` : (isCurrency ? `£${displayVal.toFixed(2)}` : displayVal.toFixed(2));
+        const bottom = showPercentPrimary && percent !== undefined ? (isCurrency ? `£${displayVal.toFixed(2)}` : displayVal.toFixed(2)) : (percent !== undefined ? `${(percent ?? 0).toFixed(2)}%` : null);
 
         return (
             <div className={`flex flex-col items-end ${highlight ? 'font-bold' : ''}`}>
@@ -236,7 +236,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
                                             <CombinedCell value={detail.refundAmt} percent={detail.returnAmtPct} />
                                         </td>
                                         <td className="px-3 py-2 text-right sticky right-0 bg-white/90 backdrop-blur-md group-hover:bg-white z-20 border-l border-gray-100 min-w-[100px]">
-                                            <div className={detail.profitInclRn >= 0 ? 'text-green-700' : 'text-red-600'}>
+                                            <div className={(detail.profitInclRn || 0) >= 0 ? 'text-green-700' : 'text-red-600'}>
                                                 <CombinedCell value={detail.profitInclRn} percent={detail.profitInclRnPct} highlight />
                                             </div>
                                         </td>

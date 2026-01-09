@@ -1,8 +1,8 @@
-
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PricingRules, Platform, Product, PriceLog, PromotionEvent, LogisticsRule, ShipmentLog, VelocityLookback, SearchConfig } from '../types';
-import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Calendar, Search } from 'lucide-react';
+import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Calendar, Search, Megaphone, AlertTriangle } from 'lucide-react';
+import { isAdsEnabled, setAdsCapability, ensureCapabilities } from '../services/platformCapabilities';
+import AlertThresholdSettings from './AlertThresholdSettings';
 
 interface SettingsPageProps {
     currentRules: PricingRules;
@@ -18,19 +18,33 @@ interface SettingsPageProps {
     themeColor: string;
     headerStyle: React.CSSProperties;
     searchConfig?: SearchConfig;
+    velocityLookback: VelocityLookback;
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logisticsRules = [], onSaveLogistics, products, extraData, shipmentHistory = [], themeColor, headerStyle, searchConfig: initialSearchConfig }) => {
-    const [activeTab, setActiveTab] = useState<'platforms' | 'logistics' | 'analysis' | 'search'>('platforms');
+const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logisticsRules = [], onSaveLogistics, products, extraData, shipmentHistory = [], themeColor, headerStyle, searchConfig: initialSearchConfig, velocityLookback: initialVelocityLookback }) => {
+    const [activeTab, setActiveTab] = useState<'platforms' | 'logistics' | 'analysis' | 'thresholds' | 'search'>('platforms');
     const [rules, setRules] = useState<PricingRules>(JSON.parse(JSON.stringify(currentRules)));
     const [logistics, setLogistics] = useState<LogisticsRule[]>(JSON.parse(JSON.stringify(logisticsRules)));
     const [searchConfig, setSearchConfig] = useState<SearchConfig>(initialSearchConfig ? JSON.parse(JSON.stringify(initialSearchConfig)) : { volumeBands: { topPercentile: 20, bottomPercentile: 20 }, minAbsoluteFloor: 10 });
-    const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(() => {
-        return (localStorage.getItem('sello_velocity_setting') as VelocityLookback) || (localStorage.getItem('ecompulse_velocity_setting') as VelocityLookback) || '30';
-    });
+    const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(initialVelocityLookback);
 
     const [newPlatformName, setNewPlatformName] = useState('');
     const [isSaved, setIsSaved] = useState(false);
+    
+    // Ads capabilities refresh trigger
+    const [adsRefresh, setAdsRefresh] = useState(0);
+
+    // Sync state with props if they change externally (e.g. after restore)
+    useEffect(() => {
+        setRules(JSON.parse(JSON.stringify(currentRules)));
+        setLogistics(JSON.parse(JSON.stringify(logisticsRules)));
+        if (initialSearchConfig) setSearchConfig(JSON.parse(JSON.stringify(initialSearchConfig)));
+    }, [currentRules, logisticsRules, initialSearchConfig]);
+
+    // Sync velocityLookback prop
+    useEffect(() => {
+        setVelocityLookback(initialVelocityLookback);
+    }, [initialVelocityLookback]);
 
     // Extract platforms that exist in the product data but might not be in rules yet
     const discoveredPlatforms = useMemo(() => {
@@ -40,18 +54,19 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
     }, [products]);
 
     useEffect(() => {
+        // Run inference once on mount
+        if (Object.keys(rules).length > 0 && extraData?.priceHistory) {
+            ensureCapabilities(Object.keys(rules), extraData.priceHistory);
+            setAdsRefresh(prev => prev + 1); // Force re-render of toggles
+        }
+    }, [rules, extraData]);
+
+    useEffect(() => {
         if (isSaved) {
             const timer = setTimeout(() => setIsSaved(false), 2000);
             return () => clearTimeout(timer);
         }
     }, [isSaved]);
-
-    // Sync state with props if they change externally (e.g. after restore)
-    useEffect(() => {
-        setRules(JSON.parse(JSON.stringify(currentRules)));
-        setLogistics(JSON.parse(JSON.stringify(logisticsRules)));
-        if (initialSearchConfig) setSearchConfig(JSON.parse(JSON.stringify(initialSearchConfig)));
-    }, [currentRules, logisticsRules, initialSearchConfig]);
 
     const handleMarkupChange = (platform: Platform, value: string) => {
         const numValue = parseFloat(value);
@@ -88,6 +103,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
             ...prev,
             [platform]: { ...prev[platform], isExcluded: !prev[platform].isExcluded }
         }));
+    };
+    
+    const toggleAdsSupported = (platform: Platform) => {
+        const current = isAdsEnabled(platform);
+        setAdsCapability(platform, !current);
+        setAdsRefresh(prev => prev + 1);
     };
 
     const handleAddPlatform = () => {
@@ -208,7 +229,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
     const platformKeys = Object.keys(rules).sort();
 
     return (
-        <div className="max-w-6xl mx-auto pb-10 flex flex-col h-[calc(100vh-100px)]">
+        <div className="max-w-6xl mx-auto pb-10 flex flex-col">
 
             {/* Updated Tab Navigation (Strict Match with Definitions Page) */}
             <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
@@ -237,6 +258,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                 </button>
 
                 <button
+                    onClick={() => setActiveTab('thresholds')}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'thresholds' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <AlertTriangle className="w-4 h-4" />
+                    Alerts & Diagnostics
+                </button>
+
+                <button
                     onClick={() => setActiveTab('search')}
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'search' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                 >
@@ -245,14 +274,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                 </button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+            <div className="pr-2">
                 {/* Platform Settings Section */}
                 {activeTab === 'platforms' && (
                     <div className="space-y-6">
                         {/* ... Content remains unchanged ... */}
                         <div>
                             <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Platform Configuration</h2>
-                            <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Configure commission fees, strategic markups, and data aggregation rules.</p>
+                            <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Configure fees, capabilities, and strategic adjustments per marketplace.</p>
                         </div>
 
                         <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
@@ -261,8 +290,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                 <div className="text-sm" style={{ color: themeColor }}>
                                     <p className="font-semibold">How these settings affect analysis:</p>
                                     <p className="mt-1">
-                                        <strong>Commission Fee:</strong> Deducted from the selling price during AI analysis.<br />
-                                        <strong>Exclude from Global Average:</strong> If checked, sales from this platform (e.g. Wayfair, FBA) will NOT affect the "Current Price" or "Velocity" used for strategy calculations, but will still appear in the Channel breakdown.
+                                        <strong>Ads Supported:</strong> Enables "Organic Share" calculation and TACoS logic for this platform.<br />
+                                        <strong>Exclude from Global Average:</strong> If checked, sales from this platform (e.g. Wayfair, FBA) will NOT affect the "Current Price" or "Velocity" used for strategy calculations.
                                     </p>
                                 </div>
                             </div>
@@ -272,7 +301,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                     <div className="col-span-3">Platform</div>
                                     <div className="col-span-2 text-center">Commission (%)</div>
                                     <div className="col-span-2 text-center">Markup (%)</div>
-                                    <div className="col-span-3">Default Manager</div>
+                                    <div className="col-span-2">Manager</div>
+                                    <div className="col-span-1 text-center">Ads?</div>
                                     <div className="col-span-1 text-center">Global Avg</div>
                                     <div className="col-span-1"></div>
                                 </div>
@@ -281,6 +311,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                     {platformKeys.map((platform) => {
                                         const currentColor = getPlatformColor(platform, rules[platform].color);
                                         const isExcluded = rules[platform].isExcluded;
+                                        const adsEnabled = isAdsEnabled(platform);
 
                                         return (
                                             <div key={platform} className={`grid grid-cols-12 gap-4 items-center p-4 rounded-lg border transition-colors group ${isExcluded ? 'bg-gray-50/80 border-gray-200 opacity-90' : 'bg-white/80 border-gray-100 hover:border-gray-200'}`}>
@@ -335,7 +366,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                                     </div>
                                                 </div>
 
-                                                <div className="col-span-3">
+                                                <div className="col-span-2">
                                                     <div className="relative w-full">
                                                         <input
                                                             type="text"
@@ -347,6 +378,16 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                                         />
                                                         <User className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                                                     </div>
+                                                </div>
+                                                
+                                                <div className="col-span-1 flex justify-center">
+                                                    <button
+                                                        onClick={() => toggleAdsSupported(platform)}
+                                                        className={`p-2 rounded-lg transition-colors ${adsEnabled ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-400'}`}
+                                                        title={adsEnabled ? "Ads Enabled: Costs tracked" : "Ads Disabled: Costs ignored"}
+                                                    >
+                                                        <Megaphone className="w-4 h-4" />
+                                                    </button>
                                                 </div>
 
                                                 <div className="col-span-1 flex justify-center">
@@ -570,6 +611,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                     </div>
                 )}
 
+                {/* Thresholds Settings Section */}
+                {activeTab === 'thresholds' && (
+                    <AlertThresholdSettings themeColor={themeColor} />
+                )}
+
                 {/* Search Settings Section */}
                 {activeTab === 'search' && (
                     <div className="space-y-6">
@@ -661,21 +707,23 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
 
             {/* Footer Actions (Sticky) */}
             <div className="pt-6 border-t border-custom-glass flex justify-end">
-                <button
-                    onClick={handleSave}
-                    disabled={isSaved}
-                    className={`px-8 py-3 rounded-lg font-medium shadow-md transition-all flex items-center gap-2 text-white`}
-                    style={{ backgroundColor: isSaved ? '#16a34a' : themeColor }}
-                >
-                    {isSaved ? (
-                        <>Saved Successfully</>
-                    ) : (
-                        <>
-                            <Save className="w-5 h-5" />
-                            Save All Changes
-                        </>
-                    )}
-                </button>
+                {activeTab !== 'thresholds' && (
+                    <button
+                        onClick={handleSave}
+                        disabled={isSaved}
+                        className={`px-8 py-3 rounded-lg font-medium shadow-md transition-all flex items-center gap-2 text-white`}
+                        style={{ backgroundColor: isSaved ? '#16a34a' : themeColor }}
+                    >
+                        {isSaved ? (
+                            <>Saved Successfully</>
+                        ) : (
+                            <>
+                                <Save className="w-5 h-5" />
+                                Save All Changes
+                            </>
+                        )}
+                    </button>
+                )}
             </div>
 
         </div>

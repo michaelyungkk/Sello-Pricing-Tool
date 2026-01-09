@@ -279,37 +279,39 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
   };
 
   const renderChangeBadge = (c: ContainerSummary) => {
+      const badgeBase = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border whitespace-nowrap shadow-sm";
+
       if (c.changeType === 'DELAYED') {
           return (
-              <span className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
-                  <TrendingDown className="w-3 h-3" />
+              <span className={`${badgeBase} text-red-700 bg-red-50 border-red-200`}>
+                  <TrendingDown className="w-3.5 h-3.5 flex-shrink-0" />
                   Delayed (+{c.daysDiff}d)
               </span>
           );
       }
       if (c.changeType === 'EARLIER') {
           return (
-              <span className="flex items-center gap-1 text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
-                  <TrendingUp className="w-3 h-3" />
-                  Early ({c.daysDiff}d)
+              <span className={`${badgeBase} text-green-700 bg-green-50 border-green-200`}>
+                  <TrendingUp className="w-3.5 h-3.5 flex-shrink-0" />
+                  Early ({Math.abs(c.daysDiff || 0)}d)
               </span>
           );
       }
       if (c.changeType === 'NEW') {
           return (
-              <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                  NEW
+              <span className={`${badgeBase} text-blue-700 bg-blue-50 border-blue-200`}>
+                  New Container
               </span>
           );
       }
       if (c.changeType === 'STATUS_CHANGE') {
           return (
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
-                  Status Updated
+              <span className={`${badgeBase} text-indigo-700 bg-indigo-50 border-indigo-200`}>
+                  Status Update
               </span>
           );
       }
-      return <span className="text-[10px] text-gray-400 font-medium">No Change</span>;
+      return <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap px-2">No Change</span>;
   };
 
   const stats = useMemo(() => {

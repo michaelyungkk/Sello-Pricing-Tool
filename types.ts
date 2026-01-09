@@ -1,4 +1,5 @@
 
+
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -93,6 +94,7 @@ export interface Product {
 
   // Stock & Velocity
   stockLevel: number; // Total stock across warehouses (On Hand)
+  agedStockQty?: number; // New: Quantity of stock older than threshold (e.g. 90 days)
   incomingStock?: number; // Total Incoming Stock (On Water/Booking)
   shipments?: ShipmentDetail[]; // List of active shipments
 
@@ -315,4 +317,24 @@ export interface SearchChip {
   type: ChipType;
   value: string; // The internal value, e.g., 'margin_percent'
   label: string; // The display label, e.g., 'Margin %'
+}
+
+// --- INVENTORY TOOL TYPES ---
+export interface InventoryTemplate {
+  id: string;
+  name: string; // Platform name
+  headers: string[]; // Full header row from template file
+  skuColumn: string; // Mapped header name for SKU
+  stockColumn: string; // Mapped header name for Stock
+  metaRows?: any[][]; // Store rows appearing BEFORE headers (e.g. Amazon version info)
+}
+
+export interface SearchSession {
+  id: string;
+  query: string;
+  results: any[];
+  params: any; 
+  explanation?: string;
+  timeLabel?: string;
+  timestamp: number;
 }

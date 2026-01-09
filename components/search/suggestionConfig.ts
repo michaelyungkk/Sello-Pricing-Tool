@@ -22,6 +22,11 @@ export const METRICS: MetricConfig[] = [
   // Health
   { id: "ADS_SPEND_PCT", label: "TACoS %", group: "Health", defaultPriority: "RISK", description: "Total Ad Cost of Sales" },
   { id: "RETURN_RATE_PCT", label: "Return Rate %", group: "Health", defaultPriority: "RISK", description: "Refunds / Sales" },
+  { id: "ORGANIC_SHARE_PCT", label: "Organic Share %", group: "Health", defaultPriority: "OPPORTUNITY", description: "100% - TACoS%" },
+
+  // Trends
+  { id: "MARGIN_CHANGE_PCT", label: "Margin Trend %", group: "Trend", defaultPriority: "DECLINE", description: "Change in margin vs previous period" },
+  { id: "VELOCITY_CHANGE", label: "Velocity Trend %", group: "Trend", defaultPriority: "DECLINE", description: "Change in sales qty vs previous period" },
 ];
 
 // --- B) CONDITION DEFINITIONS ---
@@ -37,9 +42,9 @@ export const CONDITIONS: ConditionConfig[] = [
   { id: "OVERSTOCK_RISK", label: "Overstock Risk", group: "Inventory", defaultPriority: "INVENTORY", description: "More than 120 days cover" },
   
   // Performance Decline
-  { id: "VOLUME_DROP_WOW", label: "Volume Drop (WoW)", group: "Decline", defaultPriority: "DECLINE", description: "Sales qty dropped vs last week" },
-  { id: "REVENUE_DROP_WOW", label: "Revenue Drop (WoW)", group: "Decline", defaultPriority: "DECLINE", description: "Revenue dropped vs last week" },
-  { id: "MARGIN_DROP_WOW", label: "Margin Drop (WoW)", group: "Decline", defaultPriority: "DECLINE", description: "Profitability decreasing" },
+  { id: "VOLUME_DROP_WOW", label: "Volume Change (PoP)", group: "Decline", defaultPriority: "DECLINE", description: "Sales qty change vs previous period" },
+  { id: "REVENUE_DROP_WOW", label: "Revenue Change (PoP)", group: "Decline", defaultPriority: "DECLINE", description: "Revenue change vs previous period" },
+  { id: "MARGIN_DROP_WOW", label: "Margin Change (PoP)", group: "Decline", defaultPriority: "DECLINE", description: "Profitability decreasing" },
   
   // Opportunity
   { id: "SCALE_CANDIDATE", label: "Scale Candidate", group: "Opportunity", defaultPriority: "OPPORTUNITY", description: "High margin, high velocity" },
@@ -97,7 +102,9 @@ export const SMART_PAIRINGS: Record<MetricId, ConditionId[]> = {
   INBOUND_QTY_30D: ["STOCKOUT_RISK"], 
   ADS_SPEND_PCT: ["HIGH_AD_DEPENDENCY", "NEGATIVE_LOSS", "BELOW_TARGET", "MARGIN_DROP_WOW"],
   RETURN_RATE_PCT: ["HIGH_RETURN_RATE", "NEGATIVE_LOSS"],
-  ORGANIC_SHARE_PCT: ["STRONG_ORGANIC", "HIGH_AD_DEPENDENCY"]
+  ORGANIC_SHARE_PCT: ["STRONG_ORGANIC", "HIGH_AD_DEPENDENCY"],
+  MARGIN_CHANGE_PCT: ["MARGIN_DROP_WOW"],
+  VELOCITY_CHANGE: ["VELOCITY_DROP_WOW", "SCALE_CANDIDATE"]
 };
 
 // --- E) PLATFORM RULES ---

@@ -1,8 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Product, PricingRules, SearchConfig } from '../types';
-import { Layers, ListFilter, TrendingDown, ArrowRight, X, ChevronDown, Package, Activity, ChevronRight, RotateCcw, AlertTriangle, Coins, Calendar, ShoppingBag, Megaphone, PieChart, DollarSign, Filter, Edit2, Check, Clock } from 'lucide-react';
+import { Product, PricingRules, SearchConfig, PriceChangeRecord } from '../types';
+import { Layers, ListFilter, TrendingDown, ArrowRight, X, ChevronDown, Package, Activity, ChevronRight, RotateCcw, AlertTriangle, Coins, Calendar, ShoppingBag, Megaphone, PieChart, DollarSign, Filter, Edit2, Check, Clock, Info, TrendingUp } from 'lucide-react';
 import { SearchIntent } from '../services/geminiService';
+import { isAdsEnabled } from '../services/platformCapabilities';
+import SkuDeepDivePage from './SkuDeepDivePage';
 
 interface SearchResultsPageProps {
   data: { results: any[], query: string, params: SearchIntent, id?: string };
@@ -13,10 +15,12 @@ interface SearchResultsPageProps {
   timeLabel?: string;
   onRefine: (sessionId: string, newIntent: SearchIntent) => void;
   searchConfig: SearchConfig;
+  priceChangeHistory?: PriceChangeRecord[];
 }
 
 type GroupBy = 'platform' | 'sku';
 
+// ... (Rest of interfaces: SubGroup, TopGroup, FilterChipProps remain unchanged)
 interface SubGroup {
     key: string;
     label: string;
@@ -28,9 +32,11 @@ interface SubGroup {
     totalQty: number;
     totalAdSpend: number;
     totalRefundAmount: number;
-    totalRefundQty: number; // Added for Qty based RR
+    totalRefundQty: number;
     tacos: number;
+    organicShare: number | null; 
     contribution: number; 
+    agedStockPct: number;
     items: any[];
     // Inventory Context Specific
     platformVelocity?: number;
@@ -38,6 +44,13 @@ interface SubGroup {
     // Return Context Specific
     periodReturnRate?: number;
     allTimeReturnRate?: number;
+    // Ad Context
+    adEnabledRevenue: number;
+    // Trend Context
+    totalPrevRevenue: number;
+    totalPrevQty: number;
+    totalPrevProfit: number;
+    weightedMarginChange: number;
 }
 
 interface TopGroup {
@@ -51,9 +64,11 @@ interface TopGroup {
     totalQty: number;
     totalAdSpend: number;
     totalRefundAmount: number;
-    totalRefundQty: number; // Added for Qty based RR
+    totalRefundQty: number;
     tacos: number;
+    organicShare: number | null;
     contribution: number; 
+    agedStockPct: number;
     subGroups: Record<string, SubGroup>;
     // Inventory Context Specific
     globalVelocity?: number;
@@ -61,6 +76,13 @@ interface TopGroup {
     // Return Context Specific
     periodReturnRate?: number;
     allTimeReturnRate?: number;
+    // Ad Context
+    adEnabledRevenue: number;
+    // Trend Context
+    totalPrevRevenue: number;
+    totalPrevQty: number;
+    totalPrevProfit: number;
+    weightedMarginChange: number;
 }
 
 interface FilterChipProps {
@@ -81,12 +103,15 @@ const FIELD_LABELS: Record<string, string> = {
     returnRate: 'Return %',
     revenue: 'Revenue',
     velocity: 'Qty',
-    velocityChange: 'Trend',
+    velocityChange: 'Trend % (PoP)',
     netPmPercent: 'Net Margin',
     qty: 'Qty',
     name: 'Name',
     platform: 'Platform',
-    periodReturnRate: 'Period RR%'
+    periodReturnRate: 'Period RR%',
+    organicShare: 'Organic (Ad-enabled)',
+    agedStockPct: 'Aged Stock %',
+    MARGIN_CHANGE_PCT: 'Margin Change (PoP)'
 };
 
 const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDelete, themeColor }) => {
@@ -103,9 +128,12 @@ const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDelete, the
     const displayValue = typeof filter.value === 'number' ? filter.value.toLocaleString() : filter.value;
     const logicString = `${displayField} ${filter.operator} ${displayValue}`;
     
-    const displayContent = filter.label 
-        ? <><span className="font-bold">{filter.label}:</span> <span className="opacity-80 ml-1 font-mono text-[10px]">{logicString}</span></>
-        : <span className="font-mono text-xs font-medium">{logicString}</span>;
+    // Explicit override for Trend < 0 to make it clear
+    const finalContent = filter.field === 'velocityChange' && filter.value === 0 && filter.operator === 'LT'
+        ? <span className="font-mono text-xs font-medium">Negative Trend (Period-over-Period)</span>
+        : filter.label 
+            ? <><span className="font-bold">{filter.label}:</span> <span className="opacity-80 ml-1 font-mono text-[10px]">{logicString}</span></>
+            : <span className="font-mono text-xs font-medium">{logicString}</span>;
 
     if (isEditing) {
         return (
@@ -146,7 +174,7 @@ const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDelete, the
             onClick={() => setIsEditing(true)}
             title="Click to edit filter criteria"
         >
-            {displayContent}
+            {finalContent}
             <button 
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
                 className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-indigo-50 rounded-full text-indigo-400 hover:text-red-500 transition-all"
@@ -157,11 +185,14 @@ const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDelete, the
     );
 };
 
-const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, pricingRules, themeColor, headerStyle, timeLabel, onRefine, searchConfig }) => {
+const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, pricingRules, themeColor, headerStyle, timeLabel, onRefine, searchConfig, priceChangeHistory = [] }) => {
   const [groupBy, setGroupBy] = useState<GroupBy>('platform');
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [expandedSubGroup, setExpandedSubGroup] = useState<string | null>(null);
 
+  const isDeepDive = data.params.primaryMetric === 'DEEP_DIVE' && data.results.length > 0;
+
+  // ... (Rest of event handlers and logic same as before)
   const handleFilterUpdate = (index: number, newFilter: any) => {
       const newFilters = [...(data.params.filters || [])];
       newFilters[index] = newFilter;
@@ -175,6 +206,14 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       if (data.id) onRefine(data.id, newIntent);
   };
 
+  const handleSortUpdate = (field: string, direction: 'asc' | 'desc') => {
+      const newIntent: SearchIntent = { 
+          ...data.params, 
+          sort: { field, direction } 
+      };
+      if (data.id) onRefine(data.id, newIntent);
+  };
+
   useMemo(() => {
       setExpandedGroup(null);
       setExpandedSubGroup(null);
@@ -185,7 +224,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       const p = data.params;
       const matchesKeyword = keywords.some(k => q.includes(k));
       const hasFilter = p?.filters?.some((f: any) => fields.includes(f.field));
-      // Fix: Guard against undefined sort field for strict null checks
       const hasSort = p?.sort?.field ? fields.includes(p.sort.field) : false;
       return matchesKeyword || hasFilter || hasSort;
   };
@@ -202,7 +240,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
 
   const isMarginContext = useMemo(() => checkContext(
       ['margin', 'profit', 'loss', 'negative', 'net', 'winning', 'scale'], 
-      ['margin', 'profit', 'netPmPercent']
+      ['margin', 'profit', 'netPmPercent', 'MARGIN_CHANGE_PCT']
   ), [data]);
 
   const isInventoryContext = useMemo(() => checkContext(
@@ -212,7 +250,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
 
   const isTrendContext = useMemo(() => checkContext(
       ['drop', 'decline', 'growth', 'change', 'trend', 'wow', 'spike'], 
-      ['velocityChange']
+      ['velocityChange', 'MARGIN_CHANGE_PCT']
   ), [data]);
 
   const isReturnContext = useMemo(() => checkContext(
@@ -220,23 +258,31 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       ['returnRate', 'periodReturnRate']
   ), [data]);
 
-  // Force SKU view in Inventory Context
+  const isOrganicContext = useMemo(() => checkContext(
+      ['organic', 'natural'], 
+      ['organicShare', 'ORGANIC_SHARE_PCT']
+  ), [data]);
+
+  const isAgedContext = useMemo(() => checkContext(
+      ['aged', 'old', 'long term', 'stale'], 
+      ['agedStockPct', 'AGED_STOCK_PCT']
+  ), [data]);
+
   useEffect(() => {
-      if (isInventoryContext) {
+      if (isInventoryContext || isAgedContext) {
           setGroupBy('sku');
       }
-  }, [isInventoryContext]);
+  }, [isInventoryContext, isAgedContext]);
 
 
   const hierarchicalData = useMemo<TopGroup[]>(() => {
-    if (!data.results) return [];
+    if (!data.results || isDeepDive) return [];
     
     const groups: Record<string, TopGroup> = {};
 
     data.results.forEach(item => {
       const mainKey = groupBy === 'platform' ? (item.platform || 'Unknown') : item.sku;
       
-      // Initialize Top Group if missing
       if (!groups[mainKey]) {
         groups[mainKey] = {
           key: mainKey,
@@ -251,12 +297,19 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
           totalRefundAmount: 0,
           totalRefundQty: 0,
           tacos: 0,
+          organicShare: null,
           contribution: 0,
+          agedStockPct: 0,
           subGroups: {},
           globalVelocity: 0,
           globalCover: 0,
           periodReturnRate: 0,
-          allTimeReturnRate: 0
+          allTimeReturnRate: 0,
+          adEnabledRevenue: 0,
+          totalPrevRevenue: 0,
+          totalPrevQty: 0,
+          totalPrevProfit: 0,
+          weightedMarginChange: 0
         };
       }
 
@@ -269,27 +322,28 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
           topGroup.totalQty += (item.velocity || 0); 
           topGroup.totalAdSpend += (item.adsSpend || 0);
           topGroup.contribution += (item.contribution || 0);
+          
+          if (isAdsEnabled(item.platform || '')) {
+              topGroup.adEnabledRevenue += (item.revenue || 0);
+          }
       } else {
-          // Accumulate Refund Amount and Quantity separately for accuracy
           topGroup.totalRefundAmount += Math.abs(item.refundAmount || 0);
           topGroup.totalRefundQty += Math.abs(item.velocity || 0);
       }
 
-      // --- INVENTORY CONTEXT LOGIC (With Hierarchical Channels) ---
-      if (isInventoryContext && item.type === 'INVENTORY' && groupBy === 'sku') {
-          // In Inventory Search, item is a Product Snapshot row.
-          
+      if ((isInventoryContext || isAgedContext) && item.type === 'INVENTORY' && groupBy === 'sku') {
           const gVel = item.averageDailySales || 0;
           topGroup.globalVelocity = gVel;
-          topGroup.totalQty = item.stockLevel; // Force Stock Level as Qty
-          // Cover = Stock / Global Velocity
+          topGroup.totalQty = item.stockLevel;
           topGroup.globalCover = gVel > 0 ? (item.stockLevel / gVel) : 999;
+          
+          if (item.agedStockQty) {
+              topGroup.agedStockPct = item.agedStockPct || 0;
+          }
 
-          // Build Sub-Groups from Channel Data attached to the item
           if (item.channels && Array.isArray(item.channels)) {
               item.channels.forEach((ch: any) => {
                   const subKey = ch.platform;
-                  
                   if (!topGroup.subGroups[subKey]) {
                       topGroup.subGroups[subKey] = {
                           key: subKey,
@@ -304,15 +358,20 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                           totalRefundAmount: 0,
                           totalRefundQty: 0,
                           tacos: 0,
+                          organicShare: null,
                           contribution: 0,
+                          agedStockPct: 0,
                           items: [],
                           platformVelocity: ch.velocity,
-                          platformCover: ch.velocity > 0 ? (item.stockLevel / ch.velocity) : 999
+                          platformCover: ch.velocity > 0 ? (item.stockLevel / ch.velocity) : 999,
+                          adEnabledRevenue: 0,
+                          totalPrevRevenue: 0,
+                          totalPrevQty: 0,
+                          totalPrevProfit: 0,
+                          weightedMarginChange: 0
                       };
                   }
-                  
                   const estRevenue = ch.velocity * (ch.price || item.price);
-
                   topGroup.subGroups[subKey].items.push({
                       date: item.date,
                       price: ch.price || item.price,
@@ -324,7 +383,6 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
               });
           }
       } 
-      // --- STANDARD TRANSACTION LOGIC ---
       else {
           const subKey = groupBy === 'platform' ? item.sku : (item.platform || 'Unknown');
           
@@ -342,10 +400,17 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
               totalRefundAmount: 0,
               totalRefundQty: 0,
               tacos: 0,
+              organicShare: null,
               contribution: 0,
+              agedStockPct: 0,
               items: [],
               periodReturnRate: 0,
-              allTimeReturnRate: item.allTimeReturnRate || 0
+              allTimeReturnRate: item.allTimeReturnRate || 0,
+              adEnabledRevenue: 0,
+              totalPrevRevenue: 0,
+              totalPrevQty: 0,
+              totalPrevProfit: 0,
+              weightedMarginChange: 0
             };
           }
 
@@ -357,6 +422,10 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
               subGroup.totalQty += (item.velocity || 0);
               subGroup.totalAdSpend += (item.adsSpend || 0);
               subGroup.contribution += (item.contribution || 0);
+              
+              if (isAdsEnabled(item.platform || '')) {
+                  subGroup.adEnabledRevenue += (item.revenue || 0);
+              }
           } else {
               subGroup.totalRefundAmount += Math.abs(item.refundAmount || 0);
               subGroup.totalRefundQty += Math.abs(item.velocity || 0);
@@ -365,13 +434,72 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       }
     });
 
-    // Calculate aggregations
+    // Calculate aggregations & Trend Summation
     Object.keys(groups).forEach(key => {
         const g = groups[key];
         g.weightedMargin = g.totalRevenue > 0 ? (g.totalProfit / g.totalRevenue) * 100 : 0;
-        g.tacos = g.totalRevenue > 0 ? (g.totalAdSpend / g.totalRevenue) * 100 : 0;
         
-        // Accurate Return Rate Calculation based on Quantity (Returned Units / Sold Units)
+        // --- PREV STATS AGGREGATION ---
+        const skuSet = new Set<string>();
+        
+        Object.values(g.subGroups).forEach(sg => {
+            if (groupBy === 'sku') {
+                // If group is SKU, subGroups are platforms.
+                // Take values from first item (they represent the SKU total)
+                if (sg.items.length > 0 && !skuSet.has(g.key)) {
+                    g.totalPrevRevenue = sg.items[0].prevRevenue || 0;
+                    g.totalPrevQty = sg.items[0].prevQty || 0;
+                    g.totalPrevProfit = sg.items[0].prevProfit || 0;
+                    skuSet.add(g.key);
+                }
+            } else {
+                // Group is Platform. SubGroups are SKUs.
+                if (sg.items.length > 0) {
+                    const item = sg.items[0];
+                    if (!skuSet.has(sg.key)) {
+                        g.totalPrevRevenue += (item.prevRevenue || 0);
+                        g.totalPrevQty += (item.prevQty || 0);
+                        g.totalPrevProfit += (item.prevProfit || 0);
+                        
+                        sg.totalPrevRevenue = item.prevRevenue || 0;
+                        sg.totalPrevQty = item.prevQty || 0;
+                        sg.totalPrevProfit = item.prevProfit || 0;
+                        
+                        skuSet.add(sg.key);
+                    }
+                }
+            }
+
+            if (!sg.platformVelocity) { 
+                sg.weightedMargin = sg.totalRevenue > 0 ? (sg.totalProfit / sg.totalRevenue) * 100 : 0;
+                // Calculate SubGroup Margin Change
+                const sgPrevMargin = sg.totalPrevRevenue > 0 ? (sg.totalPrevProfit / sg.totalPrevRevenue) * 100 : 0;
+                sg.weightedMarginChange = sg.weightedMargin - sgPrevMargin;
+                
+                if (sg.adEnabledRevenue > 0) {
+                    sg.tacos = (sg.totalAdSpend / sg.adEnabledRevenue) * 100;
+                    sg.organicShare = Math.max(0, 100 - sg.tacos);
+                } else {
+                    sg.tacos = 0;
+                    sg.organicShare = null;
+                }
+
+                sg.periodReturnRate = sg.totalQty > 0 ? (sg.totalRefundQty / sg.totalQty) * 100 : 0;
+            }
+        });
+        
+        // Calculate Top Group Margin Change
+        const prevGroupMargin = g.totalPrevRevenue > 0 ? (g.totalPrevProfit / g.totalPrevRevenue) * 100 : 0;
+        g.weightedMarginChange = g.weightedMargin - prevGroupMargin;
+
+        if (g.adEnabledRevenue > 0) {
+            g.tacos = (g.totalAdSpend / g.adEnabledRevenue) * 100;
+            g.organicShare = Math.max(0, 100 - g.tacos);
+        } else {
+            g.tacos = 0;
+            g.organicShare = null;
+        }
+        
         g.periodReturnRate = g.totalQty > 0 ? (g.totalRefundQty / g.totalQty) * 100 : 0;
         
         if (groupBy === 'sku') {
@@ -382,50 +510,43 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
             const sumAllTime = subs.reduce((acc, sub) => acc + (sub.allTimeReturnRate || 0), 0);
             g.allTimeReturnRate = subs.length > 0 ? sumAllTime / subs.length : 0;
         }
-        
-        Object.values(g.subGroups).forEach(sg => {
-            if (!sg.platformVelocity) { 
-                sg.weightedMargin = sg.totalRevenue > 0 ? (sg.totalProfit / sg.totalRevenue) * 100 : 0;
-                sg.tacos = sg.totalRevenue > 0 ? (sg.totalAdSpend / sg.totalRevenue) * 100 : 0;
-                // Subgroup quantity-based return rate
-                sg.periodReturnRate = sg.totalQty > 0 ? (sg.totalRefundQty / sg.totalQty) * 100 : 0;
-            }
-        });
     });
 
     return Object.values(groups).sort((a, b) => {
-        // Priority: Explicit Sort from Intent
         if (data.params && data.params.sort) {
             const { field, direction } = data.params.sort;
             const dirMult = direction === 'asc' ? 1 : -1;
             
-            // Map intent field to aggregated properties
+            // Explicit Margin Change Sort
+            if (field === 'MARGIN_CHANGE_PCT') {
+                return (a.weightedMarginChange - b.weightedMarginChange) * dirMult;
+            }
+
             if (field === 'margin' || field === 'net_margin_pct' || field === 'netPmPercent') {
+                // SMART SORT: If Trend Context is active, sort by Margin Change
+                if (isTrendContext) {
+                    return (a.weightedMarginChange - b.weightedMarginChange) * dirMult;
+                }
                 return (a.totalProfit - b.totalProfit) * dirMult;
             }
-            if (field === 'profit' || field === 'net_profit') {
-                return (a.totalProfit - b.totalProfit) * dirMult;
-            }
-            if (field === 'revenue') {
-                return (a.totalRevenue - b.totalRevenue) * dirMult;
-            }
-            if (field === 'velocity' || field === 'qty' || field === 'sales_qty') {
-                return (a.totalQty - b.totalQty) * dirMult;
-            }
-            if (field === 'tacos' || field === 'tacos_pct' || field === 'adsSpend') {
-                return (a.tacos - b.tacos) * dirMult;
-            }
-            if (field === 'stockLevel') {
-                return (a.totalQty - b.totalQty) * dirMult;
-            }
-            if (field === 'daysRemaining' || field === 'stock_cover_days') {
-                return ((a.globalCover || 0) - (b.globalCover || 0)) * dirMult;
-            }
-            if (field === 'periodReturnRate' || field === 'returnRate' || field === 'RETURN_RATE_PCT') {
-                return ((a.periodReturnRate || 0) - (b.periodReturnRate || 0)) * dirMult;
+            if (field === 'profit' || field === 'net_profit') return (a.totalProfit - b.totalProfit) * dirMult;
+            if (field === 'revenue') return (a.totalRevenue - b.totalRevenue) * dirMult;
+            if (field === 'velocity' || field === 'qty' || field === 'sales_qty') return (a.totalQty - b.totalQty) * dirMult;
+            if (field === 'tacos' || field === 'tacos_pct' || field === 'adsSpend') return (a.tacos - b.tacos) * dirMult;
+            if (field === 'stockLevel') return (a.totalQty - b.totalQty) * dirMult;
+            if (field === 'daysRemaining' || field === 'stock_cover_days') return ((a.globalCover || 0) - (b.globalCover || 0)) * dirMult;
+            if (field === 'periodReturnRate' || field === 'returnRate' || field === 'RETURN_RATE_PCT') return ((a.periodReturnRate || 0) - (b.periodReturnRate || 0)) * dirMult;
+            if (field === 'organicShare' || field === 'ORGANIC_SHARE_PCT') return ((a.organicShare || 0) - (b.organicShare || 0)) * dirMult;
+            if (field === 'agedStockPct' || field === 'AGED_STOCK_PCT') return ((a.agedStockPct || 0) - (b.agedStockPct || 0)) * dirMult;
+            if (field === 'VELOCITY_CHANGE') {
+                const aTrend = a.totalPrevQty > 0 ? ((a.totalQty - a.totalPrevQty) / a.totalPrevQty) : 0;
+                const bTrend = b.totalPrevQty > 0 ? ((b.totalQty - b.totalPrevQty) / b.totalPrevQty) : 0;
+                return (aTrend - bTrend) * dirMult;
             }
         }
 
+        if (isAgedContext) return (b.agedStockPct || 0) - (a.agedStockPct || 0);
+        if (isOrganicContext) return (b.organicShare || 0) - (a.organicShare || 0);
         if (isReturnContext) return (b.periodReturnRate || 0) - (a.periodReturnRate || 0);
         if (isInventoryContext) return a.totalQty - b.totalQty;
         if (isVolumeContext) return b.totalQty - a.totalQty;
@@ -433,9 +554,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
         if (isMarginContext) return b.totalProfit - a.totalProfit;
         return b.totalRevenue - a.totalRevenue;
     });
-  }, [data.results, groupBy, isVolumeContext, isAdContext, isMarginContext, isInventoryContext, isReturnContext, data.params]);
+  }, [data.results, groupBy, isVolumeContext, isAdContext, isMarginContext, isInventoryContext, isReturnContext, isOrganicContext, isAgedContext, isTrendContext, data.params, isDeepDive]);
 
-  // --- Volume Distribution Bands Logic ---
   const volumeContextStats = useMemo(() => {
       const quantities = hierarchicalData.map(g => g.totalQty).sort((a, b) => a - b);
       const count = quantities.length;
@@ -478,7 +598,13 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
 
   if (!data) return null;
 
+  // --- DEEP DIVE EARLY RETURN ---
+  if (isDeepDive) {
+      return <SkuDeepDivePage data={data.results[0]} themeColor={themeColor} priceChangeHistory={priceChangeHistory} />;
+  }
+
   const renderContent = () => {
+    // ... (same as existing renderContent implementation)
     if (data.results.length === 0) {
       return (
         <div className="text-center py-20 bg-custom-glass rounded-xl border border-custom-glass">
@@ -491,6 +617,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
     return (
       <div className="space-y-4">
         {hierarchicalData.map(group => {
+            // ... (same implementation for groups)
             let volumeBadge = null;
             if (volumeContextStats) {
                 if (volumeContextStats.isLowVolume) {
@@ -503,13 +630,20 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                 }
             }
 
+            // Calculate Trends for Top Group
+            const revDiff = group.totalRevenue - group.totalPrevRevenue;
+            const revDiffPct = group.totalPrevRevenue > 0 ? (revDiff / group.totalPrevRevenue) * 100 : (group.totalRevenue > 0 ? 100 : 0);
+            
+            const volDiff = group.totalQty - group.totalPrevQty;
+            const volDiffPct = group.totalPrevQty > 0 ? (volDiff / group.totalPrevQty) * 100 : (group.totalQty > 0 ? 100 : 0);
+
             return (
               <div key={group.key} className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
-                {/* Top Level Group Header */}
                 <div
                   className={`w-full p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors cursor-pointer select-text ${expandedGroup === group.key ? 'bg-gray-50/30' : ''}`}
                   onClick={(e) => handleGroupToggle(group.key, e)}
                 >
+                  {/* ... Group Header Rendering ... */}
                   <div className="flex items-center gap-4">
                      <div className={`p-2 rounded-lg text-gray-600 ${groupBy === 'platform' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                         {groupBy === 'platform' ? <Layers className="w-5 h-5" /> : <Package className="w-5 h-5" />}
@@ -521,69 +655,56 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                   </div>
                   
                   <div className="flex items-center gap-8">
-                    {/* Metric 1: Volume / Stock */}
+                    {/* ... Metrics Columns (Units, Revenue, etc) ... */}
+                    {/* UNITS COLUMN */}
                     <div className={`text-right hidden sm:block ${isVolumeContext ? 'scale-110 transform origin-right' : 'opacity-70'}`}>
                         <div className={`text-xs ${isVolumeContext ? 'text-indigo-600 font-bold' : 'text-gray-500'}`}>
-                            {isInventoryContext ? 'Total Stock' : 'Units Sold'}
+                            {isInventoryContext || isAgedContext ? 'Total Stock' : isTrendContext ? 'Vol. Change (PoP)' : 'Units Sold'}
                         </div>
-                        <div className="flex flex-col items-end">
-                            <div className={`font-bold text-lg ${isVolumeContext ? 'text-indigo-700' : 'text-gray-800'}`}>
-                                {group.totalQty.toLocaleString()}
+                        
+                        {isTrendContext ? (
+                            <div className="flex flex-col items-end">
+                                <span className="font-bold text-gray-900 text-sm">{group.totalQty.toLocaleString()}</span>
+                                <div className={`flex items-center gap-1 text-xs font-bold ${volDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    {volDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                                    {volDiff > 0 ? '+' : ''}{volDiff.toLocaleString()} ({volDiffPct.toFixed(1)}%)
+                                </div>
                             </div>
-                            {volumeBadge}
-                        </div>
+                        ) : (
+                            <div className="flex flex-col items-end">
+                                <div className={`font-bold text-lg ${isVolumeContext ? 'text-indigo-700' : 'text-gray-800'}`}>
+                                    {group.totalQty.toLocaleString()}
+                                </div>
+                                {volumeBadge}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Metric 1.5: Refund Units (Return Context) */}
-                    {isReturnContext && (
-                        <div className="text-right hidden sm:block">
-                            <div className="text-xs text-gray-500">
-                                Units Refunded
-                            </div>
-                            <div className="font-bold text-lg text-red-600">
-                                {group.totalRefundQty.toLocaleString()}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Metric 2: Revenue OR Global Velocity */}
+                    {/* REVENUE COLUMN */}
                     <div className="text-right hidden sm:block">
                         <div className="text-xs text-gray-500">
-                            {isInventoryContext ? 'Global Velocity' : 'Total Revenue'}
+                            {isInventoryContext || isAgedContext ? 'Global Velocity' : isTrendContext ? 'Rev. Change (PoP)' : 'Total Revenue'}
                         </div>
-                        <div className="font-bold text-lg text-gray-800">
-                            {isInventoryContext 
-                                ? `${(group.globalVelocity || 0).toFixed(1)}/day`
-                                : `£${group.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`
-                            }
-                        </div>
+                        
+                        {isTrendContext ? (
+                            <div className="flex flex-col items-end">
+                                <span className="font-bold text-gray-900 text-sm">£{group.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+                                <div className={`flex items-center gap-1 text-xs font-bold ${revDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    {revDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                                    {revDiff > 0 ? '+' : '-'}£{Math.abs(revDiff).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} ({revDiffPct.toFixed(1)}%)
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="font-bold text-lg text-gray-800">
+                                {isInventoryContext || isAgedContext
+                                    ? `${(group.globalVelocity || 0).toFixed(1)}/day`
+                                    : `£${group.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`
+                                }
+                            </div>
+                        )}
                     </div>
 
-                    {/* Metric 2.5: Refund Amount (Return Context) */}
-                    {isReturnContext && (
-                        <div className="text-right hidden sm:block">
-                            <div className="text-xs text-gray-500">
-                                Total Refunded
-                            </div>
-                            <div className="font-bold text-lg text-red-600">
-                                £{group.totalRefundAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Metric 2.5: Ad Spend (For Profit/Ad Context) */}
-                    {(isMarginContext || isAdContext) && (
-                        <div className="text-right hidden sm:block">
-                            <div className="text-xs text-gray-500">
-                                Total Ad Spend
-                            </div>
-                            <div className="font-bold text-lg text-orange-700">
-                                £{group.totalAdSpend.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Metric 2.6: Return Rate (Return Context) */}
+                    {/* ADDITIONAL COLUMNS ... */}
                     {isReturnContext && (
                         <div className="text-right hidden sm:block">
                             <div className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">
@@ -607,11 +728,25 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                         </div>
                     )}
 
-                    {/* Metric 3: Dynamic (Margin / TACoS / Share / Global Cover) */}
                     {!isReturnContext && (
-                        <div className="text-right hidden md:block">
-                            <div className="text-xs text-gray-500">
-                                {isInventoryContext ? 'Global Cover' : isAdContext ? 'TACoS' : isMarginContext ? 'Net Contribution' : 'Sales Share'}
+                        <div className="text-right hidden md:block group relative">
+                            <div className="text-xs text-gray-500 flex items-center justify-end gap-1">
+                                {isInventoryContext ? 'Global Cover' 
+                                : isAdContext ? 'TACoS' 
+                                : isOrganicContext ? 'Organic Share (Ad-enabled)' 
+                                : isAgedContext ? 'Aged Stock %' 
+                                : isMarginContext && isTrendContext ? 'Margin Change (PoP)'
+                                : isMarginContext ? 'Net Contribution' 
+                                : 'Sales Share'}
+                                
+                                {isOrganicContext && (
+                                    <div className="group/tooltip relative">
+                                        <Info className="w-3 h-3 text-gray-400 cursor-help" />
+                                        <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded shadow-lg opacity-0 group-hover/tooltip:opacity-100 pointer-events-none z-50">
+                                            Calculated only on ad-enabled platforms (currently Amazon/eBay/Temu).
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             
                             {isMarginContext ? (
@@ -619,8 +754,13 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                     <div className={`font-bold text-lg ${group.totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>
                                         £{group.totalProfit.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
                                     </div>
-                                    <div className={`text-xs ${group.weightedMargin < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                                        {group.weightedMargin.toFixed(1)}% Avg Margin
+                                    <div className={`text-xs flex items-center gap-1 ${group.weightedMargin < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                                        {group.weightedMargin.toFixed(1)}% 
+                                        {isTrendContext && (
+                                            <span className={`font-bold ${group.weightedMarginChange > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                ({group.weightedMarginChange > 0 ? '+' : ''}{group.weightedMarginChange.toFixed(1)}%)
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             ) : (
@@ -628,12 +768,19 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                     isInventoryContext
                                         ? ((group.globalCover || 999) < 14 ? 'text-red-600' : (group.globalCover || 0) > 120 ? 'text-orange-600' : 'text-green-600')
                                         : isAdContext 
-                                            ? (group.tacos > 25 ? 'text-red-600' : 'text-gray-800') 
+                                            ? (group.tacos > 25 ? 'text-red-600' : 'text-gray-800')
+                                            : isOrganicContext
+                                                ? (group.organicShare !== null && group.organicShare > 80 ? 'text-green-600' : group.organicShare !== null && group.organicShare < 40 ? 'text-red-600' : 'text-gray-800')
+                                            : isAgedContext
+                                                ? (group.agedStockPct > 20 ? 'text-red-600' : group.agedStockPct > 10 ? 'text-orange-600' : 'text-green-600')
                                             : 'text-indigo-600'
                                 }`}>
                                     {isInventoryContext 
                                         ? `${(group.globalCover || 0) > 730 ? '>2y' : (group.globalCover || 0).toFixed(0) + ' days'}`
                                         : isAdContext ? `${group.tacos.toFixed(1)}%` 
+                                        : isOrganicContext 
+                                            ? (group.organicShare !== null ? `${group.organicShare.toFixed(1)}%` : <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded">N/A <span className="hidden group-hover:inline">- Ads not enabled</span></span>)
+                                        : isAgedContext ? `${group.agedStockPct.toFixed(1)}%`
                                         : `${group.contribution.toFixed(1)}%`}
                                 </div>
                             )}
@@ -646,7 +793,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                   </div>
                 </div>
 
-                {/* Expanded Content (Sub-Groups) */}
+                {/* --- EXPANDED SUBGROUPS --- */}
                 {expandedGroup === group.key && (
                     <div className="border-t border-gray-200/50 bg-gray-50/10">
                         <div className="px-4 py-2 bg-gray-100/50 text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
@@ -657,30 +804,59 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                         <div className="divide-y divide-gray-100">
                             {(Object.values(group.subGroups) as SubGroup[])
                                 .sort((a, b) => {
+                                    // ... existing sorting logic ...
                                     if (data.params && data.params.sort) {
                                         const { field, direction } = data.params.sort;
                                         const dirMult = direction === 'asc' ? 1 : -1;
-                                        if (field === 'margin' || field === 'net_margin_pct' || field === 'netPmPercent') return (a.totalProfit - b.totalProfit) * dirMult;
+                                        
+                                        // Explicit Change Sort
+                                        if (field === 'MARGIN_CHANGE_PCT') {
+                                            return (a.weightedMarginChange - b.weightedMarginChange) * dirMult;
+                                        }
+
+                                        if (field === 'margin' || field === 'net_margin_pct' || field === 'netPmPercent') {
+                                            if (isTrendContext) {
+                                                return (a.weightedMarginChange - b.weightedMarginChange) * dirMult;
+                                            }
+                                            return (a.totalProfit - b.totalProfit) * dirMult;
+                                        }
                                         if (field === 'profit' || field === 'net_profit') return (a.totalProfit - b.totalProfit) * dirMult;
                                         if (field === 'revenue') return (a.totalRevenue - b.totalRevenue) * dirMult;
                                         if (field === 'velocity' || field === 'qty' || field === 'sales_qty') return (a.totalQty - b.totalQty) * dirMult;
                                         if (field === 'tacos' || field === 'tacos_pct' || field === 'adsSpend') return (a.tacos - b.tacos) * dirMult;
                                         if (field === 'periodReturnRate' || field === 'returnRate') return ((a.periodReturnRate || 0) - (b.periodReturnRate || 0)) * dirMult;
+                                        if (field === 'organicShare' || field === 'ORGANIC_SHARE_PCT') return ((a.organicShare || 0) - (b.organicShare || 0)) * dirMult;
+                                        if (field === 'agedStockPct' || field === 'AGED_STOCK_PCT') return ((a.agedStockPct || 0) - (b.agedStockPct || 0)) * dirMult;
+                                        if (field === 'VELOCITY_CHANGE') {
+                                            const aTrend = a.totalPrevQty > 0 ? ((a.totalQty - a.totalPrevQty) / a.totalPrevQty) : 0;
+                                            const bTrend = b.totalPrevQty > 0 ? ((b.totalQty - b.totalPrevQty) / b.totalPrevQty) : 0;
+                                            return (aTrend - bTrend) * dirMult;
+                                        }
                                     }
 
                                     return isReturnContext ? (b.periodReturnRate || 0) - (a.periodReturnRate || 0)
                                     : isInventoryContext ? (b.platformVelocity || 0) - (a.platformVelocity || 0)
                                     : isVolumeContext ? b.totalQty - a.totalQty 
-                                    : isAdContext ? b.tacos - a.tacos 
+                                    : isAdContext ? b.tacos - a.tacos
+                                    : isOrganicContext ? (b.organicShare || 0) - (a.organicShare || 0)
+                                    : isAgedContext ? b.agedStockPct - a.agedStockPct
                                     : isMarginContext ? b.totalProfit - a.totalProfit
                                     : b.contribution - a.contribution
                                 })
                                 .map(sub => {
                                     const compositeKey = `${group.key}|${sub.key}`;
                                     const isSubExpanded = expandedSubGroup === compositeKey;
+                                    
+                                    // Calculate SubGroup Trends
+                                    const subRevDiff = sub.totalRevenue - sub.totalPrevRevenue;
+                                    const subRevDiffPct = sub.totalPrevRevenue > 0 ? (subRevDiff / sub.totalPrevRevenue) * 100 : (sub.totalRevenue > 0 ? 100 : 0);
+                                    
+                                    const subVolDiff = sub.totalQty - sub.totalPrevQty;
+                                    const subVolDiffPct = sub.totalPrevQty > 0 ? (subVolDiff / sub.totalPrevQty) * 100 : (sub.totalQty > 0 ? 100 : 0);
 
                                     return (
                                         <div key={sub.key} className="bg-white/40">
+                                            {/* ... Subgroup Header Row ... */}
                                             <div 
                                                 className="w-full flex items-center justify-between px-6 py-3 hover:bg-white/80 transition-colors text-left cursor-pointer select-text"
                                                 onClick={(e) => handleSubGroupToggle(compositeKey, e)}
@@ -696,28 +872,32 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-6">
-                                                    {/* INVENTORY CONTEXT SUB-COLUMNS */}
-                                                    {isInventoryContext ? (
+                                                    {/* ... Subgroup Metrics ... */}
+                                                    {isInventoryContext || isAgedContext ? (
                                                         <>
                                                             <div className="text-right">
                                                                 <div className="text-xs text-gray-400">Plat. Velocity</div>
                                                                 <div className="text-sm font-bold text-indigo-600">{(sub.platformVelocity || 0).toFixed(2)}/d</div>
                                                             </div>
-                                                            <div className="text-right w-24">
+                                                            {!isAgedContext && <div className="text-right w-24">
                                                                 <div className="text-xs text-gray-400">Plat. Cover</div>
                                                                 <div className={`text-sm font-bold ${(sub.platformCover || 999) < 28 ? 'text-red-600' : 'text-green-600'}`}>
                                                                     {(sub.platformCover || 0).toFixed(0)} days
                                                                 </div>
-                                                            </div>
+                                                            </div>}
+                                                            {isAgedContext && <div className="text-right w-24">
+                                                                <div className="text-xs text-gray-400">Aged %</div>
+                                                                <div className={`text-sm font-bold ${(sub.agedStockPct || 0) > 20 ? 'text-red-600' : 'text-green-600'}`}>
+                                                                    {(sub.agedStockPct || 0).toFixed(1)}%
+                                                                </div>
+                                                            </div>}
                                                         </>
                                                     ) : isReturnContext ? (
-                                                        /* RETURN CONTEXT SUB-COLUMNS */
                                                         <>
                                                             <div className="text-right w-16">
                                                                 <div className="text-xs text-gray-400">Units</div>
                                                                 <div className="text-sm font-bold text-gray-700">{sub.totalQty}</div>
                                                             </div>
-                                                            {/* Added Refund Qty */}
                                                             <div className="text-right w-16">
                                                                 <div className="text-xs text-gray-400">Refunded</div>
                                                                 <div className="text-sm font-bold text-red-600">{sub.totalRefundQty}</div>
@@ -735,8 +915,22 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                 </div>
                                                             </div>
                                                         </>
+                                                    ) : isTrendContext ? (
+                                                        <>
+                                                            <div className="text-right">
+                                                                <div className="text-xs text-gray-400">Vol. Trend</div>
+                                                                <div className={`text-xs font-bold ${subVolDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                                    {subVolDiff > 0 ? '+' : ''}{subVolDiff} ({subVolDiffPct.toFixed(0)}%)
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-xs text-gray-400">Rev. Trend</div>
+                                                                <div className={`text-xs font-bold ${subRevDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                                    {subRevDiff > 0 ? '+' : ''}£{Math.abs(subRevDiff).toFixed(0)} ({subRevDiffPct.toFixed(0)}%)
+                                                                </div>
+                                                            </div>
+                                                        </>
                                                     ) : (
-                                                        /* TRANSACTION CONTEXT SUB-COLUMNS */
                                                         <>
                                                             <div className="text-right w-16">
                                                                 <div className="text-xs text-gray-400">Qty</div>
@@ -746,7 +940,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                 <div className="text-xs text-gray-400">Revenue</div>
                                                                 <div className="text-sm font-medium text-gray-700">£{sub.totalRevenue.toFixed(0)}</div>
                                                             </div>
-                                                            {(isMarginContext || isAdContext) && (
+                                                            {(isMarginContext || isAdContext || isOrganicContext) && (
                                                                 <div className="text-right">
                                                                     <div className="text-xs text-gray-400">Ad Spent</div>
                                                                     <div className="text-sm font-medium text-orange-700">£{sub.totalAdSpend.toFixed(0)}</div>
@@ -754,14 +948,16 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                             )}
                                                             <div className="text-right w-24">
                                                                 <div className="text-xs text-gray-400">
-                                                                    {isAdContext ? 'TACoS' : isMarginContext ? 'Net Profit' : 'Share %'}
+                                                                    {isAdContext ? 'TACoS' : isOrganicContext ? 'Organic (Ads)' : isMarginContext ? 'Net Profit' : 'Share %'}
                                                                 </div>
                                                                 <span className={`text-sm font-bold ${
                                                                     isAdContext ? (sub.tacos > 20 ? 'text-red-600' : 'text-gray-700') :
+                                                                    isOrganicContext ? (sub.organicShare !== null && sub.organicShare > 80 ? 'text-green-600' : sub.organicShare !== null && sub.organicShare < 40 ? 'text-red-600' : 'text-gray-700') :
                                                                     isMarginContext ? (sub.totalProfit < 0 ? 'text-red-600' : 'text-green-600') :
                                                                     'text-indigo-600'
                                                                 }`}>
                                                                     {isAdContext ? `${sub.tacos.toFixed(1)}%` :
+                                                                     isOrganicContext ? (sub.organicShare !== null ? `${sub.organicShare.toFixed(1)}%` : <span className="text-xs text-gray-400 font-medium">N/A</span>) :
                                                                      isMarginContext ? `£${sub.totalProfit.toFixed(0)}` :
                                                                      `${sub.contribution.toFixed(1)}%`}
                                                                 </span>
@@ -771,6 +967,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                 </div>
                                             </div>
 
+                                            {/* ... Subgroup Transactions Table ... */}
                                             {isSubExpanded && (
                                                 <div className="px-6 pb-4 animate-in fade-in slide-in-from-top-1">
                                                     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
@@ -789,15 +986,18 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                         <th className="p-2 pl-3">Date</th>
                                                                         <th className="p-2 text-right">Unit Price</th>
                                                                         <th className="p-2 text-right">
-                                                                            {isInventoryContext ? 'Velocity' : 'Qty'}
+                                                                            {isInventoryContext || isAgedContext ? 'Velocity' : 'Qty'}
                                                                         </th>
                                                                         <th className="p-2 text-right">
-                                                                            {isInventoryContext ? 'Est. Daily Rev' : 'Revenue'}
+                                                                            {isInventoryContext || isAgedContext ? 'Est. Daily Rev' : 'Revenue'}
                                                                         </th>
-                                                                        {(isAdContext || isMarginContext) && <th className="p-2 text-right">Ad Spend</th>}
+                                                                        {(isAdContext || isMarginContext || isOrganicContext) && <th className="p-2 text-right">Ad Spend</th>}
                                                                         {isAdContext && <th className="p-2 text-right">TACoS</th>}
-                                                                        {isInventoryContext && <th className="p-2 text-right">Stock</th>}
-                                                                        {isInventoryContext && <th className="p-2 text-right">Stock Cover</th>}
+                                                                        {isOrganicContext && <th className="p-2 text-right">Organic % (Ads)</th>}
+                                                                        {(isInventoryContext || isAgedContext) && <th className="p-2 text-right">Stock</th>}
+                                                                        {isAgedContext && <th className="p-2 text-right">Aged Qty</th>}
+                                                                        {isAgedContext && <th className="p-2 text-right">Aged %</th>}
+                                                                        {!isAgedContext && isInventoryContext && <th className="p-2 text-right">Stock Cover</th>}
                                                                         {isTrendContext && <th className="p-2 text-right">Trend</th>}
                                                                         <th className="p-2 text-right">Profit</th>
                                                                         <th className="p-2 text-right">Margin %</th>
@@ -810,6 +1010,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                     .filter(item => isReturnContext ? item.type === 'REFUND' : true)
                                                                     .sort((a,b) => {
                                                                         if (isAdContext && (a.tacos !== b.tacos)) return (b.tacos || 0) - (a.tacos || 0);
+                                                                        if (isOrganicContext && (a.organicShare !== b.organicShare)) return (b.organicShare || 0) - (a.organicShare || 0);
+                                                                        if (isAgedContext && (a.agedStockPct !== b.agedStockPct)) return (b.agedStockPct || 0) - (a.agedStockPct || 0);
                                                                         if (isMarginContext && (a.profit !== b.profit)) return (b.profit || 0) - (a.profit || 0); 
                                                                         const tA = new Date(a.date).getTime();
                                                                         const tB = new Date(b.date).getTime();
@@ -844,10 +1046,10 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                                     )}
                                                                                 </td>
                                                                                 <td className="p-2 text-right text-gray-900 font-bold">
-                                                                                    {isInventoryContext ? tx.velocity.toFixed(3) : tx.velocity}
+                                                                                    {isInventoryContext || isAgedContext ? tx.velocity.toFixed(3) : tx.velocity}
                                                                                 </td>
                                                                                 <td className="p-2 text-right text-gray-700">£{(tx.revenue || 0).toFixed(2)}</td>
-                                                                                {(isAdContext || isMarginContext) && (
+                                                                                {(isAdContext || isMarginContext || isOrganicContext) && (
                                                                                     <td className="p-2 text-right text-orange-700">
                                                                                         {tx.adsSpend > 0 ? `£${tx.adsSpend.toFixed(2)}` : '-'}
                                                                                     </td>
@@ -861,19 +1063,31 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                                         ) : '-'}
                                                                                     </td>
                                                                                 )}
+                                                                                {isOrganicContext && (
+                                                                                    <td className="p-2 text-right">
+                                                                                        {tx.organicShare !== null ? (
+                                                                                            <span className={`${tx.organicShare < 40 ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                                                                                                {tx.organicShare.toFixed(1)}%
+                                                                                            </span>
+                                                                                        ) : <span className="text-gray-400 italic">N/A</span>}
+                                                                                    </td>
+                                                                                )}
                                                                                 
-                                                                                {isInventoryContext && (
+                                                                                {(isInventoryContext || isAgedContext) && (
                                                                                     <>
                                                                                         <td className="p-2 text-right text-gray-800 font-medium">
                                                                                             {tx.stockLevel !== undefined ? tx.stockLevel : '-'}
                                                                                         </td>
-                                                                                        <td className="p-2 text-right">
+                                                                                        {isAgedContext && <td className="p-2 text-right text-amber-700 font-medium">{tx.agedStockQty || '-'}</td>}
+                                                                                        {isAgedContext && <td className="p-2 text-right font-bold">{(tx.agedStockPct || 0).toFixed(1)}%</td>}
+                                                                                        
+                                                                                        {!isAgedContext && <td className="p-2 text-right">
                                                                                             {tx.daysRemaining !== undefined ? (
                                                                                                 <span className={`${tx.daysRemaining < 14 ? 'text-red-600 font-bold' : 'text-green-600'}`}>
                                                                                                     {tx.daysRemaining.toFixed(0)}d
                                                                                                 </span>
                                                                                             ) : '-'}
-                                                                                        </td>
+                                                                                        </td>}
                                                                                     </>
                                                                                 )}
                                                                                 {isTrendContext && (
@@ -931,7 +1145,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
   
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 space-y-4">
-        {data.params && data.params.filters && data.params.filters.length > 0 && (
+        {data.params && data.params.filters && data.params.filters.length > 0 && !isDeepDive && (
             <div className="bg-indigo-50/50 border-b border-indigo-100 p-3 rounded-lg flex flex-wrap items-center gap-2">
                 <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wide flex items-center gap-1">
                     <Filter className="w-3 h-3" /> Active Logic:
@@ -953,6 +1167,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
             </div>
         )}
 
+        {!isDeepDive && (
         <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <p className="text-sm text-gray-500 flex items-center gap-1">Search results for:</p>
@@ -971,6 +1186,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                 {timeLabel && (<div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-lg border border-gray-200"><Calendar className="w-3.5 h-3.5" />{timeLabel}</div>)}
                 {isVolumeContext && (<div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-100"><ShoppingBag className="w-3.5 h-3.5" />Volume View</div>)}
                 {isAdContext && (<div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 text-xs font-bold rounded-lg border border-orange-100"><Megaphone className="w-3.5 h-3.5" />Ad Performance</div>)}
+                {isOrganicContext && (<div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-100"><Activity className="w-3.5 h-3.5" />Organic Share</div>)}
+                {isAgedContext && (<div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-100"><Clock className="w-3.5 h-3.5" />Aged Inventory</div>)}
                 {isMarginContext && (<div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-100"><DollarSign className="w-3.5 h-3.5" />Profit Analysis</div>)}
                 
                 {isInventoryContext && (
@@ -987,13 +1204,34 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
 
                 {isTrendContext && (<div className="flex items-center gap-2 px-3 py-1.5 bg-cyan-50 text-cyan-700 text-xs font-bold rounded-lg border border-cyan-100"><TrendingDown className="w-3.5 h-3.5" />Trend Analysis</div>)}
                 {isReturnContext && (<div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-700 text-xs font-bold rounded-lg border border-red-100"><RotateCcw className="w-3.5 h-3.5" />Returns</div>)}
+                
                 <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
-                    <span className="text-xs font-bold text-gray-400 pl-2 uppercase">Group by</span>
+                    {/* Add Trend Sort Controls */}
+                    {isTrendContext && (
+                        <div className="flex border-r border-gray-200 pr-2 mr-2">
+                            <button
+                                onClick={() => handleSortUpdate(data.params.primaryMetric || 'VELOCITY_CHANGE', 'desc')}
+                                className={`px-2 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${data.params.sort?.direction === 'desc' ? 'bg-green-50 text-green-700' : 'text-gray-500 hover:text-green-600'}`}
+                                title="Sort by Top Risers (Growth)"
+                            >
+                                <TrendingUp className="w-3 h-3" /> Risers
+                            </button>
+                            <button
+                                onClick={() => handleSortUpdate(data.params.primaryMetric || 'VELOCITY_CHANGE', 'asc')}
+                                className={`px-2 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${data.params.sort?.direction === 'asc' ? 'bg-red-50 text-red-700' : 'text-gray-500 hover:text-red-600'}`}
+                                title="Sort by Top Fallers (Decline)"
+                            >
+                                <TrendingDown className="w-3 h-3" /> Fallers
+                            </button>
+                        </div>
+                    )}
+
+                    <span className="text-xs font-bold text-gray-400 pl-1 uppercase">Group by</span>
                     <div className="flex">
                         <button 
-                            onClick={() => !isInventoryContext && setGroupBy('platform')} 
-                            disabled={isInventoryContext}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${groupBy === 'platform' ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' : 'text-gray-500 hover:text-gray-700'} ${isInventoryContext ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            onClick={() => !isInventoryContext && !isAgedContext && setGroupBy('platform')} 
+                            disabled={isInventoryContext || isAgedContext}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${groupBy === 'platform' ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' : 'text-gray-500 hover:text-gray-700'} ${(isInventoryContext || isAgedContext) ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             <Layers className="w-3 h-3" /> Platform
                         </button>
@@ -1007,6 +1245,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                 </div>
             </div>
         </div>
+        )}
       {renderContent()}
     </div>
   );

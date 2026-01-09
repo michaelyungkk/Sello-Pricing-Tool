@@ -1,27 +1,26 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail, PriceChangeRecord } from '../types';
+import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail, PriceChangeRecord, RefundLog } from '../types';
 import { TagSearchInput } from './TagSearchInput';
 import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart, PieChart as PieIcon, AlertTriangle, Activity, Megaphone, Coins, Wrench } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, ComposedChart, Legend } from 'recharts';
 import ProductList from './ProductList';
+import { getDiagnosisMeta, CanonicalDiagnosisId } from './diagnostics/diagnosisRegistry';
+import { getThresholdConfig } from '../services/thresholdsConfig';
 
 interface ProductManagementPageProps {
     products: Product[];
     pricingRules: PricingRules;
     promotions?: PromotionEvent[];
     priceHistoryMap?: Map<string, PriceLog[]>;
-    priceChangeHistory?: PriceChangeRecord[]; // Added for Elasticity
+    refundHistory?: RefundLog[]; // Added Refund Logs
+    priceChangeHistory?: PriceChangeRecord[];
     onOpenMappingModal: () => void;
-    // Optional handlers left for compatibility if needed, but UI trigger removed
-    onOpenSales?: () => void;
-    onOpenInventory?: () => void;
-    onOpenReturns?: () => void;
-    onOpenCA?: () => void;
     onAnalyze: (product: Product, context?: string) => void;
     dateLabels: { current: string, last: string };
     onUpdateProduct?: (product: Product) => void;
-    onViewElasticity?: (product: Product) => void; // Added for Elasticity
+    onViewElasticity?: (product: Product) => void;
+    onDeepDive: (sku: string) => void; // New Prop for triggering global search
     themeColor: string;
     headerStyle: React.CSSProperties;
 }
@@ -37,12 +36,14 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     pricingRules,
     promotions = [],
     priceHistoryMap = new Map(),
-    priceChangeHistory = [], // Default to empty array
+    refundHistory = [], // Default
+    priceChangeHistory = [],
     onOpenMappingModal,
     onAnalyze,
     dateLabels,
     onUpdateProduct,
-    onViewElasticity, // Handler passed from App
+    onViewElasticity,
+    onDeepDive,
     themeColor,
     headerStyle
 }) => {
@@ -110,9 +111,12 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                     <DashboardView
                         products={products}
                         priceHistoryMap={priceHistoryMap}
+                        refundHistory={refundHistory} // Pass refunds down
                         pricingRules={pricingRules}
+                        priceChangeHistory={priceChangeHistory}
                         themeColor={themeColor}
                         onAnalyze={onAnalyze}
+                        onDeepDive={onDeepDive}
                     />
                 )}
 
@@ -175,15 +179,21 @@ interface ToxicPlatform {
 const DashboardView = ({
     products,
     priceHistoryMap,
+    refundHistory,
     pricingRules,
+    priceChangeHistory,
     themeColor,
     onAnalyze,
+    onDeepDive,
 }: {
     products: Product[],
     priceHistoryMap: Map<string, PriceLog[]>,
+    refundHistory: RefundLog[],
     pricingRules: PricingRules,
+    priceChangeHistory: PriceChangeRecord[],
     themeColor: string,
     onAnalyze: (product: Product, context?: string) => void,
+    onDeepDive: (sku: string) => void,
 }) => {
     const [range, setRange] = useState<DateRange>('30d');
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
@@ -198,6 +208,9 @@ const DashboardView = ({
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
 
+    // Thresholds
+    const thresholds = useMemo(() => getThresholdConfig(), []);
+
     // Reset pagination on filter change
     useEffect(() => {
         setCurrentPage(1);
@@ -207,36 +220,46 @@ const DashboardView = ({
     const nextSlide = () => setCurrentSlide(prev => (prev + 1) % 3);
     const prevSlide = () => setCurrentSlide(prev => (prev - 1 + 3) % 3);
 
+    const getSignalStyle = (priority: string) => {
+        switch (priority) {
+            case 'High': return 'bg-red-50 text-red-700 border-red-200';
+            case 'Medium': return 'bg-amber-50 text-amber-700 border-amber-200';
+            case 'Low': return 'bg-blue-50 text-blue-700 border-blue-200';
+            default: return 'bg-gray-50 text-gray-600 border-gray-200';
+        }
+    };
+
     // --- DATA LOGIC ---
     const { processedData, periodLabel, dateRange, periodDays } = useMemo(() => {
         let startDate = new Date();
         let endDate = new Date();
         let days = 30;
-        let label = '';
 
+        // Date Logic
         if (range === 'yesterday') {
             startDate.setDate(startDate.getDate() - 1);
             endDate.setDate(endDate.getDate() - 1);
             days = 1;
-            label = startDate.toLocaleDateString();
         } else if (range === '7d') {
             startDate.setDate(startDate.getDate() - 7);
             endDate.setDate(endDate.getDate() - 1);
             days = 7;
-            label = 'Last 7 Days';
         } else if (range === '30d') {
             startDate.setDate(startDate.getDate() - 30);
             endDate.setDate(endDate.getDate() - 1);
             days = 30;
-            label = 'Last 30 Days';
         } else if (range === 'custom') {
             startDate = new Date(customStart);
             endDate = new Date(customEnd);
             if (startDate > endDate) { const temp = startDate; startDate = endDate; endDate = temp; }
             const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
             days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-            label = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
         }
+
+        // Format Label (Strategy Engine Style)
+        const format = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
+        const sameYear = startDate.getFullYear() === endDate.getFullYear();
+        const label = `${format(startDate, !sameYear)} – ${format(endDate, true)}`;
 
         const prevStart = new Date(startDate);
         const prevEnd = new Date(startDate);
@@ -308,8 +331,8 @@ const DashboardView = ({
                 Object.entries(platformBreakdown).forEach(([plat, stats]) => {
                     if (stats.rev > 0) {
                         const m = (stats.profit / stats.rev) * 100;
-                        // Toxic Threshold: < 5% Margin AND significant revenue (> £10)
-                        if (m < 5 && stats.rev > 10) {
+                        // Toxic Threshold: Margin < configured AND significant revenue (> £10)
+                        if (m < (thresholds.marginBelowTargetPct / 2) && stats.rev > 10) {
                             toxicPlatforms.push({
                                 name: plat,
                                 margin: m,
@@ -322,6 +345,34 @@ const DashboardView = ({
                 toxicPlatforms.sort((a,b) => a.margin - b.margin); // Worst margins first
             }
 
+            // --- SIGNALS CALCULATION ---
+            const signals: CanonicalDiagnosisId[] = [];
+            const dailyVelocity = curUnits / days;
+            const runway = dailyVelocity > 0 ? p.stockLevel / dailyVelocity : 999;
+            const tacos = curRev > 0 ? (curAdSpend / curRev) * 100 : 0;
+            const stockValue = p.stockLevel * (p.costPrice || 0);
+
+            if (p.stockLevel > 0) {
+                if (runway < (p.leadTimeDays * thresholds.stockoutRunwayMultiplier)) signals.push('STOCKOUT_RISK');
+                else if (runway > thresholds.overstockDays) signals.push('OVERSTOCK_RISK');
+            }
+            if ((p.returnRate || 0) > thresholds.returnRatePct) signals.push('HIGH_RETURN_RATE');
+            if (tacos > thresholds.highAdDependencyPct) signals.push('HIGH_AD_DEPENDENCY');
+            
+            if (netMargin < 0) signals.push('NEGATIVE_LOSS');
+            else if (netMargin < thresholds.marginBelowTargetPct) signals.push('BELOW_TARGET');
+            
+            if (velocityChange < -thresholds.velocityDropPct && prevUnits > 2) signals.push('VELOCITY_DROP_WOW');
+            if (stockValue > thresholds.deadStockMinValueGBP && curUnits === 0) signals.push('DORMANT_NO_SALES');
+
+            // Sort signals by priority
+            const priorityOrder: Record<string, number> = { High: 1, Medium: 2, Low: 3 };
+            signals.sort((a, b) => {
+                const pA = priorityOrder[getDiagnosisMeta(a).priority] || 99;
+                const pB = priorityOrder[getDiagnosisMeta(b).priority] || 99;
+                return pA - pB;
+            });
+
             return {
                 ...p,
                 periodUnits: curUnits,
@@ -332,26 +383,27 @@ const DashboardView = ({
                 prevPeriodUnits: prevUnits,
                 velocityChange,
                 displayPrice,
-                toxicPlatforms // Array of toxic platforms
+                toxicPlatforms, // Array of toxic platforms
+                signals // Calculated Diagnostic Signals
             };
         });
 
         return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, periodDays: days };
-    }, [products, priceHistoryMap, range, customStart, customEnd, platformScope]);
+    }, [products, priceHistoryMap, range, customStart, customEnd, platformScope, thresholds]);
 
     // --- ALERTS (SLIDE 1) ---
     const alerts = useMemo(() => ({
-        // Modified Margin Logic: Global < 10% OR Specific Toxic Platform Detected
-        margin: processedData.filter(p => (p.periodUnits > 0 && p.periodMargin < 10) || p.toxicPlatforms.length > 0),
-        velocity: processedData.filter(p => p.prevPeriodUnits > 2 && p.velocityChange < -30),
+        // Modified Margin Logic: Global < Threshold OR Specific Toxic Platform Detected
+        margin: processedData.filter(p => (p.periodUnits > 0 && p.periodMargin < thresholds.marginBelowTargetPct) || p.toxicPlatforms.length > 0),
+        velocity: processedData.filter(p => p.prevPeriodUnits > 2 && p.velocityChange < -thresholds.velocityCrashPct),
         stock: processedData.filter(p => {
             const dailyVel = p.periodUnits / (range === 'yesterday' ? 1 : range === '7d' ? 7 : 30);
             if (dailyVel <= 0) return false;
             const runway = p.stockLevel / dailyVel;
-            return runway < p.leadTimeDays && p.stockLevel > 0;
+            return runway < (p.leadTimeDays * thresholds.stockoutRunwayMultiplier) && p.stockLevel > 0;
         }),
-        dead: processedData.filter(p => p.stockLevel * (p.costPrice || 0) > 200 && p.periodUnits === 0)
-    }), [processedData, range]);
+        dead: processedData.filter(p => p.stockLevel * (p.costPrice || 0) > thresholds.deadStockMinValueGBP && p.periodUnits === 0)
+    }), [processedData, range, thresholds]);
 
     const workbenchData = useMemo(() => {
         if (!selectedAlert) return processedData.filter(p => p.periodRevenue > 0).sort((a, b) => b.periodRevenue - a.periodRevenue).slice(0, 50);
@@ -414,8 +466,6 @@ const DashboardView = ({
         setTimeout(() => { if (document.body.contains(link)) document.body.removeChild(link); }, 60000);
     };
 
-    // ... [FinancialStats and InventoryStats useMemo remain unchanged]
-    // Re-included for completeness of the component file structure
     const financialStats = useMemo(() => {
         const totalRevenue = processedData.reduce((acc, p) => acc + p.periodRevenue, 0);
         const totalProfit = processedData.reduce((acc, p) => acc + p.periodProfit, 0);
@@ -520,9 +570,10 @@ const DashboardView = ({
                         ))}
                     </div>
 
-                    <div className="ml-3 flex flex-col justify-center">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-0.5">Period</span>
-                        <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
+                    <div className="ml-3 flex flex-col justify-center pl-2 border-l border-gray-200">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-0.5">Analyzing Period</span>
+                        <span className="text-xs font-bold text-indigo-600 flex items-center gap-1.5">
+                            <Calendar className="w-3 h-3" />
                             {periodLabel}
                         </span>
                     </div>
@@ -550,10 +601,10 @@ const DashboardView = ({
                             </button>
                             {/* ALERT CARDS */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
-                                <AlertCard title="Margin Thieves" count={alerts.margin.length} icon={AlertTriangle} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc="Net Margin < 10% (Scan all)" />
-                                <AlertCard title="Velocity Crashes" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc="Vol. Drop > 30%" />
+                                <AlertCard title="Margin Thieves" count={alerts.margin.length} icon={AlertTriangle} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc={`Net Margin < ${thresholds.marginBelowTargetPct}% (Scan all)`} />
+                                <AlertCard title="Velocity Crashes" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`Vol. Drop > ${thresholds.velocityCrashPct}%`} />
                                 <AlertCard title="Stockout Risk" count={alerts.stock.length} icon={Clock} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Runway < Lead Time" />
-                                <AlertCard title="Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc=">£200 Value, 0 Sales" />
+                                <AlertCard title="Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc={`>£${thresholds.deadStockMinValueGBP} Value, 0 Sales`} />
                             </div>
                             <button 
                                 onClick={nextSlide}
@@ -591,7 +642,9 @@ const DashboardView = ({
                                 <table className="w-full text-left text-sm whitespace-nowrap">
                                     <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50 sticky top-0 z-10 backdrop-blur-sm">
                                         <tr>
+                                            <th className="p-4 w-12 text-center">Action</th>
                                             <th className="p-4">Product</th>
+                                            <th className="p-4">Signals</th>
                                             <th className="p-4 text-right">Price (Inc VAT)</th>
                                             
                                             {selectedAlert === null && <>
@@ -619,10 +672,39 @@ const DashboardView = ({
                                     </thead>
                                     <tbody className="divide-y divide-gray-100/50">
                                         {paginatedData.map(p => (
-                                            <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                            <tr 
+                                                key={p.id} 
+                                                className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group"
+                                            >
+                                                <td className="p-4 text-center">
+                                                    <button 
+                                                        onClick={() => onDeepDive(p.sku)} 
+                                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                        title="Deep Dive SKU Analysis"
+                                                    >
+                                                        <Search className="w-4 h-4" />
+                                                    </button>
+                                                </td>
                                                 <td className="p-4">
-                                                    <div className="font-bold text-gray-900">{p.sku}</div>
+                                                    <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{p.sku}</div>
                                                     <div className="text-xs text-gray-500 truncate max-w-[200px]">{p.name}</div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex flex-wrap gap-1 max-w-[140px]">
+                                                        {p.signals.slice(0, 2).map(id => {
+                                                            const meta = getDiagnosisMeta(id);
+                                                            return (
+                                                                <span 
+                                                                    key={id} 
+                                                                    onClick={(e) => { e.stopPropagation(); onDeepDive(p.sku); }}
+                                                                    className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${getSignalStyle(meta.priority)}`}
+                                                                    title={meta.description}
+                                                                >
+                                                                    {meta.shortLabel}
+                                                                </span>
+                                                            )
+                                                        })}
+                                                    </div>
                                                 </td>
                                                 <td className="p-4 text-right">£{(p.displayPrice * VAT).toFixed(2)}</td>
                                                 
@@ -636,7 +718,7 @@ const DashboardView = ({
                                                         <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
                                                         <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
                                                         <td className="p-4 text-right">
-                                                            <span className={`font-bold ${p.periodMargin < 10 ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
+                                                            <span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
                                                         </td>
                                                         <td className="p-4 text-right font-bold text-gray-800">{p.stockLevel}</td>
                                                     </>
@@ -650,11 +732,11 @@ const DashboardView = ({
                                                         <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
                                                         <td className="p-4 text-right">
                                                             <div className="flex flex-col items-end gap-1">
-                                                                <span className={`font-bold ${p.periodMargin < 10 ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
+                                                                <span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
                                                                 {selectedAlert === 'margin' && p.toxicPlatforms && p.toxicPlatforms.length > 0 && (
                                                                     <button
-                                                                        onClick={() => handleToxicAnalysis(p, p.toxicPlatforms[0])}
-                                                                        className="flex items-center gap-1 text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded border border-red-200 font-bold hover:bg-red-100 hover:border-red-300 transition-all shadow-sm"
+                                                                        onClick={(e) => { e.stopPropagation(); handleToxicAnalysis(p, p.toxicPlatforms[0]); }}
+                                                                        className="flex items-center gap-1 text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded border border-red-200 font-bold hover:bg-red-100 hover:border-red-300 transition-all shadow-sm z-10 relative"
                                                                         title={`Click to analyze ${p.toxicPlatforms[0].name} specifically`}
                                                                     >
                                                                         <Wrench className="w-3 h-3" />
@@ -746,7 +828,13 @@ const DashboardView = ({
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
                                 <MetricCard title="Total Revenue" value={`£${financialStats.totalRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={DollarSign} color="blue" />
                                 <MetricCard title="True Net Profit" value={`£${financialStats.totalProfit.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Coins} color="green" />
-                                <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Megaphone} color="purple" />
+                                <MetricCard 
+                                    title="Total Ad Spend" 
+                                    value={`£${financialStats.totalAdSpend.toLocaleString(undefined, {maximumFractionDigits:0})}`} 
+                                    icon={Megaphone} 
+                                    color="purple"
+                                    desc="Includes Ad-Only Transactions"
+                                />
                                 <MetricCard title="TACoS %" value={`${financialStats.tacos.toFixed(1)}%`} icon={PieIcon} color="orange" desc="Total Advertising Cost of Sales" />
                             </div>
                              <button 
