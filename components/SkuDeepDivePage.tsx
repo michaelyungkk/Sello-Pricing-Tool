@@ -921,8 +921,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="All">All Types</option>
-                                    <option value="Sale">Sale (Price > 0)</option>
-                                    <option value="Ad Cost">Ad Cost (Ads > 0)</option>
+                                    <option value="Sale">Sale (Price {'>'} 0)</option>
+                                    <option value="Ad Cost">Ad Cost (Ads {'>'} 0)</option>
                                     <option value="Refund">Refunds Only</option>
                                 </select>
                                 <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
