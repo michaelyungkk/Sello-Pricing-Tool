@@ -2,7 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { UserProfile as UserProfileType } from '../types';
-import { User, Settings, Palette, Image as ImageIcon, X, Check, Upload, Wand2, Sun, Moon, Type, PaintBucket, LayoutTemplate, Layers, RotateCw } from 'lucide-react';
+import { User, Settings, Palette, Image as ImageIcon, X, Check, Upload, Wand2, Sun, Moon, Type, PaintBucket, LayoutTemplate, Layers, RotateCw, Globe } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface UserProfileProps {
   profile: UserProfileType;
@@ -21,6 +22,7 @@ const GRADIENTS = [
 ];
 
 const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
+  const { t, i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [tempProfile, setTempProfile] = useState(profile);
   const [activeTab, setActiveTab] = useState<'image' | 'solid' | 'gradient'>('image');
@@ -132,6 +134,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
       setTempProfile(prev => ({ ...prev, textColor: color }));
   };
 
+  const changeLanguage = (lng: string) => {
+      i18n.changeLanguage(lng);
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button 
@@ -142,7 +148,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
              <span className="text-xs font-bold text-gray-700 leading-none" style={{ color: profile.textColor || 'inherit' }}>
                 {profile.name || 'Guest'}
              </span>
-             <span className="text-[10px] text-gray-500" style={{ color: profile.textColor ? `${profile.textColor}90` : 'inherit' }}>Settings</span>
+             <span className="text-[10px] text-gray-500" style={{ color: profile.textColor ? `${profile.textColor}90` : 'inherit' }}>{t('settings')}</span>
         </div>
         <div 
             className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-inner"
@@ -159,15 +165,36 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
             style={{ top: dropdownPos.top, right: dropdownPos.right }}
         >
             <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <h3 className="font-bold text-sm text-gray-800 uppercase tracking-wide">Personalize</h3>
+                <h3 className="font-bold text-sm text-gray-800 uppercase tracking-wide">{t('personalize')}</h3>
                 <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4"/></button>
             </div>
             
             <div className="p-3 space-y-4 max-h-[80vh] overflow-y-auto">
+                {/* Language Toggle */}
+                <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block flex items-center gap-1">
+                        <Globe className="w-3 h-3" /> {t('language')}
+                    </label>
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button 
+                            onClick={() => changeLanguage('en')}
+                            className={`flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-medium rounded transition-all ${i18n.language.startsWith('en') ? 'bg-white shadow text-gray-900 border border-gray-200' : 'text-gray-500'}`}
+                        >
+                            English
+                        </button>
+                        <button 
+                            onClick={() => changeLanguage('zh')}
+                            className={`flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-medium rounded transition-all ${i18n.language.startsWith('zh') ? 'bg-white shadow text-gray-900 border border-gray-200' : 'text-gray-500'}`}
+                        >
+                            中文
+                        </button>
+                    </div>
+                </div>
+
                 {/* High Density Row: Name & Color */}
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex-1">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Display Name</label>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">{t('display_name')}</label>
                         <input 
                             type="text" 
                             value={tempProfile.name}
@@ -176,7 +203,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
                         />
                     </div>
                     <div>
-                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Theme</label>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">{t('theme')}</label>
                         <div className="relative w-8 h-8 rounded-full overflow-hidden shadow-sm border border-gray-200">
                             <input 
                                 type="color" 
@@ -190,25 +217,25 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
 
                 {/* Text Color Preference */}
                 <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Text Color</label>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">{t('text_color')}</label>
                     <div className="flex bg-gray-100 p-1 rounded-lg">
                         <button 
                             onClick={() => handleTextColorChange('auto')}
                             className={`flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-medium rounded transition-all ${!tempProfile.textColor ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
                         >
-                            <Wand2 className="w-3 h-3" /> Auto
+                            <Wand2 className="w-3 h-3" /> {t('auto')}
                         </button>
                         <button 
                             onClick={() => handleTextColorChange('dark')}
                             className={`flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-medium rounded transition-all ${tempProfile.textColor === '#111827' ? 'bg-gray-800 shadow text-white' : 'text-gray-500'}`}
                         >
-                            <Moon className="w-3 h-3" /> Dark
+                            <Moon className="w-3 h-3" /> {t('dark')}
                         </button>
                         <button 
                             onClick={() => handleTextColorChange('light')}
                             className={`flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-medium rounded transition-all ${tempProfile.textColor === '#ffffff' ? 'bg-white shadow text-gray-900 border border-gray-200' : 'text-gray-500'}`}
                         >
-                            <Sun className="w-3 h-3" /> Light
+                            <Sun className="w-3 h-3" /> {t('light')}
                         </button>
                     </div>
                 </div>
@@ -217,22 +244,22 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
                 <div className="bg-gray-50/50 p-2 rounded-lg border border-gray-100 space-y-3">
                     <div className="flex justify-between items-center">
                         <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1">
-                            <Layers className="w-3 h-3" /> Liquid Glass
+                            <Layers className="w-3 h-3" /> {t('liquid_glass')}
                         </label>
                         <div className="flex bg-gray-200 p-0.5 rounded text-[10px]">
                             <button 
                                 onClick={() => setTempProfile({...tempProfile, glassMode: 'light'})}
                                 className={`px-2 py-0.5 rounded transition-all ${tempProfile.glassMode !== 'dark' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}
-                            >Light</button>
+                            >{t('light')}</button>
                             <button 
                                 onClick={() => setTempProfile({...tempProfile, glassMode: 'dark'})}
                                 className={`px-2 py-0.5 rounded transition-all ${tempProfile.glassMode === 'dark' ? 'bg-gray-800 shadow text-white' : 'text-gray-500'}`}
-                            >Dark</button>
+                            >{t('dark')}</button>
                         </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-400 w-10">Opacity</span>
+                        <span className="text-[10px] text-gray-400 w-10">{t('opacity')}</span>
                         <input 
                             type="range" 
                             min="0" max="100" 
@@ -244,7 +271,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-400 w-10">Blur</span>
+                        <span className="text-[10px] text-gray-400 w-10">{t('blur')}</span>
                         <input 
                             type="range" 
                             min="0" max="40" 
@@ -256,7 +283,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
                     </div>
 
                     <div className="flex justify-between items-center pt-1">
-                        <span className="text-[10px] text-gray-400">Ambient Depth Layer</span>
+                        <span className="text-[10px] text-gray-400">{t('ambient_depth')}</span>
                         <button 
                             onClick={() => setTempProfile({...tempProfile, ambientGlass: !tempProfile.ambientGlass})}
                             className={`w-8 h-4 rounded-full relative transition-colors ${tempProfile.ambientGlass ? 'bg-indigo-500' : 'bg-gray-300'}`}
@@ -267,7 +294,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
 
                     {tempProfile.ambientGlass && (
                         <div className="flex items-center gap-2 pt-1 border-t border-gray-200/50 mt-1 animate-in fade-in slide-in-from-top-1">
-                            <span className="text-[10px] text-gray-400 w-10">Depth</span>
+                            <span className="text-[10px] text-gray-400 w-10">{t('depth')}</span>
                             <input 
                                 type="range" 
                                 min="0" max="100" 
@@ -283,7 +310,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
                 {/* Background Selector */}
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase">Background</label>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase">{t('background')}</label>
                         <div className="flex gap-1">
                             {[
                                 { id: 'image', icon: Upload },
@@ -309,7 +336,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
                                 onClick={() => fileInputRef.current?.click()}
                                 className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-1"
                             >
-                                <Upload className="w-3 h-3" /> Upload
+                                <Upload className="w-3 h-3" /> {t('upload')}
                             </button>
                             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
                         </div>
@@ -352,7 +379,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
                             
                             {/* Custom Gradient Builder */}
                             <div className="bg-gray-50 p-2 rounded border border-gray-100">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">Custom Gradient</label>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block">{t('custom_gradient')}</label>
                                 <div className="flex items-center gap-2 mb-2">
                                     <input 
                                         type="color" 
@@ -402,7 +429,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ profile, onUpdate }) => {
                     style={{ backgroundColor: tempProfile.themeColor }}
                 >
                     <Check className="w-3.5 h-3.5" />
-                    Apply Changes
+                    {t('apply_changes')}
                 </button>
             </div>
         </div>,

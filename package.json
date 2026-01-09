@@ -1,3 +1,4 @@
+
 {
   "name": "ecompulse-pricing-optimizer",
   "private": true,
@@ -15,7 +16,10 @@
     "recharts": "^2.12.2",
     "xlsx": "^0.18.5",
     "idb-keyval": "^6.2.1",
-    "@google/genai": "latest"
+    "@google/genai": "latest",
+    "i18next": "^23.10.0",
+    "react-i18next": "^14.0.5",
+    "i18next-browser-languagedetector": "^7.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.64",
