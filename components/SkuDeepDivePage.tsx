@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
@@ -189,6 +188,30 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             .filter(t => new Date(t.date) >= cutoff && t.velocity > 0)
             .reduce((acc, t) => acc + t.velocity, 0);
     }, [sortedTransactions, txDays]);
+
+    // Calculate All-Time Net Margin
+    const allTimeMarginPct = useMemo(() => {
+        if (!transactions || transactions.length === 0) return 0;
+        
+        let totalProfit = 0;
+        // Sum profit from sales
+        transactions.forEach(t => {
+             const rev = t.price * t.velocity;
+             if (t.profit !== undefined) totalProfit += t.profit;
+             else if (t.margin !== undefined) totalProfit += rev * (t.margin / 100);
+        });
+        
+        // Subtract refunds from profit
+        if (refunds) {
+            refunds.forEach(r => totalProfit -= r.amount);
+        }
+
+        // Net Sales = Gross Sales (allTimeSales passed in) - Refunds
+        const totalRefundValue = refunds ? refunds.reduce((sum, r) => sum + r.amount, 0) : 0;
+        const netSales = allTimeSales - totalRefundValue;
+
+        return netSales > 0 ? (totalProfit / netSales) * 100 : 0;
+    }, [transactions, refunds, allTimeSales]);
 
     const diagnostics = useMemo(() => {
         const signals = [];
@@ -548,7 +571,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
             </div>
 
-            {/* SKU Overview Card */}
+            {/* SKU Overview Card - REDESIGNED */}
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
                 <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-4">
                     <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -557,90 +580,93 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                     <h3 className="text-lg font-bold text-gray-900">SKU Overview</h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-                    {/* Identity */}
-                    <div className="space-y-4">
-                        <div>
-                            <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Product Name</span>
-                            <div className="font-bold text-gray-900 text-lg leading-tight">{product.name}</div>
-                        </div>
-                        <div>
-                            <span className="text-xs font-bold text-gray-400 uppercase block mb-1">SKU ID</span>
-                            <div className="font-mono text-indigo-600 font-bold bg-indigo-50 px-2 py-1 rounded inline-block border border-indigo-100">
+                <div className="flex flex-col xl:flex-row gap-8">
+                    {/* LEFT: Identity (Expanded Width) */}
+                    <div className="flex-1 min-w-0">
+                        <div className="mb-2">
+                            <span className="font-mono text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 inline-block">
                                 {product.sku}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Categorization */}
-                    <div className="space-y-4">
-                        <div>
-                            <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Category</span>
-                            <div className="flex items-center gap-2 text-gray-700 font-medium">
-                                <Layers className="w-4 h-4 text-gray-400" />
-                                {product.category || 'Uncategorized'}
-                            </div>
-                        </div>
-                        <div>
-                            <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Sub-Category</span>
-                            <div className="flex items-center gap-2 text-gray-700 font-medium">
-                                <Tag className="w-4 h-4 text-gray-400" />
-                                {product.subcategory || '-'}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Inventory Position */}
-                    <div className="space-y-4">
-                        <div>
-                            <span className="text-xs font-bold text-gray-400 uppercase block mb-1 flex items-center gap-1">
-                                <Warehouse className="w-3 h-3" /> On Hand
                             </span>
-                            <div className="text-2xl font-bold text-gray-900">
-                                {product.stockLevel.toLocaleString()} <span className="text-sm font-medium text-gray-500">units</span>
-                            </div>
                         </div>
-                        <div>
-                            <span className="text-xs font-bold text-gray-400 uppercase block mb-1 flex items-center gap-1">
-                                <Ship className="w-3 h-3" /> Inbound
-                            </span>
-                            {(product.incomingStock || 0) > 0 ? (
-                                <button 
-                                    onClick={() => onViewShipments && onViewShipments(product.sku)}
-                                    disabled={!onViewShipments}
-                                    className={`text-2xl font-bold flex items-center gap-2 transition-colors ${onViewShipments ? 'text-indigo-600 hover:text-indigo-700 cursor-pointer underline decoration-dotted decoration-2 underline-offset-4' : 'text-gray-900'}`}
-                                    title={onViewShipments ? "Click to view shipment details" : "Incoming Stock"}
-                                >
-                                    {product.incomingStock?.toLocaleString()} 
-                                    <span className="text-sm font-medium text-gray-500 no-underline">units</span>
-                                </button>
-                            ) : (
-                                <div className="text-2xl font-bold text-gray-300">
-                                    0 <span className="text-sm font-medium text-gray-400">units</span>
+                        
+                        <h1 className="text-3xl font-bold text-gray-900 leading-tight mb-4 break-words">
+                            {product.name}
+                        </h1>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                <Layers className="w-3.5 h-3.5" />
+                                <span>{product.category || 'Uncategorized'}</span>
+                            </div>
+                            {product.subcategory && (
+                                <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                    <Tag className="w-3.5 h-3.5" />
+                                    <span>{product.subcategory}</span>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* All Time Stats */}
-                    <div className="space-y-4 lg:col-span-2">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white/50 p-4 rounded-xl border border-gray-200">
-                                <span className="text-xs font-bold text-gray-400 uppercase block mb-1 flex items-center gap-1">
-                                    <DollarSign className="w-3 h-3" /> All-Time Sales
+                    {/* RIGHT: Metrics Grid */}
+                    <div className="flex-shrink-0 w-full xl:w-[600px]">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            
+                            {/* 1. Velocity */}
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                    <Activity className="w-3 h-3"/> Velocity
                                 </span>
-                                <div className="text-2xl font-bold text-gray-900">
-                                    £{allTimeSales.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                <div className="text-xl font-bold text-gray-900">
+                                    {product.averageDailySales.toFixed(1)} <span className="text-xs font-normal text-gray-400">/day</span>
                                 </div>
                             </div>
-                            <div className="bg-white/50 p-4 rounded-xl border border-gray-200">
-                                <span className="text-xs font-bold text-gray-400 uppercase block mb-1 flex items-center gap-1">
-                                    <Box className="w-3 h-3" /> All-Time Quantity
+
+                            {/* 2. On Hand */}
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                    <Warehouse className="w-3 h-3"/> On Hand
                                 </span>
-                                <div className="text-2xl font-bold text-gray-900">
-                                    {allTimeQty.toLocaleString()} <span className="text-sm font-medium text-gray-500">units</span>
+                                <div className="text-xl font-bold text-gray-900">
+                                    {product.stockLevel.toLocaleString()} <span className="text-xs font-normal text-gray-400">units</span>
                                 </div>
                             </div>
+
+                            {/* 3. Inbound */}
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                    <Ship className="w-3 h-3"/> Inbound
+                                </span>
+                                <div className="text-xl font-bold text-gray-900">
+                                    {product.incomingStock || 0} <span className="text-xs font-normal text-gray-400">units</span>
+                                </div>
+                            </div>
+
+                            {/* 4. Qty */}
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                    <Box className="w-3 h-3"/> Lifetime Qty
+                                </span>
+                                <div className="text-xl font-bold text-gray-900">
+                                    {allTimeQty.toLocaleString()}
+                                </div>
+                            </div>
+
+                            {/* 5. Sales Card (Full Width of Grid) */}
+                            <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">All-Time Sales</span>
+                                <div className="text-2xl font-bold text-gray-900">
+                                    £{allTimeSales.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
+                            </div>
+
+                            {/* 6. Margin Card (Full Width of Grid) */}
+                            <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Lifetime Net Margin</span>
+                                <div className={`text-2xl font-bold ${allTimeMarginPct >= 15 ? 'text-green-600' : allTimeMarginPct > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {allTimeMarginPct.toFixed(1)}%
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>

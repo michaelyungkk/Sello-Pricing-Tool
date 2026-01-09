@@ -67,7 +67,81 @@ const getFridayThursdayRanges = () => {
     };
 };
 
-// ... (Logic Helpers omitted for brevity) ...
+// --- CENTRAL RECALCULATION LOGIC ---
+const recalculateProductMetrics = (
+    products: Product[],
+    history: PriceLog[],
+    lookback: VelocityLookback,
+    thresholds: ThresholdConfig
+): Product[] => {
+    // 1. Build History Map
+    const historyMap = new Map<string, PriceLog[]>();
+    history.forEach(h => {
+        if (!historyMap.has(h.sku)) historyMap.set(h.sku, []);
+        historyMap.get(h.sku)!.push(h);
+    });
+
+    // 2. Determine Time Window
+    let days = 30;
+    if (lookback === 'ALL') {
+        if (history.length > 0) {
+            const dates = history.map(l => new Date(l.date).getTime());
+            const minDate = Math.min(...dates);
+            const diff = Date.now() - minDate;
+            days = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+        }
+    } else {
+        days = parseInt(lookback) || 30;
+    }
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    cutoffDate.setHours(0, 0, 0, 0);
+
+    const prevCutoffDate = new Date(cutoffDate);
+    prevCutoffDate.setDate(prevCutoffDate.getDate() - days);
+
+    // 3. Process Products
+    return products.map(p => {
+        const logs = historyMap.get(p.sku) || [];
+        
+        let currentQty = 0;
+        let prevQty = 0;
+
+        logs.forEach(l => {
+            const d = new Date(l.date);
+            if (d >= cutoffDate) {
+                currentQty += l.velocity;
+            } else if (d >= prevCutoffDate) {
+                prevQty += l.velocity;
+            }
+        });
+
+        const newDailySales = currentQty / days;
+        const newPrevDailySales = prevQty / days;
+        
+        const daysRemaining = newDailySales > 0 ? p.stockLevel / newDailySales : 999;
+        
+        let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
+        if (p.stockLevel <= 0) status = 'Critical';
+        else if (daysRemaining < p.leadTimeDays * thresholds.stockoutRunwayMultiplier) status = 'Critical';
+        else if (daysRemaining > thresholds.overstockDays) status = 'Overstock';
+        else if (daysRemaining < p.leadTimeDays * (thresholds.stockoutRunwayMultiplier + 0.5)) status = 'Warning';
+
+        const velocityChange = newPrevDailySales > 0 
+            ? ((newDailySales - newPrevDailySales) / newPrevDailySales) * 100 
+            : 0;
+
+        return {
+            ...p,
+            averageDailySales: newDailySales,
+            previousDailySales: newPrevDailySales,
+            daysRemaining,
+            status,
+            _trendData: { velocityChange }
+        };
+    });
+};
 
 const App: React.FC = () => {
     // ... (Keep existing state & effects)
@@ -156,18 +230,8 @@ const App: React.FC = () => {
     }, []);
 
     const handleRefreshProductStatuses = (config: ThresholdConfig) => {
-        setProducts(prev => prev.map(p => {
-            const daysRemaining = p.averageDailySales > 0 ? p.stockLevel / p.averageDailySales : 999;
-            let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
-            
-            if (p.stockLevel <= 0) status = 'Critical';
-            else if (daysRemaining < p.leadTimeDays * config.stockoutRunwayMultiplier) status = 'Critical';
-            else if (daysRemaining > config.overstockDays) status = 'Overstock';
-            // Simple heuristic for warning if between Critical threshold and +50% buffer
-            else if (daysRemaining < p.leadTimeDays * (config.stockoutRunwayMultiplier + 0.5)) status = 'Warning';
-
-            return { ...p, status };
-        }));
+        const recalculated = recalculateProductMetrics(products, priceHistory, velocityLookback, config);
+        setProducts(recalculated);
     };
 
     const handleRefreshThresholds = () => {
@@ -177,70 +241,9 @@ const App: React.FC = () => {
     };
 
     const handleRecalculateVelocity = (newLookback: VelocityLookback, currentPriceHistory: PriceLog[]) => {
-        const historyMap = new Map<string, PriceLog[]>();
-        currentPriceHistory.forEach(h => {
-            if (!historyMap.has(h.sku)) historyMap.set(h.sku, []);
-            historyMap.get(h.sku)!.push(h);
-        });
-
-        const currentThresholds = getThresholdConfig(); // Ensure we use latest
-
-        setProducts(prev => prev.map(p => {
-            const logs = historyMap.get(p.sku) || [];
-            
-            // Determine Days
-            let days = 30;
-            if (newLookback === 'ALL') {
-                if (logs.length > 0) {
-                    const dates = logs.map(l => new Date(l.date).getTime());
-                    const minDate = Math.min(...dates);
-                    const diff = Date.now() - minDate;
-                    days = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-                }
-            } else {
-                days = parseInt(newLookback) || 30;
-            }
-
-            const cutoffDate = new Date();
-            cutoffDate.setDate(cutoffDate.getDate() - days);
-            // Reset hours to start of day for inclusive comparison if desired, but ISO string compare usually fine
-            cutoffDate.setHours(0,0,0,0);
-
-            const prevCutoffDate = new Date(cutoffDate);
-            prevCutoffDate.setDate(prevCutoffDate.getDate() - days);
-
-            let currentQty = 0;
-            let prevQty = 0;
-
-            logs.forEach(l => {
-                const d = new Date(l.date);
-                if (d >= cutoffDate) {
-                    currentQty += l.velocity;
-                } else if (d >= prevCutoffDate) {
-                    prevQty += l.velocity;
-                }
-            });
-
-            const newDailySales = currentQty / days;
-            const newPrevDailySales = prevQty / days;
-            
-            const daysRemaining = newDailySales > 0 ? p.stockLevel / newDailySales : 999;
-            
-            // Update Status based on new Runway AND current Thresholds
-            let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
-            if (p.stockLevel <= 0) status = 'Critical';
-            else if (daysRemaining < p.leadTimeDays * currentThresholds.stockoutRunwayMultiplier) status = 'Critical';
-            else if (daysRemaining > currentThresholds.overstockDays) status = 'Overstock';
-            else if (daysRemaining < p.leadTimeDays * (currentThresholds.stockoutRunwayMultiplier + 0.5)) status = 'Warning';
-
-            return {
-                ...p,
-                averageDailySales: newDailySales,
-                previousDailySales: newPrevDailySales,
-                daysRemaining,
-                status
-            };
-        }));
+        const currentThresholds = getThresholdConfig();
+        const recalculated = recalculateProductMetrics(products, currentPriceHistory, newLookback, currentThresholds);
+        setProducts(recalculated);
     };
 
     const handleSearch = async (queryOrChips: string | SearchChip[]) => {
@@ -309,7 +312,53 @@ const App: React.FC = () => {
     const handleAnalyze = async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } };
     const handleApplyPrice = (productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = prev.find(p => p.id === productId); if (!productToUpdate) { return prev; } const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...prevHistory, change]); return prev.map(p => { if (p.id !== productId) { return p; } return Object.assign({}, p, { caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }); }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); };
     const handleBackup = () => { const data = { products, priceHistory, refundHistory, shipmentHistory, priceChangeHistory, promotions, learnedAliases, pricingRules, logisticsRules, strategyRules, searchConfig, velocityLookback, userProfile, inventoryTemplates, exportDate: new Date().toISOString() }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `sello_backup_${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); };
-    const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = async (event) => { try { const json = JSON.parse(event.target?.result as string); if (!json.products) throw new Error("Invalid backup file format"); if (json.products) setProducts(json.products); if (json.priceHistory) setPriceHistory(json.priceHistory); if (json.refundHistory) setRefundHistory(json.refundHistory); if (json.shipmentHistory) setShipmentHistory(json.shipmentHistory); if (json.priceChangeHistory) setPriceChangeHistory(json.priceChangeHistory); if (json.promotions) setPromotions(json.promotions); if (json.learnedAliases) setLearnedAliases(json.learnedAliases); if (json.pricingRules) setPricingRules(json.pricingRules); if (json.logisticsRules) setLogisticsRules(json.logisticsRules); if (json.strategyRules) setStrategyRules(json.strategyRules); if (json.searchConfig) setSearchConfig(json.searchConfig); if (json.velocityLookback) setVelocityLookback(json.velocityLookback); if (json.userProfile) setUserProfile(json.userProfile); if(json.inventoryTemplates) setInventoryTemplates(json.inventoryTemplates); alert("Database restored successfully!"); } catch (err) { console.error("Restore failed", err); alert("Failed to restore database. Invalid file format."); } }; reader.readAsText(file); if (fileRestoreRef.current) fileRestoreRef.current.value = ''; };
+    
+    // --- UPDATED RESTORE HANDLER ---
+    const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const json = JSON.parse(event.target?.result as string);
+                if (!json.products) throw new Error("Invalid backup file format");
+                
+                // 1. Restore Base State
+                if (json.priceHistory) setPriceHistory(json.priceHistory);
+                if (json.refundHistory) setRefundHistory(json.refundHistory);
+                if (json.shipmentHistory) setShipmentHistory(json.shipmentHistory);
+                if (json.priceChangeHistory) setPriceChangeHistory(json.priceChangeHistory);
+                if (json.promotions) setPromotions(json.promotions);
+                if (json.learnedAliases) setLearnedAliases(json.learnedAliases);
+                if (json.pricingRules) setPricingRules(json.pricingRules);
+                if (json.logisticsRules) setLogisticsRules(json.logisticsRules);
+                if (json.strategyRules) setStrategyRules(json.strategyRules);
+                if (json.searchConfig) setSearchConfig(json.searchConfig);
+                if (json.userProfile) setUserProfile(json.userProfile);
+                if (json.inventoryTemplates) setInventoryTemplates(json.inventoryTemplates);
+                
+                let loadedVelocity = velocityLookback;
+                if (json.velocityLookback) {
+                    setVelocityLookback(json.velocityLookback);
+                    loadedVelocity = json.velocityLookback;
+                }
+
+                // 2. FORCE RECALCULATION of Products using restored history and settings
+                // This ensures "Days Remaining", "Status", and "Velocity" are consistent with the current date and restored rules
+                const currentThresholds = getThresholdConfig(); // Always use latest local thresholds, or assume restored? Usually local.
+                const recalculatedProducts = recalculateProductMetrics(json.products, json.priceHistory || [], loadedVelocity, currentThresholds);
+                
+                setProducts(recalculatedProducts);
+                
+                alert("Database restored & recalculated successfully!");
+            } catch (err) {
+                console.error("Restore failed", err);
+                alert("Failed to restore database. Invalid file format.");
+            }
+        };
+        reader.readAsText(file);
+        if (fileRestoreRef.current) fileRestoreRef.current.value = '';
+    };
     
     const handleResetRefunds = () => {
         setRefundHistory([]);
@@ -339,7 +388,99 @@ const App: React.FC = () => {
     const hasInventory = products.length > 0;
     const activeSearch = searchSessions.find(s => s.id === activeSearchId);
 
-    const handleSalesImportConfirm = (updatedProducts: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: ShipmentLog[], discoveredPlatforms?: string[]) => { setProducts(prev => { const updateMap = new Map(updatedProducts.map(p => [p.id, p])); return prev.map(p => updateMap.get(p.id) || p); }); if (historyPayload && historyPayload.length > 0) { const newLogs: PriceLog[] = historyPayload.map(h => ({ id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, sku: h.sku, date: h.date, price: h.price, velocity: h.velocity, margin: h.margin || 0, profit: h.profit, adsSpend: h.adsSpend, platform: h.platform, orderId: h.orderId })); setPriceHistory(prev => { const transactionKeys = new Set<string>(); const dailyActivityKeys = new Set<string>(); newLogs.forEach(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; const sku = l.sku; if (l.orderId) { transactionKeys.add(`${l.sku}|${l.orderId}`); } dailyActivityKeys.add(`${sku}|${d}|${p}`); }); const keptHistory = prev.filter(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { const txKey = `${l.sku}|${l.orderId}`; if (transactionKeys.has(txKey)) return false; return true; } const dailyKey = `${l.sku}|${d}|${p}`; if (dailyActivityKeys.has(dailyKey)) { return false; } return true; }); return [...newLogs, ...keptHistory]; }); } if (newShipmentLogs && newShipmentLogs.length > 0) { setShipmentHistory(prev => [...newShipmentLogs, ...prev]); } if (discoveredPlatforms && discoveredPlatforms.length > 0) { setPricingRules(prev => { const newRules = { ...prev }; let changed = false; discoveredPlatforms.forEach(p => { if (!newRules[p]) { newRules[p] = { markup: 0, commission: 15, manager: 'Unassigned', color: '#6b7280' }; changed = true; } }); return changed ? newRules : prev; }); } setIsSalesImportModalOpen(false); };
+    // --- UPDATED SALES IMPORT HANDLER ---
+    const handleSalesImportConfirm = (
+        updatedProductsFromImport: Product[], 
+        newDateLabels?: { current: string, last: string }, 
+        historyPayload?: HistoryPayload[], 
+        newShipmentLogs?: ShipmentLog[], 
+        discoveredPlatforms?: string[]
+    ) => { 
+        // 1. Update State Objects (Merge new history)
+        let updatedPriceHistory = [...priceHistory];
+        
+        if (historyPayload && historyPayload.length > 0) { 
+            const newLogs: PriceLog[] = historyPayload.map(h => ({ 
+                id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
+                sku: h.sku, 
+                date: h.date, 
+                price: h.price, 
+                velocity: h.velocity, 
+                margin: h.margin || 0, 
+                profit: h.profit, 
+                adsSpend: h.adsSpend, 
+                platform: h.platform, 
+                orderId: h.orderId 
+            })); 
+            
+            // Merge logic (filter dups)
+            const transactionKeys = new Set<string>(); 
+            const dailyActivityKeys = new Set<string>(); 
+            newLogs.forEach(l => { 
+                const d = l.date.split('T')[0]; 
+                const p = l.platform || 'General'; 
+                const sku = l.sku; 
+                if (l.orderId) { 
+                    transactionKeys.add(`${l.sku}|${l.orderId}`); 
+                } 
+                dailyActivityKeys.add(`${sku}|${d}|${p}`); 
+            }); 
+            
+            const keptHistory = priceHistory.filter(l => { 
+                const d = l.date.split('T')[0]; 
+                const p = l.platform || 'General'; 
+                if (l.orderId) { 
+                    const txKey = `${l.sku}|${l.orderId}`; 
+                    if (transactionKeys.has(txKey)) return false; 
+                    return true; 
+                } 
+                const dailyKey = `${l.sku}|${d}|${p}`; 
+                if (dailyActivityKeys.has(dailyKey)) { return false; } 
+                return true; 
+            }); 
+            
+            updatedPriceHistory = [...newLogs, ...keptHistory];
+            setPriceHistory(updatedPriceHistory);
+        }
+
+        // 2. Merge Product Updates (Cost/Fee data from import) with existing State
+        let mergedProducts = products.map(p => {
+            const update = updatedProductsFromImport.find(u => u.id === p.id);
+            if (update) {
+                // Return updated product BUT we will override velocity/status in step 3
+                return update;
+            }
+            return p;
+        });
+
+        // 3. FORCE RECALCULATION of Velocity/Status using Global Settings
+        // This overrides the simple velocity calc done inside the modal with the proper lookback window logic
+        const currentThresholds = getThresholdConfig();
+        const finalProducts = recalculateProductMetrics(mergedProducts, updatedPriceHistory, velocityLookback, currentThresholds);
+        
+        setProducts(finalProducts);
+
+        if (newShipmentLogs && newShipmentLogs.length > 0) { 
+            setShipmentHistory(prev => [...newShipmentLogs, ...prev]); 
+        } 
+        
+        if (discoveredPlatforms && discoveredPlatforms.length > 0) { 
+            setPricingRules(prev => { 
+                const newRules = { ...prev }; 
+                let changed = false; 
+                discoveredPlatforms.forEach(p => { 
+                    if (!newRules[p]) { 
+                        newRules[p] = { markup: 0, commission: 15, manager: 'Unassigned', color: '#6b7280' }; 
+                        changed = true; 
+                    } 
+                }); 
+                return changed ? newRules : prev; 
+            }); 
+        } 
+        
+        setIsSalesImportModalOpen(false); 
+    };
+
     const handleResetSalesData = () => { setPriceHistory([]); setProducts(prev => prev.map(p => ({ ...p, averageDailySales: 0, previousDailySales: 0, daysRemaining: p.stockLevel > 0 ? 999 : 0, status: p.stockLevel > 0 ? 'Overstock' : 'Critical' }))); setShipmentHistory([]); setIsSalesImportModalOpen(false); };
     const handleInventoryImport = (data: any[]) => { setProducts(prev => { const skuMap = new Map<string, Product>(); prev.forEach(p => skuMap.set(p.sku, p)); const newProducts = [...prev]; data.forEach(item => { const existingIndex = newProducts.findIndex(p => p.sku === item.sku); const existing = existingIndex !== -1 ? { ...newProducts[existingIndex] } : undefined; if (existing) { if (item.stock !== undefined) existing.stockLevel = item.stock; if (item.agedStock !== undefined) existing.agedStockQty = item.agedStock; if (item.cost !== undefined) existing.costPrice = item.cost; if (item.name) existing.name = item.name; if (item.category) existing.category = item.category; if (item.subcategory) existing.subcategory = item.subcategory; if (item.brand) existing.brand = item.brand; if (item.inventoryStatus) existing.inventoryStatus = item.inventoryStatus; if (item.cartonDimensions) existing.cartonDimensions = item.cartonDimensions; existing.lastUpdated = new Date().toISOString().split('T')[0]; newProducts[existingIndex] = existing; } else { newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, brand: item.brand, category: item.category || 'Uncategorized', subcategory: item.subcategory, stockLevel: item.stock || 0, agedStockQty: item.agedStock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: 0, leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: new Date().toISOString().split('T')[0], inventoryStatus: item.inventoryStatus, cartonDimensions: item.cartonDimensions }); } }); return newProducts; }); setIsUploadModalOpen(false); };
     const handleSkuDetailImport = (data: { masterSku: string; detail: SkuCostDetail }[]) => { setProducts(prev => prev.map(p => { const update = data.find(d => d.masterSku === p.sku); if (update) { return { ...p, costDetail: update.detail }; } return p; })); setIsSkuDetailModalOpen(false); };
