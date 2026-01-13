@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PricingRules, Platform, Product, PriceLog, PromotionEvent, LogisticsRule, ShipmentLog, VelocityLookback, SearchConfig } from '../types';
-import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Calendar, Search, Megaphone, AlertTriangle } from 'lucide-react';
+import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Search, Megaphone, AlertTriangle } from 'lucide-react';
 import { isAdsEnabled, setAdsCapability, ensureCapabilities } from '../services/platformCapabilities';
 import AlertThresholdSettings from './AlertThresholdSettings';
+import { useTranslation } from 'react-i18next';
 
 interface SettingsPageProps {
     currentRules: PricingRules;
@@ -24,6 +24,7 @@ interface SettingsPageProps {
 }
 
 const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logisticsRules = [], onSaveLogistics, products, extraData, shipmentHistory = [], themeColor, headerStyle, searchConfig: initialSearchConfig, velocityLookback: initialVelocityLookback, onRefreshThresholds }) => {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'platforms' | 'logistics' | 'analysis' | 'thresholds' | 'search'>('platforms');
     const [rules, setRules] = useState<PricingRules>(JSON.parse(JSON.stringify(currentRules)));
     const [logistics, setLogistics] = useState<LogisticsRule[]>(JSON.parse(JSON.stringify(logisticsRules)));
@@ -249,14 +250,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                 >
                     <Truck className="w-4 h-4" />
                     Logistics Rates
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('analysis')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'analysis' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    <BarChart2 className="w-4 h-4" />
-                    Analysis Logic
                 </button>
 
                 <button
@@ -539,74 +532,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                             </div>
                                         </div>
                                     ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Analysis Logic Section */}
-                {activeTab === 'analysis' && (
-                    <div className="space-y-6">
-                        <div>
-                            <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Analysis Logic</h2>
-                            <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
-                                Control how the system interprets historical sales data to calculate velocity and trends.
-                            </p>
-                        </div>
-
-                        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
-                            <div className="p-6">
-                                <div className="flex flex-col gap-6">
-                                    <div className="flex flex-col md:flex-row gap-6">
-                                        <div className="flex-1">
-                                            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                                                <Calendar className="w-4 h-4 text-indigo-600" />
-                                                Velocity Lookback Window
-                                            </label>
-                                            <p className="text-xs text-gray-500 mb-3">
-                                                Determines how many days of recent history are used to calculate "Average Daily Sales".
-                                                Changing this will instantly update the stock runway and restocking recommendations for all products.
-                                            </p>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                                                {[
-                                                    { val: '7', label: 'Last 7 Days', desc: 'Highly sensitive. Good for fast-moving goods.' },
-                                                    { val: '30', label: 'Last 30 Days', desc: 'Balanced. Recommended for general retail.' },
-                                                    { val: '60', label: 'Last 60 Days', desc: 'Smoothed. Reduces noise from short spikes.' },
-                                                    { val: '90', label: 'Last 90 Days', desc: 'Conservative. Good for slow-movers.' },
-                                                    { val: 'ALL', label: 'Full History', desc: 'Maximum data. Uses all imported logs.' }
-                                                ].map((opt) => (
-                                                    <button
-                                                        key={opt.val}
-                                                        onClick={() => setVelocityLookback(opt.val as VelocityLookback)}
-                                                        className={`text-left p-3 rounded-lg border transition-all ${velocityLookback === opt.val
-                                                                ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500'
-                                                                : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50/50 bg-white/50'
-                                                            }`}
-                                                    >
-                                                        <div className={`font-bold text-sm mb-1 ${velocityLookback === opt.val ? 'text-indigo-700' : 'text-gray-700'}`}>
-                                                            {opt.label}
-                                                        </div>
-                                                        <div className="text-[10px] text-gray-500 leading-tight">
-                                                            {opt.desc}
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 flex gap-3">
-                                        <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                                        <div className="text-sm text-blue-800">
-                                            <p className="font-bold mb-1">Impact on "Rising Stars"</p>
-                                            <p>
-                                                The "Rising Stars" chart on the dashboard compares the velocity of the selected window (e.g., Last 30 Days) against the
-                                                <strong> immediately preceding period</strong> of the same length (e.g., Days 31-60).
-                                                Selecting a shorter window makes the system more responsive to recent trend changes.
-                                            </p>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -4,6 +4,7 @@ import { SearchChip, Product } from '../types';
 import { SearchAssistantPopover } from './search/SearchAssistantPopover';
 import { ChipSelectionState, Suggestion, MetricId, ConditionId, PlatformId, TimePresetId } from './search/types';
 import { METRICS, CONDITIONS } from './search/suggestionConfig';
+import { useTranslation } from 'react-i18next';
 
 interface GlobalSearchProps {
   onSearch: (query: string | SearchChip[]) => void;
@@ -13,6 +14,7 @@ interface GlobalSearchProps {
 }
 
 const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platforms = [], products = [] }) => {
+    const { t } = useTranslation();
     const [chips, setChips] = useState<SearchChip[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [searchMode, setSearchMode] = useState<'GLOBAL' | 'SKU'>('GLOBAL');
@@ -166,9 +168,9 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platfo
     };
 
     const placeholderText = searchMode === 'SKU' 
-        ? "Type SKU ID..." 
+        ? t('search_placeholder_sku')
         : chips.length === 0 
-            ? "Ask a question (or type 'sku:' for products)..." 
+            ? t('search_placeholder_main')
             : "";
 
     return (
@@ -209,7 +211,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platfo
                 {searchMode === 'SKU' && (
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border bg-teal-100 text-teal-800 border-teal-200 animate-in fade-in zoom-in-90 select-none">
                         <Tag className="w-3 h-3" />
-                        <span>SKU Search:</span>
+                        <span>{t('search_sku_mode_label')}</span>
                     </div>
                 )}
                 

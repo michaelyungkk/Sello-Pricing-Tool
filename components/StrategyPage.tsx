@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback } from '../types';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
-import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity } from 'lucide-react';
+import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity, Edit2 } from 'lucide-react';
 
 interface StrategyPageProps {
     products: Product[];
@@ -16,10 +16,11 @@ interface StrategyPageProps {
     priceHistoryMap: Map<string, any[]>;
     promotions: PromotionEvent[];
     priceChangeHistory: PriceChangeRecord[];
+    onUpdatePriceChangeRecord?: (record: PriceChangeRecord) => void;
     velocityLookback: VelocityLookback; // Global setting passed down (used for Runway/Velocity)
 }
 
-const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], velocityLookback }) => {
+const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], onUpdatePriceChangeRecord, velocityLookback }) => {
     // ... (state definitions)
     const [config, setConfig] = useState<StrategyConfig>(() => {
         try {
@@ -56,6 +57,11 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     // Pagination State (History)
     const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
     const [historyItemsPerPage, setHistoryItemsPerPage] = useState(25);
+
+    // State for editing history records
+    const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+    const [editingDate, setEditingDate] = useState('');
+    const [recentlySavedId, setRecentlySavedId] = useState<string | null>(null);
 
     // --- LOGIC HELPERS ---
 
@@ -304,8 +310,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 // 2. Calculate Global Metrics (For Velocity, Runway, and Strategy Decision)
                 const global = calculateMetrics(p, velocityLookback, false);
                 
-                // 3. Run Strategy using GLOBAL velocity (but Local Margin for context? Usually Strategy relies on long term margin, but user requested separation. Let's use Global Margin for strategy decision to be safe/consistent with Runway)
-                const rec = getRecommendation(p, global.dailyVelocity, global.netPmPercent);
+                // PRIORITIZE ERP VELOCITY for Strategy Engine logic too (Consistent with App)
+                const strategyVelocity = (p.dailyAverageSales && p.dailyAverageSales > 0) 
+                    ? p.dailyAverageSales 
+                    : global.dailyVelocity;
+                
+                // 3. Run Strategy
+                const rec = getRecommendation(p, strategyVelocity, global.netPmPercent);
                 
                 return { 
                     ...p, 
@@ -317,7 +328,8 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                     totalProfit: local.totalProfit,
                     
                     // Strategy Columns (Global)
-                    dailyVelocity: global.dailyVelocity,                   
+                    dailyVelocity: strategyVelocity,
+                    
                     ...rec 
                 };
             })
@@ -345,6 +357,8 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
     const totalPages = Math.ceil(filteredAndSortedData.length / itemsPerPage);
 
+    // ... (rest of the file remains unchanged)
+    
     // --- Price Change History View Helpers ---
     
     const getAvgVelocity = (sku: string, startDate: Date, endDate: Date) => {
@@ -1104,13 +1118,26 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                     <th className="p-4 text-center"></th>
                                     <th className="p-4 text-left">New Price</th>
                                     <th className="p-4 text-center">Impact (7-Day Avg)</th>
+                                    <th className="p-4 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100/50">
-                                {paginatedHistoryData.map((row: any) => (
-                                    <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
+                                {paginatedHistoryData.map((row: any) => {
+                                    const isEditing = editingHistoryId === row.id;
+                                    return (
+                                    <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
                                         <td className="p-4 text-gray-500 text-xs">
-                                            {new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            {isEditing ? (
+                                                <input
+                                                    type="date"
+                                                    value={editingDate}
+                                                    onChange={(e) => setEditingDate(e.target.value)}
+                                                    className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white"
+                                                    autoFocus
+                                                />
+                                            ) : (
+                                                new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                                            )}
                                         </td>
                                         <td className="p-4">
                                             <div className="font-bold text-gray-900">{row.sku}</div>
@@ -1140,11 +1167,57 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                                 </span>
                                             </div>
                                         </td>
+                                        <td className="p-4 text-right">
+                                            {isEditing ? (
+                                                <div className="flex items-center justify-end gap-2 h-7">
+                                                    <button
+                                                        onClick={() => {
+                                                            if (onUpdatePriceChangeRecord && editingDate) {
+                                                                onUpdatePriceChangeRecord({ ...row, date: editingDate });
+                                                                setRecentlySavedId(row.id);
+                                                                setTimeout(() => setRecentlySavedId(null), 2500);
+                                                            }
+                                                            setEditingHistoryId(null);
+                                                        }}
+                                                        className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg"
+                                                        title="Save"
+                                                    >
+                                                        <Save className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setEditingHistoryId(null)}
+                                                        className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                                                        title="Cancel"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center justify-end gap-2 h-7">
+                                                    {recentlySavedId === row.id && (
+                                                        <span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1">
+                                                            <CheckCircle className="w-3 h-3" />
+                                                            Saved
+                                                        </span>
+                                                    )}
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingHistoryId(row.id);
+                                                            setEditingDate(new Date(row.date).toISOString().split('T')[0]);
+                                                        }}
+                                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                        title="Edit Date"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </td>
                                     </tr>
-                                ))}
+                                )})}
                                 {paginatedHistoryData.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="p-12 text-center text-gray-400">
+                                        <td colSpan={8} className="p-12 text-center text-gray-400">
                                             No price changes found.
                                         </td>
                                     </tr>

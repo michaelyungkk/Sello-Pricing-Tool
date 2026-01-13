@@ -1,6 +1,6 @@
-
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea } from 'recharts';
 import { ThresholdConfig } from '../services/thresholdsConfig';
@@ -49,19 +49,131 @@ const calculateQuantiles = (data: number[]) => {
     };
 };
 
-const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', footerContent }: any) => {
+const BoxPlotTooltip = ({ content, x, y, format }: any) => {
+    if (!content) return null;
+    const style: React.CSSProperties = {
+        position: 'fixed',
+        top: y,
+        left: x,
+        transform: 'translate(-50%, -100%) translateY(-8px)',
+        zIndex: 9999,
+        pointerEvents: 'none'
+    };
+    return createPortal(
+        <div style={style} className="bg-gray-900 text-white p-3 rounded-lg shadow-xl text-xs max-w-xs z-50 border border-gray-700 backdrop-blur-md bg-opacity-95 animate-in fade-in zoom-in duration-200">
+            <div className="font-bold mb-2 border-b border-gray-700 pb-1">{content.label} (n={content.n})</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                <span>Max:</span><span className="text-right font-mono">{format(content.max)}</span>
+                <span>Q3:</span><span className="text-right font-mono">{format(content.q3)}</span>
+                <span className="font-bold">Median:</span><span className="text-right font-mono font-bold">{format(content.median)}</span>
+                <span>Q1:</span><span className="text-right font-mono">{format(content.q1)}</span>
+                <span>Min:</span><span className="text-right font-mono">{format(content.min)}</span>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+
+const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOnly7, layout = 'horizontal', showAdOnlyFooter = false }: any) => {
+    const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number } | null>(null);
+
+    if (layout === 'vertical') {
+        const allStats = [data7, data30, data90].filter(Boolean);
+        if (allStats.length === 0) return <div className="h-full w-full flex items-center justify-center text-xs text-gray-400">No data</div>;
+
+        const globalMin = Math.min(...allStats.map(s => s.min));
+        const globalMax = Math.max(...allStats.map(s => s.max));
+        const range = globalMax - globalMin;
+
+        // Corrected: More robust and symmetrical padding calculation for the y-axis scale.
+        const padding = range > 0 ? range * 0.1 : Math.max(Math.abs(globalMin) * 0.2, 1);
+        const paddedMin = globalMin - padding;
+        const paddedMax = globalMax + padding;
+        const paddedRange = paddedMax - paddedMin;
+
+        const scaleY = (val: number) => {
+            if (paddedRange === 0) return 50;
+            return ((val - paddedMin) / paddedRange) * 100;
+        };
+        
+        const renderVerticalBar = (stats: any, label: string) => {
+            if (!stats) return <div className="flex-1" />;
+            return (
+                <div 
+                    className="h-full w-full flex flex-col items-center group relative"
+                    onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setTooltip({
+                            visible: true,
+                            content: { label, ...stats },
+                            x: rect.left + rect.width / 2,
+                            y: rect.top,
+                        });
+                    }}
+                    onMouseLeave={() => {
+                        setTooltip(null);
+                    }}
+                >
+                    <div className="relative w-8 flex-1">
+                        {/* Whisker line */}
+                        <div className="absolute left-1/2 -translate-x-1/2 w-px bg-gray-400" style={{ bottom: `${scaleY(stats.min)}%`, top: `${100 - scaleY(stats.max)}%` }} />
+                        {/* Box */}
+                        <div className="absolute left-1 right-1 border" style={{ bottom: `${scaleY(stats.q1)}%`, top: `${100 - scaleY(stats.q3)}%`, backgroundColor: `${color}20`, borderColor: color }} />
+                        {/* Median Line */}
+                        <div className="absolute left-1 right-1 h-0.5" style={{ bottom: `${scaleY(stats.median)}%`, backgroundColor: color }} />
+                        {/* Min/Max horizontal ticks */}
+                        <div className="absolute left-0 right-0 h-px bg-gray-400" style={{ bottom: `${scaleY(stats.min)}%` }} />
+                        <div className="absolute left-0 right-0 h-px bg-gray-400" style={{ bottom: `${scaleY(stats.max)}%` }} />
+                    </div>
+                    <div className="text-center text-[10px] font-bold text-gray-500 mt-2 h-8 flex flex-col justify-end items-center">
+                        {stats.n < 10 && <span className="text-[9px] text-amber-600 flex items-center gap-1 bg-amber-50 px-1 rounded mb-1"><AlertTriangle className="w-2.5 h-2.5"/> Low Data</span>}
+                        <span>{label}</span>
+                        <span className="font-normal text-gray-400">(n={stats.n})</span>
+                    </div>
+                </div>
+            );
+        };
+
+        return (
+            <div className="bg-white py-4 px-4 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col">
+                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                    <Activity className="w-3 h-3" /> {title}
+                </h4>
+                <div className="flex-1 flex relative pt-4 pb-2">
+                    {/* Y Axis */}
+                    <div className="absolute top-4 left-0 w-12 text-[9px] text-gray-400 font-mono" style={{ bottom: '48px' }}>
+                        {[0, 0.25, 0.5, 0.75, 1].map(p => (
+                            <div key={p} className="absolute w-full right-0" style={{ bottom: `${p * 100}%` }}>
+                                <span className="absolute right-full pr-2 -translate-y-1/2">{format(paddedMin + paddedRange * p)}</span>
+                                <div className="w-2 h-px bg-gray-200"></div>
+                            </div>
+                        ))}
+                    </div>
+                    {/* Chart Bars */}
+                    <div className="flex-1 flex justify-around gap-2 ml-12">
+                        {renderVerticalBar(data7, '7 Days')}
+                        {renderVerticalBar(data30, '30 Days')}
+                        {renderVerticalBar(data90, '90 Days')}
+                    </div>
+                </div>
+                {tooltip?.visible && <BoxPlotTooltip content={tooltip.content} x={tooltip.x} y={tooltip.y} format={format} />}
+            </div>
+        );
+    }
+    
+    // Default Horizontal Layout
     const renderBar = (stats: any, label: string, baselineMedian?: number) => {
         if (!stats) return <div className="h-8 flex items-center text-xs text-gray-400 pl-2">No data</div>;
         
         const range = stats.max - stats.min;
         const width = (val: number) => range === 0 ? 0 : ((val - stats.min) / range) * 100;
         
-        // Calculate delta vs 90d baseline
         let deltaInfo = null;
         if (baselineMedian !== undefined && stats.median !== undefined && baselineMedian !== 0) {
             const diff = ((stats.median - baselineMedian) / baselineMedian) * 100;
             const isPositive = diff > 0;
-            const isZero = diff === 0;
+            const isZero = Math.abs(diff) < 0.1;
             
             if (!isZero) {
                 deltaInfo = (
@@ -74,7 +186,21 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', foot
         }
 
         return (
-            <div className="mb-3">
+            <div 
+                className="mb-3"
+                onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setTooltip({
+                        visible: true,
+                        content: { label, ...stats },
+                        x: rect.left + rect.width / 2,
+                        y: rect.top,
+                    });
+                }}
+                onMouseLeave={() => {
+                    setTooltip(null);
+                }}
+            >
                 <div className="flex justify-between items-center mb-1">
                     <div className="flex items-center">
                         <span className="text-[10px] font-bold text-gray-500">{label} (n={stats.n})</span>
@@ -82,28 +208,21 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', foot
                     </div>
                     {stats.n < 10 && <span className="text-[9px] text-amber-600 flex items-center gap-1 bg-amber-50 px-1 rounded"><AlertTriangle className="w-2.5 h-2.5"/> Low Data</span>}
                 </div>
-                <div className="relative h-6 bg-gray-50 rounded border border-gray-100">
-                    {/* Range Line */}
+                <div className="relative h-6 rounded border border-gray-100">
                     <div className="absolute top-1/2 left-0 right-0 h-px bg-gray-300"></div>
-                    
-                    {/* Box */}
                     <div 
-                        className="absolute top-1 bottom-1 bg-opacity-20 border"
+                        className="absolute top-1 bottom-1 border"
                         style={{ 
                             left: `${width(stats.q1)}%`, 
                             width: `${width(stats.q3) - width(stats.q1)}%`,
-                            backgroundColor: color,
+                            backgroundColor: `${color}20`,
                             borderColor: color
                         }} 
                     />
-                    
-                    {/* Median */}
                     <div 
-                        className="absolute top-0 bottom-0 w-0.5 bg-gray-800"
-                        style={{ left: `${width(stats.median)}%` }} 
+                        className="absolute top-0 bottom-0 w-0.5"
+                        style={{ left: `${width(stats.median)}%`, backgroundColor: color }} 
                     />
-
-                    {/* Whiskers */}
                     <div className="absolute top-1 bottom-1 w-px bg-gray-400" style={{ left: '0%' }} />
                     <div className="absolute top-1 bottom-1 w-px bg-gray-400" style={{ right: '0%' }} />
                 </div>
@@ -117,7 +236,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', foot
     };
 
     return (
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between h-full">
             <div>
                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
                     <Activity className="w-3 h-3" /> {title}
@@ -126,7 +245,15 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', foot
                 {renderBar(data30, '30 Days', data90?.median)}
                 {renderBar(data90, '90 Days')}
             </div>
-            {footerContent}
+            {showAdOnlyFooter && adOnly7 !== undefined && (
+                <div className="mt-auto pt-2 border-t border-gray-100 bg-orange-50/50 -m-4 mt-2 px-4 py-2 rounded-b-xl">
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600 font-medium">Ad-Only Spend (7d):</span>
+                        <span className="font-bold text-orange-700">£{adOnly7.toFixed(2)}</span>
+                    </div>
+                </div>
+            )}
+            {tooltip?.visible && <BoxPlotTooltip content={tooltip.content} x={tooltip.x} y={tooltip.y} format={format} />}
         </div>
     );
 };
@@ -146,6 +273,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     });
     const [hoveredBubble, setHoveredBubble] = useState<any>(null);
     const [chartPeriod, setChartPeriod] = useState<string>('30 Days'); // New: Chart filter state
+    const [chartLayout, setChartLayout] = useState<'horizontal' | 'vertical'>('horizontal'); // New: Chart layout toggle
     
     // Focus Ref for scrolling
     const activeSignalRef = useRef<HTMLDivElement>(null);
@@ -302,17 +430,19 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             }
         }
 
-        // 6. Dead Stock (Matches Dashboard Logic)
+        // 6. Dead Stock (Matches Global Logic)
         const stockValue = product.stockLevel * (product.costPrice || 0);
-        // Uses local window periodSalesQty instead of global averageDailySales to respect date filter
-        if (stockValue > thresholds.deadStockMinValueGBP && periodSalesQty === 0) {
+        const globalVelocity = product.dailyAverageSales || product.averageDailySales || 0;
+        
+        // Consistent with ProductManagementPage: use global velocity check
+        if (stockValue > thresholds.deadStockMinValueGBP && globalVelocity === 0) {
             signals.push({ 
                 id: 'DORMANT_NO_SALES',
                 label: 'Dead Stock', 
                 severity: 'High',
                 color: 'text-gray-700 bg-gray-50 border-gray-200', 
                 icon: Package, 
-                desc: `High value dormant stock (£${stockValue.toFixed(0)}) with 0 sales in the last ${txDays} days.` 
+                desc: `High value dormant stock (£${stockValue.toFixed(0)}) with 0 velocity detected.` 
             });
         }
 
@@ -365,12 +495,53 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 d30: getDailyQtyStats(30),
                 d90: getDailyQtyStats(90)
             },
-            ads: {
-                // Correctly exclude ad-only rows (price === 0) from Per-Order distribution analysis
-                d7: getStats(7, t => t.price > 0 ? (t.adsSpend || 0) : null),
-                d30: getStats(30, t => t.price > 0 ? (t.adsSpend || 0) : null),
-                d90: getStats(90, t => t.price > 0 ? (t.adsSpend || 0) : null)
+            tacos: {
+                d7: getStats(7, t => { const revenue = t.price * t.velocity; if (revenue > 0) { const tacos = ((t.adsSpend || 0) / revenue) * 100; return Math.min(tacos, 300); } return null; }),
+                d30: getStats(30, t => { const revenue = t.price * t.velocity; if (revenue > 0) { const tacos = ((t.adsSpend || 0) / revenue) * 100; return Math.min(tacos, 300); } return null; }),
+                d90: getStats(90, t => { const revenue = t.price * t.velocity; if (revenue > 0) { const tacos = ((t.adsSpend || 0) / revenue) * 100; return Math.min(tacos, 300); } return null; })
+            },
+        };
+    }, [sortedTransactions]);
+
+    const tacosStats = useMemo(() => {
+        const calculateForDays = (days: number) => {
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - days);
+            const periodTx = sortedTransactions.filter(t => new Date(t.date) >= cutoff);
+            
+            let totalAdSpend = 0;
+            let totalRevenue = 0;
+            let adOnlySpend = 0;
+            
+            periodTx.forEach(t => {
+                const currentAdSpend = t.adsSpend || 0;
+                totalAdSpend += currentAdSpend;
+                
+                // @ts-ignore
+                const isSale = t._type !== 'REFUND_LOG' && t.price > 0 && t.velocity > 0;
+                if (isSale) {
+                    totalRevenue += t.price * t.velocity;
+                } else if (currentAdSpend > 0 && t.price === 0) {
+                    adOnlySpend += currentAdSpend;
+                }
+            });
+            
+            let tacosPct: number | string;
+            if (totalRevenue > 0) {
+                tacosPct = (totalAdSpend / totalRevenue) * 100;
+            } else if (totalAdSpend > 0) {
+                tacosPct = 'N/A (0 sales)';
+            } else {
+                tacosPct = 0;
             }
+            
+            return { totalAdSpend, totalRevenue, tacosPct, adOnlySpend };
+        };
+        
+        return {
+            d7: calculateForDays(7),
+            d30: calculateForDays(30),
+            d90: calculateForDays(90)
         };
     }, [sortedTransactions]);
 
@@ -508,6 +679,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         let list = sortedTransactions;
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - txDays);
+        cutoff.setHours(0, 0, 0, 0);
         list = list.filter(t => new Date(t.date) >= cutoff);
 
         if (txFilterPlatform !== 'All') {
@@ -523,6 +695,54 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         }
         return list; 
     }, [sortedTransactions, txFilterPlatform, txFilterType, txDays]);
+
+    const platformSubtotals = useMemo(() => {
+        const subtotals: Record<string, {
+            platform: string;
+            soldQty: number;
+            adSpend: number;
+            revenue: number; // Gross Sales Revenue
+            profit: number;  // Net Profit
+        }> = {};
+
+        let totalRevenueAllPlatforms = 0;
+
+        filteredTransactions.forEach(tx => {
+            const platform = tx.platform || 'Unknown';
+            if (!subtotals[platform]) {
+                subtotals[platform] = {
+                    platform,
+                    soldQty: 0,
+                    adSpend: 0,
+                    revenue: 0,
+                    profit: 0
+                };
+            }
+    
+            const group = subtotals[platform];
+    
+            // @ts-ignore
+            const isRefund = tx._type === 'REFUND_LOG' || tx.velocity < 0;
+            // @ts-ignore
+            const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
+    
+            if (!isRefund && !isAdRow) {
+                const txRevenue = tx.price * tx.velocity;
+                group.soldQty += tx.velocity;
+                group.revenue += txRevenue;
+                totalRevenueAllPlatforms += txRevenue;
+            }
+    
+            group.adSpend += tx.adsSpend || 0;
+            group.profit += tx.profit || 0; // profit is pre-calculated and handles refunds as negative
+        });
+    
+        return Object.values(subtotals).map(group => ({
+            ...group,
+            margin: group.revenue > 0 ? (group.profit / group.revenue) * 100 : 0,
+            revenueSharePct: totalRevenueAllPlatforms > 0 ? (group.revenue / totalRevenueAllPlatforms) * 100 : 0,
+        })).sort((a, b) => b.revenue - a.revenue);
+    }, [filteredTransactions]);
 
     const paginatedTransactions = useMemo(() => {
         return filteredTransactions.slice(0, txLimit);
@@ -713,50 +933,103 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             {/* ANALYTICS SECTION 1: Distributions */}
             {sortedTransactions.length > 0 && (
                 <div className="space-y-4">
-                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <BarChart2 className="w-5 h-5 text-indigo-600" />
-                        Distribution Analysis
-                        <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">Performance Distributions</span>
-                    </h3>
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <BarChart2 className="w-5 h-5 text-indigo-600" />
+                            Distribution Analysis
+                            <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">Performance Distributions</span>
+                        </h3>
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            <button 
+                                onClick={() => setChartLayout('horizontal')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'horizontal' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            >
+                                <Rows className="w-3 h-3" /> Horizontal
+                            </button>
+                            <button 
+                                onClick={() => setChartLayout('vertical')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'vertical' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            >
+                                <LayoutGrid className="w-3 h-3" /> Vertical
+                            </button>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                        <BoxPlot 
-                            title="Revenue per Order" 
-                            data7={analytics.revenue.d7} 
-                            data30={analytics.revenue.d30} 
-                            data90={analytics.revenue.d90}
-                            format={(v: number) => `£${v.toFixed(2)}`}
-                            color="#3b82f6"
-                        />
-                        <BoxPlot 
-                            title="Net Profit Margin" 
-                            data7={analytics.margin.d7} 
-                            data30={analytics.margin.d30} 
-                            data90={analytics.margin.d90}
-                            format={(v: number) => `${v.toFixed(1)}%`}
-                            color="#10b981"
-                        />
-                        <BoxPlot 
-                            title="Daily Units Sold" 
-                            data7={analytics.qty.d7} 
-                            data30={analytics.qty.d30} 
-                            data90={analytics.qty.d90}
-                            format={(v: number) => v.toFixed(0)}
-                            color="#8b5cf6"
-                        />
-                        <BoxPlot 
-                            title="Ad Spend (Per Order)" 
-                            data7={analytics.ads.d7} 
-                            data30={analytics.ads.d30} 
-                            data90={analytics.ads.d90}
-                            format={(v: number) => `£${v.toFixed(2)}`}
-                            color="#f59e0b"
-                            footerContent={
-                                <div className="mt-3 text-[10px] text-gray-500 border-t border-gray-100 pt-2 flex justify-between items-center bg-orange-50/30 -mx-4 -mb-4 px-4 py-2 rounded-b-xl">
-                                    <span className="font-medium">Ad-Only Spend ({txDays}d):</span>
-                                    <span className="font-mono font-bold text-orange-700">£{adStats.adOnly.toFixed(2)}</span>
+                        <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
+                            <BoxPlot 
+                                title="Revenue per Order" 
+                                data7={analytics.revenue.d7} 
+                                data30={analytics.revenue.d30} 
+                                data90={analytics.revenue.d90}
+                                format={(v: number) => `£${v.toFixed(0)}`}
+                                color="#3b82f6"
+                                layout={chartLayout}
+                            />
+                        </div>
+                        <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
+                            <BoxPlot 
+                                title="Net Profit Margin" 
+                                data7={analytics.margin.d7} 
+                                data30={analytics.margin.d30} 
+                                data90={analytics.margin.d90}
+                                format={(v: number) => `${v.toFixed(1)}%`}
+                                color="#10b981"
+                                layout={chartLayout}
+                            />
+                        </div>
+                        <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
+                            <BoxPlot 
+                                title="Daily Units Sold" 
+                                data7={analytics.qty.d7} 
+                                data30={analytics.qty.d30} 
+                                data90={analytics.qty.d90}
+                                format={(v: number) => v.toFixed(0)}
+                                color="#8b5cf6"
+                                layout={chartLayout}
+                            />
+                        </div>
+                        <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
+                           <BoxPlot
+                                title="Ad Spend / TACoS"
+                                data7={analytics.tacos.d7}
+                                data30={analytics.tacos.d30}
+                                data90={analytics.tacos.d90}
+                                format={(v: number) => `${v.toFixed(1)}%`}
+                                color="#f97316"
+                                layout={chartLayout}
+                                showAdOnlyFooter={true}
+                                adOnly7={tacosStats.d7.adOnlySpend}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                            <Megaphone className="w-3 h-3 text-orange-500" /> Advertising Efficiency (TACoS)
+                        </h4>
+                        <div className="grid grid-cols-3 gap-4 text-center divide-x divide-gray-100">
+                            <div>
+                                <div className={`text-xl font-bold ${typeof tacosStats.d7.tacosPct === 'number' && tacosStats.d7.tacosPct > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-800'}`}>
+                                    {typeof tacosStats.d7.tacosPct === 'number' ? `${tacosStats.d7.tacosPct.toFixed(1)}%` : tacosStats.d7.tacosPct}
                                 </div>
-                            }
-                        />
+                                <div className="text-xs text-gray-500 mt-1">7 Days</div>
+                            </div>
+                            <div>
+                                <div className={`text-xl font-bold ${typeof tacosStats.d30.tacosPct === 'number' && tacosStats.d30.tacosPct > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-800'}`}>
+                                    {typeof tacosStats.d30.tacosPct === 'number' ? `${tacosStats.d30.tacosPct.toFixed(1)}%` : tacosStats.d30.tacosPct}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">30 Days</div>
+                            </div>
+                            <div>
+                                <div className={`text-xl font-bold ${typeof tacosStats.d90.tacosPct === 'number' && tacosStats.d90.tacosPct > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-800'}`}>
+                                    {typeof tacosStats.d90.tacosPct === 'number' ? `${tacosStats.d90.tacosPct.toFixed(1)}%` : tacosStats.d90.tacosPct}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">90 Days</div>
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-3 text-center italic">
+                            Total Ad Spend / Total Sales Revenue. Includes ad-only spend.
+                        </p>
                     </div>
                 </div>
             )}
@@ -790,9 +1063,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     Aggregated Volume by Price Delta
                                 </h4>
                                 <div className="text-[10px] text-gray-400 flex items-center gap-2">
-                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 opacity-20 rounded-full"></div> Safe ({'>'}-5%)</span>
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 opacity-20 rounded-full"></div> Safe ({'>'} {'-5%'})</span>
                                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-500 opacity-20 rounded-full"></div> Moderate (-5% to -15%)</span>
-                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-500 opacity-20 rounded-full"></div> Severe ({'<'}-15%)</span>
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-500 opacity-20 rounded-full"></div> Severe ({'<'} {'-15%'})</span>
                                 </div>
                             </div>
 
@@ -882,7 +1155,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
             )}
 
-            {/* ANALYTICS SECTION 3: Transaction Table (Unchanged) */}
+            {/* ANALYTICS SECTION 3: Transaction Table */}
             {sortedTransactions.length > 0 && (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center">
@@ -921,8 +1194,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="All">All Types</option>
-                                    <option value="Sale">Sale (Price {'>'} 0)</option>
-                                    <option value="Ad Cost">Ad Cost (Ads {'>'} 0)</option>
+                                    <option value="Sale">Sale (Price > 0)</option>
+                                    <option value="Ad Cost">Ad Cost (Ads > 0)</option>
                                     <option value="Refund">Refunds Only</option>
                                 </select>
                                 <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
@@ -955,6 +1228,55 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 {ledgerStats.refundCount}
                                 {ledgerStats.refundValue > 0 && <span className="text-sm font-medium opacity-70">(-£{ledgerStats.refundValue.toFixed(0)})</span>}
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Platform Subtotals */}
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in">
+                        <div className="p-3 bg-gray-50/50 border-b border-gray-100">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase">Platform Subtotals (for period)</h4>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                            {platformSubtotals.map(sub => (
+                                <div key={sub.platform} className="flex items-center justify-between px-4 py-2 hover:bg-gray-50">
+                                    <span className="font-bold text-sm text-gray-800 w-1/5">{sub.platform}</span>
+                                    <div className="flex items-center justify-end gap-4 text-xs w-4/5">
+                                        <div className="text-right w-20">
+                                            <div className="text-gray-400">Qty Sold</div>
+                                            <div className="font-mono font-bold text-gray-700">{sub.soldQty.toLocaleString()}</div>
+                                        </div>
+                                        <div className="text-right w-24">
+                                            <div className="text-gray-400">Ad Spend</div>
+                                            <div className="font-mono font-bold text-orange-600">£{sub.adSpend.toFixed(2)}</div>
+                                        </div>
+                                        <div className="text-right w-24">
+                                            <div className="text-gray-400">Revenue</div>
+                                            <div className="font-mono font-bold text-indigo-600">£{sub.revenue.toFixed(2)}</div>
+                                        </div>
+                                        <div className="text-right w-20">
+                                            <div className="text-gray-400">Sales Share %</div>
+                                            <div className="font-mono font-bold text-gray-700">
+                                                {sub.revenueSharePct.toFixed(1)}%
+                                            </div>
+                                        </div>
+                                        <div className="text-right w-24">
+                                            <div className="text-gray-400">Profit</div>
+                                            <div className={`font-mono font-bold ${sub.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                £{sub.profit.toFixed(2)}
+                                            </div>
+                                        </div>
+                                        <div className="text-right w-20">
+                                            <div className="text-gray-400">Margin %</div>
+                                            <div className={`font-mono font-bold ${sub.margin >= thresholds.marginBelowTargetPct ? 'text-green-600' : sub.margin >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                                                {sub.margin.toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {platformSubtotals.length === 0 && (
+                                <div className="p-4 text-center text-gray-400 text-xs italic">No sales data for this period.</div>
+                            )}
                         </div>
                     </div>
 

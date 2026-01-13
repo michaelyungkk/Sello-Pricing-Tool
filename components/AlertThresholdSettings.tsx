@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { ThresholdConfig, getThresholdConfig, saveThresholdConfig, resetThresholdConfig, DEFAULT_THRESHOLDS } from '../services/thresholdsConfig';
 import { Save, RefreshCw, AlertTriangle, Activity, Info } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface AlertThresholdSettingsProps {
     themeColor: string;
@@ -10,49 +10,49 @@ interface AlertThresholdSettingsProps {
 
 const SETTING_META: Record<keyof ThresholdConfig, { label: string; unit: string; usedBy: string; description: string }> = {
     marginBelowTargetPct: {
-        label: 'Low Margin Threshold',
+        label: 'low_margin_threshold',
         unit: '%',
         usedBy: 'Dashboard: Margin Thieves, Deep Dive: Margin Compression',
         description: 'Products with net margin below this value are flagged as critical.'
     },
     velocityCrashPct: {
-        label: 'Velocity Crash (Heavy)',
+        label: 'velocity_crash',
         unit: '%',
         usedBy: 'Dashboard: Velocity Crashes',
         description: 'Trigger for high-priority velocity drop alerts on the dashboard.'
     },
     velocityDropPct: {
-        label: 'Velocity Drop (Standard)',
+        label: 'velocity_drop',
         unit: '%',
         usedBy: 'Deep Dive: Velocity Drop',
         description: 'Standard sensitivity for detecting negative momentum in Deep Dive.'
     },
     stockoutRunwayMultiplier: {
-        label: 'Stockout Lead Time Buffer',
+        label: 'stockout_buffer',
         unit: 'x',
         usedBy: 'Dashboard: Stockout Risk, Deep Dive: Stockout Risk',
         description: 'Multiplier for Lead Time. If Runway < (Lead Time * Multiplier), flag risk.'
     },
     overstockDays: {
-        label: 'Overstock Definition',
+        label: 'overstock_definition',
         unit: 'Days',
         usedBy: 'Dashboard: Overstock Risk, Deep Dive: Overstock',
         description: 'Inventory covering more than these days is considered overstock.'
     },
     deadStockMinValueGBP: {
-        label: 'Dead Stock Min Value',
+        label: 'dead_stock_value',
         unit: '£',
         usedBy: 'Dashboard: Dead Stock, Deep Dive: Dead Stock',
         description: 'Minimum stock value required to flag an item with 0 sales as Dead Stock.'
     },
     returnRatePct: {
-        label: 'High Return Rate',
+        label: 'high_return_rate',
         unit: '%',
         usedBy: 'Deep Dive: Elevated Returns',
         description: 'Return rate percentage that triggers a quality warning.'
     },
     highAdDependencyPct: {
-        label: 'High Ad Dependency',
+        label: 'high_ad_dependency',
         unit: '%',
         usedBy: 'Deep Dive: High Ad Dependency',
         description: 'Maximum healthy TACoS. Exceeding this triggers dependency alerts.'
@@ -60,6 +60,7 @@ const SETTING_META: Record<keyof ThresholdConfig, { label: string; unit: string;
 };
 
 const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeColor, onSaveComplete }) => {
+    const { t } = useTranslation();
     const [config, setConfig] = useState<ThresholdConfig>(DEFAULT_THRESHOLDS);
     const [isDirty, setIsDirty] = useState(false);
     const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -144,7 +145,7 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                             <div key={key} className="bg-white p-6 hover:bg-gray-50 transition-colors group">
                                 <div className="flex justify-between items-start mb-2">
                                     <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                                        {meta.label}
+                                        {t(meta.label)}
                                         {!valid && <AlertTriangle className="w-4 h-4 text-red-500" />}
                                     </label>
                                     <div className="flex items-center gap-2">

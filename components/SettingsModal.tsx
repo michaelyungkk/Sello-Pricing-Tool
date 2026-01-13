@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
 import { PricingRules, Platform } from '../types';
 import { X, Save, Percent, Coins } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface SettingsModalProps {
   currentRules: PricingRules;
@@ -12,6 +12,7 @@ interface SettingsModalProps {
 const PLATFORMS: Platform[] = ['Amazon', 'eBay', 'The Range', 'ManoMano', 'Mirikal'];
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ currentRules, onClose, onSave }) => {
+  const { t } = useTranslation();
   const [rules, setRules] = useState<PricingRules>(JSON.parse(JSON.stringify(currentRules)));
 
   const handleMarkupChange = (platform: Platform, value: string) => {
@@ -41,8 +42,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ currentRules, onClose, on
         {/* Header */}
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Platform Settings</h2>
-            <p className="text-sm text-gray-500 mt-1">Configure fees and strategic adjustments per marketplace.</p>
+            <h2 className="text-xl font-bold text-gray-900">{t('settings_title')}</h2>
+            <p className="text-sm text-gray-500 mt-1">{t('settings_desc')}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
             <X className="w-5 h-5 text-gray-500" />
@@ -53,7 +54,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ currentRules, onClose, on
         <div className="p-6 flex-1 overflow-y-auto">
           <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 mb-6">
             <p className="text-sm text-indigo-800">
-              <strong>Tip:</strong> Accurate commission rates help the AI protect your margins while optimizing for sales velocity.
+              <strong>{t('settings_tip')}</strong>
             </p>
           </div>
 
@@ -119,14 +120,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ currentRules, onClose, on
             onClick={onClose}
             className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200 rounded-lg transition-colors"
           >
-            Cancel
+            {t('cancel')}
           </button>
           <button 
             onClick={handleSave}
             className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md shadow-indigo-200 transition-all flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
-            Save Rules
+            {t('save')}
           </button>
         </div>
       </div>

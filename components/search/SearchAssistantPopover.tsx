@@ -1,9 +1,9 @@
-
 import React, { useMemo } from 'react';
 import { ChipSelectionState, Suggestion, SuggestionPriority } from './types';
 import { getSuggestions } from './suggestionEngine';
 import { TrendingUp, AlertTriangle, Package, Search, Zap, TrendingDown, DollarSign, Activity, BarChart2, ShoppingBag, Clock, ArrowRight, Filter, Globe, Tag } from 'lucide-react';
 import { Product } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 interface SearchAssistantPopoverProps {
   state: ChipSelectionState;
@@ -31,6 +31,7 @@ const KindIcon = ({ kind }: { kind: string }) => {
 }
 
 export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ state, onApply, onClear, isVisible, products = [] }) => {
+  const { t } = useTranslation();
   const suggestions = useMemo(() => getSuggestions(state, products), [state, products]);
 
   if (!isVisible) return null;
@@ -41,7 +42,7 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
         <div className="absolute top-full left-0 mt-2 w-full max-w-3xl bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
             <div className="p-4 bg-indigo-50/50 border-b border-indigo-100 flex items-center gap-2">
                 <Tag className="w-4 h-4 text-indigo-600" />
-                <span className="text-xs font-bold text-indigo-700 uppercase">Product Search Mode</span>
+                <span className="text-xs font-bold text-indigo-700 uppercase">{t('search_assistant_sku_mode')}</span>
             </div>
             <div className="p-2">
                 {suggestions.skuSuggestions.length > 0 ? (
@@ -60,13 +61,17 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
                     </div>
                 ) : (
                     <div className="p-8 text-center text-gray-400 text-sm">
-                        No products found matching "{state.searchText.replace(/^sku[:\s]+/, '')}"
+                        {t('search_assistant_no_products', { query: state.searchText.replace(/^sku[:\s]+/, '') })}
                     </div>
                 )}
             </div>
         </div>
       );
   }
+
+  // Only show platform suggestions if the user has typed something to refine scope
+  // This effectively removes the static "preset" list while keeping search functionality
+  const showPlatforms = state.searchText.trim().length > 0;
 
   return (
     <div className="absolute top-full left-0 mt-2 w-full max-w-3xl bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
@@ -79,7 +84,7 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
           {suggestions.metricSuggestions.length > 0 && (
             <div>
               <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                <Search className="w-3 h-3" /> Analyze What?
+                <Search className="w-3 h-3" /> {t('search_assistant_analyze')}
               </h4>
               <div className="grid grid-cols-2 gap-2">
                 {suggestions.metricSuggestions.map(s => (
@@ -101,7 +106,7 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
           {suggestions.conditionSuggestions.length > 0 && (
             <div>
               <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                <Activity className="w-3 h-3" /> Which Condition?
+                <Activity className="w-3 h-3" /> {t('search_assistant_condition')}
               </h4>
               <div className="flex flex-wrap gap-2">
                 {suggestions.conditionSuggestions.map(s => (
@@ -127,7 +132,7 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
           {suggestions.shortcutSuggestions.length > 0 && (
             <div>
               <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                <Zap className="w-3 h-3" /> Quick Shortcuts
+                <Zap className="w-3 h-3" /> {t('search_assistant_shortcuts')}
               </h4>
               <div className="space-y-2">
                 {suggestions.shortcutSuggestions.map(s => (
@@ -150,10 +155,10 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
           )}
 
           {/* Section 4: Refine Scope (Time & Platform) */}
-          {(suggestions.timeSuggestions.length > 0 || suggestions.platformSuggestions.length > 0) && (
+          {(suggestions.timeSuggestions.length > 0 || (showPlatforms && suggestions.platformSuggestions.length > 0)) && (
             <div>
                 <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                    <Filter className="w-3 h-3" /> Refine Scope
+                    <Filter className="w-3 h-3" /> {t('search_assistant_refine')}
                 </h4>
                 
                 {/* Time */}
@@ -174,8 +179,8 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
                     </div>
                 )}
 
-                {/* Platforms */}
-                {suggestions.platformSuggestions.length > 0 && (
+                {/* Platforms - Only shown if searching */}
+                {showPlatforms && suggestions.platformSuggestions.length > 0 && (
                     <div>
                         <div className="flex flex-wrap gap-2">
                             {suggestions.platformSuggestions.map(s => (
@@ -197,10 +202,10 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
           {/* Footer Actions */}
           <div className="pt-4 border-t border-gray-200/50 flex justify-between items-center">
              <span className="text-[10px] text-gray-400">
-               Suggestions adapt to your selection
+               {t('search_assistant_footer')}
              </span>
              <button onClick={onClear} className="text-[10px] font-bold text-gray-500 hover:text-red-600 transition-colors">
-               Clear All Filters
+               {t('search_assistant_clear')}
              </button>
           </div>
         </div>

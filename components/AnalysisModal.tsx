@@ -1,8 +1,8 @@
-
 import React from 'react';
 import { Product, AnalysisResult } from '../types';
 import StockChart from './StockChart';
 import { Check, AlertTriangle, X, TrendingUp, TrendingDown, WifiOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface AnalysisModalProps {
   product: Product;
@@ -14,6 +14,7 @@ interface AnalysisModalProps {
 }
 
 const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoading, onClose, onApplyPrice, themeColor }) => {
+  const { t } = useTranslation();
   if (!product) return null;
 
   const isOffline = analysis?.reasoning?.includes('[OFFLINE MODE]');
@@ -42,19 +43,19 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-4">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: themeColor }}></div>
-              <p className="text-gray-500 animate-pulse">Consulting Gemini AI...</p>
+              <p className="text-gray-500 animate-pulse">{t('analysis_consulting_ai')}</p>
             </div>
           ) : analysis ? (
             <div className="space-y-8">
               {/* Top Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 bg-blue-50/80 rounded-xl border border-blue-100">
-                  <p className="text-sm text-blue-600 mb-1 font-medium">Current Status</p>
+                  <p className="text-sm text-blue-600 mb-1 font-medium">{t('analysis_current_status')}</p>
                   <div className="flex items-end gap-2">
                     <span className="text-2xl font-bold text-blue-900">{analysis.daysRemaining.toFixed(0)} Days</span>
-                    <span className="text-sm text-blue-700 mb-1">stock remaining</span>
+                    <span className="text-sm text-blue-700 mb-1">{t('stock_remaining')}</span>
                   </div>
-                  <p className="text-xs text-blue-500 mt-2">Restock in {product.leadTimeDays} days</p>
+                  <p className="text-xs text-blue-500 mt-2">{t('restock_in_days', { days: product.leadTimeDays })}</p>
                 </div>
 
                 <div className={`p-4 rounded-xl border ${
@@ -68,7 +69,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
                     analysis.status === 'Warning' ? 'text-amber-600' :
                     analysis.status === 'Overstock' ? 'text-orange-600' :
                     'text-green-600'
-                  }`}>Health Assessment</p>
+                  }`}>{t('analysis_health_assessment')}</p>
                   <div className="flex items-center gap-2">
                     {analysis.status === 'Critical' && <AlertTriangle className="w-6 h-6 text-red-600" />}
                     <span className={`text-2xl font-bold ${
@@ -81,18 +82,18 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
                 </div>
 
                 <div className="p-4 rounded-xl border flex flex-col justify-between" style={{ backgroundColor: `${themeColor}10`, borderColor: `${themeColor}20` }}>
-                  <p className="text-sm font-medium" style={{ color: themeColor }}>Recommended Action</p>
+                  <p className="text-sm font-medium" style={{ color: themeColor }}>{t('analysis_recommended_action')}</p>
                   <div className="flex items-center gap-3 mt-1">
                     <div>
                       <span className="text-2xl font-bold text-gray-900">£{analysis.recommendedPrice.toFixed(2)}</span>
-                      <span className="text-xs text-gray-500 ml-2">Currently £{product.currentPrice}</span>
+                      <span className="text-xs text-gray-500 ml-2">{t('currently_price', { price: product.currentPrice.toFixed(2) })}</span>
                     </div>
                   </div>
                   <div className={`text-sm mt-2 font-semibold flex items-center gap-1 ${
                     analysis.percentageChange > 0 ? 'text-emerald-600' : analysis.percentageChange < 0 ? 'text-red-600' : 'text-gray-500'
                   }`}>
                     {analysis.percentageChange > 0 ? <TrendingUp className="w-4 h-4" /> : analysis.percentageChange < 0 ? <TrendingDown className="w-4 h-4" /> : null}
-                    {analysis.percentageChange > 0 ? '+' : ''}{analysis.percentageChange}% Adjustment
+                    {analysis.percentageChange > 0 ? '+' : ''}{analysis.percentageChange.toFixed(2)}{t('adjustment_percent')}
                   </div>
                 </div>
               </div>
@@ -101,12 +102,12 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
               <div className={`bg-white/80 border rounded-xl p-5 shadow-sm ${isOffline ? 'border-amber-200' : 'border-gray-200'}`}>
                 <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isOffline ? '#d97706' : themeColor }}></span>
-                  {isOffline ? 'Offline Simulation Engine' : 'AI Strategy Reasoning'}
+                  {isOffline ? t('analysis_offline_engine') : t('analysis_ai_reasoning')}
                   {isOffline && <WifiOff className="w-3.5 h-3.5 text-amber-500" />}
                 </h3>
                 {isOffline && (
                     <div className="mb-3 text-[10px] uppercase font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block border border-amber-100">
-                        Connection Limit Reached: Using Local Math
+                        {t('analysis_connection_limit')}
                     </div>
                 )}
                 <p className="text-gray-600 leading-relaxed">{analysis.reasoning}</p>
@@ -138,7 +139,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
             onClick={onClose}
             className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200/50 rounded-lg transition-colors"
           >
-            Cancel
+            {t('cancel')}
           </button>
           {analysis && (
             <button 
@@ -147,7 +148,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
               style={{ backgroundColor: themeColor, boxShadow: `0 4px 6px -1px ${themeColor}40` }}
             >
               <Check className="w-4 h-4" />
-              Apply New Price
+              {t('apply_new_price')}
             </button>
           )}
         </div>

@@ -1,7 +1,7 @@
-
 import React, { useState, useRef } from 'react';
 import { Upload, X, FileText, Check, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useTranslation } from 'react-i18next';
 
 interface CostUploadModalProps {
   onClose: () => void;
@@ -9,6 +9,7 @@ interface CostUploadModalProps {
 }
 
 const CostUploadModal: React.FC<CostUploadModalProps> = ({ onClose, onConfirm }) => {
+  const { t } = useTranslation();
   const [dragActive, setDragActive] = useState(false);
   const [parsedItems, setParsedItems] = useState<{ sku: string; cost: number; status: 'valid' | 'error' }[] | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -189,7 +190,7 @@ const CostUploadModal: React.FC<CostUploadModalProps> = ({ onClose, onConfirm })
         </div>
 
         <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-gray-700">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 text-gray-700">{t('cancel')}</button>
             {validItems.length > 0 && (
                 <button 
                     onClick={() => onConfirm(validItems)}

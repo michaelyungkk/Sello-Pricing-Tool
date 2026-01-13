@@ -1,4 +1,5 @@
 
+
 // ... existing imports ...
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES, DEFAULT_SEARCH_CONFIG, VAT_MULTIPLIER } from './constants';
@@ -118,10 +119,18 @@ const recalculateProductMetrics = (
             }
         });
 
-        const newDailySales = currentQty / days;
-        const newPrevDailySales = prevQty / days;
+        // Calculated actuals from history
+        const calculatedDailySales = currentQty / days;
+        const calculatedPrevDailySales = prevQty / days;
         
-        const daysRemaining = newDailySales > 0 ? p.stockLevel / newDailySales : 999;
+        // PRIORITIZE ERP VELOCITY for Inventory Logic
+        // If dailyAverageSales (ERP) is present and > 0, use it. Otherwise fallback to calculated.
+        const effectiveDailySales = (p.dailyAverageSales && p.dailyAverageSales > 0) 
+            ? p.dailyAverageSales 
+            : calculatedDailySales;
+
+        // Inventory Logic uses Effective Velocity
+        const daysRemaining = effectiveDailySales > 0 ? p.stockLevel / effectiveDailySales : 999;
         
         let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
         if (p.stockLevel <= 0) status = 'Critical';
@@ -129,17 +138,19 @@ const recalculateProductMetrics = (
         else if (daysRemaining > thresholds.overstockDays) status = 'Overstock';
         else if (daysRemaining < p.leadTimeDays * (thresholds.stockoutRunwayMultiplier + 0.5)) status = 'Warning';
 
-        const velocityChange = newPrevDailySales > 0 
-            ? ((newDailySales - newPrevDailySales) / newPrevDailySales) * 100 
+        // Trend Logic uses Actuals (Apples-to-Apples comparison)
+        const velocityChange = calculatedPrevDailySales > 0 
+            ? ((calculatedDailySales - calculatedPrevDailySales) / calculatedPrevDailySales) * 100 
             : 0;
 
         return {
             ...p,
-            averageDailySales: newDailySales,
-            previousDailySales: newPrevDailySales,
+            averageDailySales: effectiveDailySales, // Global Velocity -> ERP Preferred
+            previousDailySales: calculatedPrevDailySales, // Trend Context -> Actuals
             daysRemaining,
             status,
-            _trendData: { velocityChange }
+            _trendData: { velocityChange },
+            dailyAverageSales: p.dailyAverageSales // Persist ERP Value
         };
     });
 };
@@ -353,10 +364,10 @@ const App: React.FC = () => {
                 
                 setProducts(recalculatedProducts);
                 
-                alert("Database restored & recalculated successfully!");
+                alert(t('alert_db_restore_success'));
             } catch (err) {
                 console.error("Restore failed", err);
-                alert("Failed to restore database. Invalid file format.");
+                alert(t('alert_db_restore_fail'));
             }
         };
         reader.readAsText(file);
@@ -369,18 +380,26 @@ const App: React.FC = () => {
         setIsReturnsModalOpen(false);
     };
 
+    const handleUpdatePriceChangeRecord = (recordToUpdate: PriceChangeRecord) => {
+        setPriceChangeHistory(prev =>
+          prev.map(record =>
+            record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record
+          )
+        );
+    };
+
     const QuickUploadMenu = () => { 
         const [isOpen, setIsOpen] = useState(false); 
         const menuRef = useRef<HTMLDivElement>(null); 
         useEffect(() => { const handleClickOutside = (event: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(event.target as Node)) { setIsOpen(false); } }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []); 
         const actions = [ 
-            { label: 'Import Inventory', icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-indigo-600' }, 
-            { label: 'Import Sales', icon: FileBarChart, action: () => setIsSalesImportModalOpen(true), color: 'text-blue-600' }, 
-            { label: 'Import Refunds', icon: RotateCcw, action: () => setIsReturnsModalOpen(true), color: 'text-red-600' }, 
-            { label: 'SKU Detail', icon: FileText, action: () => setIsSkuDetailModalOpen(true), color: 'text-teal-600' }, 
-            { label: 'CA Report', icon: Upload, action: () => setIsCAUploadModalOpen(true), color: 'text-purple-600' }, 
-            { label: 'SKU Mapping', icon: LinkIcon, action: () => setIsMappingModalOpen(true), color: 'text-amber-600' }, 
-            { label: 'Shipment Import', icon: Ship, action: () => setIsShipmentModalOpen(true), color: 'text-teal-600' }, 
+            { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-indigo-600' }, 
+            { label: t('quick_upload_sales'), icon: FileBarChart, action: () => setIsSalesImportModalOpen(true), color: 'text-blue-600' }, 
+            { label: t('quick_upload_refunds'), icon: RotateCcw, action: () => setIsReturnsModalOpen(true), color: 'text-red-600' }, 
+            { label: t('quick_upload_sku_detail'), icon: FileText, action: () => setIsSkuDetailModalOpen(true), color: 'text-teal-600' }, 
+            { label: t('quick_upload_ca_report'), icon: Upload, action: () => setIsCAUploadModalOpen(true), color: 'text-purple-600' }, 
+            { label: t('quick_upload_sku_mapping'), icon: LinkIcon, action: () => setIsMappingModalOpen(true), color: 'text-amber-600' }, 
+            { label: t('quick_upload_shipment'), icon: Ship, action: () => setIsShipmentModalOpen(true), color: 'text-teal-600' }, 
         ]; 
         return ( <div className="relative z-50" ref={menuRef}> <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md transition-all font-medium" style={{ backgroundColor: userProfile.themeColor }}> <UploadCloud className="w-4 h-4" /> <span className="hidden md:inline">{t('upload_data')}</span> <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} /> </button> {isOpen && ( <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right"> <div className="p-2 grid gap-1"> {actions.map((item) => ( <button key={item.label} onClick={() => { item.action(); setIsOpen(false); }} className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-left w-full group" > <div className={`p-1.5 rounded-md bg-gray-50 group-hover:bg-white border border-gray-100 group-hover:shadow-sm transition-all ${item.color}`}> <item.icon className="w-4 h-4" /> </div> <span className="font-medium">{item.label}</span> </button> ))} </div> </div> )} </div> ); 
     };
@@ -413,7 +432,8 @@ const App: React.FC = () => {
                 profit: h.profit, 
                 adsSpend: h.adsSpend, 
                 platform: h.platform, 
-                orderId: h.orderId 
+                orderId: h.orderId,
+                postcode: h.postcode
             })); 
             
             // Merge logic (filter dups)
@@ -485,7 +505,7 @@ const App: React.FC = () => {
     };
 
     const handleResetSalesData = () => { setPriceHistory([]); setProducts(prev => prev.map(p => ({ ...p, averageDailySales: 0, previousDailySales: 0, daysRemaining: p.stockLevel > 0 ? 999 : 0, status: p.stockLevel > 0 ? 'Overstock' : 'Critical' }))); setShipmentHistory([]); setIsSalesImportModalOpen(false); };
-    const handleInventoryImport = (data: any[]) => { setProducts(prev => { const skuMap = new Map<string, Product>(); prev.forEach(p => skuMap.set(p.sku, p)); const newProducts = [...prev]; data.forEach(item => { const existingIndex = newProducts.findIndex(p => p.sku === item.sku); const existing = existingIndex !== -1 ? { ...newProducts[existingIndex] } : undefined; if (existing) { if (item.stock !== undefined) existing.stockLevel = item.stock; if (item.agedStock !== undefined) existing.agedStockQty = item.agedStock; if (item.cost !== undefined) existing.costPrice = item.cost; if (item.name) existing.name = item.name; if (item.category) existing.category = item.category; if (item.subcategory) existing.subcategory = item.subcategory; if (item.brand) existing.brand = item.brand; if (item.inventoryStatus) existing.inventoryStatus = item.inventoryStatus; if (item.cartonDimensions) existing.cartonDimensions = item.cartonDimensions; existing.lastUpdated = new Date().toISOString().split('T')[0]; newProducts[existingIndex] = existing; } else { newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, brand: item.brand, category: item.category || 'Uncategorized', subcategory: item.subcategory, stockLevel: item.stock || 0, agedStockQty: item.agedStock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: 0, leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: new Date().toISOString().split('T')[0], inventoryStatus: item.inventoryStatus, cartonDimensions: item.cartonDimensions }); } }); return newProducts; }); setIsUploadModalOpen(false); };
+    const handleInventoryImport = (data: any[]) => { setProducts(prev => { const skuMap = new Map<string, Product>(); prev.forEach(p => skuMap.set(p.sku, p)); const newProducts = [...prev]; data.forEach(item => { const existingIndex = newProducts.findIndex(p => p.sku === item.sku); const existing = existingIndex !== -1 ? { ...newProducts[existingIndex] } : undefined; if (existing) { if (item.stock !== undefined) existing.stockLevel = item.stock; if (item.agedStock !== undefined) existing.agedStockQty = item.agedStock; if (item.cost !== undefined) existing.costPrice = item.cost; if (item.gradeLevel !== undefined) existing.gradeLevel = item.gradeLevel; if (item.dailyAverageSales !== undefined) existing.dailyAverageSales = item.dailyAverageSales; if (item.name) existing.name = item.name; if (item.category) existing.category = item.category; if (item.subcategory) existing.subcategory = item.subcategory; if (item.brand) existing.brand = item.brand; if (item.inventoryStatus) existing.inventoryStatus = item.inventoryStatus; if (item.cartonDimensions) existing.cartonDimensions = item.cartonDimensions; existing.lastUpdated = new Date().toISOString().split('T')[0]; newProducts[existingIndex] = existing; } else { newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, brand: item.brand, category: item.category || 'Uncategorized', subcategory: item.subcategory, stockLevel: item.stock || 0, agedStockQty: item.agedStock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: 0, leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: new Date().toISOString().split('T')[0], gradeLevel: item.gradeLevel ?? 0, dailyAverageSales: item.dailyAverageSales ?? 0, inventoryStatus: item.inventoryStatus, cartonDimensions: item.cartonDimensions }); } }); return newProducts; }); setIsUploadModalOpen(false); };
     const handleSkuDetailImport = (data: { masterSku: string; detail: SkuCostDetail }[]) => { setProducts(prev => prev.map(p => { const update = data.find(d => d.masterSku === p.sku); if (update) { return { ...p, costDetail: update.detail }; } return p; })); setIsSkuDetailModalOpen(false); };
     const handleMappingImport = (mappings: any[], mode: 'merge' | 'replace', platform: string) => { setProducts(prev => prev.map(p => { const productMappings = mappings.filter(m => m.masterSku === p.sku); if (productMappings.length === 0 && mode === 'merge') return p; let newChannels = [...p.channels]; if (mode === 'replace') { const chIdx = newChannels.findIndex(c => c.platform === platform); if (chIdx >= 0) { newChannels[chIdx] = { ...newChannels[chIdx], skuAlias: '' }; } } if (productMappings.length > 0) { const aliases = productMappings.map(m => m.alias).join(', '); const chIdx = newChannels.findIndex(c => c.platform === platform); if (chIdx >= 0) { const existingAliases = newChannels[chIdx].skuAlias ? newChannels[chIdx].skuAlias?.split(',').map(s => s.trim()) : []; const newSet = new Set(mode === 'merge' ? existingAliases : []); productMappings.forEach(m => newSet.add(m.alias)); newChannels[chIdx] = { ...newChannels[chIdx], skuAlias: Array.from(newSet).join(', ') }; } else { newChannels.push({ platform: platform, manager: pricingRules[platform]?.manager || 'Unassigned', velocity: 0, skuAlias: aliases }); } } return { ...p, channels: newChannels }; })); setIsMappingModalOpen(false); };
     const handleReturnsImport = (refunds: RefundLog[]) => { setRefundHistory(prev => { const existingIds = new Set(prev.map(r => r.id)); const newLogs = refunds.filter(r => !existingIds.has(r.id)); if (newLogs.length > 0) { const skuRefundCounts: Record<string, number> = {}; [...prev, ...newLogs].forEach(r => { skuRefundCounts[r.sku] = (skuRefundCounts[r.sku] || 0) + r.quantity; }); setProducts(products => products.map(p => { if (skuRefundCounts[p.sku] !== undefined) { const estimatedMonthlySales = Math.max(1, p.averageDailySales * 30); const rate = Math.min(100, (skuRefundCounts[p.sku] / estimatedMonthlySales) * 100); return { ...p, returnRate: Number(rate.toFixed(2)) }; } return p; })); } return [...newLogs, ...prev]; }); setIsReturnsModalOpen(false); };
@@ -558,9 +578,9 @@ const App: React.FC = () => {
                     </header>
                     <div className="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-8">
                         {currentView === 'search' && activeSearch && ( <SearchResultsPage data={{ results: activeSearch.results, query: activeSearch.query, params: activeSearch.params, id: activeSearch.id }} products={products} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} timeLabel={activeSearch.timeLabel} onRefine={handleRefineSearch} searchConfig={searchConfig} priceChangeHistory={priceChangeHistory} thresholds={thresholds} /> )}
-                        {currentView === 'search' && !activeSearch && ( <div className="flex flex-col items-center justify-center h-full text-gray-400"> <Search className="w-12 h-12 mb-4 opacity-50" /> <p className="text-lg font-medium">Select a search from the sidebar or start a new one.</p> </div> )}
-                        {currentView === 'products' && ( products.length === 0 ? ( <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 animate-in fade-in zoom-in duration-300 h-full"> <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}><Database className="w-10 h-10" /></div> <h3 className="text-2xl font-bold text-gray-900">Welcome to Sello UK Hub</h3> <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">Let's get your dashboard set up. Please upload your company reports in the order below to initialize the system.</p> <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative"> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'bg-white text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{hasInventory ? 'Completed' : 'Step 1'}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4">{hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}</div> <h4 className="font-bold text-gray-900 text-lg">ERP Inventory Report</h4> <p className="text-sm text-gray-500 mt-2 text-center">Upload the 28-column ERP file to initialize Products, Stock Levels, COGS, and Categories.</p> <button onClick={() => setIsUploadModalOpen(true)} className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300 hover:bg-opacity-5'}`} style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}>{hasInventory ? 'Re-upload Inventory' : 'Upload Inventory'}</button> </div> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>Step 2</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4"><FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} /></div> <h4 className="font-bold text-gray-900 text-lg">Sales Transaction Report</h4> <p className="text-sm text-gray-500 mt-2 text-center">Once products are loaded, upload sales history to calculate Velocity, Fees, and Margins.</p> <button onClick={() => hasInventory && setIsSalesImportModalOpen(true)} disabled={!hasInventory} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}} className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}><Upload className="w-5 h-5" /> Upload Sales</button> </div> </div> </div> ) : ( <ProductManagementPage products={products} pricingRules={pricingRules} promotions={promotions} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} priceChangeHistory={priceChangeHistory} onOpenMappingModal={() => setIsMappingModalOpen(true)} dateLabels={dynamicDateLabels} onUpdateProduct={(p) => setProducts(prev => prev.map(old => old.id === p.id ? p : old))} onViewElasticity={handleViewElasticity} themeColor={userProfile.themeColor} headerStyle={headerStyle} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} thresholds={thresholds} /> ) )}
-                        {currentView === 'strategy' && (<StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); setCurrentView('products'); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} promotions={promotions} priceChangeHistory={priceChangeHistory} velocityLookback={velocityLookback} />)}
+                        {currentView === 'search' && !activeSearch && ( <div className="flex flex-col items-center justify-center h-full text-gray-400"> <Search className="w-12 h-12 mb-4 opacity-50" /> <p className="text-lg font-medium">{t('search_empty_state')}</p> </div> )}
+                        {currentView === 'products' && ( products.length === 0 ? ( <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 animate-in fade-in zoom-in duration-300 h-full"> <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}><Database className="w-10 h-10" /></div> <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3> <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p> <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative"> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{hasInventory ? t('step_completed') : t('step_1')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4">{hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}</div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p> <button onClick={() => setIsUploadModalOpen(true)} className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300 hover:bg-opacity-5'}`} style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}>{hasInventory ? t('reupload_inventory') : t('upload_inventory')}</button> </div> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{t('step_2')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4"><FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} /></div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p> <button onClick={() => hasInventory && setIsSalesImportModalOpen(true)} disabled={!hasInventory} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}} className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}><Upload className="w-5 h-5" /> {t('upload_sales')}</button> </div> </div> </div> ) : ( <ProductManagementPage products={products} pricingRules={pricingRules} promotions={promotions} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} priceChangeHistory={priceChangeHistory} onOpenMappingModal={() => setIsMappingModalOpen(true)} dateLabels={dynamicDateLabels} onUpdateProduct={(p) => setProducts(prev => prev.map(old => old.id === p.id ? p : old))} onViewElasticity={handleViewElasticity} themeColor={userProfile.themeColor} headerStyle={headerStyle} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} thresholds={thresholds} /> ) )}
+                        {currentView === 'strategy' && (<StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); setCurrentView('products'); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} promotions={promotions} priceChangeHistory={priceChangeHistory} onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord} velocityLookback={velocityLookback} />)}
                         {currentView === 'costs' && (<CostManagementPage products={products} themeColor={userProfile.themeColor} headerStyle={headerStyle} />)}
                         {currentView === 'promotions' && (<PromotionPage products={products} pricingRules={pricingRules} logisticsRules={logisticsRules} promotions={promotions} priceHistoryMap={priceHistoryMap} onAddPromotion={(p) => setPromotions(prev => [...prev, p])} onUpdatePromotion={(p) => setPromotions(prev => prev.map(o => o.id === p.id ? p : o))} onDeletePromotion={(id) => setPromotions(prev => prev.filter(p => p.id !== id))} themeColor={userProfile.themeColor} headerStyle={headerStyle} />)}
                         {currentView === 'tools' && (

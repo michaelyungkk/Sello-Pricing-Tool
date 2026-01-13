@@ -1,5 +1,6 @@
 
 
+
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -101,6 +102,8 @@ export interface Product {
   averageDailySales: number; // Current Velocity (Week 0)
   previousDailySales?: number; // Previous Velocity (Week 1) for trend analysis
   leadTimeDays: number;
+  gradeLevel?: number;
+  dailyAverageSales: number; // ERP-provided daily average sales
 
   // Costs & Fees
   costPrice?: number; // Cost of Goods Sold (From Inventory Report)
@@ -180,6 +183,7 @@ export interface PriceLog {
   adsSpend?: number; // Optional: Daily Ad Spend specifically for this SKU/Date
   platform?: string; // Platform specific tag (optional to support legacy data)
   orderId?: string; // Optional: Unique Order ID for transaction-level tracking
+  postcode?: string; // New: Receive Postcode
 }
 
 export interface HistoryPayload {
@@ -192,6 +196,7 @@ export interface HistoryPayload {
   adsSpend?: number;
   platform?: string;
   orderId?: string;
+  postcode?: string; // New: Receive Postcode
 }
 
 export interface ShipmentLog {

@@ -1,8 +1,8 @@
-
 import React, { useState, useRef, useMemo } from 'react';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, FileText, Database, ArrowRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
+import { useTranslation } from 'react-i18next';
 
 export interface BatchUpdateItem {
   sku: string;
@@ -20,6 +20,8 @@ export interface BatchUpdateItem {
     height: number;
     weight: number;
   };
+  gradeLevel?: number;
+  dailyAverageSales?: number;
 }
 
 interface BatchUploadModalProps {
@@ -29,6 +31,7 @@ interface BatchUploadModalProps {
 }
 
 const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, onConfirm }) => {
+  const { t } = useTranslation();
   const [dragActive, setDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +128,10 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
         // Status Column detection (Inventory Status/库存状态)
         const statusIdx = findCol(['inventorystatus', 'status', '库存状态']);
 
+        // New columns
+        const gradeLevelIdx = findCol(['gradelevel', '等级']);
+        const dailyAverageSalesIdx = findCol(['dailyaveragesales', '日均销量']);
+
         // Dimensions
         const lenIdx = findCol(['length', 'depth']);
         const widthIdx = findCol(['width']);
@@ -148,6 +155,23 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 return isNaN(val) ? undefined : val;
             };
 
+            const parseGradeLevel = (idx: number): number | undefined => {
+                if (idx === -1) return undefined; // Column not present, do not update existing values
+                const rawVal = row[idx];
+                if (rawVal === null || rawVal === undefined || String(rawVal).trim() === '') {
+                    return 0; // Empty cell, default to 0
+                }
+                
+                const valStr = String(rawVal);
+                const match = valStr.match(/\d+/); // Extract first number sequence
+                if (match && match[0]) {
+                    const num = parseInt(match[0], 10);
+                    return isNaN(num) ? 0 : num; // If parsing the extracted number fails, default 0
+                }
+                
+                return 0; // If no number is found at all
+            };
+
             const item: BatchUpdateItem = {
                 sku,
                 name: nameIdx !== -1 ? String(row[nameIdx]).trim() : undefined,
@@ -157,6 +181,8 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 stock: parseNum(stockIdx),
                 agedStock: parseNum(agedStockIdx),
                 cost: parseNum(costIdx),
+                gradeLevel: parseGradeLevel(gradeLevelIdx),
+                dailyAverageSales: parseNum(dailyAverageSalesIdx),
                 inventoryStatus: statusIdx !== -1 ? String(row[statusIdx]).trim() : undefined,
             };
 
@@ -197,8 +223,8 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                   <Database className="w-5 h-5" />
               </div>
               <div>
-                  <h2 className="text-xl font-bold text-gray-900">ERP Inventory Import</h2>
-                  <p className="text-xs text-gray-500">Update stock, aged stock, costs, and details</p>
+                  <h2 className="text-xl font-bold text-gray-900">{t('modal_erp_title')}</h2>
+                  <p className="text-xs text-gray-500">{t('modal_erp_desc')}</p>
               </div>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
@@ -216,21 +242,21 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                     {isProcessing ? (
                         <div className="flex flex-col items-center py-4">
                             <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
-                            <p className="text-indigo-600 font-medium">Processing File...</p>
+                            <p className="text-indigo-600 font-medium">{t('processing_file')}</p>
                         </div>
                     ) : (
                         <>
                             <div className="w-14 h-14 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-4">
                                 <Upload className="w-7 h-7" />
                             </div>
-                            <p className="text-gray-900 font-medium text-lg">Click to upload ERP Report</p>
-                            <p className="text-sm text-gray-500 mt-1">Drag and drop or browse (CSV / Excel)</p>
+                            <p className="text-gray-900 font-medium text-lg">{t('modal_click_to_upload_erp')}</p>
+                            <p className="text-sm text-gray-500 mt-1">{t('drag_and_drop_or_browse')}</p>
                             
                             <button 
                                 onClick={() => fileInputRef.current?.click()}
                                 className="mt-6 px-6 py-2 bg-white border border-gray-200 shadow-sm text-gray-700 font-bold rounded-lg hover:bg-gray-50"
                             >
-                                Select File
+                                {t('select_file')}
                             </button>
                         </>
                     )}
@@ -247,12 +273,12 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                     <div className="flex items-center justify-between">
                         <div className="flex gap-6 items-center">
                             <div className="flex flex-col">
-                                <span className="text-xs text-gray-500 uppercase font-bold">Total Items</span>
+                                <span className="text-xs text-gray-500 uppercase font-bold">{t('total_items')}</span>
                                 <span className="text-xl font-bold text-gray-900">{validCount}</span>
                             </div>
                             <div className="w-px h-8 bg-gray-200"></div>
                             <div className="flex flex-col">
-                                <span className="text-xs text-indigo-600 uppercase font-bold">New SKUs</span>
+                                <span className="text-xs text-indigo-600 uppercase font-bold">{t('new_skus')}</span>
                                 <span className="text-xl font-bold text-indigo-600">{newProductCount}</span>
                             </div>
                         </div>
@@ -261,16 +287,16 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                             className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors"
                         >
                             <RefreshCw className="w-4 h-4" />
-                            Reset
+                            {t('reset')}
                         </button>
                     </div>
 
                     <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                         <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase flex">
-                            <div className="flex-1">Product</div>
-                            <div className="w-20 text-right">Stock</div>
-                            <div className="w-20 text-right">Aged</div>
-                            <div className="w-24 text-right">Cost</div>
+                            <div className="flex-1">{t('product')}</div>
+                            <div className="w-20 text-right">{t('stock')}</div>
+                            <div className="w-20 text-right">{t('aged')}</div>
+                            <div className="w-24 text-right">{t('cost')}</div>
                         </div>
                         <div className="max-h-[300px] overflow-y-auto">
                             {parsedItems.slice(0, 50).map((item, idx) => (
@@ -279,10 +305,10 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                                         <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
                                             {item.sku}
                                             {!existingSkus.has(item.sku) && (
-                                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 uppercase">New</span>
+                                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 uppercase">{t('new')}</span>
                                             )}
                                             {item.inventoryStatus === 'New Product' && (
-                                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-700 font-bold border border-green-200 uppercase">Status: New</span>
+                                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-700 font-bold border border-green-200 uppercase">{t('status_new')}</span>
                                             )}
                                         </div>
                                         {item.name && <div className="text-xs text-gray-500 truncate">{item.name}</div>}
@@ -300,7 +326,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                             ))}
                             {parsedItems.length > 50 && (
                                 <div className="px-4 py-3 text-center text-xs text-gray-400 italic bg-gray-50">
-                                    ...and {parsedItems.length - 50} more items
+                                    {t('and_x_more_items', { count: parsedItems.length - 50 })}
                                 </div>
                             )}
                         </div>
@@ -310,14 +336,14 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
         </div>
 
         <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
-            <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors">{t('cancel')}</button>
             {parsedItems && parsedItems.length > 0 && (
                 <button 
                     onClick={() => onConfirm(parsedItems)}
                     className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
                 >
                     <Check className="w-4 h-4" />
-                    Confirm Import
+                    {t('confirm_import')}
                 </button>
             )}
         </div>

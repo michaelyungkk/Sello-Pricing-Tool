@@ -1,12 +1,14 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail, PriceChangeRecord, RefundLog } from '../types';
 import { TagSearchInput } from './TagSearchInput';
-import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart, PieChart as PieIcon, AlertTriangle, Activity, Megaphone, Coins, Wrench } from 'lucide-react';
+import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart, PieChart as PieIcon, AlertTriangle, Activity, Megaphone, Coins, Wrench, Map as MapIcon } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, ComposedChart, Legend } from 'recharts';
 import ProductList from './ProductList';
 import { getDiagnosisMeta, CanonicalDiagnosisId } from './diagnostics/diagnosisRegistry';
 import { getThresholdConfig, ThresholdConfig } from '../services/thresholdsConfig';
+import UkSalesMap from './UkSalesMap';
 
 interface ProductManagementPageProps {
     products: Product[];
@@ -212,8 +214,8 @@ const DashboardView = ({
         setCurrentPage(1);
     }, [selectedAlert, range, platformScope]);
 
-    const nextSlide = () => setCurrentSlide(prev => (prev + 1) % 3);
-    const prevSlide = () => setCurrentSlide(prev => (prev - 1 + 3) % 3);
+    const nextSlide = () => setCurrentSlide(prev => (prev + 1) % 4); // Increased to 4
+    const prevSlide = () => setCurrentSlide(prev => (prev - 1 + 4) % 4);
 
     const getSignalStyle = (priority: string) => {
         switch (priority) {
@@ -246,7 +248,7 @@ const DashboardView = ({
             endDate = new Date(customEnd);
             if (startDate > endDate) { const temp = startDate; startDate = endDate; endDate = temp; }
             const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-            days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            days = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24))) + 1;
         }
 
         const format = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
@@ -334,10 +336,14 @@ const DashboardView = ({
             }
 
             const signals: CanonicalDiagnosisId[] = [];
-            const dailyVelocity = curUnits / days;
+            
+            // --- UPDATED VELOCITY & RUNWAY LOGIC ---
+            // Use static/global velocity for runway calculation to avoid time-window bias
+            const dailyVelocity = p.dailyAverageSales || p.averageDailySales || 0;
             const runway = dailyVelocity > 0 ? p.stockLevel / dailyVelocity : 999;
             const tacos = curRev > 0 ? (curAdSpend / curRev) * 100 : 0;
             const stockValue = p.stockLevel * (p.costPrice || 0);
+            const globalTrend = p._trendData?.velocityChange || 0;
 
             if (p.stockLevel > 0) {
                 if (runway < (p.leadTimeDays * thresholds.stockoutRunwayMultiplier)) signals.push('STOCKOUT_RISK');
@@ -349,8 +355,11 @@ const DashboardView = ({
             if (netMargin < 0) signals.push('NEGATIVE_LOSS');
             else if (netMargin < thresholds.marginBelowTargetPct) signals.push('BELOW_TARGET');
             
-            if (velocityChange < -thresholds.velocityDropPct && prevUnits > 2) signals.push('VELOCITY_DROP_WOW');
-            if (stockValue > thresholds.deadStockMinValueGBP && curUnits === 0) signals.push('DORMANT_NO_SALES');
+            // Use Global Trend for Velocity Drop signal
+            if (globalTrend < -thresholds.velocityDropPct) signals.push('VELOCITY_DROP_WOW');
+            
+            // Dead Stock: Use global velocity to determine if active items are dormant
+            if (stockValue > thresholds.deadStockMinValueGBP && dailyVelocity === 0) signals.push('DORMANT_NO_SALES');
 
             // Sort signals by priority
             const priorityOrder: Record<string, number> = { High: 1, Medium: 2, Low: 3 };
@@ -368,33 +377,37 @@ const DashboardView = ({
                 periodAdSpend: curAdSpend,
                 periodMargin: netMargin,
                 prevPeriodUnits: prevUnits,
-                velocityChange,
+                velocityChange, // Local trend for table display
+                globalTrend, // Global trend for filtering
                 displayPrice,
                 toxicPlatforms,
-                signals
+                signals,
+                dailyVelocity // Export global velocity for table
             };
         });
 
         return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, periodDays: days };
-    }, [products, priceHistoryMap, range, customStart, customEnd, platformScope, thresholds]); // thresholds added to dependency
+    }, [products, priceHistoryMap, range, customStart, customEnd, platformScope, thresholds]); 
 
     const alerts = useMemo(() => ({
         margin: processedData.filter(p => (p.periodUnits > 0 && p.periodMargin < thresholds.marginBelowTargetPct) || p.toxicPlatforms.length > 0),
-        velocity: processedData.filter(p => p.prevPeriodUnits > 2 && p.velocityChange < -thresholds.velocityCrashPct),
+        // Use Global Trend for Velocity Alert
+        velocity: processedData.filter(p => p.globalTrend < -thresholds.velocityCrashPct),
+        // Use Global Runway for Stock Alert
         stock: processedData.filter(p => {
-            const dailyVel = p.periodUnits / (range === 'yesterday' ? 1 : range === '7d' ? 7 : 30);
-            if (dailyVel <= 0) return false;
-            const runway = p.stockLevel / dailyVel;
+            if (p.dailyVelocity <= 0) return false;
+            const runway = p.stockLevel / p.dailyVelocity;
             return runway < (p.leadTimeDays * thresholds.stockoutRunwayMultiplier) && p.stockLevel > 0;
         }),
-        dead: processedData.filter(p => p.stockLevel * (p.costPrice || 0) > thresholds.deadStockMinValueGBP && p.periodUnits === 0)
-    }), [processedData, range, thresholds]); // thresholds added to dependency
+        // Use Global Dead Stock check
+        dead: processedData.filter(p => p.stockLevel * (p.costPrice || 0) > thresholds.deadStockMinValueGBP && p.dailyVelocity === 0)
+    }), [processedData, thresholds]);
 
     const workbenchData = useMemo(() => {
         if (!selectedAlert) return processedData.filter(p => p.periodRevenue > 0).sort((a, b) => b.periodRevenue - a.periodRevenue).slice(0, 50);
         return alerts[selectedAlert].sort((a, b) => {
             if (selectedAlert === 'margin') return a.periodMargin - b.periodMargin;
-            if (selectedAlert === 'velocity') return a.velocityChange - b.velocityChange;
+            if (selectedAlert === 'velocity') return a.globalTrend - b.globalTrend;
             if (selectedAlert === 'stock') return a.stockLevel - b.stockLevel;
             if (selectedAlert === 'dead') return (b.stockLevel * (b.costPrice || 0)) - (a.stockLevel * (a.costPrice || 0));
             return 0;
@@ -464,22 +477,25 @@ const DashboardView = ({
         processedData.forEach(p => {
             const stockVal = p.stockLevel * (p.costPrice || 0);
             totalStockValue += stockVal;
-            if (p.periodUnits === 0) deadStockValue += stockVal;
-            const dailyVel = p.periodUnits / periodDays;
-            const runway = dailyVel > 0 ? p.stockLevel / dailyVel : 999;
+            // Dead Stock check using Global Velocity
+            if (p.dailyVelocity === 0) deadStockValue += stockVal;
+            
+            const runway = p.dailyVelocity > 0 ? p.stockLevel / p.dailyVelocity : 999;
+            
             if (p.stockLevel <= 0) runwayDistribution['OOS']++;
             else if (runway < 14) runwayDistribution['< 2w']++;
             else if (runway < 28) runwayDistribution['2-4w']++;
             else if (runway < 84) runwayDistribution['4-12w']++;
             else runwayDistribution['12w+']++;
-            if (runway < p.leadTimeDays && dailyVel > 0) {
+            
+            if (runway < p.leadTimeDays && p.dailyVelocity > 0) {
                 const daysOOS = p.leadTimeDays - runway;
-                lostRevenue += (daysOOS * dailyVel * (p.currentPrice || 0));
+                lostRevenue += (daysOOS * p.dailyVelocity * (p.currentPrice || 0));
             }
         });
         const chartData = Object.entries(runwayDistribution).map(([name, value]) => ({ name, value }));
         return { totalStockValue, deadStockValue, lostRevenue, chartData };
-    }, [processedData, range]);
+    }, [processedData]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
@@ -538,7 +554,7 @@ const DashboardView = ({
 
             <div>
                 <div className="flex justify-center gap-2 mb-4">
-                    {[0, 1, 2].map(idx => (
+                    {[0, 1, 2, 3].map(idx => (
                         <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${currentSlide === idx ? 'w-8 bg-indigo-600' : 'w-2 bg-gray-300'}`} />
                     ))}
                 </div>
@@ -739,6 +755,25 @@ const DashboardView = ({
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* SLIDE 3: UK MAP VISUALIZATION */}
+                {currentSlide === 3 && (
+                    <div className="animate-in fade-in slide-in-from-right-8 duration-300">
+                        <div className="flex items-stretch gap-4 mb-6">
+                            <button onClick={prevSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
+                            <div className="flex-1">
+                                <UkSalesMap 
+                                    products={products}
+                                    priceHistoryMap={priceHistoryMap}
+                                    dateRange={dateRange}
+                                    selectedPlatform={platformScope}
+                                    themeColor={themeColor}
+                                />
+                            </div>
+                            <button onClick={nextSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
                         </div>
                     </div>
                 )}

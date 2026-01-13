@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Product, PriceLog, PriceChangeRecord } from '../types';
 import { X, TrendingUp, TrendingDown, Activity, Calendar, ArrowRight } from 'lucide-react';
@@ -14,6 +13,7 @@ import {
   ResponsiveContainer,
   ReferenceLine
 } from 'recharts';
+import { useTranslation } from 'react-i18next';
 
 interface PriceElasticityModalProps {
   product: Product;
@@ -23,6 +23,7 @@ interface PriceElasticityModalProps {
 }
 
 const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, priceHistory, priceChangeHistory, onClose }) => {
+  const { t } = useTranslation();
   
   // 1. Filter history for this product and sort by date
   const productHistory = useMemo(() => {
@@ -123,7 +124,7 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
           <div>
             <div className="flex items-center gap-2 mb-1">
                <span className="px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded uppercase tracking-wide">
-                  Elasticity Analysis
+                  {t('elasticity_analysis')}
                </span>
                <span className="text-sm text-gray-500 font-mono">{product.sku}</span>
             </div>
@@ -145,7 +146,7 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
                             <Activity className="w-6 h-6" />
                         </div>
                         <div>
-                            <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Latest Price Event</h4>
+                            <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide">{t('latest_price_event')}</h4>
                             <p className="text-lg font-bold text-gray-900 flex items-center gap-2">
                                 {new Date(impactStats.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                 <span className={`text-xs px-2 py-0.5 rounded-full border ${impactStats.priceChangePct > 0 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
@@ -161,7 +162,7 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
                     <div className="h-10 w-px bg-gray-200 hidden md:block"></div>
 
                     <div className="flex flex-col items-end">
-                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide text-right">Velocity Impact (7-Day Avg)</h4>
+                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide text-right">{t('velocity_impact')}</h4>
                         <div className="flex items-center gap-3 mt-1">
                             <div className="text-right">
                                 <div className="text-xs text-gray-400">Before</div>

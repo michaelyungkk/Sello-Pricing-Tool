@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Product, PricingRules, HistoryPayload, ShipmentLog } from '../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search, Hash } from 'lucide-react';
@@ -42,6 +43,7 @@ interface ColumnMapping {
     profitExclRn?: string; // New: Absolute Profit currency
     profitExclRnPercent?: string; // New: Net PM%
     outerOrderId?: string; // New: Unique Order ID
+    receivePostcode?: string; // New: Receive Postcode
 }
 
 const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRules, learnedAliases = {}, onClose, onResetData, onConfirm }) => {
@@ -158,7 +160,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     wmsFee: findMapped(['wmsfee', 'fulfillment', 'pickpack']),
                     profitExclRn: findMapped(['profit_excl_rn', 'netprofit', 'profitamount'], false),
                     profitExclRnPercent: findMapped(['profit_excl_rn%', 'netpm', 'profit%', 'margin%'], true),
-                    outerOrderId: findMapped(['outer_order_id', 'order_id', 'orderid', 'order_no', 'ordernumber', 'transaction_id'], false)
+                    outerOrderId: findMapped(['outer_order_id', 'order_id', 'orderid', 'order_no', 'ordernumber', 'transaction_id'], false),
+                    receivePostcode: findMapped(['receive_postcode', 'postcode', 'zip', 'postalcode', 'ship_to_zip'], false)
                 };
 
                 setMapping(detectedMapping);
@@ -208,6 +211,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             const profitIdx = getIdx(map.profitExclRn);
             const netPmIdx = getIdx(map.profitExclRnPercent);
             const orderIdIdx = getIdx(map.outerOrderId); // Index for Order ID
+            const postcodeIdx = getIdx(map.receivePostcode); // Index for Postcode
 
             // 1. Overall Aggregation (For Product Updates - Snapshot)
             const aggregated: Record<string, {
@@ -234,6 +238,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 totalAds: number, // New: Aggregate daily ad spend
                 platform: string,
                 orderId?: string; // New: optional orderId
+                postcode?: string; // New: Receive Postcode
             }> = {};
 
             const discoveredPlatforms = new Set<string>();
@@ -354,6 +359,11 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     ? String(row[orderIdIdx]).trim()
                     : '';
                 
+                // Capture Postcode if available
+                const postcode = (postcodeIdx !== -1 && row[postcodeIdx])
+                    ? String(row[postcodeIdx]).trim()
+                    : undefined;
+                
                 if (orderId) orderIdsDetectedCount++;
 
                 discoveredPlatforms.add(platformName);
@@ -458,7 +468,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                             totalProfit: 0,
                             totalAds: 0,
                             platform: platformName,
-                            orderId: orderId || undefined // Store orderId if present
+                            orderId: orderId || undefined, // Store orderId if present
+                            postcode: postcode || undefined
                         };
                     }
                     dailyAggregated[dailyKey].totalQty += qty;
@@ -523,6 +534,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         velocity: isNaN(bucket.totalQty) ? 0 : bucket.totalQty,
                         platform: bucket.platform,
                         orderId: bucket.orderId,
+                        postcode: bucket.postcode,
                         // FIX: Explicitly record ad spend even if 0, to prevent fallback to global averages in dashboard
                         adsSpend: Number(bucket.totalAds.toFixed(4))
                     };
@@ -774,6 +786,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 <MappingSelect label="Revenue (sales_amt)" value={mapping.revenue} onChange={(v: string) => mapField('revenue', v)} options={rawHeaders} required />
                                 <MappingSelect label="Date (order_time)" value={mapping.date} onChange={(v: string) => mapField('date', v)} options={rawHeaders} />
                                 <MappingSelect label="Order ID (Optional)" value={mapping.outerOrderId} onChange={(v: string) => mapField('outerOrderId', v)} options={rawHeaders} />
+                                <MappingSelect label="Postcode (receive_postcode)" value={mapping.receivePostcode} onChange={(v: string) => mapField('receivePostcode', v)} options={rawHeaders} />
                                 <MappingSelect label="Platform Level 1" value={mapping.platform} onChange={(v: string) => mapField('platform', v)} options={rawHeaders} />
                                 <MappingSelect label="Platform Level 2 (Subsource)" value={mapping.platformLevel2} onChange={(v: string) => mapField('platformLevel2', v)} options={rawHeaders} />
                             </div>
