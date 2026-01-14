@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom';
 import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback } from '../types';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
-import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity, Edit2 } from 'lucide-react';
+import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity, Edit2, Plus } from 'lucide-react';
+import ManualPriceChangeModal from './ManualPriceChangeModal';
 
 interface StrategyPageProps {
     products: Product[];
@@ -17,10 +18,11 @@ interface StrategyPageProps {
     promotions: PromotionEvent[];
     priceChangeHistory: PriceChangeRecord[];
     onUpdatePriceChangeRecord?: (record: PriceChangeRecord) => void;
+    onManualPriceChange?: (data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
     velocityLookback: VelocityLookback; // Global setting passed down (used for Runway/Velocity)
 }
 
-const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], onUpdatePriceChangeRecord, velocityLookback }) => {
+const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], onUpdatePriceChangeRecord, onManualPriceChange, velocityLookback }) => {
     // ... (state definitions)
     const [config, setConfig] = useState<StrategyConfig>(() => {
         try {
@@ -46,6 +48,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [customStart, setCustomStart] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+    const [isManualLodgeOpen, setIsManualLodgeOpen] = useState(false);
 
     const [activeTab, setActiveTab] = useState<'ENGINE' | 'HISTORY'>('ENGINE');
     const [filterTab, setFilterTab] = useState<'All' | 'INCREASE' | 'DECREASE' | 'MAINTAIN'>('All');
@@ -1104,6 +1107,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                         <Download className="w-3.5 h-3.5" />
                                         Export Log
                                     </button>
+                                    <button
+                                        onClick={() => setIsManualLodgeOpen(true)}
+                                        className="px-3 py-1.5 bg-indigo-600 text-white border border-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition-colors"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        Lodge Manual Change
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1321,6 +1331,14 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                     </div>
                 </div>,
                 document.body
+            )}
+
+            {isManualLodgeOpen && onManualPriceChange && (
+                <ManualPriceChangeModal
+                    products={products}
+                    onClose={() => setIsManualLodgeOpen(false)}
+                    onConfirm={onManualPriceChange}
+                />
             )}
         </div>
     );

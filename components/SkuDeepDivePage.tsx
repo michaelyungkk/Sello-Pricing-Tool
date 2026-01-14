@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
-import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea } from 'recharts';
+import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea, ComposedChart, Bar } from 'recharts';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 
 interface SkuDeepDivePageProps {
@@ -75,89 +75,149 @@ const BoxPlotTooltip = ({ content, x, y, format }: any) => {
 };
 
 
-const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOnly7, layout = 'horizontal', showAdOnlyFooter = false }: any) => {
-    const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number } | null>(null);
-
-    if (layout === 'vertical') {
-        const allStats = [data7, data30, data90].filter(Boolean);
-        if (allStats.length === 0) return <div className="h-full w-full flex items-center justify-center text-xs text-gray-400">No data</div>;
-
-        const globalMin = Math.min(...allStats.map(s => s.min));
-        const globalMax = Math.max(...allStats.map(s => s.max));
-        const range = globalMax - globalMin;
-
-        // Corrected: More robust and symmetrical padding calculation for the y-axis scale.
-        const padding = range > 0 ? range * 0.1 : Math.max(Math.abs(globalMin) * 0.2, 1);
-        const paddedMin = globalMin - padding;
-        const paddedMax = globalMax + padding;
-        const paddedRange = paddedMax - paddedMin;
-
-        const scaleY = (val: number) => {
-            if (paddedRange === 0) return 50;
-            return ((val - paddedMin) / paddedRange) * 100;
-        };
-        
-        const renderVerticalBar = (stats: any, label: string) => {
-            if (!stats) return <div className="flex-1" />;
+const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOnly7, layout = 'horizontal', showAdOnlyFooter = false, setTooltip, tooltip }: any) => {
+    
+    // Custom Tooltip component for Recharts
+    const CustomRechartsTooltip = ({ active, payload, label, formatFn }: any) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload; // The full data object is here
+            const content = {
+                label,
+                n: data.n,
+                max: data.max,
+                q3: data.q3,
+                median: data.median,
+                q1: data.q1,
+                min: data.min,
+            };
             return (
-                <div 
-                    className="h-full w-full flex flex-col items-center group relative"
-                    onMouseEnter={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setTooltip({
-                            visible: true,
-                            content: { label, ...stats },
-                            x: rect.left + rect.width / 2,
-                            y: rect.top,
-                        });
-                    }}
-                    onMouseLeave={() => {
-                        setTooltip(null);
-                    }}
-                >
-                    <div className="relative w-8 flex-1">
-                        {/* Whisker line */}
-                        <div className="absolute left-1/2 -translate-x-1/2 w-px bg-gray-400" style={{ bottom: `${scaleY(stats.min)}%`, top: `${100 - scaleY(stats.max)}%` }} />
-                        {/* Box */}
-                        <div className="absolute left-1 right-1 border" style={{ bottom: `${scaleY(stats.q1)}%`, top: `${100 - scaleY(stats.q3)}%`, backgroundColor: `${color}20`, borderColor: color }} />
-                        {/* Median Line */}
-                        <div className="absolute left-1 right-1 h-0.5" style={{ bottom: `${scaleY(stats.median)}%`, backgroundColor: color }} />
-                        {/* Min/Max horizontal ticks */}
-                        <div className="absolute left-0 right-0 h-px bg-gray-400" style={{ bottom: `${scaleY(stats.min)}%` }} />
-                        <div className="absolute left-0 right-0 h-px bg-gray-400" style={{ bottom: `${scaleY(stats.max)}%` }} />
-                    </div>
-                    <div className="text-center text-[10px] font-bold text-gray-500 mt-2 h-8 flex flex-col justify-end items-center">
-                        {stats.n < 10 && <span className="text-[9px] text-amber-600 flex items-center gap-1 bg-amber-50 px-1 rounded mb-1"><AlertTriangle className="w-2.5 h-2.5"/> Low Data</span>}
-                        <span>{label}</span>
-                        <span className="font-normal text-gray-400">(n={stats.n})</span>
+                <div className="bg-gray-900 text-white p-3 rounded-lg shadow-xl text-xs max-w-xs z-50 border border-gray-700 backdrop-blur-md bg-opacity-95">
+                    <div className="font-bold mb-2 border-b border-gray-700 pb-1">{content.label} (n={content.n})</div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                        <span>Max:</span><span className="text-right font-mono">{formatFn(content.max)}</span>
+                        <span>Q3:</span><span className="text-right font-mono">{formatFn(content.q3)}</span>
+                        <span className="font-bold">Median:</span><span className="text-right font-mono font-bold">{formatFn(content.median)}</span>
+                        <span>Q1:</span><span className="text-right font-mono">{formatFn(content.q1)}</span>
+                        <span>Min:</span><span className="text-right font-mono">{formatFn(content.min)}</span>
                     </div>
                 </div>
             );
+        }
+        return null;
+    };
+
+    // Custom shape for the Bar component to draw the box and whiskers
+    const BoxAndWhisker = (props: any) => {
+        const { fill, x, y, width, height, payload, color } = props;
+        const { min, q1, median, q3, max } = payload;
+        
+        const iqrHeight = Math.abs(height);
+        const iqrRange = q3 - q1;
+
+        if (iqrRange <= 0 && height === 0) return null;
+
+        const scale = (value: number) => {
+            if (iqrRange <= 0) return y + iqrHeight / 2;
+            return y + ((q3 - value) / iqrRange) * iqrHeight;
         };
+        
+        const medianY = scale(median);
+        const minY = scale(min);
+        const maxY = scale(max);
+
+        const whiskerX = x + width / 2;
+        const tickWidth = width / 2;
 
         return (
-            <div className="bg-white py-4 px-4 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col">
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+            <g>
+                <rect x={x} y={y} width={width} height={height} fill={`${color}20`} stroke={color} />
+                <line x1={x} y1={medianY} x2={x + width} y2={medianY} stroke={color} strokeWidth={2} />
+                <line x1={whiskerX} y1={y} x2={whiskerX} y2={maxY} stroke="gray" />
+                <line x1={whiskerX} y1={y + height} x2={whiskerX} y2={minY} stroke="gray" />
+                <line x1={whiskerX - tickWidth} y1={maxY} x2={whiskerX + tickWidth} y2={maxY} stroke="gray" />
+                <line x1={whiskerX - tickWidth} y1={minY} x2={whiskerX + tickWidth} y2={minY} stroke="gray" />
+            </g>
+        );
+    };
+
+    const CustomizedAxisTick = (props: any) => {
+        const { x, y, payload, data } = props;
+        const dataPoint = data.find((d: any) => d.name === payload.value);
+      
+        return (
+          <g transform={`translate(${x},${y})`}>
+            <text x={0} y={0} dy={16} textAnchor="middle" fill="#666" fontSize={10} fontWeight="bold">
+              {payload.value}
+            </text>
+            {dataPoint && (
+                <text x={0} y={28} dy={0} textAnchor="middle" fill="#666" fontSize={10}>
+                    (n={dataPoint.n})
+                </text>
+            )}
+            {dataPoint && dataPoint.n < 10 && (
+                 <text x={0} y={42} dy={0} textAnchor="middle" fill="#92400e" fontSize={9} fontWeight="bold">
+                    (Low Data)
+                 </text>
+            )}
+          </g>
+        );
+    };
+
+    if (layout === 'vertical') {
+        const chartData = [
+            { name: '7 Days', ...(data7 || {}) },
+            { name: '30 Days', ...(data30 || {}) },
+            { name: '90 Days', ...(data90 || {}) },
+        ].filter(d => d.min !== undefined && d.min !== null);
+
+        if (chartData.length === 0) {
+            return (
+                <div className="bg-white py-4 px-4 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col items-center justify-center">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                        <Activity className="w-3 h-3" /> {title}
+                    </h4>
+                    <div className="text-xs text-gray-400">No data available for this period.</div>
+                </div>
+            );
+        }
+
+        const allValues = chartData.flatMap(d => [d.min, d.max]);
+        const globalMin = Math.min(...allValues);
+        const globalMax = Math.max(...allValues);
+        const range = globalMax - globalMin;
+        const padding = range > 0 ? range * 0.15 : Math.max(Math.abs(globalMin) * 0.2, 1);
+        const yDomain: [number, number] = [globalMin - padding, globalMax + padding];
+
+        return (
+            <div className="bg-white py-4 px-2 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col">
+                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2 px-2">
                     <Activity className="w-3 h-3" /> {title}
                 </h4>
-                <div className="flex-1 flex relative pt-4 pb-2">
-                    {/* Y Axis */}
-                    <div className="absolute top-4 left-0 w-12 text-[9px] text-gray-400 font-mono" style={{ bottom: '48px' }}>
-                        {[0, 0.25, 0.5, 0.75, 1].map(p => (
-                            <div key={p} className="absolute w-full right-0" style={{ bottom: `${p * 100}%` }}>
-                                <span className="absolute right-full pr-2 -translate-y-1/2">{format(paddedMin + paddedRange * p)}</span>
-                                <div className="w-2 h-px bg-gray-200"></div>
-                            </div>
-                        ))}
-                    </div>
-                    {/* Chart Bars */}
-                    <div className="flex-1 flex justify-around gap-2 ml-12">
-                        {renderVerticalBar(data7, '7 Days')}
-                        {renderVerticalBar(data30, '30 Days')}
-                        {renderVerticalBar(data90, '90 Days')}
-                    </div>
+                <div className="flex-1 min-h-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="name" tick={<CustomizedAxisTick data={chartData} />} height={55} tickLine={false} axisLine={false} />
+                            <YAxis 
+                                domain={yDomain} 
+                                tickFormatter={format} 
+                                tick={{fontSize: 10}}
+                                width={45}
+                                tickLine={false}
+                                axisLine={false}
+                            />
+                            <RechartsTooltip 
+                              content={<CustomRechartsTooltip formatFn={format} />} 
+                              cursor={{ fill: `${color}10` }} 
+                            />
+                            <Bar 
+                                dataKey={(d) => [d.q1, d.q3]} 
+                                shape={<BoxAndWhisker color={color} />} 
+                                barSize={40}
+                            />
+                        </ComposedChart>
+                    </ResponsiveContainer>
                 </div>
-                {tooltip?.visible && <BoxPlotTooltip content={tooltip.content} x={tooltip.x} y={tooltip.y} format={format} />}
             </div>
         );
     }
@@ -274,6 +334,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const [hoveredBubble, setHoveredBubble] = useState<any>(null);
     const [chartPeriod, setChartPeriod] = useState<string>('30 Days'); // New: Chart filter state
     const [chartLayout, setChartLayout] = useState<'horizontal' | 'vertical'>('horizontal'); // New: Chart layout toggle
+    const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number } | null>(null);
     
     // Focus Ref for scrolling
     const activeSignalRef = useRef<HTMLDivElement>(null);
@@ -964,6 +1025,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 format={(v: number) => `£${v.toFixed(0)}`}
                                 color="#3b82f6"
                                 layout={chartLayout}
+                                tooltip={tooltip}
+                                setTooltip={setTooltip}
                             />
                         </div>
                         <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
@@ -975,6 +1038,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 format={(v: number) => `${v.toFixed(1)}%`}
                                 color="#10b981"
                                 layout={chartLayout}
+                                tooltip={tooltip}
+                                setTooltip={setTooltip}
                             />
                         </div>
                         <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
@@ -986,6 +1051,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 format={(v: number) => v.toFixed(0)}
                                 color="#8b5cf6"
                                 layout={chartLayout}
+                                tooltip={tooltip}
+                                setTooltip={setTooltip}
                             />
                         </div>
                         <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
@@ -999,6 +1066,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 layout={chartLayout}
                                 showAdOnlyFooter={true}
                                 adOnly7={tacosStats.d7.adOnlySpend}
+                                tooltip={tooltip}
+                                setTooltip={setTooltip}
                             />
                         </div>
                     </div>

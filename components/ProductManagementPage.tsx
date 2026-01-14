@@ -561,15 +561,15 @@ const DashboardView = ({
 
                 {currentSlide === 0 && (
                     <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                        <div className="flex items-stretch gap-4 mb-6">
-                            <button onClick={prevSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
+                        <div className="flex items-center gap-4 mb-6">
+                            <button onClick={prevSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
                                 <AlertCard title="Margin Thieves" count={alerts.margin.length} icon={AlertTriangle} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc={`Net Margin < ${thresholds.marginBelowTargetPct}% (Scan all)`} />
                                 <AlertCard title="Velocity Crashes" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`Vol. Drop > ${thresholds.velocityCrashPct}%`} />
                                 <AlertCard title="Stockout Risk" count={alerts.stock.length} icon={Clock} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Runway < Lead Time" />
                                 <AlertCard title="Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc={`>£${thresholds.deadStockMinValueGBP} Value, 0 Sales`} />
                             </div>
-                            <button onClick={nextSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
+                            <button onClick={nextSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
                         </div>
 
                         <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg overflow-hidden flex flex-col min-h-[400px]">
@@ -696,15 +696,15 @@ const DashboardView = ({
 
                 {currentSlide === 1 && (
                     <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                        <div className="flex items-stretch gap-4 mb-6">
-                             <button onClick={prevSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
+                        <div className="flex items-center gap-4 mb-6">
+                             <button onClick={prevSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
                                 <MetricCard title="Total Revenue" value={`£${financialStats.totalRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={DollarSign} color="blue" />
                                 <MetricCard title="True Net Profit" value={`£${financialStats.totalProfit.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Coins} color="green" />
                                 <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Megaphone} color="purple" desc="Includes Ad-Only Transactions" />
                                 <MetricCard title="TACoS %" value={`${financialStats.tacos.toFixed(1)}%`} icon={PieIcon} color="orange" desc="Total Advertising Cost of Sales" />
                             </div>
-                             <button onClick={nextSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
+                             <button onClick={nextSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
                         </div>
                         <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-600" /> Financial Performance</h3>
@@ -729,14 +729,14 @@ const DashboardView = ({
 
                 {currentSlide === 2 && (
                     <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                        <div className="flex items-stretch gap-4 mb-6">
-                            <button onClick={prevSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
+                        <div className="flex items-center gap-4 mb-6">
+                            <button onClick={prevSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
                                 <MetricCard title="Total Stock Value" value={`£${inventoryStats.totalStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Package} color="blue" desc="Based on Cost Price" />
                                 <MetricCard title="Dead Stock Value" value={`£${inventoryStats.deadStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={AlertTriangle} color="gray" desc="0 Sales in Period" />
                                 <MetricCard title="Projected Lost Revenue" value={`£${inventoryStats.lostRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={TrendingDown} color="red" desc="Due to Stockouts" />
                             </div>
-                             <button onClick={nextSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
+                             <button onClick={nextSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
                         </div>
                         <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-purple-600" /> Stock Runway Distribution</h3>
@@ -762,8 +762,8 @@ const DashboardView = ({
                 {/* SLIDE 3: UK MAP VISUALIZATION */}
                 {currentSlide === 3 && (
                     <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                        <div className="flex items-stretch gap-4 mb-6">
-                            <button onClick={prevSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
+                        <div className="flex items-center gap-4 mb-6">
+                            <button onClick={prevSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
                             <div className="flex-1">
                                 <UkSalesMap 
                                     products={products}
@@ -773,7 +773,7 @@ const DashboardView = ({
                                     themeColor={themeColor}
                                 />
                             </div>
-                            <button onClick={nextSlide} className="w-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
+                            <button onClick={nextSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
                         </div>
                     </div>
                 )}
