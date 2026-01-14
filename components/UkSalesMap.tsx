@@ -1,11 +1,10 @@
-
 import React, { useState, useMemo } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
 import { Product, PriceLog } from '../types';
 import { POSTCODE_COORDS } from './UkPostcodeMapCoords';
 import { UK_POSTCODE_AREA_NAME } from '../ukPostcodeAreaNames';
-import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship } from 'lucide-react';
+import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
 const UK_TOPO_JSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
@@ -16,6 +15,8 @@ interface UkSalesMapProps {
   dateRange: { start: Date, end: Date };
   selectedPlatform: string;
   themeColor: string;
+  onPrevSlide?: () => void;
+  onNextSlide?: () => void;
 }
 
 // Region Labels
@@ -31,10 +32,13 @@ interface AreaData {
     code: string;
     revenue: number;
     volume: number;
+    orders: number;
     profit: number;
     margin: number;
     returnRate: number;
     avgShippingCost: number;
+    adSpend: number;
+    tacos: number;
     coordinates: [number, number];
     platformBreakdown: { platform: string; revenue: number; volume: number; profit: number }[];
     topSkus: { sku: string; name: string; profit: number; volume: number }[];
@@ -52,15 +56,19 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   priceHistoryMap, 
   dateRange, 
   selectedPlatform, 
-  themeColor 
+  themeColor,
+  onPrevSlide,
+  onNextSlide
 }) => {
   const [metric, setMetric] = useState<'REVENUE' | 'VOLUME'>('REVENUE');
   const [mode, setMode] = useState<'ABSOLUTE' | 'CHANGE'>('ABSOLUTE');
-  const [colorMetric, setColorMetric] = useState<'MARGIN' | 'RETURN_RATE' | 'AVG_SHIPPING'>('MARGIN');
+  const [colorMetric, setColorMetric] = useState<'MARGIN' | 'RETURN_RATE' | 'AVG_SHIPPING'>('AVG_SHIPPING');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('All');
   const [hoveredArea, setHoveredArea] = useState<any | null>(null);
   const [pinnedArea, setPinnedArea] = useState<any | null>(null);
+  const [tableSort, setTableSort] = useState<{ key: keyof AreaData, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
+
 
   const getAreaDisplayName = (code: string) => {
     const name = UK_POSTCODE_AREA_NAME[code];
@@ -96,12 +104,14 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     const areaStats: Record<string, { 
         revenue: number, 
         volume: number, 
+        orders: number,
         profit: number, 
         prevRevenue: number;
         prevVolume: number;
         prevProfit: number;
         weightedReturnRate: number,
         totalPostage: number,
+        totalAdSpend: number,
         platforms: Record<string, { revenue: number, volume: number, profit: number }>,
         skus: Record<string, { name: string, profit: number, volume: number, revenue: number }>
     }> = {};
@@ -137,21 +147,24 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             const areaCode = match[1].toUpperCase();
             
             if (!areaStats[areaCode]) {
-                areaStats[areaCode] = { revenue: 0, volume: 0, profit: 0, prevRevenue: 0, prevVolume: 0, prevProfit: 0, weightedReturnRate: 0, totalPostage: 0, platforms: {}, skus: {} };
+                areaStats[areaCode] = { revenue: 0, volume: 0, orders: 0, profit: 0, prevRevenue: 0, prevVolume: 0, prevProfit: 0, weightedReturnRate: 0, totalPostage: 0, totalAdSpend: 0, platforms: {}, skus: {} };
             }
 
             const area = areaStats[areaCode];
             const rev = log.price * log.velocity;
             const profit = log.profit !== undefined ? log.profit : rev * ((log.margin || 0) / 100);
             const platform = log.platform || 'Unknown';
+            const adSpend = log.adsSpend || (product.adsFee || 0) * log.velocity;
             
             if (logDate >= dateRange.start && logDate <= dateRange.end) {
                 // Top level stats
                 area.revenue += rev;
                 area.volume += log.velocity;
+                area.orders += 1; // Assuming one log is one transaction/order
                 area.profit += profit;
                 area.weightedReturnRate += (product.returnRate || 0) * log.velocity;
                 area.totalPostage += (product.postage || 0) * log.velocity;
+                area.totalAdSpend += adSpend;
                 
                 // Platform breakdown
                 if (!area.platforms[platform]) area.platforms[platform] = { revenue: 0, volume: 0, profit: 0 };
@@ -190,10 +203,13 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             code,
             revenue: stats.revenue,
             volume: stats.volume,
+            orders: stats.orders,
             profit: stats.profit,
             margin: stats.revenue > 0 ? (stats.profit / stats.revenue) * 100 : 0,
             returnRate: stats.volume > 0 ? stats.weightedReturnRate / stats.volume : 0,
             avgShippingCost: stats.volume > 0 ? stats.totalPostage / stats.volume : 0,
+            adSpend: stats.totalAdSpend,
+            tacos: stats.revenue > 0 ? (stats.totalAdSpend / stats.revenue) * 100 : 0,
             coordinates: POSTCODE_COORDS[code],
             platformBreakdown,
             topSkus,
@@ -295,7 +311,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
       return "#9ca3af"; // gray for no change
   };
 
-
   const sortedAreas = rankedMapData.slice(0, 5);
 
   const areaToShow = useMemo(() => {
@@ -303,12 +318,50 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     if (!hoveredArea) return null;
     return rankedMapData.find(d => d.code === hoveredArea.code);
   }, [hoveredArea, rankedMapData]);
+  
+  const sortedTableData = useMemo(() => {
+    const data = [...rankedMapData];
+    // Sort by selected column
+    data.sort((a, b) => {
+        const valA = (a as any)[tableSort.key] ?? 0;
+        const valB = (b as any)[tableSort.key] ?? 0;
+        const result = valA < valB ? -1 : valA > valB ? 1 : 0;
+        return tableSort.direction === 'asc' ? result : -result;
+    });
+    // Pin selected row to top
+    if (pinnedArea) {
+        const pinnedIndex = data.findIndex(d => d.code === pinnedArea.code);
+        if (pinnedIndex > -1) {
+            const [pinnedItem] = data.splice(pinnedIndex, 1);
+            data.unshift(pinnedItem);
+        }
+    }
+    return data;
+  }, [rankedMapData, tableSort, pinnedArea]);
 
+  const SortableHeader = ({ label, sortKey, align = 'left' }: { label: string, sortKey: keyof AreaData, align?: 'left' | 'right' }) => {
+    const isActive = tableSort.key === sortKey;
+    return (
+        <th 
+            className={`px-3 py-2 cursor-pointer hover:bg-gray-100 transition-colors text-${align}`}
+            onClick={() => setTableSort(prev => ({ key: sortKey, direction: prev.key === sortKey && prev.direction === 'desc' ? 'asc' : 'desc' }))}
+        >
+            <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
+                <span>{label}</span>
+                {isActive ? (
+                    tableSort.direction === 'asc' ? <ChevronUp className="w-3 h-3 text-indigo-500" /> : <ChevronDown className="w-3 h-3 text-indigo-500" />
+                ) : (
+                    <ArrowUpDown className="w-3 h-3 text-gray-300" />
+                )}
+            </div>
+        </th>
+    );
+  };
 
   return (
     <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4">
         {/* Controls Header */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4 p-4 bg-white/50 rounded-xl border border-gray-200">
+        <div className="flex flex-row justify-between items-center mb-4 gap-4 p-4 bg-white/50 rounded-xl border border-gray-200">
             <div className="flex items-center gap-2">
                 <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
                     <MapIcon className="w-5 h-5" />
@@ -319,84 +372,89 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-                {/* Mode Toggle */}
-                <div className="flex bg-gray-200 p-1 rounded-lg">
-                    <button 
-                        onClick={() => setMode('ABSOLUTE')}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'ABSOLUTE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-                    >
-                        <BarChart2 className="w-3 h-3" /> Absolute
-                    </button>
-                    <button 
-                        onClick={() => setMode('CHANGE')}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'CHANGE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-                    >
-                        <TrendingUp className="w-3 h-3" /> Change (PoP)
-                    </button>
-                </div>
-
-                {/* Metric Toggle */}
-                <div className="flex bg-gray-200 p-1 rounded-lg">
-                    <button 
-                        onClick={() => setMetric('REVENUE')}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${metric === 'REVENUE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-                    >
-                        <DollarSign className="w-3 h-3" /> Revenue
-                    </button>
-                    <button 
-                        onClick={() => setMetric('VOLUME')}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${metric === 'VOLUME' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-                    >
-                        <Package className="w-3 h-3" /> Volume
-                    </button>
-                </div>
-
-                <div className="h-6 w-px bg-gray-300"></div>
+            <div className="flex items-center gap-4">
+                {onPrevSlide && <button onClick={onPrevSlide} className="w-12 h-12 flex-shrink-0 bg-white/50 border border-gray-200 shadow-sm rounded-xl flex items-center justify-center transition-colors text-gray-500 hover:text-indigo-600 hover:bg-white"><ChevronLeft className="w-6 h-6" /></button>}
                 
-                {/* Color Metric Toggle */}
-                 <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
-                    COLOR:
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-100/50 rounded-lg border border-gray-200/80">
+                    {/* Mode Toggle */}
                     <div className="flex bg-gray-200 p-1 rounded-lg">
-                        <button onClick={() => setColorMetric('MARGIN')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'MARGIN' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Margin %</button>
-                        <button onClick={() => setColorMetric('RETURN_RATE')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'RETURN_RATE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Return Rate</button>
-                        <button onClick={() => setColorMetric('AVG_SHIPPING')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'AVG_SHIPPING' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Avg Shipping</button>
+                        <button 
+                            onClick={() => setMode('ABSOLUTE')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'ABSOLUTE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                        >
+                            <BarChart2 className="w-3 h-3" /> Absolute
+                        </button>
+                        <button 
+                            onClick={() => setMode('CHANGE')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'CHANGE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                        >
+                            <TrendingUp className="w-3 h-3" /> Change (PoP)
+                        </button>
+                    </div>
+
+                    {/* Metric Toggle */}
+                    <div className="flex bg-gray-200 p-1 rounded-lg">
+                        <button 
+                            onClick={() => setMetric('REVENUE')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${metric === 'REVENUE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                        >
+                            <DollarSign className="w-3 h-3" /> Revenue
+                        </button>
+                        <button 
+                            onClick={() => setMetric('VOLUME')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${metric === 'VOLUME' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                        >
+                            <Package className="w-3 h-3" /> Volume
+                        </button>
+                    </div>
+
+                    <div className="h-6 w-px bg-gray-300"></div>
+                    
+                    {/* Color Metric Toggle */}
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                        COLOR:
+                        <div className="flex bg-gray-200 p-1 rounded-lg">
+                            <button onClick={() => setColorMetric('MARGIN')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'MARGIN' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Margin %</button>
+                            <button onClick={() => setColorMetric('RETURN_RATE')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'RETURN_RATE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Return Rate</button>
+                            <button onClick={() => setColorMetric('AVG_SHIPPING')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'AVG_SHIPPING' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Avg Shipping</button>
+                        </div>
+                    </div>
+
+                    <div className="h-6 w-px bg-gray-300"></div>
+
+                    {/* Category Filters */}
+                    <div className="relative">
+                        <select 
+                            value={selectedCategory}
+                            onChange={e => { setSelectedCategory(e.target.value); setSelectedSubcategory('All'); }}
+                            className="pl-8 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="All">All Categories</option>
+                            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <Filter className="absolute left-2.5 top-2 w-3 h-3 text-gray-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative">
+                        <select 
+                            value={selectedSubcategory}
+                            onChange={e => setSelectedSubcategory(e.target.value)}
+                            className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-indigo-500"
+                            disabled={selectedCategory === 'All'}
+                        >
+                            <option value="All">All Subcategories</option>
+                            {subcategories.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
                     </div>
                 </div>
-
-                <div className="h-6 w-px bg-gray-300"></div>
-
-
-                {/* Filters */}
-                <div className="relative">
-                    <select 
-                        value={selectedCategory}
-                        onChange={e => { setSelectedCategory(e.target.value); setSelectedSubcategory('All'); }}
-                        className="pl-8 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                        <option value="All">All Categories</option>
-                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <Filter className="absolute left-2.5 top-2 w-3 h-3 text-gray-400 pointer-events-none" />
-                </div>
-
-                <div className="relative">
-                    <select 
-                        value={selectedSubcategory}
-                        onChange={e => setSelectedSubcategory(e.target.value)}
-                        className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-indigo-500"
-                        disabled={selectedCategory === 'All'}
-                    >
-                        <option value="All">All Subcategories</option>
-                        {subcategories.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
+                {onNextSlide && <button onClick={onNextSlide} className="w-12 h-12 flex-shrink-0 bg-white/50 border border-gray-200 shadow-sm rounded-xl flex items-center justify-center transition-colors text-gray-500 hover:text-indigo-600 hover:bg-white"><ChevronRight className="w-6 h-6" /></button>}
             </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 h-[500px]">
+        <div className="flex flex-col lg:flex-row gap-6">
             {/* Map Visualization */}
-            <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm relative overflow-hidden" onClick={() => setPinnedArea(null)}>
+            <div className="flex-1 h-[450px] bg-white rounded-xl border border-gray-200 shadow-sm relative overflow-hidden" onClick={() => setPinnedArea(null)}>
                 <ComposableMap 
                     projection="geoAzimuthalEqualArea"
                     projectionConfig={{
@@ -502,6 +560,10 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         <span className="text-gray-500 flex items-center gap-1"><CornerDownLeft className="w-3 h-3"/>Return Rate</span>
                                         <span className={`font-bold ${areaToShow.returnRate > 5 ? 'text-red-600' : 'text-gray-800'}`}>{areaToShow.returnRate.toFixed(1)}%</span>
                                     </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500 flex items-center gap-1"><Ship className="w-3 h-3"/>Avg Shipping</span>
+                                        <span className={`font-bold ${areaToShow.avgShippingCost > 7 ? 'text-red-600' : areaToShow.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-800'}`}>£{areaToShow.avgShippingCost.toFixed(2)}</span>
+                                    </div>
                                     {areaToShow.platformBreakdown.length > 0 &&
                                       <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
                                           <span className="text-gray-500">Top Platform</span>
@@ -585,8 +647,8 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                 </div>
             </div>
 
-            {/* Right Panel: Conditional Leaderboard or Snapshot */}
-            <div className="w-full lg:w-80 flex flex-col gap-4">
+            {/* Right Panel: Leaderboard or Snapshot */}
+            <div className="w-full lg:w-96 flex flex-col gap-4">
                 {pinnedArea ? (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex-1 animate-in fade-in">
                         <div className="flex justify-between items-center mb-4">
@@ -613,6 +675,14 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <div className="bg-amber-50 border border-amber-100 rounded-lg p-2">
                                 <div className="text-xs text-amber-700 font-bold uppercase">Margin</div>
                                 <div className="text-lg font-bold text-amber-900">{pinnedArea.margin.toFixed(1)}%</div>
+                            </div>
+                             <div className="bg-red-50/70 border border-red-100 rounded-lg p-2">
+                                <div className="text-xs text-red-700 font-bold uppercase">Return Rate</div>
+                                <div className={`text-lg font-bold ${pinnedArea.returnRate > 5 ? 'text-red-900' : 'text-gray-800'}`}>{pinnedArea.returnRate.toFixed(1)}%</div>
+                            </div>
+                            <div className="bg-cyan-50/70 border border-cyan-100 rounded-lg p-2">
+                                <div className="text-xs text-cyan-700 font-bold uppercase">Avg Shipping</div>
+                                <div className={`text-lg font-bold text-cyan-900`}>£{pinnedArea.avgShippingCost.toFixed(2)}</div>
                             </div>
                         </div>
                         
@@ -718,6 +788,54 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         </div>
                     </>
                 )}
+            </div>
+        </div>
+        
+        {/* Table */}
+        <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col mt-6 min-h-0">
+            <div className="p-3 bg-gray-50 border-b border-gray-100">
+                <h4 className="text-xs font-bold text-gray-600 uppercase">Regional Detail Table</h4>
+            </div>
+            <div className="overflow-auto">
+                <table className="w-full text-left text-xs whitespace-nowrap">
+                    <thead className="bg-gray-100 text-gray-500 font-semibold sticky top-0">
+                        <tr>
+                            <SortableHeader label="Area" sortKey="code" />
+                            <SortableHeader label="Orders" sortKey="orders" align="right"/>
+                            <SortableHeader label="Units" sortKey="volume" align="right"/>
+                            <SortableHeader label="Revenue" sortKey="revenue" align="right"/>
+                            <SortableHeader label="Profit" sortKey="profit" align="right"/>
+                            <SortableHeader label="Margin %" sortKey="margin" align="right"/>
+                            <SortableHeader label="Return %" sortKey="returnRate" align="right"/>
+                            <SortableHeader label="Ad Spend" sortKey="adSpend" align="right"/>
+                            <SortableHeader label="TACoS %" sortKey="tacos" align="right"/>
+                            <SortableHeader label="Avg Ship" sortKey="avgShippingCost" align="right"/>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {sortedTableData.map(d => {
+                            const isPinned = pinnedArea && pinnedArea.code === d.code;
+                            return (
+                                <tr 
+                                    key={d.code} 
+                                    className={`hover:bg-gray-50 cursor-pointer ${isPinned ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
+                                    onClick={() => setPinnedArea(d)}
+                                >
+                                    <td className="px-3 py-2 font-bold text-gray-800">{getAreaDisplayName(d.code)}</td>
+                                    <td className="px-3 py-2 text-right font-mono">{d.orders}</td>
+                                    <td className="px-3 py-2 text-right font-mono">{d.volume}</td>
+                                    <td className="px-3 py-2 text-right font-mono">£{d.revenue.toFixed(0)}</td>
+                                    <td className={`px-3 py-2 text-right font-mono font-bold ${d.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>£{d.profit.toFixed(0)}</td>
+                                    <td className={`px-3 py-2 text-right font-mono font-bold ${d.margin > 15 ? 'text-green-600' : d.margin > 0 ? 'text-amber-600' : 'text-red-600'}`}>{d.margin.toFixed(1)}%</td>
+                                    <td className={`px-3 py-2 text-right font-mono ${d.returnRate > 5 ? 'text-red-600' : 'text-gray-600'}`}>{d.returnRate.toFixed(1)}%</td>
+                                    <td className="px-3 py-2 text-right font-mono text-orange-600">£{d.adSpend.toFixed(0)}</td>
+                                    <td className={`px-3 py-2 text-right font-mono ${d.tacos > 15 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{d.tacos.toFixed(1)}%</td>
+                                    <td className={`px-3 py-2 text-right font-mono ${d.avgShippingCost > 7 ? 'text-red-600' : d.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-600'}`}>£{d.avgShippingCost.toFixed(2)}</td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

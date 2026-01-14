@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail, PriceChangeRecord, RefundLog } from '../types';
@@ -552,7 +551,7 @@ const DashboardView = ({
                 </div>
             </div>
 
-            <div>
+            <div className="min-h-[850px]">
                 <div className="flex justify-center gap-2 mb-4">
                     {[0, 1, 2, 3].map(idx => (
                         <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${currentSlide === idx ? 'w-8 bg-indigo-600' : 'w-2 bg-gray-300'}`} />
@@ -761,19 +760,17 @@ const DashboardView = ({
 
                 {/* SLIDE 3: UK MAP VISUALIZATION */}
                 {currentSlide === 3 && (
-                    <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                        <div className="flex items-center gap-4 mb-6">
-                            <button onClick={prevSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
-                            <div className="flex-1">
-                                <UkSalesMap 
-                                    products={products}
-                                    priceHistoryMap={priceHistoryMap}
-                                    dateRange={dateRange}
-                                    selectedPlatform={platformScope}
-                                    themeColor={themeColor}
-                                />
-                            </div>
-                            <button onClick={nextSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
+                    <div className="animate-in fade-in slide-in-from-right-8 duration-300 h-full">
+                        <div className="h-full">
+                            <UkSalesMap 
+                                products={products}
+                                priceHistoryMap={priceHistoryMap}
+                                dateRange={dateRange}
+                                selectedPlatform={platformScope}
+                                themeColor={themeColor}
+                                onPrevSlide={prevSlide}
+                                onNextSlide={nextSlide}
+                            />
                         </div>
                     </div>
                 )}
