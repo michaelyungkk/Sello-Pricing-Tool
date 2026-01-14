@@ -5,7 +5,7 @@ import { scaleLinear } from 'd3-scale';
 import { Product, PriceLog } from '../types';
 import { POSTCODE_COORDS } from './UkPostcodeMapCoords';
 import { UK_POSTCODE_AREA_NAME } from '../ukPostcodeAreaNames';
-import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon } from 'lucide-react';
+import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship } from 'lucide-react';
 
 // Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
 const UK_TOPO_JSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
@@ -34,6 +34,7 @@ interface AreaData {
     profit: number;
     margin: number;
     returnRate: number;
+    avgShippingCost: number;
     coordinates: [number, number];
     platformBreakdown: { platform: string; revenue: number; volume: number; profit: number }[];
     topSkus: { sku: string; name: string; profit: number; volume: number }[];
@@ -55,6 +56,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
 }) => {
   const [metric, setMetric] = useState<'REVENUE' | 'VOLUME'>('REVENUE');
   const [mode, setMode] = useState<'ABSOLUTE' | 'CHANGE'>('ABSOLUTE');
+  const [colorMetric, setColorMetric] = useState<'MARGIN' | 'RETURN_RATE' | 'AVG_SHIPPING'>('MARGIN');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('All');
   const [hoveredArea, setHoveredArea] = useState<any | null>(null);
@@ -99,6 +101,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         prevVolume: number;
         prevProfit: number;
         weightedReturnRate: number,
+        totalPostage: number,
         platforms: Record<string, { revenue: number, volume: number, profit: number }>,
         skus: Record<string, { name: string, profit: number, volume: number, revenue: number }>
     }> = {};
@@ -134,7 +137,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             const areaCode = match[1].toUpperCase();
             
             if (!areaStats[areaCode]) {
-                areaStats[areaCode] = { revenue: 0, volume: 0, profit: 0, prevRevenue: 0, prevVolume: 0, prevProfit: 0, weightedReturnRate: 0, platforms: {}, skus: {} };
+                areaStats[areaCode] = { revenue: 0, volume: 0, profit: 0, prevRevenue: 0, prevVolume: 0, prevProfit: 0, weightedReturnRate: 0, totalPostage: 0, platforms: {}, skus: {} };
             }
 
             const area = areaStats[areaCode];
@@ -148,6 +151,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                 area.volume += log.velocity;
                 area.profit += profit;
                 area.weightedReturnRate += (product.returnRate || 0) * log.velocity;
+                area.totalPostage += (product.postage || 0) * log.velocity;
                 
                 // Platform breakdown
                 if (!area.platforms[platform]) area.platforms[platform] = { revenue: 0, volume: 0, profit: 0 };
@@ -189,6 +193,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             profit: stats.profit,
             margin: stats.revenue > 0 ? (stats.profit / stats.revenue) * 100 : 0,
             returnRate: stats.volume > 0 ? stats.weightedReturnRate / stats.volume : 0,
+            avgShippingCost: stats.volume > 0 ? stats.totalPostage / stats.volume : 0,
             coordinates: POSTCODE_COORDS[code],
             platformBreakdown,
             topSkus,
@@ -249,9 +254,40 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     return [0, max / 2, max];
   }, [rankedMapData]);
 
-  const colorScale = scaleLinear<string>()
-    .domain(marginDomain)
-    .range(["#ef4444", "#facc15", "#22c55e"]); // Red -> Yellow -> Green
+  const returnRateDomain = useMemo(() => {
+    const rates = rankedMapData.map(d => d.returnRate).filter(r => isFinite(r));
+    if (rates.length === 0) return [0, 5, 10];
+    const max = Math.max(...rates);
+    // Green (0) -> Yellow (5) -> Red (max or 10)
+    return [0, Math.min(max, 5), Math.max(max, 10)];
+  }, [rankedMapData]);
+
+  const shippingCostDomain = useMemo(() => {
+    const costs = rankedMapData.map(d => d.avgShippingCost).filter(c => isFinite(c) && c > 0);
+    if (costs.length === 0) return [2, 5, 10];
+    const min = Math.min(...costs);
+    const max = Math.max(...costs);
+    const mid = (min + max) / 2;
+    // Green (low) -> Yellow (mid) -> Red (high)
+    return [min, mid, max];
+  }, [rankedMapData]);
+
+  const colorScale = useMemo(() => {
+      if (colorMetric === 'RETURN_RATE') {
+          return scaleLinear<string>()
+              .domain(returnRateDomain)
+              .range(["#22c55e", "#facc15", "#ef4444"]); // Green -> Yellow -> Red
+      }
+      if (colorMetric === 'AVG_SHIPPING') {
+          return scaleLinear<string>()
+              .domain(shippingCostDomain)
+              .range(["#22c55e", "#facc15", "#ef4444"]); // Green -> Yellow -> Red
+      }
+      // Default to Margin
+      return scaleLinear<string>()
+          .domain(marginDomain)
+          .range(["#ef4444", "#facc15", "#22c55e"]); // Red -> Yellow -> Green
+  }, [colorMetric, marginDomain, returnRateDomain, shippingCostDomain]);
   
   const deltaColor = (value: number) => {
       if (value > 0) return "#22c55e"; // green
@@ -317,6 +353,19 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                 </div>
 
                 <div className="h-6 w-px bg-gray-300"></div>
+                
+                {/* Color Metric Toggle */}
+                 <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                    COLOR:
+                    <div className="flex bg-gray-200 p-1 rounded-lg">
+                        <button onClick={() => setColorMetric('MARGIN')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'MARGIN' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Margin %</button>
+                        <button onClick={() => setColorMetric('RETURN_RATE')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'RETURN_RATE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Return Rate</button>
+                        <button onClick={() => setColorMetric('AVG_SHIPPING')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'AVG_SHIPPING' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Avg Shipping</button>
+                    </div>
+                </div>
+
+                <div className="h-6 w-px bg-gray-300"></div>
+
 
                 {/* Filters */}
                 <div className="relative">
@@ -405,10 +454,11 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                 <Marker key={d.code} coordinates={d.coordinates}>
                                     <circle
                                         r={sizeScale(d.sizeValue)}
-                                        fill={mode === 'ABSOLUTE' ? colorScale(d.margin) : deltaColor(d.value)}
+                                        fill={mode === 'ABSOLUTE' ? colorScale(colorMetric === 'MARGIN' ? d.margin : colorMetric === 'RETURN_RATE' ? d.returnRate : d.avgShippingCost) : deltaColor(d.value)}
+                                        fillOpacity={0.7}
                                         stroke={isPinned ? themeColor : '#fff'}
                                         strokeWidth={isPinned ? 2.5 : 1}
-                                        className="cursor-pointer hover:opacity-80 transition-all"
+                                        className="cursor-pointer hover:opacity-100 transition-all"
                                         onMouseEnter={() => setHoveredArea(d)}
                                         onMouseLeave={() => setHoveredArea(null)}
                                         onClick={(e) => {
@@ -452,6 +502,14 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         <span className="text-gray-500 flex items-center gap-1"><CornerDownLeft className="w-3 h-3"/>Return Rate</span>
                                         <span className={`font-bold ${areaToShow.returnRate > 5 ? 'text-red-600' : 'text-gray-800'}`}>{areaToShow.returnRate.toFixed(1)}%</span>
                                     </div>
+                                    {areaToShow.platformBreakdown.length > 0 &&
+                                      <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
+                                          <span className="text-gray-500">Top Platform</span>
+                                          <span className="font-bold text-gray-800">
+                                              {areaToShow.platformBreakdown[0].platform} ({((areaToShow.platformBreakdown[0].revenue / areaToShow.revenue) * 100).toFixed(0)}%)
+                                          </span>
+                                      </div>
+                                    }
                                 </>
                             ) : (
                                 <>
@@ -467,7 +525,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         <span>Change</span>
                                         <span className="flex items-center gap-1">
                                             {areaToShow.value > 0 ? <TrendingUp className="w-3 h-3"/> : <TrendingDownIcon className="w-3 h-3"/>}
-                                            {areaToShow.value > 0 ? '+' : ''}{metric === 'REVENUE' ? `£${Math.abs(areaToShow.value).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `${Math.abs(areaToShow.value)} u`}
+                                            {areaToShow.value > 0 ? '+' : ''}{metric === 'REVENUE' ? `£${Math.abs(areaToShow.value).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `${areaToShow.value}`}
                                             ({isFinite(areaToShow.revenueDeltaPct) ? `${areaToShow.value > 0 ? '+' : ''}${(metric === 'REVENUE' ? areaToShow.revenueDeltaPct : areaToShow.volumeDeltaPct).toFixed(0)}%` : 'New'})
                                         </span>
                                     </div>
@@ -498,11 +556,15 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         </div>
                         {mode === 'ABSOLUTE' ? (
                             <div>
-                                <div className="text-[10px] text-gray-500 font-medium">Color: Margin %</div>
-                                <div className="w-full h-3 rounded mt-1" style={{ background: `linear-gradient(to right, ${colorScale(marginDomain[0])}, ${colorScale(marginDomain[1])}, ${colorScale(marginDomain[2])})` }}></div>
+                                <div className="text-[10px] text-gray-500 font-medium">Color: {
+                                    colorMetric === 'MARGIN' ? 'Margin %' :
+                                    colorMetric === 'RETURN_RATE' ? 'Return Rate' :
+                                    'Avg Shipping'
+                                }</div>
+                                <div className="w-full h-3 rounded mt-1" style={{ background: `linear-gradient(to right, ${colorScale.range()[0]}, ${colorScale.range()[1]}, ${colorScale.range()[2]})` }}></div>
                                 <div className="flex justify-between text-[9px] font-mono mt-0.5">
-                                    <span>{marginDomain[0].toFixed(0)}%</span>
-                                    <span>{marginDomain[2].toFixed(0)}%</span>
+                                    <span>{colorMetric === 'AVG_SHIPPING' ? 'Low' : 'Low'}</span>
+                                    <span>{colorMetric === 'AVG_SHIPPING' ? 'High' : 'High'}</span>
                                 </div>
                             </div>
                         ) : (
@@ -557,6 +619,11 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         {/* Platform Breakdown */}
                         <div className="mb-4">
                             <h5 className="font-bold text-gray-600 text-xs uppercase mb-2 flex items-center gap-2"><PieChart className="w-3 h-3"/> Platform Mix</h5>
+                            {pinnedArea.platformBreakdown.length > 0 && (
+                                <div className="text-xs text-gray-500 mb-2">
+                                    Top: <span className="font-bold text-gray-800">{pinnedArea.platformBreakdown[0].platform} ({((pinnedArea.platformBreakdown[0].revenue / pinnedArea.revenue) * 100).toFixed(0)}%)</span>
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 {pinnedArea.platformBreakdown.slice(0, 4).map((plat: any, i: number) => (
                                     <div key={i} className="flex justify-between items-center text-xs">

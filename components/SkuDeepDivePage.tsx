@@ -1325,7 +1325,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                         <div className="text-right w-20">
                                             <div className="text-gray-400">Sales Share %</div>
                                             <div className="font-mono font-bold text-gray-700">
-                                                {sub.revenueSharePct.toFixed(1)}%
+                                                {'>'} {sub.revenueSharePct.toFixed(1)}%
                                             </div>
                                         </div>
                                         <div className="text-right w-24">
