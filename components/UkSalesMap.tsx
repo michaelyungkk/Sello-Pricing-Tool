@@ -4,7 +4,7 @@ import { scaleLinear } from 'd3-scale';
 import { Product, PriceLog } from '../types';
 import { POSTCODE_COORDS } from './UkPostcodeMapCoords';
 import { UK_POSTCODE_AREA_NAME } from '../ukPostcodeAreaNames';
-import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight } from 'lucide-react';
 
 // Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
 const UK_TOPO_JSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
@@ -28,6 +28,14 @@ const regions = [
 ];
 
 // In-component type for aggregated data
+interface DistrictData {
+    code: string;
+    revenue: number;
+    volume: number;
+    profit: number;
+    totalShippingCost: number;
+    avgShippingCost: number;
+}
 interface AreaData {
     code: string;
     revenue: number;
@@ -48,6 +56,8 @@ interface AreaData {
     volumeDelta: number;
     revenueDeltaPct: number;
     volumeDeltaPct: number;
+    districtBreakdown: DistrictData[];
+    totalShippingCost: number;
 }
 
 
@@ -100,6 +110,12 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     const prevEnd = new Date(dateRange.start.getTime());
     prevEnd.setDate(prevEnd.getDate() - 1);
     const prevStart = new Date(prevEnd.getTime() - duration);
+    
+    // Timezone-safe string boundaries for filtering
+    const sStr = dateRange.start.toISOString().split('T')[0];
+    const eStr = dateRange.end.toISOString().split('T')[0];
+    const prevSStr = prevStart.toISOString().split('T')[0];
+    const prevEStr = prevEnd.toISOString().split('T')[0];
 
     const areaStats: Record<string, { 
         revenue: number, 
@@ -115,6 +131,8 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         platforms: Record<string, { revenue: number, volume: number, profit: number }>,
         skus: Record<string, { name: string, profit: number, volume: number, revenue: number }>
     }> = {};
+    
+    const districtStats: Record<string, { revenue: number, volume: number, profit: number, totalPostage: number }> = {};
 
     const skuMap = new Map<string, Product>();
     
@@ -137,26 +155,42 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         logs.forEach(log => {
             // Apply Global Filters
             if (selectedPlatform !== 'All' && log.platform !== selectedPlatform) return;
-            const logDate = new Date(log.date);
+            const logDateStr = log.date.split('T')[0];
             
             // Extract Postcode Area
             if (!log.postcode) return;
-            const match = log.postcode.match(/^([A-Z]{1,2})/i); 
-            if (!match) return;
+            const areaMatch = log.postcode.match(/^([A-Z]{1,2})/i); 
+            const districtMatch = log.postcode.match(/^([A-Z]{1,2}[0-9R][0-9A-Z]?)/i);
             
-            const areaCode = match[1].toUpperCase();
+            if (!areaMatch) return;
+            const areaCode = areaMatch[1].toUpperCase();
             
             if (!areaStats[areaCode]) {
                 areaStats[areaCode] = { revenue: 0, volume: 0, orders: 0, profit: 0, prevRevenue: 0, prevVolume: 0, prevProfit: 0, weightedReturnRate: 0, totalPostage: 0, totalAdSpend: 0, platforms: {}, skus: {} };
             }
 
-            const area = areaStats[areaCode];
             const rev = log.price * log.velocity;
             const profit = log.profit !== undefined ? log.profit : rev * ((log.margin || 0) / 100);
+
+            // Aggregate District Level Data
+            if (districtMatch) {
+                const districtCode = districtMatch[1].toUpperCase();
+                if (!districtStats[districtCode]) {
+                    districtStats[districtCode] = { revenue: 0, volume: 0, profit: 0, totalPostage: 0 };
+                }
+                if (logDateStr >= sStr && logDateStr <= eStr) {
+                    districtStats[districtCode].revenue += rev;
+                    districtStats[districtCode].volume += log.velocity;
+                    districtStats[districtCode].profit += profit;
+                    districtStats[districtCode].totalPostage += (product.postage || 0) * log.velocity;
+                }
+            }
+            
+            const area = areaStats[areaCode];
             const platform = log.platform || 'Unknown';
             const adSpend = log.adsSpend || (product.adsFee || 0) * log.velocity;
             
-            if (logDate >= dateRange.start && logDate <= dateRange.end) {
+            if (logDateStr >= sStr && logDateStr <= eStr) {
                 // Top level stats
                 area.revenue += rev;
                 area.volume += log.velocity;
@@ -178,7 +212,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                 area.skus[sku].volume += log.velocity;
                 area.skus[sku].revenue += rev;
 
-            } else if (logDate >= prevStart && logDate <= prevEnd) {
+            } else if (logDateStr >= prevSStr && logDateStr <= prevEStr) {
                 area.prevRevenue += rev;
                 area.prevVolume += log.velocity;
                 area.prevProfit += profit;
@@ -198,6 +232,21 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
 
         const revenueDelta = stats.revenue - stats.prevRevenue;
         const volumeDelta = stats.volume - stats.prevVolume;
+        
+        const districtBreakdown = Object.entries(districtStats)
+          .filter(([districtCode]) => {
+              const prefixMatch = districtCode.match(/^[A-Z]+/);
+              return prefixMatch && prefixMatch[0] === code;
+          })
+          .map(([districtCode, districtData]) => ({
+            code: districtCode,
+            revenue: districtData.revenue,
+            volume: districtData.volume,
+            profit: districtData.profit,
+            totalShippingCost: districtData.totalPostage,
+            avgShippingCost: districtData.volume > 0 ? districtData.totalPostage / districtData.volume : 0
+          }))
+          .sort((a, b) => b.revenue - a.revenue);
 
         return {
             code,
@@ -208,6 +257,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             margin: stats.revenue > 0 ? (stats.profit / stats.revenue) * 100 : 0,
             returnRate: stats.volume > 0 ? stats.weightedReturnRate / stats.volume : 0,
             avgShippingCost: stats.volume > 0 ? stats.totalPostage / stats.volume : 0,
+            totalShippingCost: stats.totalPostage,
             adSpend: stats.totalAdSpend,
             tacos: stats.revenue > 0 ? (stats.totalAdSpend / stats.revenue) * 100 : 0,
             coordinates: POSTCODE_COORDS[code],
@@ -219,6 +269,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             volumeDelta,
             revenueDeltaPct: stats.prevRevenue > 0 ? (revenueDelta / stats.prevRevenue) * 100 : (revenueDelta > 0 ? Infinity : 0),
             volumeDeltaPct: stats.prevVolume > 0 ? (volumeDelta / stats.prevVolume) * 100 : (volumeDelta > 0 ? Infinity : 0),
+            districtBreakdown,
         };
     }).filter(d => d.coordinates);
   }, [products, priceHistoryMap, dateRange, selectedPlatform, selectedCategory, selectedSubcategory]);
@@ -328,16 +379,9 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         const result = valA < valB ? -1 : valA > valB ? 1 : 0;
         return tableSort.direction === 'asc' ? result : -result;
     });
-    // Pin selected row to top
-    if (pinnedArea) {
-        const pinnedIndex = data.findIndex(d => d.code === pinnedArea.code);
-        if (pinnedIndex > -1) {
-            const [pinnedItem] = data.splice(pinnedIndex, 1);
-            data.unshift(pinnedItem);
-        }
-    }
+    // This logic is now handled in the JSX to interleave rows
     return data;
-  }, [rankedMapData, tableSort, pinnedArea]);
+  }, [rankedMapData, tableSort]);
 
   const SortableHeader = ({ label, sortKey, align = 'left' }: { label: string, sortKey: keyof AreaData, align?: 'left' | 'right' }) => {
     const isActive = tableSort.key === sortKey;
@@ -726,7 +770,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                 ))}
                             </div>
                         </div>
-
                     </div>
                 ) : (
                     <>
@@ -792,7 +835,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         </div>
         
         {/* Table */}
-        <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col mt-6 min-h-0">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col mt-6">
             <div className="p-3 bg-gray-50 border-b border-gray-100">
                 <h4 className="text-xs font-bold text-gray-600 uppercase">Regional Detail Table</h4>
             </div>
@@ -809,6 +852,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <SortableHeader label="Return %" sortKey="returnRate" align="right"/>
                             <SortableHeader label="Ad Spend" sortKey="adSpend" align="right"/>
                             <SortableHeader label="TACoS %" sortKey="tacos" align="right"/>
+                            <SortableHeader label="Total Ship" sortKey="totalShippingCost" align="right"/>
                             <SortableHeader label="Avg Ship" sortKey="avgShippingCost" align="right"/>
                         </tr>
                     </thead>
@@ -816,22 +860,46 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         {sortedTableData.map(d => {
                             const isPinned = pinnedArea && pinnedArea.code === d.code;
                             return (
-                                <tr 
-                                    key={d.code} 
-                                    className={`hover:bg-gray-50 cursor-pointer ${isPinned ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
-                                    onClick={() => setPinnedArea(d)}
-                                >
-                                    <td className="px-3 py-2 font-bold text-gray-800">{getAreaDisplayName(d.code)}</td>
-                                    <td className="px-3 py-2 text-right font-mono">{d.orders}</td>
-                                    <td className="px-3 py-2 text-right font-mono">{d.volume}</td>
-                                    <td className="px-3 py-2 text-right font-mono">£{d.revenue.toFixed(0)}</td>
-                                    <td className={`px-3 py-2 text-right font-mono font-bold ${d.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>£{d.profit.toFixed(0)}</td>
-                                    <td className={`px-3 py-2 text-right font-mono font-bold ${d.margin > 15 ? 'text-green-600' : d.margin > 0 ? 'text-amber-600' : 'text-red-600'}`}>{d.margin.toFixed(1)}%</td>
-                                    <td className={`px-3 py-2 text-right font-mono ${d.returnRate > 5 ? 'text-red-600' : 'text-gray-600'}`}>{d.returnRate.toFixed(1)}%</td>
-                                    <td className="px-3 py-2 text-right font-mono text-orange-600">£{d.adSpend.toFixed(0)}</td>
-                                    <td className={`px-3 py-2 text-right font-mono ${d.tacos > 15 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{d.tacos.toFixed(1)}%</td>
-                                    <td className={`px-3 py-2 text-right font-mono ${d.avgShippingCost > 7 ? 'text-red-600' : d.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-600'}`}>£{d.avgShippingCost.toFixed(2)}</td>
-                                </tr>
+                                <React.Fragment key={d.code}>
+                                    <tr 
+                                        className={`hover:bg-gray-50 cursor-pointer ${isPinned ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
+                                        onClick={() => setPinnedArea(d)}
+                                    >
+                                        <td className="px-3 py-2 font-bold text-gray-800">{getAreaDisplayName(d.code)}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{d.orders}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{d.volume}</td>
+                                        <td className="px-3 py-2 text-right font-mono">£{d.revenue.toFixed(0)}</td>
+                                        <td className={`px-3 py-2 text-right font-mono font-bold ${d.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>£{d.profit.toFixed(0)}</td>
+                                        <td className={`px-3 py-2 text-right font-mono font-bold ${d.margin > 15 ? 'text-green-600' : d.margin > 0 ? 'text-amber-600' : 'text-red-600'}`}>{d.margin.toFixed(1)}%</td>
+                                        <td className={`px-3 py-2 text-right font-mono ${d.returnRate > 5 ? 'text-red-600' : 'text-gray-600'}`}>{d.returnRate.toFixed(1)}%</td>
+                                        <td className="px-3 py-2 text-right font-mono text-orange-600">£{d.adSpend.toFixed(0)}</td>
+                                        <td className={`px-3 py-2 text-right font-mono ${d.tacos > 15 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{d.tacos.toFixed(1)}%</td>
+                                        <td className="px-3 py-2 text-right font-mono text-gray-600">£{d.totalShippingCost.toFixed(0)}</td>
+                                        <td className={`px-3 py-2 text-right font-mono ${d.avgShippingCost > 7 ? 'text-red-600' : d.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-600'}`}>£{d.avgShippingCost.toFixed(2)}</td>
+                                    </tr>
+                                    {isPinned && d.districtBreakdown.length > 0 && (
+                                        d.districtBreakdown.map((district, index) => (
+                                            <tr key={`${d.code}-${district.code}`} className="bg-gray-50/50 text-gray-600">
+                                                <td className="px-3 py-1.5">
+                                                    <div className="flex items-center gap-2 pl-4">
+                                                        <CornerDownRight className="w-3 h-3 text-gray-400" />
+                                                        <span className="font-mono font-semibold">{district.code}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 py-1.5 text-right font-mono">-</td>
+                                                <td className="px-3 py-1.5 text-right font-mono">{district.volume}</td>
+                                                <td className="px-3 py-1.5 text-right font-mono">£{district.revenue.toFixed(0)}</td>
+                                                <td className={`px-3 py-1.5 text-right font-mono ${district.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>£{district.profit.toFixed(0)}</td>
+                                                <td className="px-3 py-1.5 text-center text-gray-300">-</td>
+                                                <td className="px-3 py-1.5 text-center text-gray-300">-</td>
+                                                <td className="px-3 py-1.5 text-center text-gray-300">-</td>
+                                                <td className="px-3 py-1.5 text-center text-gray-300">-</td>
+                                                <td className="px-3 py-1.5 text-right font-mono text-gray-600">£{district.totalShippingCost.toFixed(0)}</td>
+                                                <td className="px-3 py-1.5 text-right font-mono text-gray-600">£{district.avgShippingCost.toFixed(2)}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </React.Fragment>
                             )
                         })}
                     </tbody>
