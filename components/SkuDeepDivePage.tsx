@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows } from 'lucide-react';
@@ -19,7 +20,7 @@ interface SkuDeepDivePageProps {
     priceChangeHistory?: PriceChangeRecord[];
     initialTimeWindow?: 'yesterday' | '7d' | '30d' | 'custom';
     focus?: string;
-    thresholds: ThresholdConfig; // REQUIRED: Passed from App state
+    thresholds: ThresholdConfig;
 }
 
 const calculateQuantiles = (data: number[]) => {
@@ -77,10 +78,9 @@ const BoxPlotTooltip = ({ content, x, y, format }: any) => {
 
 const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOnly7, layout = 'horizontal', showAdOnlyFooter = false, setTooltip, tooltip }: any) => {
     
-    // Custom Tooltip component for Recharts
     const CustomRechartsTooltip = ({ active, payload, label, formatFn }: any) => {
         if (active && payload && payload.length) {
-            const data = payload[0].payload; // The full data object is here
+            const data = payload[0].payload;
             const content = {
                 label,
                 n: data.n,
@@ -106,9 +106,8 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
         return null;
     };
 
-    // Custom shape for the Bar component to draw the box and whiskers
     const BoxAndWhisker = (props: any) => {
-        const { fill, x, y, width, height, payload, color } = props;
+        const { x, y, width, height, payload, color } = props;
         const { min, q1, median, q3, max } = payload;
         
         const iqrHeight = Math.abs(height);
@@ -332,30 +331,26 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         return 7; // Default
     });
     const [hoveredBubble, setHoveredBubble] = useState<any>(null);
-    const [chartPeriod, setChartPeriod] = useState<string>('30 Days'); // New: Chart filter state
-    const [chartLayout, setChartLayout] = useState<'horizontal' | 'vertical'>('horizontal'); // New: Chart layout toggle
+    const [chartPeriod, setChartPeriod] = useState<string>('30 Days');
+    const [chartLayout, setChartLayout] = useState<'horizontal' | 'vertical'>('horizontal');
     const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number } | null>(null);
     
-    // Focus Ref for scrolling
     const activeSignalRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (focus && activeSignalRef.current) {
-            // Short delay to ensure rendering is complete
             setTimeout(() => {
                 activeSignalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
         }
     }, [focus]);
 
-    // Merge transactions and refunds for unified view
     const sortedTransactions = useMemo(() => {
         const sales = transactions.map(t => ({ ...t, _type: 'SALE' }));
         const refundLogs = refunds.map(r => ({
             id: r.id,
             sku: r.sku,
             date: r.date,
-            // Negative velocity for refunds
             velocity: r.quantity > 0 ? -r.quantity : 0, 
             price: r.amount > 0 ? (r.quantity > 0 ? r.amount/r.quantity : r.amount) : 0,
             platform: r.platform,
@@ -364,12 +359,11 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             adsSpend: 0,
             _type: 'REFUND_LOG',
             reason: r.reason
-        } as unknown as PriceLog)); // Casting to compatible shape
+        } as unknown as PriceLog));
 
         return [...sales, ...refundLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [transactions, refunds]);
 
-    // Calculate actual sales within the selected period for diagnostics
     const periodSalesQty = useMemo(() => {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - txDays);
@@ -379,24 +373,20 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             .reduce((acc, t) => acc + t.velocity, 0);
     }, [sortedTransactions, txDays]);
 
-    // Calculate All-Time Net Margin
     const allTimeMarginPct = useMemo(() => {
         if (!transactions || transactions.length === 0) return 0;
         
         let totalProfit = 0;
-        // Sum profit from sales
         transactions.forEach(t => {
              const rev = t.price * t.velocity;
              if (t.profit !== undefined) totalProfit += t.profit;
              else if (t.margin !== undefined) totalProfit += rev * (t.margin / 100);
         });
         
-        // Subtract refunds from profit
         if (refunds) {
             refunds.forEach(r => totalProfit -= r.amount);
         }
 
-        // Net Sales = Gross Sales (allTimeSales passed in) - Refunds
         const totalRefundValue = refunds ? refunds.reduce((sum, r) => sum + r.amount, 0) : 0;
         const netSales = allTimeSales - totalRefundValue;
 
@@ -406,7 +396,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const diagnostics = useMemo(() => {
         const signals = [];
 
-        // 1. Stock Health
         if (product.stockLevel > 0) {
             if (product.daysRemaining < (product.leadTimeDays * thresholds.stockoutRunwayMultiplier)) {
                 signals.push({ 
@@ -429,7 +418,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             }
         }
 
-        // 2. Returns
         if (product.returnRate && product.returnRate > thresholds.returnRatePct) {
             signals.push({ 
                 id: 'HIGH_RETURN_RATE',
@@ -441,7 +429,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             });
         }
 
-        // 3. Ad Dependency
         const adPct = product.costDetail?.adsFeePct ?? (product.currentPrice > 0 ? ((product.adsFee || 0) / product.currentPrice * 100) : 0);
         if (adPct > thresholds.highAdDependencyPct) {
             signals.push({ 
@@ -454,7 +441,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             });
         }
 
-        // 4. Margin Compression
         const margin = product.costDetail?.profitInclRnPct;
         if (margin !== undefined && margin < thresholds.marginBelowTargetPct) {
             signals.push({ 
@@ -467,7 +453,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             });
         }
 
-        // 5. Velocity Trend
         const trend = product._trendData?.velocityChange;
         if (trend !== undefined) {
             if (trend < -thresholds.velocityDropPct) {
@@ -491,11 +476,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             }
         }
 
-        // 6. Dead Stock (Matches Global Logic)
         const stockValue = product.stockLevel * (product.costPrice || 0);
         const globalVelocity = product.dailyAverageSales || product.averageDailySales || 0;
         
-        // Consistent with ProductManagementPage: use global velocity check
         if (stockValue > thresholds.deadStockMinValueGBP && globalVelocity === 0) {
             signals.push({ 
                 id: 'DORMANT_NO_SALES',
@@ -512,12 +495,11 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
     const platforms = useMemo(() => Array.from(new Set(sortedTransactions.map(t => t.platform || 'Unknown'))).sort(), [sortedTransactions]);
 
-    // Box Plot Data Generators
     const getStats = (days: number, valueFn: (t: PriceLog) => number | null) => {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - days);
         const filtered = sortedTransactions
-            .filter(t => new Date(t.date) >= cutoff && t.velocity > 0) // Only sales for stats
+            .filter(t => new Date(t.date) >= cutoff && t.velocity > 0)
             .map(valueFn)
             .filter((v): v is number => v !== null);
         return calculateQuantiles(filtered);
@@ -606,36 +588,12 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         };
     }, [sortedTransactions]);
 
-    // Dedicated Stats for Ad Distribution Overlay (Respects Date + Platform, Ignores "Sale/Ad" type toggle)
-    const adStats = useMemo(() => {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - txDays);
-        
-        let list = sortedTransactions.filter(t => new Date(t.date) >= cutoff);
-        if (txFilterPlatform !== 'All') {
-            list = list.filter(t => t.platform === txFilterPlatform);
-        }
-
-        let total = 0;
-        let adOnly = 0;
-
-        list.forEach(t => {
-            const val = t.adsSpend || 0;
-            total += val;
-            if (t.price === 0 && val > 0) adOnly += val;
-        });
-
-        return { total, adOnly, pct: total > 0 ? (adOnly / total) * 100 : 0 };
-    }, [sortedTransactions, txDays, txFilterPlatform]);
-
-    // Price-Volume Analysis (Aggregated Bands)
     const priceVolumeAnalysis = useMemo(() => {
         const validTx = sortedTransactions.filter(t => t.velocity > 0 && t.price > 0);
-        const refPrice = product.caPrice || product.currentPrice || 1; // Base for % calcs
+        const refPrice = product.caPrice || product.currentPrice || 1; 
 
-        // Thresholds for visuals
-        const thresholdAmber = -(refPrice * 0.05); // -5%
-        const thresholdRed = -(refPrice * 0.15);   // -15%
+        const thresholdAmber = -(refPrice * 0.05); 
+        const thresholdRed = -(refPrice * 0.15);   
 
         const buckets = [
             { label: '90 Days', days: 90 },
@@ -644,10 +602,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         ];
 
         const chartData: any[] = [];
-        const periodStats: any[] = []; // Aggregated averages per period
-        const aggregatedPrices: Record<number, number> = {}; // for table
+        const periodStats: any[] = []; 
+        const aggregatedPrices: Record<number, number> = {}; 
 
-        // Helper for Effective CA Price
         const getEffectiveCA = (dateStr: string) => {
             const txDate = new Date(dateStr).getTime();
             const changes = priceChangeHistory
@@ -666,8 +623,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             
             const bucketTx = validTx.filter(t => new Date(t.date) >= cutoff);
             
-            // Banding Logic: Group by delta rounded to nearest 0.50 (or 0.25 if price low?)
-            // Let's use 0.50 fixed for simplicity as requested
             const BAND_SIZE = 0.5;
             const groups: Record<string, { totalQty: number, totalRev: number, sumDelta: number, sumPrice: number }> = {};
             
@@ -677,7 +632,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             bucketTx.forEach(t => {
                 const effectiveRef = getEffectiveCA(t.date);
                 const rawDelta = t.price - effectiveRef;
-                // Snap to band
                 const band = (Math.round(rawDelta / BAND_SIZE) * BAND_SIZE).toFixed(2);
                 
                 if (!groups[band]) groups[band] = { totalQty: 0, totalRev: 0, sumDelta: 0, sumPrice: 0 };
@@ -689,14 +643,12 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 totalPeriodQty += t.velocity;
                 totalPeriodDelta += (rawDelta * t.velocity);
 
-                // Accumulate for table (only for 90d to catch all points)
                 if (bucket.days === 90) {
                     const p = Number(t.price.toFixed(2));
                     aggregatedPrices[p] = (aggregatedPrices[p] || 0) + t.velocity;
                 }
             });
 
-            // Push Bands to Chart
             Object.entries(groups).forEach(([b, stats]) => {
                 chartData.push({
                     period: bucket.label,
@@ -707,12 +659,11 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 });
             });
 
-            // Push Aggregate Indicator (Weighted Avg Delta for period)
             if (totalPeriodQty > 0) {
                 periodStats.push({
                     period: bucket.label,
                     avgDelta: totalPeriodDelta / totalPeriodQty,
-                    totalQty: 1 // Dummy size for the star
+                    totalQty: 1
                 });
             }
         });
@@ -724,7 +675,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         return { chartData, pointsTable, periodStats, thresholds: { amber: thresholdAmber, red: thresholdRed } };
     }, [sortedTransactions, priceChangeHistory, product]);
 
-    // Filter Chart Data based on selection
     const filteredChartData = useMemo(() => {
         if (chartPeriod === 'All') return priceVolumeAnalysis.chartData;
         return priceVolumeAnalysis.chartData.filter(d => d.period === chartPeriod);
@@ -735,7 +685,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         return priceVolumeAnalysis.periodStats.filter(d => d.period === chartPeriod);
     }, [priceVolumeAnalysis, chartPeriod]);
 
-    // Filtered Transaction List
     const filteredTransactions = useMemo(() => {
         let list = sortedTransactions;
         const cutoff = new Date();
@@ -762,8 +711,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             platform: string;
             soldQty: number;
             adSpend: number;
-            revenue: number; // Gross Sales Revenue
-            profit: number;  // Net Profit
+            revenue: number; 
+            profit: number; 
         }> = {};
 
         let totalRevenueAllPlatforms = 0;
@@ -795,7 +744,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             }
     
             group.adSpend += tx.adsSpend || 0;
-            group.profit += tx.profit || 0; // profit is pre-calculated and handles refunds as negative
+            group.profit += tx.profit || 0;
         });
     
         return Object.values(subtotals).map(group => ({
@@ -825,7 +774,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 adOnlySpend += (t.adsSpend || 0);
             } else if (t.velocity < 0 || t.price < 0) {
                 refundCount++;
-                // If it's a refund log with separate amount/qty, revenue is negative.
                 refundValue += Math.abs(rev);
             }
         });
@@ -835,7 +783,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300 pb-20">
-            {/* Header / Nav */}
             <div className="flex items-center gap-2">
                 {onBack && (
                     <button onClick={onBack} className="text-gray-500 hover:text-gray-700 transition-colors p-2 rounded-full hover:bg-gray-100">
@@ -853,7 +800,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
             </div>
 
-            {/* SKU Overview Card - REDESIGNED */}
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
                 <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-4">
                     <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -863,7 +809,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
 
                 <div className="flex flex-col xl:flex-row gap-8">
-                    {/* LEFT: Identity (Expanded Width) */}
                     <div className="flex-1 min-w-0">
                         <div className="mb-2">
                             <span className="font-mono text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 inline-block">
@@ -889,11 +834,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         </div>
                     </div>
 
-                    {/* RIGHT: Metrics Grid */}
                     <div className="flex-shrink-0 w-full xl:w-[600px]">
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             
-                            {/* 1. Velocity */}
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
                                     <Activity className="w-3 h-3"/> Velocity
@@ -903,7 +846,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            {/* 2. On Hand */}
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
                                     <Warehouse className="w-3 h-3"/> On Hand
@@ -913,7 +855,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            {/* 3. Inbound */}
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
                                     <Ship className="w-3 h-3"/> Inbound
@@ -923,7 +864,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            {/* 4. Qty */}
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
                                     <Box className="w-3 h-3"/> Lifetime Qty
@@ -933,7 +873,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            {/* 5. Sales Card (Full Width of Grid) */}
                             <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">All-Time Sales</span>
                                 <div className="text-2xl font-bold text-gray-900">
@@ -941,7 +880,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            {/* 6. Margin Card (Full Width of Grid) */}
                             <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Lifetime Net Margin</span>
                                 <div className={`text-2xl font-bold ${allTimeMarginPct >= 15 ? 'text-green-600' : allTimeMarginPct > 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -954,7 +892,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
             </div>
 
-            {/* Diagnostic Signals Strip */}
             {diagnostics.length > 0 && (
                 <div className="bg-white/50 border border-gray-200 rounded-xl p-4 backdrop-blur-sm animate-in fade-in slide-in-from-top-2">
                     <div className="flex justify-between items-center mb-3">
@@ -979,7 +916,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     <span className="text-sm font-bold leading-tight">{signal.label}</span>
                                 </div>
                                 
-                                {/* Tooltip */}
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-50 text-center transform translate-y-2 group-hover:translate-y-0">
                                     <div className="font-semibold mb-1 border-b border-gray-700 pb-1">{signal.label}</div>
                                     <div className="leading-relaxed opacity-90">{signal.desc}</div>
@@ -991,7 +927,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
             )}
 
-            {/* ANALYTICS SECTION 1: Distributions */}
             {sortedTransactions.length > 0 && (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center">
@@ -1103,7 +1038,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
             )}
 
-            {/* ANALYTICS SECTION 2: Price Intelligence (Redesigned) */}
             {sortedTransactions.length > 0 && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-4">
@@ -1112,7 +1046,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 <DollarSign className="w-5 h-5 text-green-600" />
                                 Price Deviation vs Volume
                             </h3>
-                            {/* Period Toggle */}
                             <div className="flex bg-gray-100 p-1 rounded-lg">
                                 {['7 Days', '30 Days', '90 Days', 'All'].map(p => (
                                     <button
@@ -1132,9 +1065,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     Aggregated Volume by Price Delta
                                 </h4>
                                 <div className="text-[10px] text-gray-400 flex items-center gap-2">
-                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 opacity-20 rounded-full"></div> Safe (&gt; -5%)</span>
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 opacity-20 rounded-full"></div> Safe ({'>'} -5%)</span>
                                     <span className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-500 opacity-20 rounded-full"></div> Moderate (-5% to -15%)</span>
-                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-500 opacity-20 rounded-full"></div> Severe (&lt; -15%)</span>
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-500 opacity-20 rounded-full"></div> Severe ({'<'} -15%)</span>
                                 </div>
                             </div>
 
@@ -1146,14 +1079,12 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                         <YAxis type="number" dataKey="delta" name="Price Deviation" unit="£" domain={['auto', 'auto']} tick={{fontSize: 12}} />
                                         <ZAxis type="number" dataKey="totalQty" range={[60, 600]} name="Volume" />
                                         
-                                        {/* Guardrail Zones */}
                                         <ReferenceArea y1={priceVolumeAnalysis.thresholds.amber} y2={1000} fill="green" fillOpacity={0.05} />
                                         <ReferenceArea y1={priceVolumeAnalysis.thresholds.red} y2={priceVolumeAnalysis.thresholds.amber} fill="orange" fillOpacity={0.05} />
                                         <ReferenceArea y1={-1000} y2={priceVolumeAnalysis.thresholds.red} fill="red" fillOpacity={0.05} />
                                         
                                         <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" label={{ value: 'Ref Price', position: 'right', fill: '#6b7280', fontSize: 10 }} />
                                         
-                                        {/* Aggregated Bubbles */}
                                         <Scatter 
                                             name="Price Bands" 
                                             data={filteredChartData} 
@@ -1163,7 +1094,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                             onMouseLeave={() => setHoveredBubble(null)}
                                         />
 
-                                        {/* Weighted Average Indicator */}
                                         <Scatter 
                                             name="Weighted Avg" 
                                             data={filteredAvgStats} 
@@ -1175,7 +1105,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </ResponsiveContainer>
                             </div>
                             
-                            {/* Detail Bar */}
                             <div className="mt-2 h-10 bg-gray-50 rounded-lg border border-gray-100 flex items-center px-4 text-xs">
                                 {hoveredBubble ? (
                                     <div className="flex flex-wrap items-center gap-4 w-full animate-in fade-in duration-200">
@@ -1224,7 +1153,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
             )}
 
-            {/* ANALYTICS SECTION 3: Transaction Table */}
             {sortedTransactions.length > 0 && (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center">
@@ -1263,8 +1191,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="All">All Types</option>
-                                    <option value="Sale">Sale (Price > 0)</option>
-                                    <option value="Ad Cost">Ad Cost (Ads > 0)</option>
+                                    <option value="Sale">Sale (Price {'>'} 0)</option>
+                                    <option value="Ad Cost">Ad Cost (Ads {'>'} 0)</option>
                                     <option value="Refund">Refunds Only</option>
                                 </select>
                                 <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
@@ -1272,7 +1200,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         </div>
                     </div>
 
-                    {/* Transaction Summary Bar */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm text-sm">
                         <div className="flex flex-col">
                             <span className="text-xs text-gray-500 uppercase font-bold">Sales Rows</span>
@@ -1300,7 +1227,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         </div>
                     </div>
 
-                    {/* Platform Subtotals */}
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in">
                         <div className="p-3 bg-gray-50/50 border-b border-gray-100">
                             <h4 className="text-xs font-bold text-gray-500 uppercase">Platform Subtotals (for period)</h4>
@@ -1325,7 +1251,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                         <div className="text-right w-20">
                                             <div className="text-gray-400">Sales Share %</div>
                                             <div className="font-mono font-bold text-gray-700">
-                                                &gt; {sub.revenueSharePct.toFixed(1)}%
+                                                {'>'} {sub.revenueSharePct.toFixed(1)}%
                                             </div>
                                         </div>
                                         <div className="text-right w-24">
@@ -1363,11 +1289,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {paginatedTransactions.map((tx, idx) => {
-                                    // Robust Type detection using new mapped fields
-                                    // @ts-ignore
+                                {paginatedTransactions.map((tx: any, idx: number) => {
                                     const isRefund = tx._type === 'REFUND_LOG' || tx.velocity < 0;
-                                    // @ts-ignore
                                     const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
                                     const isZeroRev = Math.abs(tx.price * tx.velocity) < 0.01 && !isAdRow && !isRefund;
 
@@ -1383,9 +1306,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold border w-fit ${isAdRow ? 'bg-orange-100 border-orange-200 text-orange-800' : isRefund ? 'bg-red-100 border-red-200 text-red-800' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                                         {tx.platform}
                                                     </span>
-                                                    {/* @ts-ignore */}
                                                     {isRefund && tx.reason && (
-                                                        // @ts-ignore
                                                         <span className="text-[9px] text-red-500 mt-0.5 max-w-[120px] truncate">{tx.reason}</span>
                                                     )}
                                                 </div>
