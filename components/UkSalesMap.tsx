@@ -1,10 +1,11 @@
+
 import React, { useState, useMemo } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
-import { Product, PriceLog } from '../types';
+import { Product, PriceLog, SearchChip } from '../types';
 import { POSTCODE_COORDS } from './UkPostcodeMapCoords';
 import { UK_POSTCODE_AREA_NAME } from '../ukPostcodeAreaNames';
-import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight } from 'lucide-react';
+import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Search } from 'lucide-react';
 
 // Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
 const UK_TOPO_JSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
@@ -17,6 +18,8 @@ interface UkSalesMapProps {
   themeColor: string;
   onPrevSlide?: () => void;
   onNextSlide?: () => void;
+  onSearch?: (query: string | SearchChip[]) => void;
+  timePeriodLabel?: string;
 }
 
 // Region Labels
@@ -68,7 +71,9 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   selectedPlatform, 
   themeColor,
   onPrevSlide,
-  onNextSlide
+  onNextSlide,
+  onSearch,
+  timePeriodLabel
 }) => {
   const [metric, setMetric] = useState<'REVENUE' | 'VOLUME'>('REVENUE');
   const [mode, setMode] = useState<'ABSOLUTE' | 'CHANGE'>('ABSOLUTE');
@@ -83,6 +88,19 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   const getAreaDisplayName = (code: string) => {
     const name = UK_POSTCODE_AREA_NAME[code];
     return name ? `${name} (${code})` : `${code} (Unknown Area)`;
+  };
+
+  const handleAreaDeepDive = (areaCode: string) => {
+      if (onSearch) {
+          const areaName = UK_POSTCODE_AREA_NAME[areaCode] || areaCode;
+          const platformText = selectedPlatform !== 'All' ? ` on ${selectedPlatform}` : '';
+          const timeText = timePeriodLabel || 'Last 30 Days';
+          
+          // Construct explicit natural language query that the parser will understand
+          // Changed "Transactions" to "Sales" to be safer with existing keywords
+          const query = `Sales in Postcode: ${areaCode} ${timeText}${platformText}`;
+          onSearch(query);
+      }
   };
 
   // 1. Extract Unique Categories for Filter
@@ -379,7 +397,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         const result = valA < valB ? -1 : valA > valB ? 1 : 0;
         return tableSort.direction === 'asc' ? result : -result;
     });
-    // This logic is now handled in the JSX to interleave rows
     return data;
   }, [rankedMapData, tableSort]);
 
@@ -854,6 +871,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <SortableHeader label="TACoS %" sortKey="tacos" align="right"/>
                             <SortableHeader label="Total Ship" sortKey="totalShippingCost" align="right"/>
                             <SortableHeader label="Avg Ship" sortKey="avgShippingCost" align="right"/>
+                            <th className="px-3 py-2 text-center w-12">Action</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -876,6 +894,18 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         <td className={`px-3 py-2 text-right font-mono ${d.tacos > 15 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{d.tacos.toFixed(1)}%</td>
                                         <td className="px-3 py-2 text-right font-mono text-gray-600">£{d.totalShippingCost.toFixed(0)}</td>
                                         <td className={`px-3 py-2 text-right font-mono ${d.avgShippingCost > 7 ? 'text-red-600' : d.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-600'}`}>£{d.avgShippingCost.toFixed(2)}</td>
+                                        <td className="px-3 py-2 text-center">
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleAreaDeepDive(d.code);
+                                                }}
+                                                className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                                title={`Deep Dive transactions in ${d.code}`}
+                                            >
+                                                <Search className="w-3.5 h-3.5" />
+                                            </button>
+                                        </td>
                                     </tr>
                                     {isPinned && d.districtBreakdown.length > 0 && (
                                         d.districtBreakdown.map((district, index) => (
@@ -896,6 +926,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                                 <td className="px-3 py-1.5 text-center text-gray-300">-</td>
                                                 <td className="px-3 py-1.5 text-right font-mono text-gray-600">£{district.totalShippingCost.toFixed(0)}</td>
                                                 <td className="px-3 py-1.5 text-right font-mono text-gray-600">£{district.avgShippingCost.toFixed(2)}</td>
+                                                <td className="px-3 py-1.5 text-center"></td>
                                             </tr>
                                         ))
                                     )}

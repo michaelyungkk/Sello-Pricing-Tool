@@ -285,6 +285,16 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
             const strCriteria = String(f.value).toLowerCase();
             const valStr = String(val).toLowerCase();
 
+            // Explicit Postcode Matching Logic
+            if (f.field === 'postcode') {
+                // Criteria: "B"
+                // Value: "B78 1SE"
+                // We want "B" to match "B7..." or "B..." but NOT "BS..."
+                // Regex check: Start with criteria followed by a digit, OR criteria matches whole string (rare)
+                const pcRegex = new RegExp(`^${strCriteria}(\\d|$)`, 'i');
+                return pcRegex.test(valStr);
+            }
+
             if (f.field === 'name' && f.operator === 'CONTAINS') {
                 const nameMatch = product.name.toLowerCase().includes(strCriteria);
                 const skuMatch = product.sku.toLowerCase().includes(strCriteria);
@@ -330,6 +340,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
                 agedStockQty: calculatedMetrics.agedStockQty,
                 agedStockPct: calculatedMetrics.agedStockPct,
                 daysRemaining: calculatedMetrics.daysRemaining,
+                postcode: log.postcode, // Pass postcode through to UI
                 
                 // Trend Metrics
                 velocityChange: calculatedMetrics.velocityChange,
@@ -368,6 +379,16 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
             const criteria = Number(f.value);
             const strCriteria = String(f.value).toLowerCase();
             const valStr = String(val).toLowerCase();
+            
+            // Explicit Postcode Matching Logic for Refunds
+            if (f.field === 'postcode') {
+                // Refunds usually don't have postcode data in log unless enriched. 
+                // Currently RefundLog doesn't have postcode. 
+                // So if filtering by postcode, we sadly skip refunds or need to map it.
+                // Assuming it's missing for now.
+                return false;
+            }
+
             if (f.field === 'name' && f.operator === 'CONTAINS') {
                 const nameMatch = product.name.toLowerCase().includes(strCriteria);
                 const skuMatch = product.sku.toLowerCase().includes(strCriteria);

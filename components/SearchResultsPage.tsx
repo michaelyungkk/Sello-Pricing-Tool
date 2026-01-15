@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, PricingRules, SearchConfig, PriceChangeRecord } from '../types';
-import { Layers, ListFilter, TrendingDown, ArrowRight, X, ChevronDown, Package, Activity, ChevronRight, RotateCcw, AlertTriangle, Coins, Calendar, ShoppingBag, Megaphone, PieChart, DollarSign, Filter, Edit2, Check, Clock, Info, TrendingUp } from 'lucide-react';
+import { Layers, ListFilter, TrendingDown, ArrowRight, X, ChevronDown, Package, Activity, ChevronRight, RotateCcw, AlertTriangle, Coins, Calendar, ShoppingBag, Megaphone, PieChart, DollarSign, Filter, Edit2, Check, Clock, Info, TrendingUp, MapPin } from 'lucide-react';
 import { SearchIntent } from '../services/geminiService';
 import { isAdsEnabled } from '../services/platformCapabilities';
 import SkuDeepDivePage from './SkuDeepDivePage';
@@ -52,6 +52,8 @@ interface SubGroup {
     totalPrevQty: number;
     totalPrevProfit: number;
     weightedMarginChange: number;
+    // Postcode Context
+    districtStats?: Record<string, number>;
 }
 
 interface TopGroup {
@@ -84,6 +86,8 @@ interface TopGroup {
     totalPrevQty: number;
     totalPrevProfit: number;
     weightedMarginChange: number;
+    // Postcode Context
+    districtStats?: Record<string, number>;
 }
 
 interface FilterChipProps {
@@ -112,7 +116,8 @@ const FIELD_LABELS: Record<string, string> = {
     periodReturnRate: 'Period RR%',
     organicShare: 'Organic (Ad-enabled)',
     agedStockPct: 'Aged Stock %',
-    MARGIN_CHANGE_PCT: 'Margin Change (PoP)'
+    MARGIN_CHANGE_PCT: 'Margin Change (PoP)',
+    postcode: 'Postcode Area'
 };
 
 const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDelete, themeColor }) => {
@@ -127,7 +132,11 @@ const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDelete, the
 
     const displayField = FIELD_LABELS[filter.field] || filter.field;
     const displayValue = typeof filter.value === 'number' ? filter.value.toLocaleString() : filter.value;
-    const logicString = `${displayField} ${filter.operator} ${displayValue}`;
+    
+    // Special handling for Postcode Area to reassure users about strict matching
+    const logicString = filter.field === 'postcode'
+        ? `Area: ${displayValue}`
+        : `${displayField} ${filter.operator} ${displayValue}`;
     
     // Explicit override for Trend < 0 to make it clear
     const finalContent = filter.field === 'velocityChange' && filter.value === 0 && filter.operator === 'LT'
@@ -135,6 +144,8 @@ const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDelete, the
         : filter.label 
             ? <><span className="font-bold">{filter.label}:</span> <span className="opacity-80 ml-1 font-mono text-[10px]">{logicString}</span></>
             : <span className="font-mono text-xs font-medium">{logicString}</span>;
+
+    const icon = filter.field === 'postcode' ? <MapPin className="w-3 h-3 text-indigo-500" /> : null;
 
     if (isEditing) {
         return (
@@ -173,8 +184,9 @@ const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDelete, the
         <div 
             className="group flex items-center gap-1 px-3 py-1.5 bg-white border border-indigo-100 rounded-full text-xs text-indigo-700 shadow-sm hover:border-indigo-300 transition-all cursor-pointer hover:shadow-md"
             onClick={() => setIsEditing(true)}
-            title="Click to edit filter criteria"
+            title={filter.field === 'postcode' ? "Strict Area Match (e.g. 'B' matches 'B1' but not 'BN1')" : "Click to edit filter criteria"}
         >
+            {icon}
             {finalContent}
             <button 
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -276,6 +288,11 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       ['agedStockPct', 'AGED_STOCK_PCT']
   ), [data]);
 
+  const isPostcodeContext = useMemo(() => checkContext(
+      ['postcode', 'area', 'region'], 
+      ['postcode']
+  ), [data]);
+
   useEffect(() => {
       if (isInventoryContext || isAgedContext) {
           setGroupBy('sku');
@@ -328,7 +345,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
           totalPrevRevenue: 0,
           totalPrevQty: 0,
           totalPrevProfit: 0,
-          weightedMarginChange: 0
+          weightedMarginChange: 0,
+          districtStats: {}
         };
       }
 
@@ -388,7 +406,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                           totalPrevRevenue: 0,
                           totalPrevQty: 0,
                           totalPrevProfit: 0,
-                          weightedMarginChange: 0
+                          weightedMarginChange: 0,
+                          districtStats: {}
                       };
                   }
                   const estRevenue = ch.velocity * (ch.price || item.price);
@@ -398,7 +417,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                       velocity: ch.velocity,
                       revenue: estRevenue, 
                       stockLevel: item.stockLevel, 
-                      type: 'INVENTORY_CHANNEL'
+                      type: 'INVENTORY_CHANNEL',
+                      postcode: item.postcode // Pass if available
                   });
               });
           }
@@ -430,7 +450,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
               totalPrevRevenue: 0,
               totalPrevQty: 0,
               totalPrevProfit: 0,
-              weightedMarginChange: 0
+              weightedMarginChange: 0,
+              districtStats: {}
             };
           }
 
@@ -451,6 +472,20 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
               subGroup.totalRefundQty += Math.abs(item.velocity || 0);
           }
           subGroup.items.push(item);
+
+          // Postcode District Aggregation
+          if (item.postcode) {
+              const district = item.postcode.split(' ')[0];
+              if (district) {
+                  // Top Group Stats
+                  if (!topGroup.districtStats) topGroup.districtStats = {};
+                  topGroup.districtStats[district] = (topGroup.districtStats[district] || 0) + (item.velocity || 0);
+                  
+                  // Sub Group Stats
+                  if (!subGroup.districtStats) subGroup.districtStats = {};
+                  subGroup.districtStats[district] = (subGroup.districtStats[district] || 0) + (item.velocity || 0);
+              }
+          }
       }
     });
 
@@ -574,7 +609,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
         if (isMarginContext) return b.totalProfit - a.totalProfit;
         return b.totalRevenue - a.totalRevenue;
     });
-  }, [data.results, groupBy, isVolumeContext, isAdContext, isMarginContext, isInventoryContext, isReturnContext, isOrganicContext, isAgedContext, isTrendContext, data.params, isDeepDive, liveProductMap]); 
+  }, [data.results, groupBy, isVolumeContext, isAdContext, isMarginContext, isInventoryContext, isReturnContext, isOrganicContext, isAgedContext, isTrendContext, isPostcodeContext, data.params, isDeepDive, liveProductMap]); 
 
   const volumeContextStats = useMemo(() => {
       const quantities = hierarchicalData.map(g => g.totalQty).sort((a, b) => a - b);
@@ -614,6 +649,16 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       if (selection && selection.toString().length > 0) return;
       e.stopPropagation();
       setExpandedSubGroup(prev => prev === compositeKey ? null : compositeKey);
+  };
+
+  // Helper to format top districts for display
+  const getTopDistricts = (stats: Record<string, number> | undefined) => {
+      if (!stats) return null;
+      const sorted = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+      if (sorted.length === 0) return null;
+      
+      const top3 = sorted.slice(0, 3).map(([code, count]) => `${code} (${count})`).join(', ');
+      return top3;
   };
 
   if (!data) return null;
@@ -667,6 +712,9 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
             const volDiff = group.totalQty - group.totalPrevQty;
             const volDiffPct = group.totalPrevQty > 0 ? (volDiff / group.totalPrevQty) * 100 : (group.totalQty > 0 ? 100 : 0);
 
+            // Postcode Context Summary
+            const topDistricts = isPostcodeContext ? getTopDistricts(group.districtStats) : null;
+
             return (
               <div key={group.key} className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
                 <div
@@ -680,6 +728,11 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                      <div>
                         <h3 className="font-bold text-gray-900">{group.label}</h3>
                         {group.productName && <p className="text-xs text-gray-500">{group.productName}</p>}
+                        {topDistricts && (
+                            <p className="text-[10px] text-indigo-600 mt-1 flex items-center gap-1 font-medium">
+                                <MapPin className="w-3 h-3" /> Top Districts: {topDistricts}
+                            </p>
+                        )}
                      </div>
                   </div>
                   
@@ -1026,6 +1079,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                         {isAgedContext && <th className="p-2 text-right">Aged %</th>}
                                                                         {!isAgedContext && isInventoryContext && <th className="p-2 text-right">Stock Cover</th>}
                                                                         {isTrendContext && <th className="p-2 text-right">Trend</th>}
+                                                                        {isPostcodeContext && <th className="p-2 text-right">Postcode</th>}
                                                                         <th className="p-2 text-right">Profit</th>
                                                                         <th className="p-2 text-right">Margin %</th>
                                                                         <th className="p-2 text-right">Share %</th>
@@ -1124,6 +1178,11 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                                                 {tx.velocityChange > 0 ? '+' : ''}{tx.velocityChange.toFixed(0)}%
                                                                                             </span>
                                                                                         ) : '-'}
+                                                                                    </td>
+                                                                                )}
+                                                                                {isPostcodeContext && (
+                                                                                    <td className="p-2 text-right text-gray-600 font-mono text-[10px]">
+                                                                                        {tx.postcode || '-'}
                                                                                     </td>
                                                                                 )}
                                                                                 

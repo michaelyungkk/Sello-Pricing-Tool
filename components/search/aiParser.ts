@@ -82,15 +82,34 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
       'sku', 'product', 'item', 'list', 'table',
       'last', 'month', 'year', 'ytd', 'this', 'all time', 'history',
       'amazon', 'ebay', 'range', 'manomano', 'wayfair', 'onbuy', 'groupon', 'tiktok', 'volume', 'sales', 'revenue',
+      'transaction', 'transactions', // Added to prevent these from being seen as product names
       // EXPANDED KEYWORDS LIST
       'velocity', 'daily', 'candidate', 'average', 'avg', 'ratio', 'percent', 'pct', 
       'per', 'unit', 'qty', 'level', 'aged', 'inbound', 'below', 'target', 'dependency', 
       'strong', 'organic', 'dormant', 'no', 'old', 'long term', 'stale',
       // UPDATED: Include new terms to prevent accidental text filtering
-      'share', 'natural', 'change', 'pop', 'growth', 'spike', 'improvement', 'fall', 'down', 'up', 'rise'
+      'share', 'natural', 'change', 'pop', 'growth', 'spike', 'improvement', 'fall', 'down', 'up', 'rise',
+      'postcode', 'area', 'region', 'district'
   ];
 
+  // --- 3.5. Extract Postcode/Area Filters explicitly ---
+  // Look for "postcode: X" or "area: X"
+  const postcodeMatch = lowerText.match(/(?:postcode|area|region):\s*([a-z0-9]{1,4})/i);
+  if (postcodeMatch) {
+      const pcCode = postcodeMatch[1].toUpperCase();
+      plan.filters.push({ field: "postcode", op: "CONTAINS", value: pcCode });
+      plan.explain += ` Filtered by Postcode Area: ${pcCode}.`;
+      // Remove from text processing
+      // We don't remove it from potentialSearchTerm yet, handled by keywords below
+  }
+
   let potentialSearchTerm = lowerText;
+  
+  // Remove the explicit match pattern from the text so it doesn't become a name filter
+  if (postcodeMatch) {
+      potentialSearchTerm = potentialSearchTerm.replace(postcodeMatch[0], '');
+  }
+
   commandKeywords.forEach(k => {
       // Remove keywords safely
       try {
@@ -103,7 +122,7 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
   // Clean up numbers often associated with time/limit
   potentialSearchTerm = potentialSearchTerm.replace(/\b\d+\b/g, '').trim();
   // Remove special chars often used in logic but allow hyphens/underscores/spaces for SKUs/Names
-  potentialSearchTerm = potentialSearchTerm.replace(/[><=%]/g, '').replace(/\s+/g, ' ').trim();
+  potentialSearchTerm = potentialSearchTerm.replace(/[><=%:]/g, '').replace(/\s+/g, ' ').trim();
 
   // If there is significant text left, apply it as a filter
   if (potentialSearchTerm.length > 2) {

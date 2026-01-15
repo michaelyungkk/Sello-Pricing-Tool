@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail, PriceChangeRecord, RefundLog } from '../types';
+import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail, PriceChangeRecord, RefundLog, SearchChip } from '../types';
 import { TagSearchInput } from './TagSearchInput';
 import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart, PieChart as PieIcon, AlertTriangle, Activity, Megaphone, Coins, Wrench, Map as MapIcon } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, ComposedChart, Legend } from 'recharts';
@@ -22,6 +23,7 @@ interface ProductManagementPageProps {
     onUpdateProduct?: (product: Product) => void;
     onViewElasticity?: (product: Product) => void;
     onDeepDive: (sku: string) => void; 
+    onSearch?: (query: string | SearchChip[]) => void; // New Prop
     themeColor: string;
     headerStyle: React.CSSProperties;
     thresholds?: ThresholdConfig; // New Prop for Reactivity
@@ -46,6 +48,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     onUpdateProduct,
     onViewElasticity,
     onDeepDive,
+    onSearch,
     themeColor,
     headerStyle,
     thresholds // Destructure
@@ -115,7 +118,8 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                         themeColor={themeColor}
                         onAnalyze={onAnalyze}
                         onDeepDive={onDeepDive}
-                        thresholds={thresholds} // Pass Prop
+                        onSearch={onSearch} // Pass it down
+                        thresholds={thresholds}
                     />
                 )}
 
@@ -183,7 +187,8 @@ const DashboardView = ({
     themeColor,
     onAnalyze,
     onDeepDive,
-    thresholds: propThresholds // Receive Prop
+    onSearch, // Receive it
+    thresholds: propThresholds
 }: {
     products: Product[],
     priceHistoryMap: Map<string, PriceLog[]>,
@@ -193,6 +198,7 @@ const DashboardView = ({
     themeColor: string,
     onAnalyze: (product: Product, context?: string) => void,
     onDeepDive: (sku: string) => void,
+    onSearch?: (query: string | SearchChip[]) => void,
     thresholds?: ThresholdConfig
 }) => {
     const [range, setRange] = useState<DateRange>('30d');
@@ -496,6 +502,14 @@ const DashboardView = ({
         return { totalStockValue, deadStockValue, lostRevenue, chartData };
     }, [processedData]);
 
+    // Format range label for search
+    const getRangeLabel = () => {
+        if (range === 'yesterday') return 'Last 1 Day';
+        if (range === '7d') return 'Last 7 Days';
+        if (range === '30d') return 'Last 30 Days';
+        return 'Custom Range';
+    };
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
             <div className="flex flex-col md:flex-row justify-between items-center bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm gap-4 relative z-30">
@@ -770,6 +784,8 @@ const DashboardView = ({
                                 themeColor={themeColor}
                                 onPrevSlide={prevSlide}
                                 onNextSlide={nextSlide}
+                                onSearch={onSearch}
+                                timePeriodLabel={getRangeLabel()} // Pass the time label
                             />
                         </div>
                     </div>
@@ -780,6 +796,7 @@ const DashboardView = ({
 };
 
 const MetricCard = ({ title, value, icon: Icon, color, desc }: any) => {
+    // ... same as before
     const colorStyles = {
         blue: 'bg-blue-50 text-blue-700',
         green: 'bg-green-50 text-green-700',
@@ -804,6 +821,7 @@ const MetricCard = ({ title, value, icon: Icon, color, desc }: any) => {
 };
 
 const AlertCard = ({ title, count, icon: Icon, color, isActive, onClick, desc }: any) => {
+    // ... same as before
     const colorStyles = {
         red: isActive ? 'bg-red-600 text-white border-red-700' : 'bg-white hover:border-red-300 border-transparent',
         amber: isActive ? 'bg-amber-500 text-white border-amber-600' : 'bg-white hover:border-amber-300 border-transparent',
@@ -836,6 +854,7 @@ const AlertCard = ({ title, count, icon: Icon, color, isActive, onClick, desc }:
 };
 
 const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }: { products: Product[], themeColor: string, initialTags?: string[], onTagsChange?: (tags: string[]) => void }) => {
+    // ... same as before
     const [inputValue, setInputValue] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -1037,6 +1056,7 @@ const ShipmentsView = ({ products, themeColor, initialTags = [], onTagsChange }:
 };
 
 const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { products: Product[], pricingRules: PricingRules, promotions: PromotionEvent[], themeColor: string }) => {
+    // ... same as before
     const [search, setSearch] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -1188,6 +1208,7 @@ const PriceMatrixView = ({ products, pricingRules, promotions, themeColor }: { p
 };
 
 const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: any) => {
+    // ... same as before
     const [platformTags, setPlatformTags] = useState<{ platform: string; tags: string[] }[]>(() => {
         const existing = product.channels.map((c:any) => ({ platform: c.platform, tags: c.skuAlias ? c.skuAlias.split(',').map((s:string) => s.trim()).filter(Boolean) : [] }));
         Object.keys(pricingRules).forEach(pKey => { if (!existing.find((e:any) => e.platform === pKey)) existing.push({ platform: pKey, tags: [] }); });
