@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
   ReferenceLine
 } from 'recharts';
+import { GradeBadge } from './GradeBadge';
 import { useTranslation } from 'react-i18next';
 
 interface PriceElasticityModalProps {
@@ -126,7 +127,10 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
                <span className="px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded uppercase tracking-wide">
                   {t('elasticity_analysis')}
                </span>
-               <span className="text-sm text-gray-500 font-mono">{product.sku}</span>
+               <div className="flex items-center">
+                <span className="text-sm text-gray-500 font-mono">{product.sku}</span>
+                <GradeBadge gradeLevel={product.gradeLevel} />
+               </div>
             </div>
             <h2 className="text-2xl font-bold text-gray-900">{product.name}</h2>
           </div>

@@ -158,6 +158,10 @@ export interface Product {
   // New: Cost Detail Report Data
   costDetail?: SkuCostDetail;
 
+  // New: Seasonal/Festival Tags
+  seasonTags?: string[];
+  festivalTags?: string[];
+
   // Transient Data
   _trendData?: { velocityChange: number };
 }

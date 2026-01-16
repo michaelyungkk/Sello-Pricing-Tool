@@ -201,6 +201,7 @@ export default {
   dead_stock_value: "呆滞库存最低价值",
   high_return_rate: "高退货率",
   high_ad_dependency: "高广告依赖度",
+  current_season_label: "当前季节",
 
   // CostManagementPage
   cost_management_title: "SKU盈利能力分析",

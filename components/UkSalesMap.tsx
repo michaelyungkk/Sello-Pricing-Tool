@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
@@ -6,6 +5,8 @@ import { Product, PriceLog, SearchChip } from '../types';
 import { POSTCODE_COORDS } from './UkPostcodeMapCoords';
 import { UK_POSTCODE_AREA_NAME } from '../ukPostcodeAreaNames';
 import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Search } from 'lucide-react';
+import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from '../services/metrics';
+import { aggregateUkMapData, AreaData } from '../services/mapAgg';
 
 // Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
 const UK_TOPO_JSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
@@ -30,38 +31,8 @@ const regions = [
   { name: 'N. Ireland', coordinates: [-6.5, 54.6] as [number, number] },
 ];
 
-// In-component type for aggregated data
-interface DistrictData {
-    code: string;
-    revenue: number;
-    volume: number;
-    profit: number;
-    totalShippingCost: number;
-    avgShippingCost: number;
-}
-interface AreaData {
-    code: string;
-    revenue: number;
-    volume: number;
-    orders: number;
-    profit: number;
-    margin: number;
-    returnRate: number;
-    avgShippingCost: number;
-    adSpend: number;
-    tacos: number;
-    coordinates: [number, number];
-    platformBreakdown: { platform: string; revenue: number; volume: number; profit: number }[];
-    topSkus: { sku: string; name: string; profit: number; volume: number }[];
-    prevRevenue: number;
-    prevVolume: number;
-    revenueDelta: number;
-    volumeDelta: number;
-    revenueDeltaPct: number;
-    volumeDeltaPct: number;
-    districtBreakdown: DistrictData[];
-    totalShippingCost: number;
-}
+const LOW_MARGIN_PCT = 10;
+const HIGH_TACOS_PCT = 15;
 
 
 const UkSalesMap: React.FC<UkSalesMapProps> = ({ 
@@ -77,7 +48,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
 }) => {
   const [metric, setMetric] = useState<'REVENUE' | 'VOLUME'>('REVENUE');
   const [mode, setMode] = useState<'ABSOLUTE' | 'CHANGE'>('ABSOLUTE');
-  const [colorMetric, setColorMetric] = useState<'MARGIN' | 'RETURN_RATE' | 'AVG_SHIPPING'>('AVG_SHIPPING');
+  const [colorMetric, setColorMetric] = useState<'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS'>('REVENUE');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('All');
   const [hoveredArea, setHoveredArea] = useState<any | null>(null);
@@ -124,173 +95,12 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
 
   // 2. Aggregate Data by Postcode Area
   const mapData: AreaData[] = useMemo(() => {
-    const duration = dateRange.end.getTime() - dateRange.start.getTime();
-    const prevEnd = new Date(dateRange.start.getTime());
-    prevEnd.setDate(prevEnd.getDate() - 1);
-    const prevStart = new Date(prevEnd.getTime() - duration);
-    
-    // Timezone-safe string boundaries for filtering
-    const sStr = dateRange.start.toISOString().split('T')[0];
-    const eStr = dateRange.end.toISOString().split('T')[0];
-    const prevSStr = prevStart.toISOString().split('T')[0];
-    const prevEStr = prevEnd.toISOString().split('T')[0];
-
-    const areaStats: Record<string, { 
-        revenue: number, 
-        volume: number, 
-        orders: number,
-        profit: number, 
-        prevRevenue: number;
-        prevVolume: number;
-        prevProfit: number;
-        weightedReturnRate: number,
-        totalPostage: number,
-        totalAdSpend: number,
-        platforms: Record<string, { revenue: number, volume: number, profit: number }>,
-        skus: Record<string, { name: string, profit: number, volume: number, revenue: number }>
-    }> = {};
-    
-    const districtStats: Record<string, { revenue: number, volume: number, profit: number, totalPostage: number }> = {};
-
-    const skuMap = new Map<string, Product>();
-    
-    // Pre-filter products to optimize loop
-    const relevantProducts = products.filter(p => {
-        if (selectedCategory !== 'All' && p.category !== selectedCategory) return false;
-        if (selectedSubcategory !== 'All' && p.subcategory !== selectedSubcategory) return false;
-        return true;
-    });
-
-    relevantProducts.forEach(p => skuMap.set(p.sku, p));
-    const validSkus = new Set(relevantProducts.map(p => p.sku));
-
-    // Iterate through all history logs
-    for (const [sku, logs] of priceHistoryMap.entries()) {
-        if (!validSkus.has(sku)) continue;
-        const product = skuMap.get(sku);
-        if (!product) continue;
-
-        logs.forEach(log => {
-            // Apply Global Filters
-            if (selectedPlatform !== 'All' && log.platform !== selectedPlatform) return;
-            const logDateStr = log.date.split('T')[0];
-            
-            // Extract Postcode Area
-            if (!log.postcode) return;
-            const areaMatch = log.postcode.match(/^([A-Z]{1,2})/i); 
-            const districtMatch = log.postcode.match(/^([A-Z]{1,2}[0-9R][0-9A-Z]?)/i);
-            
-            if (!areaMatch) return;
-            const areaCode = areaMatch[1].toUpperCase();
-            
-            if (!areaStats[areaCode]) {
-                areaStats[areaCode] = { revenue: 0, volume: 0, orders: 0, profit: 0, prevRevenue: 0, prevVolume: 0, prevProfit: 0, weightedReturnRate: 0, totalPostage: 0, totalAdSpend: 0, platforms: {}, skus: {} };
-            }
-
-            const rev = log.price * log.velocity;
-            const profit = log.profit !== undefined ? log.profit : rev * ((log.margin || 0) / 100);
-
-            // Aggregate District Level Data
-            if (districtMatch) {
-                const districtCode = districtMatch[1].toUpperCase();
-                if (!districtStats[districtCode]) {
-                    districtStats[districtCode] = { revenue: 0, volume: 0, profit: 0, totalPostage: 0 };
-                }
-                if (logDateStr >= sStr && logDateStr <= eStr) {
-                    districtStats[districtCode].revenue += rev;
-                    districtStats[districtCode].volume += log.velocity;
-                    districtStats[districtCode].profit += profit;
-                    districtStats[districtCode].totalPostage += (product.postage || 0) * log.velocity;
-                }
-            }
-            
-            const area = areaStats[areaCode];
-            const platform = log.platform || 'Unknown';
-            const adSpend = log.adsSpend || (product.adsFee || 0) * log.velocity;
-            
-            if (logDateStr >= sStr && logDateStr <= eStr) {
-                // Top level stats
-                area.revenue += rev;
-                area.volume += log.velocity;
-                area.orders += 1; // Assuming one log is one transaction/order
-                area.profit += profit;
-                area.weightedReturnRate += (product.returnRate || 0) * log.velocity;
-                area.totalPostage += (product.postage || 0) * log.velocity;
-                area.totalAdSpend += adSpend;
-                
-                // Platform breakdown
-                if (!area.platforms[platform]) area.platforms[platform] = { revenue: 0, volume: 0, profit: 0 };
-                area.platforms[platform].revenue += rev;
-                area.platforms[platform].volume += log.velocity;
-                area.platforms[platform].profit += profit;
-
-                // SKU breakdown
-                if (!area.skus[sku]) area.skus[sku] = { name: product.name, profit: 0, volume: 0, revenue: 0 };
-                area.skus[sku].profit += profit;
-                area.skus[sku].volume += log.velocity;
-                area.skus[sku].revenue += rev;
-
-            } else if (logDateStr >= prevSStr && logDateStr <= prevEStr) {
-                area.prevRevenue += rev;
-                area.prevVolume += log.velocity;
-                area.prevProfit += profit;
-            }
-        });
-    }
-
-    return Object.entries(areaStats).map(([code, stats]) => {
-        const platformBreakdown = Object.entries(stats.platforms)
-            .map(([platform, data]) => ({ platform, ...data }))
-            .sort((a, b) => b.revenue - a.revenue);
-        
-        const topSkus = Object.entries(stats.skus)
-            .map(([sku, data]) => ({ sku, ...data }))
-            .sort((a, b) => b.profit - a.profit)
-            .slice(0, 3);
-
-        const revenueDelta = stats.revenue - stats.prevRevenue;
-        const volumeDelta = stats.volume - stats.prevVolume;
-        
-        const districtBreakdown = Object.entries(districtStats)
-          .filter(([districtCode]) => {
-              const prefixMatch = districtCode.match(/^[A-Z]+/);
-              return prefixMatch && prefixMatch[0] === code;
-          })
-          .map(([districtCode, districtData]) => ({
-            code: districtCode,
-            revenue: districtData.revenue,
-            volume: districtData.volume,
-            profit: districtData.profit,
-            totalShippingCost: districtData.totalPostage,
-            avgShippingCost: districtData.volume > 0 ? districtData.totalPostage / districtData.volume : 0
-          }))
-          .sort((a, b) => b.revenue - a.revenue);
-
-        return {
-            code,
-            revenue: stats.revenue,
-            volume: stats.volume,
-            orders: stats.orders,
-            profit: stats.profit,
-            margin: stats.revenue > 0 ? (stats.profit / stats.revenue) * 100 : 0,
-            returnRate: stats.volume > 0 ? stats.weightedReturnRate / stats.volume : 0,
-            avgShippingCost: stats.volume > 0 ? stats.totalPostage / stats.volume : 0,
-            totalShippingCost: stats.totalPostage,
-            adSpend: stats.totalAdSpend,
-            tacos: stats.revenue > 0 ? (stats.totalAdSpend / stats.revenue) * 100 : 0,
-            coordinates: POSTCODE_COORDS[code],
-            platformBreakdown,
-            topSkus,
-            prevRevenue: stats.prevRevenue,
-            prevVolume: stats.prevVolume,
-            revenueDelta,
-            volumeDelta,
-            revenueDeltaPct: stats.prevRevenue > 0 ? (revenueDelta / stats.prevRevenue) * 100 : (revenueDelta > 0 ? Infinity : 0),
-            volumeDeltaPct: stats.prevVolume > 0 ? (volumeDelta / stats.prevVolume) * 100 : (volumeDelta > 0 ? Infinity : 0),
-            districtBreakdown,
-        };
-    }).filter(d => d.coordinates);
-  }, [products, priceHistoryMap, dateRange, selectedPlatform, selectedCategory, selectedSubcategory]);
+    return aggregateUkMapData(
+        products,
+        priceHistoryMap,
+        { startDate: dateRange.start, endDate: dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory }
+    );
+  }, [products, priceHistoryMap, dateRange.start, dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory]);
 
   // 3. Rank data and calculate shares
   const rankedMapData = useMemo(() => {
@@ -327,6 +137,22 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     .domain([0, maxValue])
     .range([4, 20]); // Min bubble size 4, Max 20
 
+  const revenueDomain = useMemo(() => {
+    const revenues = rankedMapData.map(d => d.revenue).filter(r => isFinite(r));
+    if (revenues.length === 0) return [0, 1000];
+    return [0, Math.max(...revenues)];
+  }, [rankedMapData]);
+
+  const profitDomain = useMemo(() => {
+      const profits = rankedMapData.map(d => d.profit).filter(p => isFinite(p));
+      if (profits.length === 0) return [-100, 0, 100];
+      const min = Math.min(...profits);
+      const max = Math.max(...profits);
+      if (min < 0 && max > 0) return [min, 0, max];
+      if (max <= 0) return [min, min / 2, 0];
+      return [0, max / 2, max];
+  }, [rankedMapData]);
+
   const marginDomain = useMemo(() => {
     const margins = rankedMapData.map(d => d.margin).filter(m => isFinite(m));
     if (margins.length === 0) return [-10, 0, 30]; // Default domain
@@ -339,40 +165,37 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     return [0, max / 2, max];
   }, [rankedMapData]);
 
-  const returnRateDomain = useMemo(() => {
-    const rates = rankedMapData.map(d => d.returnRate).filter(r => isFinite(r));
-    if (rates.length === 0) return [0, 5, 10];
-    const max = Math.max(...rates);
-    // Green (0) -> Yellow (5) -> Red (max or 10)
-    return [0, Math.min(max, 5), Math.max(max, 10)];
-  }, [rankedMapData]);
-
-  const shippingCostDomain = useMemo(() => {
-    const costs = rankedMapData.map(d => d.avgShippingCost).filter(c => isFinite(c) && c > 0);
-    if (costs.length === 0) return [2, 5, 10];
-    const min = Math.min(...costs);
-    const max = Math.max(...costs);
-    const mid = (min + max) / 2;
-    // Green (low) -> Yellow (mid) -> Red (high)
-    return [min, mid, max];
+  const tacosDomain = useMemo(() => {
+    const tacosValues = rankedMapData.map(d => d.tacos).filter(t => isFinite(t));
+    if (tacosValues.length === 0) return [0, 15, 30];
+    const max = Math.max(...tacosValues);
+    return [0, Math.min(max, 15), Math.max(max, 30)]; // Green -> Yellow -> Red
   }, [rankedMapData]);
 
   const colorScale = useMemo(() => {
-      if (colorMetric === 'RETURN_RATE') {
+      switch (colorMetric) {
+        case 'REVENUE':
           return scaleLinear<string>()
-              .domain(returnRateDomain)
-              .range(["#22c55e", "#facc15", "#ef4444"]); // Green -> Yellow -> Red
-      }
-      if (colorMetric === 'AVG_SHIPPING') {
+            .domain(revenueDomain)
+            .range(["#e0f2fe", "#7dd3fc", "#0ea5e9"]); // Light to dark blue
+        case 'PROFIT':
           return scaleLinear<string>()
-              .domain(shippingCostDomain)
-              .range(["#22c55e", "#facc15", "#ef4444"]); // Green -> Yellow -> Red
+            .domain(profitDomain)
+            .range(["#ef4444", "#facc15", "#22c55e"]); // Red -> Yellow -> Green
+        case 'MARGIN':
+          return scaleLinear<string>()
+            .domain(marginDomain)
+            .range(["#ef4444", "#facc15", "#22c55e"]); // Red -> Yellow -> Green
+        case 'TACOS':
+          return scaleLinear<string>()
+            .domain(tacosDomain)
+            .range(["#22c55e", "#facc15", "#ef4444"]); // Green -> Yellow -> Red (high TACoS is bad)
+        default:
+          return scaleLinear<string>()
+            .domain(revenueDomain)
+            .range(["#e0f2fe", "#7dd3fc", "#0ea5e9"]);
       }
-      // Default to Margin
-      return scaleLinear<string>()
-          .domain(marginDomain)
-          .range(["#ef4444", "#facc15", "#22c55e"]); // Red -> Yellow -> Green
-  }, [colorMetric, marginDomain, returnRateDomain, shippingCostDomain]);
+  }, [colorMetric, revenueDomain, profitDomain, marginDomain, tacosDomain]);
   
   const deltaColor = (value: number) => {
       if (value > 0) return "#22c55e"; // green
@@ -423,19 +246,20 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4">
         {/* Controls Header */}
         <div className="flex flex-row justify-between items-center mb-4 gap-4 p-4 bg-white/50 rounded-xl border border-gray-200">
-            <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
-                    <MapIcon className="w-5 h-5" />
-                </div>
-                <div>
-                    <h3 className="font-bold text-gray-900">UK Sales Distribution</h3>
-                    <p className="text-xs text-gray-500">Geographic performance by Postcode Area</p>
+            <div className="flex items-center gap-4">
+                {onPrevSlide && <button onClick={onPrevSlide} className="w-12 h-12 flex-shrink-0 bg-white/50 border border-gray-200 shadow-sm rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>}
+                <div className="flex items-center gap-2">
+                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+                        <MapIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-gray-900">UK Sales Distribution</h3>
+                        <p className="text-xs text-gray-500">Geographic performance by Postcode Area</p>
+                    </div>
                 </div>
             </div>
 
             <div className="flex items-center gap-4">
-                {onPrevSlide && <button onClick={onPrevSlide} className="w-12 h-12 flex-shrink-0 bg-white/50 border border-gray-200 shadow-sm rounded-xl flex items-center justify-center transition-colors text-gray-500 hover:text-indigo-600 hover:bg-white"><ChevronLeft className="w-6 h-6" /></button>}
-                
                 {/* Filters */}
                 <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-100/50 rounded-lg border border-gray-200/80">
                     {/* Mode Toggle */}
@@ -476,9 +300,10 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                     <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
                         COLOR:
                         <div className="flex bg-gray-200 p-1 rounded-lg">
+                            <button onClick={() => setColorMetric('REVENUE')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'REVENUE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Revenue</button>
+                            <button onClick={() => setColorMetric('PROFIT')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'PROFIT' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Profit</button>
                             <button onClick={() => setColorMetric('MARGIN')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'MARGIN' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Margin %</button>
-                            <button onClick={() => setColorMetric('RETURN_RATE')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'RETURN_RATE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Return Rate</button>
-                            <button onClick={() => setColorMetric('AVG_SHIPPING')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'AVG_SHIPPING' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Avg Shipping</button>
+                            <button onClick={() => setColorMetric('TACOS')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'TACOS' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>TACoS %</button>
                         </div>
                     </div>
 
@@ -509,7 +334,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         </select>
                     </div>
                 </div>
-                {onNextSlide && <button onClick={onNextSlide} className="w-12 h-12 flex-shrink-0 bg-white/50 border border-gray-200 shadow-sm rounded-xl flex items-center justify-center transition-colors text-gray-500 hover:text-indigo-600 hover:bg-white"><ChevronRight className="w-6 h-6" /></button>}
+                {onNextSlide && <button onClick={onNextSlide} className="w-12 h-12 flex-shrink-0 bg-white/50 border border-gray-200 shadow-sm rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>}
             </div>
         </div>
 
@@ -568,12 +393,38 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         {rankedMapData.map((d) => {
                             if (d.sizeValue <= 0) return null;
                             const isPinned = pinnedArea && pinnedArea.code === d.code;
+                            const isLowMargin = d.margin < LOW_MARGIN_PCT;
+                            const isHighTacos = d.tacos > HIGH_TACOS_PCT;
                             
                             return (
                                 <Marker key={d.code} coordinates={d.coordinates}>
+                                    {isLowMargin && (
+                                        <circle
+                                            r={sizeScale(d.sizeValue) + 3}
+                                            fill="none"
+                                            stroke="#f59e0b"
+                                            strokeWidth={1.5}
+                                            strokeOpacity={0.8}
+                                        />
+                                    )}
+                                    {isHighTacos && (
+                                        <circle
+                                            r={sizeScale(d.sizeValue) + 5}
+                                            fill="none"
+                                            stroke="#8b5cf6"
+                                            strokeWidth={1}
+                                            strokeDasharray="2 2"
+                                            strokeOpacity={0.9}
+                                        />
+                                    )}
                                     <circle
                                         r={sizeScale(d.sizeValue)}
-                                        fill={mode === 'ABSOLUTE' ? colorScale(colorMetric === 'MARGIN' ? d.margin : colorMetric === 'RETURN_RATE' ? d.returnRate : d.avgShippingCost) : deltaColor(d.value)}
+                                        fill={mode === 'ABSOLUTE' ? colorScale(
+                                          colorMetric === 'REVENUE' ? d.revenue :
+                                          colorMetric === 'PROFIT' ? d.profit :
+                                          colorMetric === 'MARGIN' ? d.margin :
+                                          d.tacos
+                                        ) : deltaColor(d.value)}
                                         fillOpacity={0.7}
                                         stroke={isPinned ? themeColor : '#fff'}
                                         strokeWidth={isPinned ? 2.5 : 1}
@@ -582,7 +433,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         onMouseLeave={() => setHoveredArea(null)}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            setPinnedArea(d);
+                                            setPinnedArea(prev => (prev && prev.code === d.code) ? null : d);
                                         }}
                                     />
                                 </Marker>
@@ -610,6 +461,10 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         <span className="font-bold text-gray-800">{areaToShow.volume} units</span>
                                     </div>
                                     <div className="flex justify-between">
+                                        <span className="text-gray-500">Orders</span>
+                                        <span className="font-bold text-gray-800">{areaToShow.orders}</span>
+                                    </div>
+                                    <div className="flex justify-between">
                                         <span className="text-gray-500">Profit</span>
                                         <span className={`font-bold ${areaToShow.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>£{areaToShow.profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                                     </div>
@@ -618,12 +473,12 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         <span className={`font-bold ${areaToShow.margin >= 15 ? 'text-green-600' : areaToShow.margin > 0 ? 'text-amber-600' : 'text-red-600'}`}>{areaToShow.margin.toFixed(1)}%</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-gray-500 flex items-center gap-1"><CornerDownLeft className="w-3 h-3"/>Return Rate</span>
-                                        <span className={`font-bold ${areaToShow.returnRate > 5 ? 'text-red-600' : 'text-gray-800'}`}>{areaToShow.returnRate.toFixed(1)}%</span>
+                                        <span className="text-gray-500">Ad Spend</span>
+                                        <span className="font-bold text-orange-600">£{areaToShow.adSpend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-gray-500 flex items-center gap-1"><Ship className="w-3 h-3"/>Avg Shipping</span>
-                                        <span className={`font-bold ${areaToShow.avgShippingCost > 7 ? 'text-red-600' : areaToShow.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-800'}`}>£{areaToShow.avgShippingCost.toFixed(2)}</span>
+                                        <span className="text-gray-500">TACoS</span>
+                                        <span className={`font-bold ${areaToShow.tacos > 15 ? 'text-red-600' : 'text-gray-800'}`}>{areaToShow.tacos.toFixed(1)}%</span>
                                     </div>
                                     {areaToShow.platformBreakdown.length > 0 &&
                                       <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
@@ -654,6 +509,25 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                     </div>
                                 </>
                             )}
+                             {(areaToShow.margin < LOW_MARGIN_PCT || areaToShow.tacos > HIGH_TACOS_PCT) && (
+                                <div className="mt-2 pt-2 border-t border-gray-100">
+                                    <h5 className="text-[10px] font-bold text-amber-500 uppercase mb-1">Risk Factors</h5>
+                                    <div className="space-y-1">
+                                        {areaToShow.margin < LOW_MARGIN_PCT && (
+                                            <div className="flex justify-between text-xs items-center text-amber-600">
+                                                <span>Low Margin (&lt;10%)</span>
+                                                <span className="font-bold">{areaToShow.margin.toFixed(1)}%</span>
+                                            </div>
+                                        )}
+                                        {areaToShow.tacos > HIGH_TACOS_PCT && (
+                                            <div className="flex justify-between text-xs items-center text-purple-600">
+                                                <span>High TACoS (&gt;15%)</span>
+                                                <span className="font-bold">{areaToShow.tacos.toFixed(1)}%</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                             <div className="border-t border-gray-100 my-1 pt-1 mt-2">
                                 <span className="text-[10px] text-gray-400 uppercase font-bold">Top Seller (by Profit)</span>
                                 <div className="text-xs text-gray-700 truncate">{areaToShow.topSkus?.[0]?.name || 'N/A'}</div>
@@ -680,14 +554,15 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         {mode === 'ABSOLUTE' ? (
                             <div>
                                 <div className="text-[10px] text-gray-500 font-medium">Color: {
+                                    colorMetric === 'REVENUE' ? 'Revenue' :
+                                    colorMetric === 'PROFIT' ? 'Profit' :
                                     colorMetric === 'MARGIN' ? 'Margin %' :
-                                    colorMetric === 'RETURN_RATE' ? 'Return Rate' :
-                                    'Avg Shipping'
+                                    'TACoS %'
                                 }</div>
                                 <div className="w-full h-3 rounded mt-1" style={{ background: `linear-gradient(to right, ${colorScale.range()[0]}, ${colorScale.range()[1]}, ${colorScale.range()[2]})` }}></div>
                                 <div className="flex justify-between text-[9px] font-mono mt-0.5">
-                                    <span>{colorMetric === 'AVG_SHIPPING' ? 'Low' : 'Low'}</span>
-                                    <span>{colorMetric === 'AVG_SHIPPING' ? 'High' : 'High'}</span>
+                                    <span>Low</span>
+                                    <span>High</span>
                                 </div>
                             </div>
                         ) : (
@@ -730,20 +605,20 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                 <div className="text-lg font-bold text-green-900">£{pinnedArea.profit.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                             </div>
                              <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                                <div className="text-xs text-gray-600 font-bold uppercase">Units</div>
-                                <div className="text-lg font-bold text-gray-800">{pinnedArea.volume.toLocaleString()}</div>
+                                <div className="text-xs text-gray-600 font-bold uppercase">Units / Orders</div>
+                                <div className="text-lg font-bold text-gray-800">{pinnedArea.volume.toLocaleString()} / {pinnedArea.orders.toLocaleString()}</div>
                             </div>
                             <div className="bg-amber-50 border border-amber-100 rounded-lg p-2">
                                 <div className="text-xs text-amber-700 font-bold uppercase">Margin</div>
                                 <div className="text-lg font-bold text-amber-900">{pinnedArea.margin.toFixed(1)}%</div>
                             </div>
-                             <div className="bg-red-50/70 border border-red-100 rounded-lg p-2">
-                                <div className="text-xs text-red-700 font-bold uppercase">Return Rate</div>
-                                <div className={`text-lg font-bold ${pinnedArea.returnRate > 5 ? 'text-red-900' : 'text-gray-800'}`}>{pinnedArea.returnRate.toFixed(1)}%</div>
+                             <div className="bg-orange-50/70 border border-orange-100 rounded-lg p-2">
+                                <div className="text-xs text-orange-700 font-bold uppercase">Ad Spend</div>
+                                <div className="text-lg font-bold text-orange-900">£{pinnedArea.adSpend.toFixed(0)}</div>
                             </div>
-                            <div className="bg-cyan-50/70 border border-cyan-100 rounded-lg p-2">
-                                <div className="text-xs text-cyan-700 font-bold uppercase">Avg Shipping</div>
-                                <div className={`text-lg font-bold text-cyan-900`}>£{pinnedArea.avgShippingCost.toFixed(2)}</div>
+                            <div className="bg-purple-50/70 border border-purple-100 rounded-lg p-2">
+                                <div className="text-xs text-purple-700 font-bold uppercase">TACoS</div>
+                                <div className={`text-lg font-bold text-purple-900`}>{pinnedArea.tacos.toFixed(1)}%</div>
                             </div>
                         </div>
                         
@@ -798,7 +673,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                 {sortedAreas.length > 0 ? sortedAreas.map((area, i) => (
                                     <div 
                                         key={area.code} 
-                                        onClick={() => setPinnedArea(area)}
+                                        onClick={() => setPinnedArea(prev => (prev && prev.code === area.code) ? null : area)}
                                         className={`flex items-center justify-between p-2 rounded-lg transition-colors cursor-pointer hover:bg-gray-50 border border-transparent hover:border-gray-100`}
                                     >
                                         <div className="flex items-center gap-3">
@@ -881,7 +756,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                 <React.Fragment key={d.code}>
                                     <tr 
                                         className={`hover:bg-gray-50 cursor-pointer ${isPinned ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
-                                        onClick={() => setPinnedArea(d)}
+                                        onClick={() => setPinnedArea(prev => (prev && prev.code === d.code) ? null : d)}
                                     >
                                         <td className="px-3 py-2 font-bold text-gray-800">{getAreaDisplayName(d.code)}</td>
                                         <td className="px-3 py-2 text-right font-mono">{d.orders}</td>

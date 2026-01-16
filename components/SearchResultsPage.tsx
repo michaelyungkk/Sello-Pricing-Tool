@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, PricingRules, SearchConfig, PriceChangeRecord } from '../types';
 import { Layers, ListFilter, TrendingDown, ArrowRight, X, ChevronDown, Package, Activity, ChevronRight, RotateCcw, AlertTriangle, Coins, Calendar, ShoppingBag, Megaphone, PieChart, DollarSign, Filter, Edit2, Check, Clock, Info, TrendingUp, MapPin } from 'lucide-react';
@@ -6,6 +5,7 @@ import { SearchIntent } from '../services/geminiService';
 import { isAdsEnabled } from '../services/platformCapabilities';
 import SkuDeepDivePage from './SkuDeepDivePage';
 import { ThresholdConfig } from '../services/thresholdsConfig';
+import { GradeBadge } from './GradeBadge';
 
 interface SearchResultsPageProps {
   data: { results: any[], query: string, params: SearchIntent, id?: string };
@@ -234,7 +234,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
       if (data.id) onRefine(data.id, newIntent);
   };
 
-  useMemo(() => {
+  useEffect(() => {
       setExpandedGroup(null);
       setExpandedSubGroup(null);
   }, [groupBy]);
@@ -714,6 +714,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
 
             // Postcode Context Summary
             const topDistricts = isPostcodeContext ? getTopDistricts(group.districtStats) : null;
+            
+            const productForGroup = groupBy === 'sku' ? liveProductMap.get(group.key) : null;
 
             return (
               <div key={group.key} className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
@@ -726,7 +728,10 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                         {groupBy === 'platform' ? <Layers className="w-5 h-5" /> : <Package className="w-5 h-5" />}
                      </div>
                      <div>
-                        <h3 className="font-bold text-gray-900">{group.label}</h3>
+                        <h3 className="font-bold text-gray-900 flex items-center">
+                            {group.label}
+                            {productForGroup && <GradeBadge gradeLevel={productForGroup.gradeLevel} />}
+                        </h3>
                         {group.productName && <p className="text-xs text-gray-500">{group.productName}</p>}
                         {topDistricts && (
                             <p className="text-[10px] text-indigo-600 mt-1 flex items-center gap-1 font-medium">
@@ -934,6 +939,8 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                     const subVolDiff = sub.totalQty - sub.totalPrevQty;
                                     const subVolDiffPct = sub.totalPrevQty > 0 ? (subVolDiff / sub.totalPrevQty) * 100 : (sub.totalQty > 0 ? 100 : 0);
 
+                                    const productForSubgroup = groupBy === 'platform' ? liveProductMap.get(sub.key) : null;
+
                                     return (
                                         <div key={sub.key} className="bg-white/40">
                                             {/* ... Subgroup Header Row ... */}
@@ -947,7 +954,10 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                         {groupBy === 'platform' ? <Package className="w-3 h-3" /> : <Layers className="w-3 h-3" />}
                                                     </div>
                                                     <div>
-                                                        <div className="font-mono text-sm font-bold text-gray-700">{sub.label}</div>
+                                                        <div className="font-mono text-sm font-bold text-gray-700 flex items-center">
+                                                            {sub.label}
+                                                            {productForSubgroup && <GradeBadge gradeLevel={productForSubgroup.gradeLevel} />}
+                                                        </div>
                                                         {sub.productName && <div className="text-xs text-gray-500">{sub.productName}</div>}
                                                     </div>
                                                 </div>

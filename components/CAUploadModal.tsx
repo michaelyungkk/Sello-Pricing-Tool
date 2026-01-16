@@ -1,19 +1,21 @@
 
-import React, { useState, useRef } from 'react';
-import { Upload, X, FileText, Check, AlertCircle, Loader2, RefreshCw, Calendar } from 'lucide-react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { Upload, X, FileText, Check, AlertCircle, Loader2, RefreshCw, Calendar, TrendingUp, AlertTriangle, Hash } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { Product } from '../types';
 
 interface CAUploadModalProps {
+    products: Product[];
     onClose: () => void;
     onConfirm: (data: { sku: string; caPrice: number }[], reportDate: string) => void;
 }
 
-const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => {
+const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConfirm }) => {
     const [dragActive, setDragActive] = useState(false);
     const [parsedItems, setParsedItems] = useState<{ sku: string; caPrice: number; status: 'valid' | 'error' | 'skipped' }[] | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [skippedCount, setSkippedCount] = useState(0);
+    const [stats, setStats] = useState({ valid: 0, skipped: 0, matched: 0, changes: 0 });
     const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]); // Default to today
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,7 +103,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => 
         }
 
         const results = [];
-        let skipped = 0;
+        let skippedCount = 0;
 
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
@@ -110,7 +112,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => 
 
             // Skip parent SKUs matching pattern *-UK-ALL
             if (sku.match(/-UK-ALL$/i)) {
-                skipped++;
+                skippedCount++;
                 results.push({
                     sku,
                     caPrice: 0,
@@ -129,9 +131,51 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => 
             });
         }
 
-        setSkippedCount(skipped);
         setParsedItems(results);
     };
+
+    // Calculate detailed stats when parsedItems updates
+    useEffect(() => {
+        if (!parsedItems) return;
+
+        const validItems = parsedItems.filter(i => i.status === 'valid');
+        const skippedCount = parsedItems.filter(i => i.status === 'skipped').length;
+
+        // Build Map of Uploaded Data
+        const caDataMap = new Map<string, number>();
+        validItems.forEach(d => caDataMap.set(d.sku.toUpperCase().trim(), d.caPrice));
+
+        let matchedCount = 0;
+        let changeCount = 0;
+
+        products.forEach(p => {
+            const masterSku = p.sku.toUpperCase().trim();
+            let newPrice = caDataMap.get(masterSku);
+
+            // Logic mirroring App.tsx for suffix fallback
+            if (newPrice === undefined) {
+                const stripped = masterSku.replace(/[-_]UK$/i, '');
+                newPrice = caDataMap.get(stripped);
+            }
+
+            if (newPrice !== undefined) {
+                matchedCount++;
+                const oldPrice = p.caPrice || 0;
+                // Count as a "Recorded Change" if old price exists and difference is significant
+                if (oldPrice > 0 && Math.abs(oldPrice - newPrice) > 0.02) {
+                    changeCount++;
+                }
+            }
+        });
+
+        setStats({
+            valid: validItems.length,
+            skipped: skippedCount,
+            matched: matchedCount,
+            changes: changeCount
+        });
+
+    }, [parsedItems, products]);
 
     const validItems = parsedItems?.filter(i => i.status === 'valid') || [];
 
@@ -191,32 +235,56 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => 
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center">
+                            {/* Summary Stats Grid */}
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-center">
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase flex items-center justify-center gap-1">
+                                        <Hash className="w-3 h-3" /> Found
+                                    </span>
+                                    <div className="text-xl font-bold text-gray-900 mt-1">{stats.valid}</div>
+                                </div>
+                                <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-center">
+                                    <span className="text-[10px] text-blue-700 font-bold uppercase flex items-center justify-center gap-1">
+                                        <Check className="w-3 h-3" /> Matched
+                                    </span>
+                                    <div className="text-xl font-bold text-blue-900 mt-1">{stats.matched}</div>
+                                </div>
+                                <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                                    <span className="text-[10px] text-amber-700 font-bold uppercase flex items-center justify-center gap-1">
+                                        <TrendingUp className="w-3 h-3" /> Changes
+                                    </span>
+                                    <div className="text-xl font-bold text-amber-900 mt-1">{stats.changes}</div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center px-1">
                                 <div className="flex flex-col gap-1">
-                                    <span className="text-sm font-medium text-green-600">{validItems.length} Valid Entries Found</span>
-                                    {skippedCount > 0 && (
-                                        <span className="text-xs text-amber-600">{skippedCount} Parent SKUs Skipped</span>
+                                    {stats.skipped > 0 && (
+                                        <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 flex items-center gap-1 w-fit">
+                                            <AlertTriangle className="w-3 h-3" /> {stats.skipped} Parent SKUs Skipped
+                                        </span>
                                     )}
                                 </div>
-                                <button onClick={() => setParsedItems(null)} className="text-sm text-gray-500 flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Reset</button>
+                                <button onClick={() => setParsedItems(null)} className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-800"><RefreshCw className="w-3 h-3" /> Reset</button>
                             </div>
-                            <div className="max-h-60 overflow-y-auto border rounded-lg">
+
+                            <div className="max-h-40 overflow-y-auto border rounded-lg">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50">
+                                    <thead className="bg-gray-50 sticky top-0">
                                         <tr>
-                                            <th className="p-2">SKU</th>
-                                            <th className="p-2 text-right">CA Price</th>
-                                            <th className="p-2 text-center">Status</th>
+                                            <th className="p-2 text-xs uppercase font-bold text-gray-500">SKU</th>
+                                            <th className="p-2 text-right text-xs uppercase font-bold text-gray-500">CA Price</th>
+                                            <th className="p-2 text-center text-xs uppercase font-bold text-gray-500">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {parsedItems.slice(0, 50).map((item, idx) => (
                                             <tr key={idx} className={`border-t ${item.status === 'skipped' ? 'bg-amber-50' : ''}`}>
-                                                <td className="p-2">{item.sku}</td>
-                                                <td className="p-2 text-right">{item.status === 'valid' ? `£${item.caPrice.toFixed(2)}` : '-'}</td>
+                                                <td className="p-2 font-mono text-xs">{item.sku}</td>
+                                                <td className="p-2 text-right font-medium">{item.status === 'valid' ? `£${item.caPrice.toFixed(2)}` : '-'}</td>
                                                 <td className="p-2 text-center">
                                                     {item.status === 'valid' && <Check className="w-4 h-4 text-green-600 inline" />}
-                                                    {item.status === 'skipped' && <span className="text-xs text-amber-600">Parent SKU</span>}
+                                                    {item.status === 'skipped' && <span className="text-[10px] text-amber-600 font-bold uppercase">Parent</span>}
                                                     {item.status === 'error' && <AlertCircle className="w-4 h-4 text-red-600 inline" />}
                                                 </td>
                                             </tr>
@@ -228,14 +296,14 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ onClose, onConfirm }) => 
                     )}
                 </div>
 
-                <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700">Cancel</button>
+                <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
+                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors font-medium">Cancel</button>
                     {validItems.length > 0 && (
                         <button
                             onClick={() => onConfirm(validItems, reportDate)}
-                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md transition-colors font-medium"
                         >
-                            Update CA Prices
+                            Update Prices
                         </button>
                     )}
                 </div>

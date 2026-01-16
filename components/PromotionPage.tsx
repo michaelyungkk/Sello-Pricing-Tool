@@ -1,8 +1,8 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent, PromotionItem, PriceLog, LogisticsRule } from '../types';
 import { TagSearchInput } from './TagSearchInput';
+import { GradeBadge } from './GradeBadge';
 import { Plus, ChevronRight, Search, Trash2, ArrowLeft, CheckCircle, Check, Download, Calendar, Lock, Unlock, LayoutDashboard, List, Calculator, Edit2, AlertCircle, Save, X, RotateCcw, Eye, EyeOff, ArrowUpDown, ChevronUp, ChevronDown, Upload, FileText, Loader2, RefreshCw, TrendingUp, TrendingDown, Target, ShoppingBag, Coins, Truck, Info, HelpCircle, Archive, Zap, Clock, Star, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -699,7 +699,12 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
 
                             return (
                                 <tr key={item.sku} className="even:bg-gray-50/30 hover:bg-gray-100/50">
-                                    <td className="p-4 font-bold text-gray-900">{item.sku}</td>
+                                    <td className="p-4">
+                                        <div className="flex items-center">
+                                            <div className="font-bold text-gray-900">{item.sku}</div>
+                                            <GradeBadge gradeLevel={product?.gradeLevel} />
+                                        </div>
+                                    </td>
                                     <td className="p-4 text-right">
                                         {product?.caPrice ? (
                                             <span className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded border border-purple-100">£{product.caPrice.toFixed(2)}</span>
@@ -726,7 +731,7 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
                         })}
                         {promo.items.length === 0 && (
                             <tr>
-                                <td colSpan={6} className="p-8 text-center text-gray-400">
+                                <td colSpan={7} className="p-8 text-center text-gray-400">
                                     No products in this campaign yet.
                                 </td>
                             </tr>
@@ -765,6 +770,12 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
     const [searchQuery, setSearchQuery] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [platformFilter, setPlatformFilter] = useState('All Platforms');
+
+    const productMap = useMemo(() => {
+        const map = new Map<string, Product>();
+        products.forEach(p => map.set(p.sku, p));
+        return map;
+    }, [products]);
 
     const allRows = useMemo(() => {
         const rows: any[] = [];
@@ -904,26 +915,34 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
-                        {filteredRows.map(row => (
-                            <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
-                                <td className="p-4 font-bold text-gray-700">{row.sku}</td>
-                                <td className="p-4 text-gray-600">{row.eventName}</td>
-                                <td className="p-4">
-                                    <span className="bg-gray-100/80 text-gray-700 px-2 py-1 rounded text-xs font-medium border border-gray-200">
-                                        {row.platform}
-                                    </span>
-                                </td>
-                                <td className="p-4 text-right font-bold" style={{ color: themeColor }}>
-                                    £{row.promoPrice.toFixed(2)}
-                                </td>
-                                <td className="p-4 text-gray-500 text-xs">
-                                    {formatDate(row.startDate)} - {formatDate(row.endDate)}
-                                </td>
-                                <td className="p-4">
-                                    <StatusBadge status={row.status} />
-                                </td>
-                            </tr>
-                        ))}
+                        {filteredRows.map(row => {
+                            const product = productMap.get(row.sku);
+                            return (
+                                <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
+                                    <td className="p-4">
+                                        <div className="flex items-center">
+                                            <div className="font-bold text-gray-700">{row.sku}</div>
+                                            <GradeBadge gradeLevel={product?.gradeLevel} />
+                                        </div>
+                                    </td>
+                                    <td className="p-4 text-gray-600">{row.eventName}</td>
+                                    <td className="p-4">
+                                        <span className="bg-gray-100/80 text-gray-700 px-2 py-1 rounded text-xs font-medium border border-gray-200">
+                                            {row.platform}
+                                        </span>
+                                    </td>
+                                    <td className="p-4 text-right font-bold" style={{ color: themeColor }}>
+                                        £{row.promoPrice.toFixed(2)}
+                                    </td>
+                                    <td className="p-4 text-gray-500 text-xs">
+                                        {formatDate(row.startDate)} - {formatDate(row.endDate)}
+                                    </td>
+                                    <td className="p-4">
+                                        <StatusBadge status={row.status} />
+                                    </td>
+                                </tr>
+                            );
+                        })}
                         {filteredRows.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="p-12 text-center text-gray-400">
@@ -1282,7 +1301,10 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
                                         />
                                     </td>
                                     <td className="p-4">
-                                        <div className="font-bold text-gray-900">{p.sku}</div>
+                                        <div className="flex items-center">
+                                            <div className="font-bold text-gray-900">{p.sku}</div>
+                                            <GradeBadge gradeLevel={p.gradeLevel} />
+                                        </div>
                                         <div 
                                             className="text-xs text-gray-600 font-medium my-1 select-text"
                                             onClick={(e) => e.stopPropagation()}

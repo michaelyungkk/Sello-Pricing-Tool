@@ -2,6 +2,7 @@ import React from 'react';
 import { Product, AnalysisResult } from '../types';
 import StockChart from './StockChart';
 import { Check, AlertTriangle, X, TrendingUp, TrendingDown, WifiOff } from 'lucide-react';
+import { GradeBadge } from './GradeBadge';
 import { useTranslation } from 'react-i18next';
 
 interface AnalysisModalProps {
@@ -29,7 +30,10 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
               <span className="px-2 py-0.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded uppercase tracking-wide">
                 {product.platform || (product.channels?.[0]?.platform) || 'Multi-Channel'}
               </span>
-              <span className="text-sm text-gray-500">{product.sku}</span>
+              <div className="flex items-center">
+                <span className="text-sm text-gray-500">{product.sku}</span>
+                <GradeBadge gradeLevel={product.gradeLevel} />
+              </div>
             </div>
             <h2 className="text-2xl font-bold text-gray-900">{product.name}</h2>
           </div>

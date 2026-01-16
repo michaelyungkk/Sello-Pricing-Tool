@@ -199,6 +199,7 @@ export default {
   dead_stock_value: "Dead Stock Min Value",
   high_return_rate: "High Return Rate",
   high_ad_dependency: "High Ad Dependency",
+  current_season_label: "Current Season",
 
   // CostManagementPage
   cost_management_title: "SKU Profitability Analysis",

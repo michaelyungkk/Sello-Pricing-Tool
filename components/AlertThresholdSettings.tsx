@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ThresholdConfig, getThresholdConfig, saveThresholdConfig, resetThresholdConfig, DEFAULT_THRESHOLDS } from '../services/thresholdsConfig';
-import { Save, RefreshCw, AlertTriangle, Activity, Info } from 'lucide-react';
+import { Save, RefreshCw, AlertTriangle, Activity, Info, Calendar } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 interface AlertThresholdSettingsProps {
@@ -8,7 +8,7 @@ interface AlertThresholdSettingsProps {
     onSaveComplete?: () => void;
 }
 
-const SETTING_META: Record<keyof ThresholdConfig, { label: string; unit: string; usedBy: string; description: string }> = {
+const SETTING_META: Record<keyof Omit<ThresholdConfig, 'currentSeason'>, { label: string; unit: string; usedBy: string; description: string }> = {
     marginBelowTargetPct: {
         label: 'low_margin_threshold',
         unit: '%',
@@ -70,10 +70,13 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
     }, []);
 
     const handleChange = (key: keyof ThresholdConfig, value: string) => {
-        const num = parseFloat(value);
-        if (isNaN(num)) return;
-        
-        setConfig(prev => ({ ...prev, [key]: num }));
+        if (key === 'currentSeason') {
+            setConfig(prev => ({ ...prev, [key]: value as any }));
+        } else {
+            const num = parseFloat(value);
+            if (isNaN(num)) return;
+            setConfig(prev => ({ ...prev, [key]: num }));
+        }
         setIsDirty(true);
         setSavedMessage(null);
     };
@@ -97,12 +100,14 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
         }
     };
 
-    const isValid = (key: keyof ThresholdConfig, val: number) => {
+    const isValid = (key: keyof ThresholdConfig, val: number | string) => {
+        if (key === 'currentSeason') return true;
+        if (typeof val !== 'number') return false;
         if (key.toLowerCase().includes('pct')) return val >= 0 && val <= 100;
         return val >= 0;
     };
 
-    const allValid = Object.entries(config).every(([k, v]) => isValid(k as keyof ThresholdConfig, v as number));
+    const allValid = Object.entries(config).every(([k, v]) => isValid(k as keyof ThresholdConfig, v as number | string));
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
@@ -137,9 +142,9 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-200">
-                    {(Object.entries(config) as [keyof ThresholdConfig, number][]).map(([key, value]) => {
-                        const meta = SETTING_META[key];
-                        const valid = isValid(key, value);
+                    {(Object.entries(config) as [keyof ThresholdConfig, number | string][]).filter(([key]) => key !== 'currentSeason').map(([key, value]) => {
+                        const meta = SETTING_META[key as keyof Omit<ThresholdConfig, 'currentSeason'>];
+                        const valid = isValid(key as keyof ThresholdConfig, value);
 
                         return (
                             <div key={key} className="bg-white p-6 hover:bg-gray-50 transition-colors group">
@@ -152,7 +157,7 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                                         <input 
                                             type="number" 
                                             value={value}
-                                            onChange={(e) => handleChange(key, e.target.value)}
+                                            onChange={(e) => handleChange(key as keyof ThresholdConfig, e.target.value)}
                                             className={`w-20 text-right font-mono font-bold text-sm border rounded-md py-1 px-2 focus:ring-2 focus:ring-indigo-500 ${!valid ? 'border-red-500 text-red-600 bg-red-50' : 'border-gray-300'}`}
                                         />
                                         <span className="text-xs font-bold text-gray-400 w-8">{meta.unit}</span>
@@ -171,6 +176,35 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                             </div>
                         );
                     })}
+                </div>
+                 <div className="bg-white p-6 border-t border-gray-200/50">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-indigo-500"/>
+                                {t('current_season_label')}
+                            </label>
+                            <p className="text-xs text-gray-500 mt-2 mb-3 max-w-sm">Sets the current season for the Strategy Engine. This will affect recommendations for products with seasonal tags in future updates.</p>
+                             <div className="flex items-center gap-1.5">
+                                <Info className="w-3 h-3 text-indigo-400" />
+                                <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wide">Used by:</span>
+                                <span className="text-[10px] text-gray-600 font-medium">Strategy Engine</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={config.currentSeason || 'None'}
+                                onChange={(e) => handleChange('currentSeason', e.target.value)}
+                                className="w-48 border rounded-md py-1.5 px-2 focus:ring-2 focus:ring-indigo-500 border-gray-300 bg-white"
+                            >
+                                <option value="None">None</option>
+                                <option value="Summer">Summer</option>
+                                <option value="Autumn">Autumn</option>
+                                <option value="Winter">Winter</option>
+                                <option value="Spring">Spring</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

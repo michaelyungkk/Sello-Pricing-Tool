@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, FileText, Database, ArrowRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -22,6 +23,8 @@ export interface BatchUpdateItem {
   };
   gradeLevel?: number;
   dailyAverageSales?: number;
+  seasonTags?: string;
+  festivalTags?: string;
 }
 
 interface BatchUploadModalProps {
@@ -138,6 +141,9 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
         const heightIdx = findCol(['height']);
         const weightIdx = findCol(['weight']);
 
+        const seasonTagsIdx = findCol(['seasontags', 'season', 'season_tags']);
+        const festivalTagsIdx = findCol(['festivaltags', 'festival', 'event', 'festival_tags']);
+
         if (skuIdx === -1) throw new Error("Could not detect SKU column. Please ensure header contains 'SKU'.");
 
         const results: BatchUpdateItem[] = [];
@@ -184,6 +190,8 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 gradeLevel: parseGradeLevel(gradeLevelIdx),
                 dailyAverageSales: parseNum(dailyAverageSalesIdx),
                 inventoryStatus: statusIdx !== -1 ? String(row[statusIdx]).trim() : undefined,
+                seasonTags: seasonTagsIdx !== -1 ? String(row[seasonTagsIdx]).trim() : undefined,
+                festivalTags: festivalTagsIdx !== -1 ? String(row[festivalTagsIdx]).trim() : undefined,
             };
 
             const l = parseNum(lenIdx);

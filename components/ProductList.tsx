@@ -3,11 +3,13 @@ import { createPortal } from 'react-dom';
 import { Product, PricingRules } from '../types';
 import { VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
+import { GradeBadge } from './GradeBadge';
 import { Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart } from 'lucide-react';
 
 interface ProductListProps {
     products: Product[];
     onEditAliases?: (product: Product) => void;
+    onEditTags?: (product: Product) => void;
     onViewShipments?: (sku: string) => void; // New Callback
     onViewElasticity?: (product: Product) => void; // New Callback for Elasticity
     dateLabels?: { current: string, last: string };
@@ -79,6 +81,7 @@ interface ProductRowProps {
     product: Product;
     themeColor: string;
     onEditAliases?: (p: Product) => void;
+    onEditTags?: (p: Product) => void;
     onViewShipments?: (sku: string) => void;
     onViewElasticity?: (p: Product) => void;
     hoveredProduct: { id: string; rect: DOMRect } | null;
@@ -90,6 +93,7 @@ const ProductRow = React.memo(({
     product,
     themeColor,
     onEditAliases,
+    onEditTags,
     onViewShipments,
     onViewElasticity,
     handleMouseEnter,
@@ -114,11 +118,28 @@ const ProductRow = React.memo(({
         <tr key={product.id} className="even:bg-gray-50/50 hover:bg-gray-100/50 transition-colors group text-sm border-b border-gray-50 last:border-none">
             <td className="px-4 py-3">
                 <div>
-                    <div className="font-bold text-gray-900 font-mono">{product.sku}</div>
+                    <div className="flex items-center">
+                        <div className="font-bold text-gray-900 font-mono">{product.sku}</div>
+                        <GradeBadge gradeLevel={product.gradeLevel} />
+                    </div>
                     <div className="text-gray-900 font-medium text-xs mt-1 truncate max-w-[240px] xl:max-w-[350px]" title={product.name}>{product.name}</div>
                     <div className="flex gap-2 mt-1.5">
                         {product.subcategory && (
                             <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{product.subcategory}</span>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                        {product.seasonTags?.slice(0, 2).map(tag => (
+                            <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
+                        ))}
+                        {(product.seasonTags?.length || 0) > 2 && (
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.seasonTags?.length || 0) - 2 }</span>
+                        )}
+                        {product.festivalTags?.slice(0, 2).map(tag => (
+                            <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
+                        ))}
+                        {(product.festivalTags?.length || 0) > 2 && (
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.festivalTags?.length || 0) - 2 }</span>
                         )}
                     </div>
                 </div>
@@ -207,6 +228,15 @@ const ProductRow = React.memo(({
                             <LineChart className="w-4 h-4" />
                         </button>
                     )}
+                    {onEditTags && (
+                        <button
+                            onClick={() => onEditTags(product)}
+                            className="text-gray-400 hover:text-sky-600 transition-colors p-1 rounded hover:bg-sky-50"
+                            title="Edit Seasonal/Event Tags"
+                        >
+                            <Tag className="w-4 h-4" />
+                        </button>
+                    )}
                     {onEditAliases && (
                         <button
                             onClick={() => onEditAliases(product)}
@@ -222,7 +252,7 @@ const ProductRow = React.memo(({
     );
 });
 
-const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onViewShipments, onViewElasticity, dateLabels, pricingRules, themeColor }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEditTags, onViewShipments, onViewElasticity, dateLabels, pricingRules, themeColor }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -930,6 +960,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onVi
                                     product={product}
                                     themeColor={themeColor}
                                     onEditAliases={onEditAliases}
+                                    onEditTags={onEditTags}
                                     onViewShipments={onViewShipments} // Pass handler down
                                     onViewElasticity={onViewElasticity} // Pass Elasticity Handler
                                     hoveredProduct={hoveredProduct}

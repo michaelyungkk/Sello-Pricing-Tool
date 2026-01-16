@@ -5,6 +5,8 @@ import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, Aler
 import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea, ComposedChart, Bar } from 'recharts';
 import { ThresholdConfig } from '../services/thresholdsConfig';
+import { GradeBadge } from './GradeBadge';
+import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from '../services/metrics';
 
 interface SkuDeepDivePageProps {
     data: {
@@ -378,19 +380,17 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         
         let totalProfit = 0;
         transactions.forEach(t => {
-             const rev = t.price * t.velocity;
-             if (t.profit !== undefined) totalProfit += t.profit;
-             else if (t.margin !== undefined) totalProfit += rev * (t.margin / 100);
+            totalProfit += calcProfit(t);
         });
         
         if (refunds) {
             refunds.forEach(r => totalProfit -= r.amount);
         }
-
+    
         const totalRefundValue = refunds ? refunds.reduce((sum, r) => sum + r.amount, 0) : 0;
         const netSales = allTimeSales - totalRefundValue;
-
-        return netSales > 0 ? (totalProfit / netSales) * 100 : 0;
+    
+        return calcMarginPct(netSales, totalProfit);
     }, [transactions, refunds, allTimeSales]);
 
     const diagnostics = useMemo(() => {
@@ -524,14 +524,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
         return {
             revenue: {
-                d7: getStats(7, t => { const r = t.price * t.velocity; return r > 0.01 ? r : null; }),
-                d30: getStats(30, t => { const r = t.price * t.velocity; return r > 0.01 ? r : null; }),
-                d90: getStats(90, t => { const r = t.price * t.velocity; return r > 0.01 ? r : null; })
+                d7: getStats(7, t => { const r = calcRevenue(t); return r > 0.01 ? r : null; }),
+                d30: getStats(30, t => { const r = calcRevenue(t); return r > 0.01 ? r : null; }),
+                d90: getStats(90, t => { const r = calcRevenue(t); return r > 0.01 ? r : null; })
             },
             margin: {
-                d7: getStats(7, t => (t.price * t.velocity) > 0.01 ? t.margin : null),
-                d30: getStats(30, t => (t.price * t.velocity) > 0.01 ? t.margin : null),
-                d90: getStats(90, t => (t.price * t.velocity) > 0.01 ? t.margin : null)
+                d7: getStats(7, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return calcMarginPct(rev, profit); } return null; }),
+                d30: getStats(30, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return calcMarginPct(rev, profit); } return null; }),
+                d90: getStats(90, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return calcMarginPct(rev, profit); } return null; })
             },
             qty: {
                 d7: getDailyQtyStats(7),
@@ -539,9 +539,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 d90: getDailyQtyStats(90)
             },
             tacos: {
-                d7: getStats(7, t => { const revenue = t.price * t.velocity; if (revenue > 0) { const tacos = ((t.adsSpend || 0) / revenue) * 100; return Math.min(tacos, 300); } return null; }),
-                d30: getStats(30, t => { const revenue = t.price * t.velocity; if (revenue > 0) { const tacos = ((t.adsSpend || 0) / revenue) * 100; return Math.min(tacos, 300); } return null; }),
-                d90: getStats(90, t => { const revenue = t.price * t.velocity; if (revenue > 0) { const tacos = ((t.adsSpend || 0) / revenue) * 100; return Math.min(tacos, 300); } return null; })
+                d7: getStats(7, t => { const revenue = calcRevenue(t); if (revenue > 0) { const adSpend = calcAdSpend(t); const tacos = calcTACoSPct(adSpend, revenue); return Math.min(tacos, 300); } return null; }),
+                d30: getStats(30, t => { const revenue = calcRevenue(t); if (revenue > 0) { const adSpend = calcAdSpend(t); const tacos = calcTACoSPct(adSpend, revenue); return Math.min(tacos, 300); } return null; }),
+                d90: getStats(90, t => { const revenue = calcRevenue(t); if (revenue > 0) { const adSpend = calcAdSpend(t); const tacos = calcTACoSPct(adSpend, revenue); return Math.min(tacos, 300); } return null; })
             },
         };
     }, [sortedTransactions]);
@@ -557,13 +557,13 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             let adOnlySpend = 0;
             
             periodTx.forEach(t => {
-                const currentAdSpend = t.adsSpend || 0;
+                const currentAdSpend = calcAdSpend(t);
                 totalAdSpend += currentAdSpend;
                 
                 // @ts-ignore
                 const isSale = t._type !== 'REFUND_LOG' && t.price > 0 && t.velocity > 0;
                 if (isSale) {
-                    totalRevenue += t.price * t.velocity;
+                    totalRevenue += calcRevenue(t);
                 } else if (currentAdSpend > 0 && t.price === 0) {
                     adOnlySpend += currentAdSpend;
                 }
@@ -571,7 +571,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             
             let tacosPct: number | string;
             if (totalRevenue > 0) {
-                tacosPct = (totalAdSpend / totalRevenue) * 100;
+                tacosPct = calcTACoSPct(totalAdSpend, totalRevenue);
             } else if (totalAdSpend > 0) {
                 tacosPct = 'N/A (0 sales)';
             } else {
@@ -734,22 +734,22 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             // @ts-ignore
             const isRefund = tx._type === 'REFUND_LOG' || tx.velocity < 0;
             // @ts-ignore
-            const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
+            const isAdRow = tx.price === 0 && calcAdSpend(tx) > 0 && !isRefund;
     
             if (!isRefund && !isAdRow) {
-                const txRevenue = tx.price * tx.velocity;
-                group.soldQty += tx.velocity;
+                const txRevenue = calcRevenue(tx);
+                group.soldQty += calcUnits(tx);
                 group.revenue += txRevenue;
                 totalRevenueAllPlatforms += txRevenue;
             }
     
-            group.adSpend += tx.adsSpend || 0;
-            group.profit += tx.profit || 0;
+            group.adSpend += calcAdSpend(tx);
+            group.profit += calcProfit(tx);
         });
     
         return Object.values(subtotals).map(group => ({
             ...group,
-            margin: group.revenue > 0 ? (group.profit / group.revenue) * 100 : 0,
+            margin: calcMarginPct(group.revenue, group.profit),
             revenueSharePct: totalRevenueAllPlatforms > 0 ? (group.revenue / totalRevenueAllPlatforms) * 100 : 0,
         })).sort((a, b) => b.revenue - a.revenue);
     }, [filteredTransactions]);
@@ -810,10 +810,11 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
                 <div className="flex flex-col xl:flex-row gap-8">
                     <div className="flex-1 min-w-0">
-                        <div className="mb-2">
+                        <div className="mb-2 flex items-center">
                             <span className="font-mono text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 inline-block">
                                 {product.sku}
                             </span>
+                            <GradeBadge gradeLevel={product.gradeLevel} />
                         </div>
                         
                         <h1 className="text-3xl font-bold text-gray-900 leading-tight mb-4 break-words">
@@ -830,6 +831,18 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     <Tag className="w-3.5 h-3.5" />
                                     <span>{product.subcategory}</span>
                                 </div>
+                            )}
+                            {product.seasonTags?.slice(0, 2).map(tag => (
+                                <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
+                            ))}
+                            {(product.seasonTags?.length || 0) > 2 && (
+                                <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.seasonTags?.length || 0) - 2 }</span>
+                            )}
+                            {product.festivalTags?.slice(0, 2).map(tag => (
+                                <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
+                            ))}
+                            {(product.festivalTags?.length || 0) > 2 && (
+                                <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.festivalTags?.length || 0) - 2 }</span>
                             )}
                         </div>
                     </div>

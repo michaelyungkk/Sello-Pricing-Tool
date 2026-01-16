@@ -1,9 +1,12 @@
 // ... (imports)
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+// Fix: import ThresholdConfig from ../services/thresholdsConfig instead of ../types.
 import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback } from '../types';
+import { ThresholdConfig } from '../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
+import { GradeBadge } from './GradeBadge';
 import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity, Edit2, Plus } from 'lucide-react';
 import ManualPriceChangeModal from './ManualPriceChangeModal';
 
@@ -20,9 +23,10 @@ interface StrategyPageProps {
     onUpdatePriceChangeRecord?: (record: PriceChangeRecord) => void;
     onManualPriceChange?: (data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
     velocityLookback: VelocityLookback; // Global setting passed down (used for Runway/Velocity)
+    thresholds?: ThresholdConfig;
 }
 
-const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], onUpdatePriceChangeRecord, onManualPriceChange, velocityLookback }) => {
+const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], onUpdatePriceChangeRecord, onManualPriceChange, velocityLookback, thresholds }) => {
     // ... (state definitions)
     const [config, setConfig] = useState<StrategyConfig>(() => {
         try {
@@ -208,7 +212,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     };
 
     // 3. Decision Engine
-    const getRecommendation = (product: Product, dailyVelocity: number, netPmPercent: number) => {
+    const getRecommendation = (product: Product, dailyVelocity: number, netPmPercent: number, thresholds?: ThresholdConfig) => {
         const basePrice = safeNum(product.caPrice) || safeNum(product.currentPrice);
         const effectiveStock = safeNum(product.stockLevel) + (includeIncoming ? safeNum(product.incomingStock) : 0);
 
@@ -249,6 +253,17 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
         const isNew = product.inventoryStatus === 'New Product';
 
+        // --- SEASONAL LOGIC ---
+        let isOffSeasonSeasonalItem = false;
+        const currentSeason = thresholds?.currentSeason;
+        if (currentSeason && currentSeason !== 'None' && product.seasonTags && product.seasonTags.length > 0) {
+            // Case-insensitive check
+            const isCurrentlyInSeason = product.seasonTags.some(tag => tag.toLowerCase() === currentSeason.toLowerCase());
+            if (!isCurrentlyInSeason) {
+                isOffSeasonSeasonalItem = true;
+            }
+        }
+        
         // CONVERT CONFIG WEEKS TO DAYS FOR COMPARISON (config uses weeks, engine now runs on days)
         const minRunwayDays = safeNum(config.increase.minRunwayWeeks) * 7;
         const highStockDays = safeNum(config.decrease.highStockWeeks) * 7;
@@ -271,7 +286,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
             const highStock = runwayDays > highStockDays;
             const medStockHighMargin = runwayDays > medStockDays && netPmPercent > config.decrease.minMarginPercent;
 
-            if (highStock || medStockHighMargin) {
+            if ((highStock || medStockHighMargin) && !isOffSeasonSeasonalItem) {
                 action = 'DECREASE';
                 const decreaseAmount = Math.max(
                     basePrice * (safeNum(config.decrease.adjustmentPercent) / 100),
@@ -283,6 +298,8 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 reasoning = highStock
                     ? `Runway > ${config.decrease.highStockWeeks} wks (${runwayDays.toFixed(0)}d)`
                     : `Runway > ${config.decrease.medStockWeeks} wks & Net PM > ${config.decrease.minMarginPercent}%`;
+            } else if (isOffSeasonSeasonalItem) {
+                reasoning = 'Maintain: Off-season item with high stock.';
             }
         }
 
@@ -319,7 +336,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                     : global.dailyVelocity;
                 
                 // 3. Run Strategy
-                const rec = getRecommendation(p, strategyVelocity, global.netPmPercent);
+                const rec = getRecommendation(p, strategyVelocity, global.netPmPercent, thresholds);
                 
                 return { 
                     ...p, 
@@ -347,7 +364,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 const score = (x: string) => x === 'INCREASE' ? 3 : x === 'DECREASE' ? 2 : 1;
                 return score(b.action) - score(a.action);
             });
-    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, includeIncoming, pricingRules, showOOS]);
+    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, includeIncoming, pricingRules, showOOS, thresholds]);
 
     const filteredAndSortedData = useMemo(() => {
         return tableData.filter(row => filterTab === 'All' || row.action === filterTab);
@@ -887,10 +904,8 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                     </div>
 
                                     <div className="mt-6 pt-4 border-t border-gray-200/50">
-                                        <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Platform Exclusions</label>
-                                        <p className="text-[10px] text-gray-400">
-                                            Configure excluded platforms (e.g. Wayfair, FBA) in the <strong>Settings</strong> page.
-                                            Transactions from excluded platforms are filtered out from the price calculation above.
+                                        <p className="text-xs text-gray-400 italic">
+                                            Seasonal adjustments: Coming soon.
                                         </p>
                                     </div>
                                 </div>
@@ -957,13 +972,30 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                     {paginatedData.map((row: any) => (
                                         <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${row.safetyViolation ? 'bg-amber-50/30' : ''}`}>
                                             <td className="p-4">
-                                                <div className="font-bold text-gray-900">{row.sku}</div>
+                                                <div className="flex items-center">
+                                                    <div className="font-bold text-gray-900">{row.sku}</div>
+                                                    <GradeBadge gradeLevel={row.gradeLevel} />
+                                                </div>
                                                 <div className="text-xs text-gray-500 truncate max-w-[200px]">{row.name}</div>
-                                                {row.subcategory && (
-                                                    <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-full border border-gray-200">
-                                                        {row.subcategory}
-                                                    </span>
-                                                )}
+                                                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                                                    {row.subcategory && (
+                                                        <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-full border border-gray-200">
+                                                            {row.subcategory}
+                                                        </span>
+                                                    )}
+                                                    {row.seasonTags?.slice(0, 2).map((tag: string) => (
+                                                        <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
+                                                    ))}
+                                                    {(row.seasonTags?.length || 0) > 2 && (
+                                                        <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (row.seasonTags?.length || 0) - 2 }</span>
+                                                    )}
+                                                    {row.festivalTags?.slice(0, 2).map((tag: string) => (
+                                                        <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
+                                                    ))}
+                                                    {(row.festivalTags?.length || 0) > 2 && (
+                                                        <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (row.festivalTags?.length || 0) - 2 }</span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="p-4 text-right">
                                                 <div className="flex flex-col items-end gap-1.5">

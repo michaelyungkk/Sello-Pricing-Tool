@@ -1,4 +1,3 @@
-
 export interface ThresholdConfig {
   marginBelowTargetPct: number;
   velocityCrashPct: number;
@@ -8,6 +7,7 @@ export interface ThresholdConfig {
   deadStockMinValueGBP: number;
   returnRatePct: number;
   highAdDependencyPct: number;
+  currentSeason?: 'Summer' | 'Autumn' | 'Winter' | 'Spring' | 'None';
 }
 
 export const DEFAULT_THRESHOLDS: ThresholdConfig = {
@@ -18,7 +18,8 @@ export const DEFAULT_THRESHOLDS: ThresholdConfig = {
   overstockDays: 120,
   deadStockMinValueGBP: 200,
   returnRatePct: 5,
-  highAdDependencyPct: 15
+  highAdDependencyPct: 15,
+  currentSeason: 'None'
 };
 
 const KEY = "ukhub.alertDiagnosticThresholds.v1";

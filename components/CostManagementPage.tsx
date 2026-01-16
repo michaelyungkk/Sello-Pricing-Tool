@@ -3,6 +3,7 @@ import { Product, SkuCostDetail } from '../types';
 import { TagSearchInput } from './TagSearchInput';
 import { ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Percent, Hash } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { GradeBadge } from './GradeBadge';
 
 interface CostManagementPageProps {
     products: Product[];
@@ -199,7 +200,10 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
                                 return (
                                     <tr key={product.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 group">
                                         <td className="px-3 py-2 sticky left-0 bg-white/50 backdrop-blur-sm group-hover:bg-white z-10 border-r border-gray-100">
-                                            <div className="font-bold text-gray-900">{product.sku}</div>
+                                            <div className="flex items-center">
+                                                <div className="font-bold text-gray-900">{product.sku}</div>
+                                                <GradeBadge gradeLevel={product.gradeLevel} />
+                                            </div>
                                             <div className="text-xs text-gray-500 truncate max-w-[180px]">{product.name}</div>
                                         </td>
                                         <td className="px-3 py-2 text-right">

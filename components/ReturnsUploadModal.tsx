@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef } from 'react';
 import { Upload, X, Check, AlertCircle, Loader2, RotateCcw, Info, Link as LinkIcon, FileQuestion, Filter, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -10,6 +11,45 @@ interface ReturnsUploadModalProps {
   onReset?: () => void;
   existingOrders?: Map<string, string>; // OrderID -> Platform
 }
+
+/**
+ * Decodes the raw platform reason string into a more readable format.
+ * e.g., "QI - Quality Issue/Q1 - Unfunctional product" -> "Quality Issue: Unfunctional product"
+ */
+const decodeRefundReason = (rawReason: string | undefined): string | undefined => {
+    if (!rawReason || typeof rawReason !== 'string' || !rawReason.includes('/')) {
+        return rawReason;
+    }
+
+    try {
+        const parts = rawReason.split('/');
+        if (parts.length < 2) {
+            return rawReason;
+        }
+
+        const mainReasonPart = parts[0];
+        const subReasonPart = parts.slice(1).join('/');
+
+        // Extract text after " - " if it exists
+        const mainReason = mainReasonPart.includes(' - ') ? mainReasonPart.split(' - ').slice(1).join(' - ').trim() : mainReasonPart.trim();
+        const subReason = subReasonPart.includes(' - ') ? subReasonPart.split(' - ').slice(1).join(' - ').trim() : subReasonPart.trim();
+
+        if (mainReason && subReason) {
+            // Capitalize first letter of sub-reason, make rest lowercase. Handles 'DELIVERED BUT NOT RECEIVE'
+            const formattedSubReason = subReason.charAt(0).toUpperCase() + subReason.slice(1).toLowerCase();
+            
+            // Correcting typos found in user's list and cleaning up
+            const cleanedMainReason = mainReason.replace('PLatform', 'Platform');
+            const cleanedSubReason = formattedSubReason.replace('Parcially', 'Partially');
+
+            return `${cleanedMainReason}: ${cleanedSubReason}`;
+        }
+    } catch (e) {
+        console.error("Failed to decode refund reason:", rawReason, e);
+    }
+
+    return rawReason; // Fallback to original string on any error
+};
 
 const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConfirm, onReset, existingOrders }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -125,9 +165,11 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         // --- DETAILED FIELDS FOR DEEP DIVE ---
         const typeIdx = findColPriority(['after-salestype', 'servicetype', 'type']);
         const statusIdx = findColPriority(['after-salesstatus', 'status']);
+        
+        // --- FIX: Terms must be what the header becomes AFTER normalization ---
+        const platReasonIdx = findColPriority(['platformaftersalesreason', 'platformreason']);
         const custReasonIdx = findColPriority(['reasonforrefund', 'reasonforreturn', 'buyerreason', 'returnreason']);
-        // Updated priority to ensure 'platform' is part of the name
-        const platReasonIdx = findColPriority(['platformafter-salesreason', 'platformreason', 'platform_after_sales_reason']);
+
         const remarksIdx = findColPriority(['remarks', 'memo', 'comments']);
         
         // --- STRICT ORDER ID MAPPING ---
@@ -198,8 +240,11 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
             const platformReason = platReasonIdx !== -1 ? String(row[platReasonIdx]).trim() : undefined;
             const remarks = remarksIdx !== -1 ? String(row[remarksIdx]).trim() : undefined;
 
-            // Updated Priority: Platform Reason first, as requested
-            const displayReason = platformReason || customerReason || undefined;
+            // NEW: Decode the platform reason
+            const decodedReason = decodeRefundReason(platformReason);
+
+            // Updated Priority: Decoded platform reason first, as requested
+            const displayReason = decodedReason || customerReason || 'Unknown Reason';
 
             // Order Match Logic
             const orderId = orderIdIdx !== -1 ? String(row[orderIdIdx]).trim() : undefined;
@@ -233,14 +278,14 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                 amount,
                 quantity,
                 platform: finalPlatform,
-                reason: displayReason,
+                reason: displayReason, // Use decoded reason for display
                 orderId: orderId,
                 
                 // Captured detailed fields
                 type,
                 status,
                 customerReason,
-                platformReason,
+                platformReason, // Keep original platform reason
                 remarks
             });
 
