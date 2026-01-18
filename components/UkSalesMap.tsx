@@ -11,6 +11,14 @@ import { aggregateUkMapData, AreaData } from '../services/mapAgg';
 // Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
 const UK_TOPO_JSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
 
+// NEW: type for map marker data, combining AreaData with calculated metrics
+type MapMarkerData = AreaData & {
+    value: number;
+    sizeValue: number;
+    share: number;
+    rank: number;
+};
+
 interface UkSalesMapProps {
   products: Product[];
   priceHistoryMap: Map<string, PriceLog[]>;
@@ -22,6 +30,11 @@ interface UkSalesMapProps {
   onSearch?: (query: string | SearchChip[]) => void;
   timePeriodLabel?: string;
 }
+
+type TableSortState = {
+    key: keyof AreaData;
+    direction: 'asc' | 'desc';
+};
 
 // Region Labels
 const regions = [
@@ -51,9 +64,9 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   const [colorMetric, setColorMetric] = useState<'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS'>('REVENUE');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('All');
-  const [hoveredArea, setHoveredArea] = useState<any | null>(null);
-  const [pinnedArea, setPinnedArea] = useState<any | null>(null);
-  const [tableSort, setTableSort] = useState<{ key: keyof AreaData, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
+  const [hoveredArea, setHoveredArea] = useState<MapMarkerData | null>(null);
+  const [pinnedArea, setPinnedArea] = useState<MapMarkerData | null>(null);
+  const [tableSort, setTableSort] = useState<TableSortState>({ key: 'revenue', direction: 'desc' });
 
 
   const getAreaDisplayName = (code: string) => {
@@ -103,7 +116,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   }, [products, priceHistoryMap, dateRange.start, dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory]);
 
   // 3. Rank data and calculate shares
-  const rankedMapData = useMemo(() => {
+  const rankedMapData: MapMarkerData[] = useMemo(() => {
       const dataWithValues = mapData.map(d => ({
           ...d,
           value: mode === 'ABSOLUTE' 
