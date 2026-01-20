@@ -1,6 +1,4 @@
 
-
-
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -47,6 +45,17 @@ export interface PriceChangeRecord {
   date: string;          // ISO Date of the change detection (upload time)
   oldPrice: number;      // Previous CA Price
   newPrice: number;      // New CA Price
+  changeType: 'INCREASE' | 'DECREASE';
+  percentChange: number;
+}
+
+export interface CostChangeRecord {
+  id: string;
+  sku: string;
+  productName: string;
+  date: string;
+  oldCost: number;
+  newCost: number;
   changeType: 'INCREASE' | 'DECREASE';
   percentChange: number;
 }
@@ -346,4 +355,16 @@ export interface SearchSession {
   explanation?: string;
   timeLabel?: string;
   timestamp: number;
+}
+
+export interface CategoryPolicy {
+  id: string;
+  mainCategory: string;
+  subCategory?: string; // Optional subcategory override
+  platform?: string; // Optional platform override
+  targetMarginPct?: number | null;
+  baselinePrice?: number | null;
+  notes?: string;
+  updatedAt?: string;
+  updatedBy?: 'manual' | 'import';
 }

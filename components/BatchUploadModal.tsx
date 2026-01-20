@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useMemo } from 'react';
-import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, FileText, Database, ArrowRight } from 'lucide-react';
+import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, FileText, Database, ArrowRight, Coins, TrendingUp, TrendingDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +38,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parsedItems, setParsedItems] = useState<BatchUpdateItem[] | null>(null);
+  const [costChangeSummary, setCostChangeSummary] = useState<{ increases: number; decreases: number; unchanged: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const existingSkus = useMemo(() => new Set(products.map(p => p.sku)), [products]);
@@ -147,6 +147,9 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
         if (skuIdx === -1) throw new Error("Could not detect SKU column. Please ensure header contains 'SKU'.");
 
         const results: BatchUpdateItem[] = [];
+        const productMap = new Map<string, Product>();
+        products.forEach(p => productMap.set(p.sku, p));
+        const summary = { increases: 0, decreases: 0, unchanged: 0 };
 
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
@@ -209,9 +212,32 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
             }
 
             results.push(item);
+            
+            // Cost change summary logic
+            const existingProduct = productMap.get(item.sku);
+            if (existingProduct) {
+                if (item.cost !== undefined) {
+                    const oldCost = existingProduct.costPrice || 0;
+                    const newCost = Number(item.cost);
+
+                    if (oldCost > 0 && Math.abs(oldCost - newCost) > 0.02) {
+                        if (newCost > oldCost) {
+                            summary.increases++;
+                        } else {
+                            summary.decreases++;
+                        }
+                    } else {
+                        summary.unchanged++;
+                    }
+                } else {
+                    summary.unchanged++;
+                }
+            }
         }
         
+        setCostChangeSummary(summary);
         setParsedItems(results);
+
       } catch (err: any) {
           setError(err.message || "Failed to analyze file.");
       } finally {
@@ -291,13 +317,44 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                             </div>
                         </div>
                         <button 
-                            onClick={() => setParsedItems(null)}
+                            onClick={() => { setParsedItems(null); setCostChangeSummary(null); }}
                             className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors"
                         >
                             <RefreshCw className="w-4 h-4" />
                             {t('reset')}
                         </button>
                     </div>
+
+                    {costChangeSummary && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                            <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                <Coins className="w-4 h-4 text-amber-500" />
+                                Cost Price Change Summary
+                            </h4>
+                            <div className="grid grid-cols-3 gap-4 text-center">
+                                <div className="p-3 bg-green-50 border border-green-100 rounded-lg">
+                                    <div className="text-xl font-bold text-green-700 flex items-center justify-center gap-1">
+                                        <TrendingUp className="w-4 h-4" />
+                                        {costChangeSummary.increases}
+                                    </div>
+                                    <div className="text-[10px] text-green-600 uppercase font-bold mt-1">Increases</div>
+                                </div>
+                                <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
+                                    <div className="text-xl font-bold text-red-700 flex items-center justify-center gap-1">
+                                        <TrendingDown className="w-4 h-4" />
+                                        {costChangeSummary.decreases}
+                                    </div>
+                                    <div className="text-[10px] text-red-600 uppercase font-bold mt-1">Decreases</div>
+                                </div>
+                                <div className="p-3 bg-gray-50 border border-gray-100 rounded-lg">
+                                    <div className="text-xl font-bold text-gray-600">
+                                        {costChangeSummary.unchanged}
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 uppercase font-bold mt-1">Unchanged</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                         <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase flex">

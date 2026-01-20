@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail, PriceChangeRecord, RefundLog, SearchChip } from '../types';
@@ -10,6 +11,7 @@ import { getThresholdConfig, ThresholdConfig } from '../services/thresholdsConfi
 import UkSalesMap from './UkSalesMap';
 import { GradeBadge } from './GradeBadge';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne } from '../services/dateUtils';
+import { CategoryPerformanceSlide } from './CategoryPerformanceSlide'; // Import new component
 
 interface ProductManagementPageProps {
     products: Product[];
@@ -358,7 +360,7 @@ const ReturnsView = ({ refundHistory = [], products, themeColor, pricingRules }:
         totalCount, 
         byReason, 
         byProduct, 
-        pieData,
+        pieData, 
         periodLabel 
     } = useMemo(() => {
         let startDate = new Date();
@@ -659,8 +661,8 @@ const DashboardView = ({
         setCurrentPage(1);
     }, [selectedAlert, range, platformScope]);
 
-    const nextSlide = () => setCurrentSlide(prev => (prev + 1) % 4); // Increased to 4
-    const prevSlide = () => setCurrentSlide(prev => (prev - 1 + 4) % 4);
+    const nextSlide = () => setCurrentSlide(prev => (prev + 1) % 5); // Increased to 5 for Category Slide
+    const prevSlide = () => setCurrentSlide(prev => (prev - 1 + 5) % 5);
 
     const getSignalStyle = (priority: string) => {
         switch (priority) {
@@ -1006,236 +1008,255 @@ const DashboardView = ({
                 </div>
             </div>
 
-            <div className="min-h-[850px]">
-                <div className="flex justify-center gap-2 mb-4">
-                    {[0, 1, 2, 3].map(idx => (
-                        <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${currentSlide === idx ? 'w-8 bg-indigo-600' : 'w-2 bg-gray-300'}`} />
-                    ))}
+            <div className="min-h-[850px] flex flex-col relative group">
+                {/* NAVIGATION HEADER ROW */}
+                <div className="relative flex items-center justify-center mb-4 min-h-[3rem] px-2 z-20">
+                    <button 
+                        onClick={prevSlide}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-custom-glass border border-custom-glass shadow-sm rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
+                    >
+                        <ChevronLeft className="w-6 h-6" />
+                    </button>
+
+                    <div className="flex justify-center gap-2">
+                        {[0, 1, 2, 3, 4].map(idx => (
+                            <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${currentSlide === idx ? 'w-8 bg-indigo-600' : 'w-2 bg-gray-300'}`} />
+                        ))}
+                    </div>
+
+                    <button 
+                        onClick={nextSlide}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-custom-glass border border-custom-glass shadow-sm rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"
+                    >
+                        <ChevronRight className="w-6 h-6" />
+                    </button>
                 </div>
 
-                {currentSlide === 0 && (
-                    <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                        <div className="flex items-center gap-4 mb-6">
-                            <button onClick={prevSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
+                <div className="flex-1 relative">
+                    {currentSlide === 0 && (
+                        <div className="animate-in fade-in slide-in-from-right-8 duration-300">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 mb-6">
                                 <AlertCard title="Margin Thieves" count={alerts.margin.length} icon={AlertTriangle} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc={`Net Margin < ${thresholds.marginBelowTargetPct}% (Scan all)`} />
                                 <AlertCard title="Velocity Crashes" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`Vol. Drop > ${thresholds.velocityCrashPct}%`} />
                                 <AlertCard title="Stockout Risk" count={alerts.stock.length} icon={Clock} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Runway < Lead Time" />
                                 <AlertCard title="Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc={`>£${thresholds.deadStockMinValueGBP} Value, 0 Sales`} />
                             </div>
-                            <button onClick={nextSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
-                        </div>
 
-                        <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg overflow-hidden flex flex-col min-h-[400px]">
-                            <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
-                                <div className="flex items-center gap-4">
-                                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                        {selectedAlert ? (
-                                            <>
-                                                <span className={`w-2 h-2 rounded-full ${selectedAlert === 'margin' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
-                                                Priority Actions: {selectedAlert === 'margin' ? 'Fix Margins' : selectedAlert === 'velocity' ? 'Investigate Drops' : selectedAlert === 'stock' ? 'Replenish' : 'Liquidation'}
-                                            </>
-                                        ) : (
-                                            <><Activity className="w-4 h-4 text-indigo-500" /> Top Movers (Overview)</>
-                                        )}
-                                    </h3>
-                                    <span className="text-xs text-gray-500">{workbenchData.length} SKUs require attention</span>
-                                </div>
-                                <button onClick={handleExport} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200" title="Export current view to CSV"><Download className="w-4 h-4" /></button>
-                            </div>
-                            <div className="flex-1 overflow-auto">
-                                <table className="w-full text-left text-sm whitespace-nowrap">
-                                    <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50 sticky top-0 z-10 backdrop-blur-sm">
-                                        <tr>
-                                            <th className="p-4 w-12 text-center">Action</th>
-                                            <th className="p-4">Product</th>
-                                            <th className="p-4">Signals</th>
-                                            <th className="p-4 text-right">Price (Inc VAT)</th>
-                                            {selectedAlert === null && <>
-                                                <th className="p-4 text-right">CA Price</th>
-                                                <th className="p-4 text-right">Qty Sold</th>
-                                                <th className="p-4 text-right">Period Sales</th>
-                                                <th className="p-4 text-right">Period Profit</th>
-                                                <th className="p-4 text-right">Net Margin %</th>
-                                                <th className="p-4 text-right">Inventory</th>
-                                            </>}
-                                            {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && <>
-                                                {selectedAlert === 'margin' && <th className="p-4 text-right">Cost (Inc VAT)</th>}
-                                                <th className="p-4 text-right">Period Sales</th>
-                                                <th className="p-4 text-right">Period Profit</th>
-                                                <th className="p-4 text-right">Net Margin %</th>
-                                            </>}
-                                            {selectedAlert === 'velocity' && <>
-                                                <th className="p-4 text-right">Prev Qty</th>
-                                                <th className="p-4 text-right">Curr Qty</th>
-                                                <th className="p-4 text-right">% Change</th>
-                                                <th className="p-4 text-right">Inventory</th>
-                                            </>}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100/50">
-                                        {paginatedData.map(p => (
-                                            <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
-                                                <td className="p-4 text-center">
-                                                    <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Deep Dive SKU Analysis"><Search className="w-4 h-4" /></button>
-                                                </td>
-                                                <td className="p-4">
-                                                    <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors flex items-center">
-                                                        {p.sku}
-                                                        <GradeBadge gradeLevel={p.gradeLevel} />
-                                                    </div>
-                                                    <div className="text-xs text-gray-500 truncate max-w-[200px]">{p.name}</div>
-                                                </td>
-                                                <td className="p-4">
-                                                    <div className="flex flex-wrap gap-1 max-w-[140px]">
-                                                        {p.signals.slice(0, 2).map(id => {
-                                                            const meta = getDiagnosisMeta(id);
-                                                            return <span key={id} onClick={(e) => { e.stopPropagation(); onDeepDive(p.sku); }} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${getSignalStyle(meta.priority)}`} title={meta.description}>{meta.shortLabel}</span>
-                                                        })}
-                                                    </div>
-                                                </td>
-                                                <td className="p-4 text-right">£{(p.displayPrice * VAT).toFixed(2)}</td>
-                                                {selectedAlert === null && (
-                                                    <>
-                                                        <td className="p-4 text-right font-bold text-purple-600">{p.caPrice ? `£${(p.caPrice * VAT).toFixed(2)}` : '-'}</td>
-                                                        <td className="p-4 text-right font-medium text-gray-800">{p.periodUnits}</td>
-                                                        <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
-                                                        <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
-                                                        <td className="p-4 text-right"><span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span></td>
-                                                        <td className="p-4 text-right font-bold text-gray-800">{p.stockLevel}</td>
-                                                    </>
-                                                )}
-                                                {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && (
-                                                    <>
-                                                        {selectedAlert === 'margin' && <td className="p-4 text-right text-gray-500">£{((p.costPrice || 0) * VAT).toFixed(2)}</td>}
-                                                        <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
-                                                        <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
-                                                        <td className="p-4 text-right">
-                                                            <div className="flex flex-col items-end gap-1">
-                                                                <span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
-                                                            </div>
-                                                        </td>
-                                                    </>
-                                                )}
-                                                {selectedAlert === 'velocity' && (
-                                                    <>
-                                                        <td className="p-4 text-right text-gray-600">{p.prevPeriodUnits}</td>
-                                                        <td className="p-4 text-right font-medium">{p.periodUnits}</td>
-                                                        <td className="p-4 text-right"><span className="text-red-600 font-bold">{p.velocityChange.toFixed(0)}%</span></td>
-                                                        <td className="p-4 text-right font-bold text-gray-800">{p.stockLevel}</td>
-                                                    </>
-                                                )}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                           {workbenchData.length > itemsPerPage && (
-                                <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
-                                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <p className="text-sm text-gray-700">Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, workbenchData.length)}</span> of <span className="font-medium">{workbenchData.length}</span> results</p>
-                                            <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
-                                        </div>
-                                        <div>
-                                            {totalPages > 1 && (
-                                                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                                                    <button onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
-                                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {currentPage} of {totalPages}</span>
-                                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
-                                                </nav>
+                            <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg overflow-hidden flex flex-col min-h-[400px]">
+                                <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
+                                    <div className="flex items-center gap-4">
+                                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                            {selectedAlert ? (
+                                                <>
+                                                    <span className={`w-2 h-2 rounded-full ${selectedAlert === 'margin' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                                                    Priority Actions: {selectedAlert === 'margin' ? 'Fix Margins' : selectedAlert === 'velocity' ? 'Investigate Drops' : selectedAlert === 'stock' ? 'Replenish' : 'Liquidation'}
+                                                </>
+                                            ) : (
+                                                <><Activity className="w-4 h-4 text-indigo-500" /> Top Movers (Overview)</>
                                             )}
+                                        </h3>
+                                        <span className="text-xs text-gray-500">{workbenchData.length} SKUs require attention</span>
+                                    </div>
+                                    <button onClick={handleExport} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200" title="Export current view to CSV"><Download className="w-4 h-4" /></button>
+                                </div>
+                                <div className="flex-1 overflow-auto">
+                                    <table className="w-full text-left text-sm whitespace-nowrap">
+                                        <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50 sticky top-0 z-10 backdrop-blur-sm">
+                                            <tr>
+                                                <th className="p-4 w-12 text-center">Action</th>
+                                                <th className="p-4">Product</th>
+                                                <th className="p-4">Signals</th>
+                                                <th className="p-4 text-right">Price (Inc VAT)</th>
+                                                {selectedAlert === null && <>
+                                                    <th className="p-4 text-right">CA Price</th>
+                                                    <th className="p-4 text-right">Qty Sold</th>
+                                                    <th className="p-4 text-right">Period Sales</th>
+                                                    <th className="p-4 text-right">Period Profit</th>
+                                                    <th className="p-4 text-right">Net Margin %</th>
+                                                    <th className="p-4 text-right">Inventory</th>
+                                                </>}
+                                                {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && <>
+                                                    {selectedAlert === 'margin' && <th className="p-4 text-right">Cost (Inc VAT)</th>}
+                                                    <th className="p-4 text-right">Period Sales</th>
+                                                    <th className="p-4 text-right">Period Profit</th>
+                                                    <th className="p-4 text-right">Net Margin %</th>
+                                                </>}
+                                                {selectedAlert === 'velocity' && <>
+                                                    <th className="p-4 text-right">Prev Qty</th>
+                                                    <th className="p-4 text-right">Curr Qty</th>
+                                                    <th className="p-4 text-right">% Change</th>
+                                                    <th className="p-4 text-right">Inventory</th>
+                                                </>}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100/50">
+                                            {paginatedData.map(p => (
+                                                <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                                    <td className="p-4 text-center">
+                                                        <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Deep Dive SKU Analysis"><Search className="w-4 h-4" /></button>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors flex items-center">
+                                                            {p.sku}
+                                                            <GradeBadge gradeLevel={p.gradeLevel} />
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 truncate max-w-[200px]">{p.name}</div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="flex flex-wrap gap-1 max-w-[140px]">
+                                                            {p.signals.slice(0, 2).map(id => {
+                                                                const meta = getDiagnosisMeta(id);
+                                                                return <span key={id} onClick={(e) => { e.stopPropagation(); onDeepDive(p.sku); }} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${getSignalStyle(meta.priority)}`} title={meta.description}>{meta.shortLabel}</span>
+                                                            })}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 text-right">£{(p.displayPrice * VAT).toFixed(2)}</td>
+                                                    {selectedAlert === null && (
+                                                        <>
+                                                            <td className="p-4 text-right font-bold text-purple-600">{p.caPrice ? `£${(p.caPrice * VAT).toFixed(2)}` : '-'}</td>
+                                                            <td className="p-4 text-right font-medium text-gray-800">{p.periodUnits}</td>
+                                                            <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
+                                                            <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
+                                                            <td className="p-4 text-right"><span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span></td>
+                                                            <td className="p-4 text-right font-bold text-gray-800">{p.stockLevel}</td>
+                                                        </>
+                                                    )}
+                                                    {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && (
+                                                        <>
+                                                            {selectedAlert === 'margin' && <td className="p-4 text-right text-gray-500">£{((p.costPrice || 0) * VAT).toFixed(2)}</td>}
+                                                            <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
+                                                            <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
+                                                            <td className="p-4 text-right">
+                                                                <div className="flex flex-col items-end gap-1">
+                                                                    <span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
+                                                                </div>
+                                                            </td>
+                                                        </>
+                                                    )}
+                                                    {selectedAlert === 'velocity' && (
+                                                        <>
+                                                            <td className="p-4 text-right text-gray-600">{p.prevPeriodUnits}</td>
+                                                            <td className="p-4 text-right font-medium">{p.periodUnits}</td>
+                                                            <td className="p-4 text-right"><span className="text-red-600 font-bold">{p.velocityChange.toFixed(0)}%</span></td>
+                                                            <td className="p-4 text-right font-bold text-gray-800">{p.stockLevel}</td>
+                                                        </>
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {workbenchData.length > itemsPerPage && (
+                                    <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <p className="text-sm text-gray-700">Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, workbenchData.length)}</span> of <span className="font-medium">{workbenchData.length}</span> results</p>
+                                                <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
+                                            </div>
+                                            <div>
+                                                {totalPages > 1 && (
+                                                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                                        <button onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
+                                                        <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {currentPage} of {totalPages}</span>
+                                                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
+                                                    </nav>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {currentSlide === 1 && (
-                    <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                        <div className="flex items-center gap-4 mb-6">
-                             <button onClick={prevSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
+                    {currentSlide === 1 && (
+                        <div className="animate-in fade-in slide-in-from-right-8 duration-300">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 mb-6">
                                 <MetricCard title="Total Revenue" value={`£${financialStats.totalRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={DollarSign} color="blue" />
                                 <MetricCard title="True Net Profit" value={`£${financialStats.totalProfit.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Coins} color="green" />
                                 <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Megaphone} color="purple" desc="Includes Ad-Only Transactions" />
                                 <MetricCard title="TACoS %" value={`${financialStats.tacos.toFixed(1)}%`} icon={PieIcon} color="orange" desc="Total Advertising Cost of Sales" />
                             </div>
-                             <button onClick={nextSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
-                        </div>
-                        <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
-                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-600" /> Financial Performance</h3>
-                            <div className="flex-1 min-h-0 -ml-2">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart data={financialStats.chartData}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                        <XAxis dataKey="day" tick={{fontSize: 10}} />
-                                        <YAxis yAxisId="left" tick={{fontSize: 10, fill: '#6b7280'}} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Revenue', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#93c5fd', fontWeight: 'bold', fontSize: 12 } }} />
-                                        <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fill: '#6b7280'}} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Profit & Ads', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: '#8b5cf6', fontWeight: 'bold', fontSize: 12 } }} />
-                                        <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(value: number) => '£' + value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} />
-                                        <Legend wrapperStyle={{ fontSize: '12px' }} />
-                                        <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#93c5fd" barSize={20} radius={[4, 4, 0, 0]} />
-                                        <Line yAxisId="right" type="monotone" dataKey="ads" name="Ad Spend" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-                                        <Line yAxisId="right" type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={2} dot={false} />
-                                    </ComposedChart>
-                                </ResponsiveContainer>
+                            <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-600" /> Financial Performance</h3>
+                                <div className="flex-1 min-h-0 -ml-2">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <ComposedChart data={financialStats.chartData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                                            <XAxis dataKey="day" tick={{fontSize: 10}} />
+                                            <YAxis yAxisId="left" tick={{fontSize: 10, fill: '#6b7280'}} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Revenue', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#93c5fd', fontWeight: 'bold', fontSize: 12 } }} />
+                                            <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fill: '#6b7280'}} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Profit & Ads', angle: 90, position: 'insideRight', style: { textAnchor: 'middle', fill: '#8b5cf6', fontWeight: 'bold', fontSize: 12 } }} />
+                                            <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(value: number) => '£' + value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} />
+                                            <Legend wrapperStyle={{ fontSize: '12px' }} />
+                                            <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#93c5fd" barSize={20} radius={[4, 4, 0, 0]} />
+                                            <Line yAxisId="right" type="monotone" dataKey="ads" name="Ad Spend" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                                            <Line yAxisId="right" type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={2} dot={false} />
+                                        </ComposedChart>
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {currentSlide === 2 && (
-                    <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                        <div className="flex items-center gap-4 mb-6">
-                            <button onClick={prevSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                    {currentSlide === 2 && (
+                        <div className="animate-in fade-in slide-in-from-right-8 duration-300">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1 mb-6">
                                 <MetricCard title="Total Stock Value" value={`£${inventoryStats.totalStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Package} color="blue" desc="Based on Cost Price" />
                                 <MetricCard title="Dead Stock Value" value={`£${inventoryStats.deadStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={AlertTriangle} color="gray" desc="0 Sales in Period" />
                                 <MetricCard title="Projected Lost Revenue" value={`£${inventoryStats.lostRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={TrendingDown} color="red" desc="Due to Stockouts" />
                             </div>
-                             <button onClick={nextSlide} className="w-12 h-12 flex-shrink-0 bg-custom-glass border-custom-glass shadow-lg rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>
-                        </div>
-                        <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
-                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-purple-600" /> Stock Runway Distribution</h3>
-                            <div className="flex-1 min-h-0 -ml-2">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={inventoryStats.chartData} layout="horizontal">
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                        <XAxis dataKey="name" tick={{fontSize: 12, fontWeight: 600}} />
-                                        <YAxis tick={{fontSize: 10}} />
-                                        <RechartsTooltip cursor={{fill: 'transparent'}} />
-                                        <Bar dataKey="value" name="SKU Count" fill="#818cf8" radius={[4, 4, 0, 0]} barSize={40}>
-                                            {inventoryStats.chartData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.name === 'OOS' || entry.name === '< 2w' ? '#f87171' : entry.name === '2-4w' ? '#fbbf24' : '#34d399'} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
+                            <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock className="w-4 h-4 text-purple-600" /> Stock Runway Distribution</h3>
+                                <div className="flex-1 min-h-0 -ml-2">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={inventoryStats.chartData} layout="horizontal">
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                                            <XAxis dataKey="name" tick={{fontSize: 12, fontWeight: 600}} />
+                                            <YAxis tick={{fontSize: 10}} />
+                                            <RechartsTooltip cursor={{fill: 'transparent'}} />
+                                            <Bar dataKey="value" name="SKU Count" fill="#818cf8" radius={[4, 4, 0, 0]} barSize={40}>
+                                                {inventoryStats.chartData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.name === 'OOS' || entry.name === '< 2w' ? '#f87171' : entry.name === '2-4w' ? '#fbbf24' : '#34d399'} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* SLIDE 3: UK MAP VISUALIZATION */}
-                {currentSlide === 3 && (
-                    <div className="animate-in fade-in slide-in-from-right-8 duration-300 h-full">
-                        <div className="h-full">
-                            <UkSalesMap 
-                                products={products}
-                                priceHistoryMap={priceHistoryMap}
-                                dateRange={dateRange}
-                                selectedPlatform={platformScope}
-                                themeColor={themeColor}
-                                onPrevSlide={prevSlide}
-                                onNextSlide={nextSlide}
-                                onSearch={onSearch}
-                                timePeriodLabel={getRangeLabel()} // Pass the time label
-                            />
+                    {/* SLIDE 3: UK MAP VISUALIZATION */}
+                    {currentSlide === 3 && (
+                        <div className="animate-in fade-in slide-in-from-right-8 duration-300 h-full">
+                            <div className="h-full">
+                                <UkSalesMap 
+                                    products={products}
+                                    priceHistoryMap={priceHistoryMap}
+                                    dateRange={dateRange}
+                                    selectedPlatform={platformScope}
+                                    themeColor={themeColor}
+                                    onSearch={onSearch}
+                                    timePeriodLabel={getRangeLabel()} // Pass the time label
+                                />
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
+
+                    {/* SLIDE 4: CATEGORY PERFORMANCE (NEW) */}
+                    {currentSlide === 4 && (
+                        <div className="animate-in fade-in slide-in-from-right-8 duration-300 h-full">
+                            <div className="h-full">
+                                <CategoryPerformanceSlide
+                                    products={products}
+                                    priceHistoryMap={priceHistoryMap}
+                                    dateRange={dateRange}
+                                    themeColor={themeColor}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

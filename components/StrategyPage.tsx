@@ -2,13 +2,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 // Fix: import ThresholdConfig from ../services/thresholdsConfig instead of ../types.
-import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback } from '../types';
+import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord } from '../types';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
 import { GradeBadge } from './GradeBadge';
-import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity, Edit2, Plus } from 'lucide-react';
+import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity, Edit2, Plus, Coins } from 'lucide-react';
 import ManualPriceChangeModal from './ManualPriceChangeModal';
+import ManualCostChangeModal from './ManualCostChangeModal';
 
 interface StrategyPageProps {
     products: Product[];
@@ -20,13 +21,16 @@ interface StrategyPageProps {
     priceHistoryMap: Map<string, any[]>;
     promotions: PromotionEvent[];
     priceChangeHistory: PriceChangeRecord[];
+    costChangeHistory: CostChangeRecord[];
     onUpdatePriceChangeRecord?: (record: PriceChangeRecord) => void;
+    onUpdateCostChangeRecord?: (record: CostChangeRecord) => void;
     onManualPriceChange?: (data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
+    onManualCostChange?: (data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
     velocityLookback: VelocityLookback; // Global setting passed down (used for Runway/Velocity)
     thresholds?: ThresholdConfig;
 }
 
-const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], onUpdatePriceChangeRecord, onManualPriceChange, velocityLookback, thresholds }) => {
+const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], costChangeHistory = [], onUpdatePriceChangeRecord, onUpdateCostChangeRecord, onManualPriceChange, onManualCostChange, velocityLookback, thresholds }) => {
     // ... (state definitions)
     const [config, setConfig] = useState<StrategyConfig>(() => {
         try {
@@ -53,8 +57,9 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
     const [isManualLodgeOpen, setIsManualLodgeOpen] = useState(false);
+    const [isManualCostLodgeOpen, setIsManualCostLodgeOpen] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<'ENGINE' | 'HISTORY'>('ENGINE');
+    const [activeTab, setActiveTab] = useState<'ENGINE' | 'HISTORY' | 'COST_HISTORY'>('ENGINE');
     const [filterTab, setFilterTab] = useState<'All' | 'INCREASE' | 'DECREASE' | 'MAINTAIN'>('All');
 
     // Pagination State (Engine)
@@ -65,10 +70,19 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
     const [historyItemsPerPage, setHistoryItemsPerPage] = useState(25);
 
+    // Pagination State (Cost History)
+    const [costHistoryCurrentPage, setCostHistoryCurrentPage] = useState(1);
+    const [costHistoryItemsPerPage, setCostHistoryItemsPerPage] = useState(25);
+
     // State for editing history records
     const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
     const [editingDate, setEditingDate] = useState('');
     const [recentlySavedId, setRecentlySavedId] = useState<string | null>(null);
+
+    // New state for cost history editing
+    const [editingCostHistoryId, setEditingCostHistoryId] = useState<string | null>(null);
+    const [editingCostDate, setEditingCostDate] = useState('');
+    const [recentlySavedCostId, setRecentlySavedCostId] = useState<string | null>(null);
 
     // --- LOGIC HELPERS ---
 
@@ -445,10 +459,38 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
     const totalHistoryPages = Math.ceil(historyTableData.length / historyItemsPerPage);
 
+    // --- Cost Change History View Helpers ---
+    const costHistoryTableData = useMemo(() => {
+        let data = [...costChangeHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        if (searchTags.length > 0 || searchQuery) {
+            data = data.filter(item => {
+                const matchesTerm = (term: string) => {
+                    const t = term.toLowerCase();
+                    return item.sku.toLowerCase().includes(t) || 
+                           item.productName.toLowerCase().includes(t);
+                };
+                if (searchTags.length > 0) {
+                    return searchTags.some(tag => matchesTerm(tag));
+                }
+                return matchesTerm(searchQuery);
+            });
+        }
+        return data;
+    }, [costChangeHistory, searchTags, searchQuery]);
+
+    const paginatedCostHistoryData = useMemo(() => {
+        const start = (costHistoryCurrentPage - 1) * costHistoryItemsPerPage;
+        return costHistoryTableData.slice(start, start + costHistoryItemsPerPage);
+    }, [costHistoryTableData, costHistoryCurrentPage, costHistoryItemsPerPage]);
+
+    const totalCostHistoryPages = Math.ceil(costHistoryTableData.length / costHistoryItemsPerPage);
+
     // Reset pagination on filter change
     useEffect(() => {
         setCurrentPage(1);
         setHistoryCurrentPage(1);
+        setCostHistoryCurrentPage(1);
     }, [searchQuery, searchTags, activeTab, filterTab, selectedWindow, showOOS]);
 
     const uniquePlatforms = useMemo(() => {
@@ -556,6 +598,42 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         }, 100);
     };
 
+    const handleCostHistoryExport = () => {
+        const clean = (val: any) => {
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/[\r\n]+/g, ' ');
+            return `"${str.replace(/"/g, '""')}"`;
+        };
+    
+        const headers = ['Date', 'SKU', 'Product Name', 'Change Type', 'Change %', 'Old Cost', 'New Cost'];
+        
+        const rows = costHistoryTableData.map(row => [
+            row.date,
+            clean(row.sku),
+            clean(row.productName),
+            row.changeType,
+            row.percentChange.toFixed(2) + '%',
+            row.oldCost.toFixed(2),
+            row.newCost.toFixed(2),
+        ]);
+    
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        const filename = `cost_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        
+        setTimeout(() => {
+            if (document.body.contains(link)) document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+    };
+
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
             {/* Header & Tabs */}
@@ -583,6 +661,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 >
                     <History className="w-4 h-4" />
                     Price Change Log
+                </button>
+                <button
+                    onClick={() => setActiveTab('COST_HISTORY')}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <Coins className="w-4 h-4" />
+                    Cost Change Log
                 </button>
             </div>
 
@@ -1319,6 +1404,84 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 </div>
             )}
 
+            {activeTab === 'COST_HISTORY' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                    <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start gap-4">
+                        <div className="p-2 bg-green-50 text-green-700 rounded-lg"><Info className="w-5 h-5" /></div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900">Cost Price Change Ledger</h3>
+                            <p className="text-xs text-gray-500 mt-1">
+                                This log is automatically populated when you upload an ERP Inventory Report.
+                                The system compares the new cost against the previously stored cost to detect changes.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+                        <div className="p-4 border-b border-custom-glass bg-gray-50/50">
+                             <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                                <div className="w-full max-w-lg">
+                                    <TagSearchInput 
+                                        tags={searchTags}
+                                        onTagsChange={(tags) => { setSearchTags(tags); setCostHistoryCurrentPage(1); }}
+                                        onInputChange={(val) => { setSearchQuery(val); setCostHistoryCurrentPage(1); }}
+                                        placeholder="Search History (SKU or Name)..."
+                                        themeColor={themeColor}
+                                    />
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="text-xs text-gray-500">
+                                        Showing <strong>{costHistoryTableData.length}</strong> records
+                                    </div>
+                                    <button onClick={handleCostHistoryExport} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm transition-colors">
+                                        <Download className="w-3.5 h-3.5" /> Export Log
+                                    </button>
+                                    <button
+                                        onClick={() => setIsManualCostLodgeOpen(true)}
+                                        className="px-3 py-1.5 bg-indigo-600 text-white border border-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition-colors"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        Lodge Manual Cost Change
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
+                                <tr>
+                                    <th className="p-4">Date</th>
+                                    <th className="p-4">SKU</th>
+                                    <th className="p-4 text-center">Change</th>
+                                    <th className="p-4 text-right">Old Cost</th>
+                                    <th className="p-4 text-center"></th>
+                                    <th className="p-4 text-left">New Cost</th>
+                                    <th className="p-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100/50">
+                                {paginatedCostHistoryData.map((row: any) => {
+                                    const isEditing = editingCostHistoryId === row.id;
+                                    return (
+                                        <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
+                                            <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingCostDate} onChange={(e) => setEditingCostDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus/> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                            <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
+                                            <td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
+                                            <td className="p-4 text-right text-gray-400 line-through">£{row.oldCost.toFixed(2)}</td>
+                                            <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
+                                            <td className="p-4 font-bold text-gray-900">£{row.newCost.toFixed(2)}</td>
+                                            <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => {if (onUpdateCostChangeRecord && editingCostDate) { onUpdateCostChangeRecord({ ...row, date: editingCostDate }); setRecentlySavedCostId(row.id); setTimeout(() => setRecentlySavedCostId(null), 2500); } setEditingCostHistoryId(null);}} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingCostHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedCostId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingCostHistoryId(row.id); setEditingCostDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
+                                        </tr>
+                                    );
+                                })}
+                                {paginatedCostHistoryData.length === 0 && (<tr><td colSpan={7} className="p-12 text-center text-gray-400">No cost changes found.</td></tr>)}
+                            </tbody>
+                        </table>
+                        {costHistoryTableData.length > 0 && (<div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6"><div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between"><div className="flex items-center gap-4"><p className="text-sm text-gray-700">Showing <span className="font-medium">{(costHistoryCurrentPage - 1) * costHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(costHistoryCurrentPage * costHistoryItemsPerPage, costHistoryTableData.length)}</span> of <span className="font-medium">{costHistoryTableData.length}</span> results</p><select value={costHistoryItemsPerPage} onChange={(e) => { setCostHistoryItemsPerPage(Number(e.target.value)); setCostHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></div><div>{totalCostHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setCostHistoryCurrentPage(p => Math.max(1, p - 1))} disabled={costHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {costHistoryCurrentPage} of {totalCostHistoryPages}</span><button onClick={() => setCostHistoryCurrentPage(p => Math.min(totalCostHistoryPages, p + 1))} disabled={costHistoryCurrentPage === totalCostHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div></div></div>)}
+                    </div>
+                </div>
+            )}
+
+
             {/* Custom Date Modal */}
             {isCustomDateModalOpen && createPortal(
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsCustomDateModalOpen(false)}>
@@ -1370,6 +1533,14 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                     products={products}
                     onClose={() => setIsManualLodgeOpen(false)}
                     onConfirm={onManualPriceChange}
+                />
+            )}
+
+            {isManualCostLodgeOpen && onManualCostChange && (
+                <ManualCostChangeModal
+                    products={products}
+                    onClose={() => setIsManualCostLodgeOpen(false)}
+                    onConfirm={onManualCostChange}
                 />
             )}
         </div>

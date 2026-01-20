@@ -1,7 +1,9 @@
+
+
 // ... existing imports ...
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES, DEFAULT_SEARCH_CONFIG, VAT_MULTIPLIER } from './constants';
-import { Product, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback, RefundLog, ShipmentDetail, HistoryPayload, PriceChangeRecord, AnalysisResult, SearchChip, SearchConfig, SkuCostDetail, InventoryTemplate, SearchSession } from './types';
+import { Product, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback, RefundLog, ShipmentDetail, HistoryPayload, PriceChangeRecord, AnalysisResult, SearchChip, SearchConfig, SkuCostDetail, InventoryTemplate, SearchSession, CostChangeRecord } from './types';
 
 // Components
 import ProductList from './components/ProductList';
@@ -163,6 +165,7 @@ const App: React.FC = () => {
     const [refundHistory, setRefundHistory] = useState<RefundLog[]>([]);
     const [shipmentHistory, setShipmentHistory] = useState<ShipmentLog[]>([]);
     const [priceChangeHistory, setPriceChangeHistory] = useState<PriceChangeRecord[]>([]);
+    const [costChangeHistory, setCostChangeHistory] = useState<CostChangeRecord[]>([]);
     const [promotions, setPromotions] = useState<PromotionEvent[]>(MOCK_PROMOTIONS);
     const [learnedAliases, setLearnedAliases] = useState<Record<string, string>>({});
     const [inventoryTemplates, setInventoryTemplates] = useState<InventoryTemplate[]>([]); 
@@ -336,12 +339,31 @@ const App: React.FC = () => {
         setPriceChangeHistory(prev => [newRecord, ...prev]);
     };
 
+    const handleManualCostChange = (data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => {
+        const { sku, productName, date, oldCost, newCost } = data;
+        const changeType = newCost > oldCost ? 'INCREASE' : 'DECREASE';
+        const percentChange = oldCost > 0 ? ((newCost - oldCost) / oldCost) * 100 : (newCost > 0 ? 100 : 0);
+    
+        const newRecord: CostChangeRecord = {
+            id: `manual-cost-${Date.now()}-${sku}`,
+            sku,
+            productName,
+            date,
+            oldCost,
+            newCost,
+            changeType,
+            percentChange
+        };
+    
+        setCostChangeHistory(prev => [...prev, newRecord].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    };
+
     const handleRefineSearch = (sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, priceHistory, pricingRules, refundHistory); setSearchSessions(prev => prev.map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel }; } return s; })); setIsSearchLoading(false); }, 150); };
     const deleteSearchSession = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => prev.filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('products'); } };
     const handleViewElasticity = (product: Product) => { setSelectedElasticityProduct(product); };
     const handleAnalyze = async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } };
     const handleApplyPrice = (productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = prev.find(p => p.id === productId); if (!productToUpdate) { return prev; } const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...prevHistory, change]); return prev.map(p => { if (p.id !== productId) { return p; } return Object.assign({}, p, { caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }); }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); };
-    const handleBackup = () => { const data = { products, priceHistory, refundHistory, shipmentHistory, priceChangeHistory, promotions, learnedAliases, pricingRules, logisticsRules, strategyRules, searchConfig, velocityLookback, userProfile, inventoryTemplates, thresholds, exportDate: new Date().toISOString() }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `sello_backup_${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); };
+    const handleBackup = () => { const data = { products, priceHistory, refundHistory, shipmentHistory, priceChangeHistory, costChangeHistory, promotions, learnedAliases, pricingRules, logisticsRules, strategyRules, searchConfig, velocityLookback, userProfile, inventoryTemplates, thresholds, exportDate: new Date().toISOString() }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `sello_backup_${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); };
     
     // --- UPDATED RESTORE HANDLER ---
     const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -358,6 +380,7 @@ const App: React.FC = () => {
                 if (json.refundHistory) setRefundHistory(json.refundHistory);
                 if (json.shipmentHistory) setShipmentHistory(json.shipmentHistory);
                 if (json.priceChangeHistory) setPriceChangeHistory(json.priceChangeHistory);
+                if (json.costChangeHistory) setCostChangeHistory(json.costChangeHistory);
                 if (json.promotions) setPromotions(json.promotions);
                 if (json.learnedAliases) setLearnedAliases(json.learnedAliases);
                 if (json.pricingRules) setPricingRules(json.pricingRules);
@@ -409,6 +432,14 @@ const App: React.FC = () => {
         );
     };
 
+    const handleUpdateCostChangeRecord = (recordToUpdate: CostChangeRecord) => {
+        setCostChangeHistory(prev =>
+          prev.map(record =>
+            record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record
+          )
+        );
+    };
+
     const QuickUploadMenu = () => { 
         const [isOpen, setIsOpen] = useState(false); 
         const menuRef = useRef<HTMLDivElement>(null); 
@@ -437,8 +468,17 @@ const App: React.FC = () => {
         newDateLabels?: { current: string, last: string }, 
         historyPayload?: HistoryPayload[], 
         newShipmentLogs?: ShipmentLog[], 
-        discoveredPlatforms?: string[]
+        discoveredPlatforms?: string[],
+        newlyLearnedAliases?: Record<string, string>
     ) => { 
+        // Merge newly learned aliases into global state
+        if (newlyLearnedAliases && Object.keys(newlyLearnedAliases).length > 0) {
+            setLearnedAliases(prev => ({
+                ...prev,
+                ...newlyLearnedAliases
+            }));
+        }
+
         // 1. Update State Objects (Merge new history)
         let updatedPriceHistory = [...priceHistory];
         
@@ -526,23 +566,138 @@ const App: React.FC = () => {
     };
 
     const handleResetSalesData = () => { setPriceHistory([]); setProducts(prev => prev.map(p => ({ ...p, averageDailySales: 0, previousDailySales: 0, daysRemaining: p.stockLevel > 0 ? 999 : 0, status: p.stockLevel > 0 ? 'Overstock' : 'Critical' }))); setShipmentHistory([]); setIsSalesImportModalOpen(false); };
-    const handleInventoryImport = (data: any[]) => { setProducts(prev => { const skuMap = new Map<string, Product>(); prev.forEach(p => skuMap.set(p.sku, p)); const newProducts = [...prev]; data.forEach(item => { const parseTags = (tags?: string): string[] => { if (!tags) return []; return tags.split(',').map(t => t.trim()).filter(Boolean); }; const existingIndex = newProducts.findIndex(p => p.sku === item.sku); const existing = existingIndex !== -1 ? { ...newProducts[existingIndex] } : undefined; if (existing) { if (item.stock !== undefined) existing.stockLevel = item.stock; if (item.agedStock !== undefined) existing.agedStockQty = item.agedStock; if (item.cost !== undefined) existing.costPrice = item.cost; if (item.gradeLevel !== undefined) existing.gradeLevel = item.gradeLevel; if (item.dailyAverageSales !== undefined) existing.dailyAverageSales = item.dailyAverageSales; if (item.name) existing.name = item.name; if (item.category) existing.category = item.category; if (item.subcategory) existing.subcategory = item.subcategory; if (item.brand) existing.brand = item.brand; if (item.inventoryStatus) existing.inventoryStatus = item.inventoryStatus; if (item.cartonDimensions) existing.cartonDimensions = item.cartonDimensions; if (item.seasonTags !== undefined) existing.seasonTags = parseTags(item.seasonTags); if (item.festivalTags !== undefined) existing.festivalTags = parseTags(item.festivalTags); existing.lastUpdated = new Date().toISOString().split('T')[0]; newProducts[existingIndex] = existing; } else { newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, brand: item.brand, category: item.category || 'Uncategorized', subcategory: item.subcategory, stockLevel: item.stock || 0, agedStockQty: item.agedStock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: 0, leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: new Date().toISOString().split('T')[0], gradeLevel: item.gradeLevel ?? 0, dailyAverageSales: item.dailyAverageSales ?? 0, inventoryStatus: item.inventoryStatus, cartonDimensions: item.cartonDimensions, seasonTags: parseTags(item.seasonTags), festivalTags: parseTags(item.festivalTags) }); } }); return newProducts; }); setIsUploadModalOpen(false); };
+    const handleInventoryImport = (data: any[]) => {
+        const costChanges: CostChangeRecord[] = [];
+        const reportDate = new Date().toISOString().split('T')[0];
+    
+        setProducts(prev => {
+            const newProducts = [...prev];
+            data.forEach(item => {
+                const parseTags = (tags?: string): string[] => {
+                    if (!tags) return [];
+                    return tags.split(',').map(t => t.trim()).filter(Boolean);
+                };
+                const existingIndex = newProducts.findIndex(p => p.sku === item.sku);
+                
+                if (existingIndex !== -1) {
+                    const existing = { ...newProducts[existingIndex] };
+                    if (item.stock !== undefined) existing.stockLevel = item.stock;
+                    if (item.agedStock !== undefined) existing.agedStockQty = item.agedStock;
+    
+                    if (item.cost !== undefined) {
+                        const oldCost = existing.costPrice || 0;
+                        const newCost = Number(item.cost);
+    
+                        if (oldCost > 0 && Math.abs(oldCost - newCost) > 0.02) {
+                            costChanges.push({
+                                id: `cost-chg-${Date.now()}-${item.sku}`,
+                                sku: item.sku,
+                                productName: existing.name,
+                                date: reportDate,
+                                oldCost: oldCost,
+                                newCost: newCost,
+                                changeType: newCost > oldCost ? 'INCREASE' : 'DECREASE',
+                                percentChange: ((newCost - oldCost) / oldCost) * 100
+                            });
+                        }
+                        existing.costPrice = newCost;
+                    }
+                    
+                    if (item.gradeLevel !== undefined) existing.gradeLevel = item.gradeLevel;
+                    if (item.dailyAverageSales !== undefined) existing.dailyAverageSales = item.dailyAverageSales;
+                    if (item.name) existing.name = item.name;
+                    if (item.category) existing.category = item.category;
+                    if (item.subcategory) existing.subcategory = item.subcategory;
+                    if (item.brand) existing.brand = item.brand;
+                    if (item.inventoryStatus) existing.inventoryStatus = item.inventoryStatus;
+                    if (item.cartonDimensions) existing.cartonDimensions = item.cartonDimensions;
+                    if (item.seasonTags !== undefined) existing.seasonTags = parseTags(item.seasonTags);
+                    if (item.festivalTags !== undefined) existing.festivalTags = parseTags(item.festivalTags);
+                    existing.lastUpdated = new Date().toISOString().split('T')[0];
+                    newProducts[existingIndex] = existing;
+                } else {
+                    newProducts.push({
+                        id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        sku: item.sku,
+                        name: item.name || item.sku,
+                        brand: item.brand,
+                        category: item.category || 'Uncategorized',
+                        subcategory: item.subcategory,
+                        stockLevel: item.stock || 0,
+                        agedStockQty: item.agedStock || 0,
+                        costPrice: item.cost || 0,
+                        currentPrice: 0,
+                        averageDailySales: 0,
+                        leadTimeDays: 30,
+                        status: 'Healthy',
+                        recommendation: 'New Product',
+                        daysRemaining: 999,
+                        channels: [],
+                        lastUpdated: new Date().toISOString().split('T')[0],
+                        gradeLevel: item.gradeLevel ?? 0,
+                        dailyAverageSales: item.dailyAverageSales ?? 0,
+                        inventoryStatus: item.inventoryStatus,
+                        cartonDimensions: item.cartonDimensions,
+                        seasonTags: parseTags(item.seasonTags),
+                        festivalTags: parseTags(item.festivalTags)
+                    });
+                }
+            });
+            return newProducts;
+        });
+    
+        if (costChanges.length > 0) {
+            setCostChangeHistory(prev => [...costChanges, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        }
+    
+        setIsUploadModalOpen(false);
+    };
     const handleSkuDetailImport = (data: { masterSku: string; detail: SkuCostDetail }[]) => { setProducts(prev => prev.map(p => { const update = data.find(d => d.masterSku === p.sku); if (update) { return { ...p, costDetail: update.detail }; } return p; })); setIsSkuDetailModalOpen(false); };
     const handleMappingImport = (mappings: any[], mode: 'merge' | 'replace', platform: string) => { setProducts(prev => prev.map(p => { const productMappings = mappings.filter(m => m.masterSku === p.sku); if (productMappings.length === 0 && mode === 'merge') return p; let newChannels = [...p.channels]; if (mode === 'replace') { const chIdx = newChannels.findIndex(c => c.platform === platform); if (chIdx >= 0) { newChannels[chIdx] = { ...newChannels[chIdx], skuAlias: '' }; } } if (productMappings.length > 0) { const aliases = productMappings.map(m => m.alias).join(', '); const chIdx = newChannels.findIndex(c => c.platform === platform); if (chIdx >= 0) { const existingAliases = newChannels[chIdx].skuAlias ? newChannels[chIdx].skuAlias?.split(',').map(s => s.trim()) : []; const newSet = new Set(mode === 'merge' ? existingAliases : []); productMappings.forEach(m => newSet.add(m.alias)); newChannels[chIdx] = { ...newChannels[chIdx], skuAlias: Array.from(newSet).join(', ') }; } else { newChannels.push({ platform: platform, manager: pricingRules[platform]?.manager || 'Unassigned', velocity: 0, skuAlias: aliases }); } } return { ...p, channels: newChannels }; })); setIsMappingModalOpen(false); };
     const handleReturnsImport = (refunds: RefundLog[]) => { setRefundHistory(prev => { const existingIds = new Set(prev.map(r => r.id)); const newLogs = refunds.filter(r => !existingIds.has(r.id)); if (newLogs.length > 0) { const skuRefundCounts: Record<string, number> = {}; [...prev, ...newLogs].forEach(r => { skuRefundCounts[r.sku] = (skuRefundCounts[r.sku] || 0) + r.quantity; }); setProducts(products => products.map(p => { if (skuRefundCounts[p.sku] !== undefined) { const estimatedMonthlySales = Math.max(1, p.averageDailySales * 30); const rate = Math.min(100, (skuRefundCounts[p.sku] / estimatedMonthlySales) * 100); return { ...p, returnRate: Number(rate.toFixed(2)) }; } return p; })); } return [...newLogs, ...prev]; }); setIsReturnsModalOpen(false); };
     
     const handleCAImport = (data: { sku: string; caPrice: number }[], reportDate: string) => {
         const changes: PriceChangeRecord[] = [];
+        
+        // Helper to normalize SKUs for robust matching (- vs _)
+        const normalizeSkuForMatching = (sku: string): string => {
+            if (!sku) return '';
+            return sku.toUpperCase().trim().replace(/_/g, '-');
+        };
+
         const caDataMap = new Map<string, number>();
-        data.forEach(d => caDataMap.set(d.sku.toUpperCase().trim(), d.caPrice));
+        data.forEach(d => caDataMap.set(normalizeSkuForMatching(d.sku), d.caPrice));
 
         setProducts(prev => prev.map(p => {
-            const masterSku = p.sku.toUpperCase().trim();
-            let newPrice = caDataMap.get(masterSku);
+            // Collect all possible identifiers for the product: master SKU and all aliases
+            const identifiers = [p.sku];
+            p.channels.forEach(c => {
+                if (c.skuAlias) {
+                    identifiers.push(...c.skuAlias.split(',').map(s => s.trim()).filter(Boolean));
+                }
+            });
 
+            let newPrice: number | undefined;
+
+            // 1. Try to find a match using normalized identifiers (checks master SKU and aliases)
+            for (const id of identifiers) {
+                const normalizedId = normalizeSkuForMatching(id);
+                if (caDataMap.has(normalizedId)) {
+                    newPrice = caDataMap.get(normalizedId);
+                    break;
+                }
+            }
+
+            // 2. Fallback: Try suffix stripping logic if no direct/alias match found
             if (newPrice === undefined) {
-                const stripped = masterSku.replace(/[-_]UK$/i, '');
-                newPrice = caDataMap.get(stripped);
+                for (const id of identifiers) {
+                    const normalizedId = normalizeSkuForMatching(id);
+                    const stripped = normalizedId.replace(/-UK$/i, '');
+                    if (stripped !== normalizedId && caDataMap.has(stripped)) {
+                        newPrice = caDataMap.get(stripped);
+                        break;
+                    }
+                }
             }
 
             if (newPrice !== undefined) {
@@ -591,8 +746,8 @@ const App: React.FC = () => {
                         <div className="bg-gray-50/50 rounded-xl p-4 border border-custom-glass"> <div className="flex justify-between items-center mb-1"><p className="text-xs font-semibold text-gray-500">{t('tool_status')}</p><span className="text-[10px] text-gray-400">v1.6.0</span></div> <div className={`flex items-center gap-2 text-sm ${isOnline ? 'text-green-600' : 'text-gray-500'}`}>{isOnline ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span> {t('system_online')}</> : <><WifiOff className="w-3 h-3" /> {t('offline_mode')}</>}</div> </div>
                     </div>
                 </aside>
-                <main className="flex-1 md:ml-64 p-8 min-w-0 relative z-10">
-                    <header className="flex justify-between items-center mb-8 gap-8">
+                <main className="flex-1 md:ml-64 min-w-0 relative z-10">
+                    <header className="sticky top-0 z-50 flex justify-between items-center gap-8 px-8 py-4 bg-custom-glass backdrop-blur-custom border-b border-custom-glass/50 shadow-sm mb-4 transition-all duration-300">
                         <div> <h1 className="text-2xl font-bold transition-colors" style={headerStyle}> {currentView === 'search' ? t('header_search') : currentView === 'products' ? t('header_products') : currentView === 'dashboard' ? t('header_dashboard') : currentView === 'strategy' ? t('header_strategy') : currentView === 'costs' ? t('header_costs') : currentView === 'definitions' ? t('header_definitions') : currentView === 'promotions' ? t('header_promotions') : currentView === 'tools' ? t('header_toolbox') : t('header_settings')} </h1> <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}> {currentView === 'search' ? t('desc_search') : currentView === 'dashboard' ? t('desc_dashboard') : currentView === 'strategy' ? t('desc_strategy') : currentView === 'products' ? t('desc_products') : currentView === 'costs' ? t('desc_costs') : currentView === 'definitions' ? t('desc_definitions') : currentView === 'promotions' ? t('desc_promotions') : currentView === 'tools' ? t('desc_toolbox') : t('desc_settings')} </p> </div>
                         <div className="flex-1 max-w-2xl"> <GlobalSearch onSearch={handleSearch} isLoading={isSearchLoading} platforms={Object.keys(pricingRules)} products={products} /> </div>
                         <div className="flex items-center gap-4"> {userProfile.name && <span className="text-sm font-semibold animate-in fade-in slide-in-from-top-2" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>} {hasInventory && <QuickUploadMenu />} <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button> <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div> <UserProfile profile={userProfile} onUpdate={setUserProfile} /> </div>
@@ -605,7 +760,7 @@ const App: React.FC = () => {
                             {products.length === 0 ? ( <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 animate-in fade-in zoom-in duration-300 h-full"> <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}><Database className="w-10 h-10" /></div> <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3> <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p> <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative"> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{hasInventory ? t('step_completed') : t('step_1')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4">{hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}</div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p> <button onClick={() => setIsUploadModalOpen(true)} className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300 hover:bg-opacity-5'}`} style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}>{hasInventory ? t('reupload_inventory') : t('upload_inventory')}</button> </div> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60 cursor-not-allowed' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{t('step_2')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4"><FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} /></div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p> <button onClick={() => hasInventory && setIsSalesImportModalOpen(true)} disabled={!hasInventory} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}} className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}><Upload className="w-5 h-5" /> {t('upload_sales')}</button> </div> </div> </div> ) : ( <ProductManagementPage products={products} pricingRules={pricingRules} promotions={promotions} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} priceChangeHistory={priceChangeHistory} onOpenMappingModal={() => setIsMappingModalOpen(true)} dateLabels={dynamicDateLabels} onUpdateProduct={(p) => setProducts(prev => prev.map(old => old.id === p.id ? p : old))} onViewElasticity={handleViewElasticity} themeColor={userProfile.themeColor} headerStyle={headerStyle} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} /> )}
                         </div>
                         <div style={{ display: currentView === 'strategy' ? 'block' : 'none' }}>
-                            <StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); setCurrentView('products'); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} promotions={promotions} priceChangeHistory={priceChangeHistory} onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord} onManualPriceChange={handleManualPriceChange} velocityLookback={velocityLookback} thresholds={thresholds} />
+                            <StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); setCurrentView('products'); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} promotions={promotions} priceChangeHistory={priceChangeHistory} costChangeHistory={costChangeHistory} onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord} onUpdateCostChangeRecord={handleUpdateCostChangeRecord} onManualPriceChange={handleManualPriceChange} onManualCostChange={handleManualCostChange} velocityLookback={velocityLookback} thresholds={thresholds} />
                         </div>
                         <div style={{ display: currentView === 'costs' ? 'block' : 'none' }}>
                             <CostManagementPage products={products} themeColor={userProfile.themeColor} headerStyle={headerStyle} />

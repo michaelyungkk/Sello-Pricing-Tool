@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Product, PricingRules, HistoryPayload, ShipmentLog } from '../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search, Hash } from 'lucide-react';
@@ -18,7 +19,8 @@ interface SalesImportModalProps {
         dateLabels?: { current: string, last: string },
         historyPayload?: HistoryPayload[],
         shipmentLogs?: ShipmentLog[],
-        discoveredPlatforms?: string[]
+        discoveredPlatforms?: string[],
+        newlyLearnedAliases?: Record<string, string>
     ) => void;
 }
 
@@ -61,6 +63,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
     const [previewData, setPreviewData] = useState<any>(null);
     const [unknownSkus, setUnknownSkus] = useState<Record<string, { count: number, revenue: number, masterSku: string | null }>>({});
+    const [resolvedAliases, setResolvedAliases] = useState<Record<string, string>>({});
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -186,7 +189,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         else reader.readAsText(file);
     };
 
-    const analyzeData = (headers: string[], rows: any[][], map: ColumnMapping) => {
+    const analyzeData = (headers: string[], rows: any[][], map: ColumnMapping, extraAliases: Record<string, string> = {}) => {
         try {
             const getIdx = (col?: string) => col ? headers.indexOf(col) : -1;
 
@@ -263,11 +266,17 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             });
 
             // Add Learned Aliases to lookup
-            /* FIX: Explicitly cast entries of learnedAliases to avoid 'unknown' type assignment issues */
             (Object.entries(learnedAliases) as [string, string][]).forEach(([alias, master]) => {
                 const aliasUpper = alias.toUpperCase();
                 if (!aliasMap[aliasUpper]) aliasMap[aliasUpper] = master;
             });
+
+            // Add newly resolved aliases for this session
+            (Object.entries(extraAliases) as [string, string][]).forEach(([alias, master]) => {
+                const aliasUpper = alias.toUpperCase();
+                if (!aliasMap[aliasUpper]) aliasMap[aliasUpper] = master;
+            });
+
 
             const currentUnknownSkus: Record<string, { count: number, revenue: number, masterSku: string | null }> = {};
             let matchCount = 0;
@@ -691,7 +700,16 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
     const analyzeWithResolutions = () => {
         setIsProcessing(true);
         setTimeout(() => {
-            analyzeData(rawHeaders, rawRows, mapping);
+            const newAliases: Record<string, string> = {};
+            (Object.entries(unknownSkus) as [string, { count: number, revenue: number, masterSku: string | null }][]).forEach(([fileSku, data]) => {
+                if (data.masterSku && products.some(p => p.sku === data.masterSku)) {
+                    newAliases[fileSku] = data.masterSku;
+                }
+            });
+
+            setResolvedAliases(newAliases);
+
+            analyzeData(rawHeaders, rawRows, mapping, newAliases);
             setIsProcessing(false);
         }, 500);
     };
@@ -885,19 +903,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                     Mapped SKUs will be remembered globally for future imports.
                                 </div>
                                 <button
-                                    onClick={() => {
-                                        // Re-analyze with new mappings
-                                        // We basically take the manual mappings and append them to transient aliasMap
-                                        const resolvedAliases = { ...learnedAliases };
-                                        /* FIX: Explicitly cast entries of unknownSkus to avoid 'unknown' type access issues */
-                                        (Object.entries(unknownSkus) as [string, { count: number, revenue: number, masterSku: string | null }][]).forEach(([fileSku, data]) => {
-                                            if (data.masterSku && products.some(p => p.sku === data.masterSku)) {
-                                                resolvedAliases[fileSku.toUpperCase()] = data.masterSku;
-                                            }
-                                        });
-
-                                        analyzeWithResolutions();
-                                    }}
+                                    onClick={analyzeWithResolutions}
                                     className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md transition-all flex items-center gap-2"
                                 >
                                     <Check className="w-4 h-4" />
@@ -1014,7 +1020,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         )}
                         {step === 'preview' && (
                             <button
-                                onClick={() => onConfirm(previewData.updates, { current: previewData.stats.dateLabel, last: "Previous" }, previewData.history, previewData.shipmentLogs, previewData.stats.discoveredPlatforms)}
+                                onClick={() => onConfirm(previewData.updates, { current: previewData.stats.dateLabel, last: "Previous" }, previewData.history, previewData.shipmentLogs, previewData.stats.discoveredPlatforms, resolvedAliases)}
                                 className="px-6 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all"
                             >
                                 <Check className="w-4 h-4" />

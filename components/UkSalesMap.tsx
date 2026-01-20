@@ -25,8 +25,6 @@ interface UkSalesMapProps {
   dateRange: { start: Date, end: Date };
   selectedPlatform: string;
   themeColor: string;
-  onPrevSlide?: () => void;
-  onNextSlide?: () => void;
   onSearch?: (query: string | SearchChip[]) => void;
   timePeriodLabel?: string;
 }
@@ -54,8 +52,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   dateRange, 
   selectedPlatform, 
   themeColor,
-  onPrevSlide,
-  onNextSlide,
   onSearch,
   timePeriodLabel
 }) => {
@@ -260,7 +256,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         {/* Controls Header */}
         <div className="flex flex-row justify-between items-center mb-4 gap-4 p-4 bg-white/50 rounded-xl border border-gray-200">
             <div className="flex items-center gap-4">
-                {onPrevSlide && <button onClick={onPrevSlide} className="w-12 h-12 flex-shrink-0 bg-white/50 border border-gray-200 shadow-sm rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronLeft className="w-6 h-6" /></button>}
                 <div className="flex items-center gap-2">
                     <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
                         <MapIcon className="w-5 h-5" />
@@ -347,7 +342,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         </select>
                     </div>
                 </div>
-                {onNextSlide && <button onClick={onNextSlide} className="w-12 h-12 flex-shrink-0 bg-white/50 border border-gray-200 shadow-sm rounded-xl flex items-center justify-center transition-colors hidden md:flex text-gray-500 hover:text-indigo-600 hover:bg-white/50"><ChevronRight className="w-6 h-6" /></button>}
             </div>
         </div>
 
