@@ -694,7 +694,7 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                             {treemapData.length > 0 ? (
                                 <div className="w-full h-[620px]">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <Treemap isAnimationActive={false} data={treemapData} dataKey="size" ratio={4 / 3} fill="#8884d8" content={<TreemapContent />}><RechartsTooltip content={<CustomTreemapTooltip />} /></Treemap>
+                                        <Treemap isAnimationActive={false} data={treemapData} dataKey="size" fill="#8884d8" content={<TreemapContent />}><RechartsTooltip content={<CustomTreemapTooltip />} /></Treemap>
                                     </ResponsiveContainer>
                                 </div>
                             ) : <div className="flex flex-col items-center justify-center h-full text-gray-400"><PieChart className="w-8 h-8 mb-2 opacity-50" /><span className="text-xs font-medium">No data available for this view</span></div>}

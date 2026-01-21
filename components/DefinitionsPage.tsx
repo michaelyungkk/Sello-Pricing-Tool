@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone, Clock, Activity, Layers, Eye, ShieldAlert, Package, RotateCcw, CornerDownLeft, Ship, BookOpen, Rocket, Link, Wrench, Save, Info, ArrowRight, Database, Search, Layout, Settings, History, Tag, ShieldCheck, Zap, Globe, Cpu } from 'lucide-react';
 interface DefinitionsPageProps {
@@ -207,6 +208,19 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                     </div>
                 ) : activeTab === 'financial' ? (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-2 bg-teal-50 rounded-lg text-teal-600">
+                                    <DollarSign className="w-5 h-5" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-gray-900">Tax Basis (inc/ex)</h3>
+                            </div>
+                            <div className="prose prose-sm text-gray-600 max-w-none">
+                                <p>
+                                    Default is <strong>inc tax</strong> across the app. Only metrics explicitly labeled ‘ex tax’ are tax-excluded (mainly in the Cost Management view).
+                                </p>
+                            </div>
+                        </div>
                         {/* Date Ranges */}
                         <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-6 backdrop-blur-custom">
                             <div className="flex items-center gap-3 mb-4">

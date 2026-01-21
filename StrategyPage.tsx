@@ -1,4 +1,3 @@
-
 // ... (imports)
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -916,7 +915,6 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                             <div className="text-[10px] text-gray-400 mt-2 px-2 space-y-0.5">
                                 <p>* Profit uses exact value when available; otherwise estimated via revenue * margin%</p>
                                 <p>* Date filtering excludes today</p>
-                                <p className="font-mono text-blue-600">Filter Keys: {getCalculationWindow(selectedWindow, customStart, customEnd).startKey} → {getCalculationWindow(selectedWindow, customStart, customEnd).endKey}</p>
                             </div>
                         </div>
                     )}

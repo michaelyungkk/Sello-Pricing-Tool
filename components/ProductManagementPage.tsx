@@ -674,46 +674,39 @@ const DashboardView = ({
     };
 
     const { processedData, periodLabel, dateRange, periodDays } = useMemo(() => {
-        let sStr: string;
-        let eStr: string;
-        let days: number;
-
-        const todayKey = getTodayKeyMelbourne();
-        const yesterdayKey = addDaysToDateKey(todayKey, -1);
+        let startDate = new Date();
+        let endDate = new Date();
 
         if (range === 'yesterday') {
-            sStr = yesterdayKey;
-            eStr = yesterdayKey;
-            days = 1;
+            startDate.setDate(startDate.getDate() - 1);
+            endDate.setDate(endDate.getDate() - 1);
         } else if (range === '7d') {
-            eStr = yesterdayKey;
-            sStr = addDaysToDateKey(eStr, -6);
-            days = 7;
+            startDate.setDate(startDate.getDate() - 7);
+            endDate.setDate(endDate.getDate() - 1);
         } else if (range === '30d') {
-            eStr = yesterdayKey;
-            sStr = addDaysToDateKey(eStr, -29);
-            days = 30;
+            startDate.setDate(startDate.getDate() - 30);
+            endDate.setDate(endDate.getDate() - 1);
         } else if (range === 'custom') {
-            sStr = asDateKey(customStart) || todayKey;
-            eStr = asDateKey(customEnd) || todayKey;
-            if (sStr > eStr) { const temp = sStr; sStr = eStr; eStr = temp; }
-            const diffTime = new Date(eStr).getTime() - new Date(sStr).getTime();
-            days = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        } else { // Fallback to 30d
-            eStr = yesterdayKey;
-            sStr = addDaysToDateKey(eStr, -29);
-            days = 30;
+            startDate = new Date(customStart);
+            endDate = new Date(customEnd);
         }
-
-        const startDate = new Date(sStr);
-        const endDate = new Date(eStr);
 
         const format = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
         const sameYear = startDate.getFullYear() === endDate.getFullYear();
         const label = `${format(startDate, !sameYear)} – ${format(endDate, true)}`;
         
+        const sStr = asDateKey(startDate);
+        const eStr = asDateKey(endDate);
+        
+        if (!sStr || !eStr) {
+            return { processedData: [], periodLabel: label, dateRange: { start: startDate, end: endDate }, periodDays: 0 };
+        }
+
+        const durationMs = endDate.getTime() - startDate.getTime();
+        const durationDays = Math.round(durationMs / (1000 * 60 * 60 * 24)) + 1;
+
         const peStr = addDaysToDateKey(sStr, -1);
-        const psStr = addDaysToDateKey(peStr, -(days - 1));
+        const psStr = addDaysToDateKey(peStr, -(durationDays - 1));
 
         const data = products.map(p => {
             const logs = priceHistoryMap.get(p.sku) || [];
@@ -779,7 +772,7 @@ const DashboardView = ({
                                 name: plat,
                                 margin: m,
                                 revenue: stats.rev,
-                                velocity: stats.units / days
+                                velocity: stats.units / durationDays
                             });
                         }
                     }
@@ -790,7 +783,7 @@ const DashboardView = ({
             const signals: CanonicalDiagnosisId[] = [];
             
             // --- FIX: Use period-specific velocity for alerts ---
-            const periodDailyVelocity = days > 0 ? curUnits / days : 0;
+            const periodDailyVelocity = durationDays > 0 ? curUnits / durationDays : 0;
             const periodRunway = periodDailyVelocity > 0 ? p.stockLevel / periodDailyVelocity : 999;
             const tacos = curRev > 0 ? (curAdSpend / curRev) * 100 : 0;
             const stockValue = p.stockLevel * (p.costPrice || 0);
@@ -835,8 +828,8 @@ const DashboardView = ({
                 signals,
             };
         });
-
-        return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, periodDays: days };
+        
+        return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, periodDays: durationDays };
     }, [products, priceHistoryMap, range, customStart, customEnd, platformScope, thresholds]); 
 
     const alerts = useMemo(() => ({

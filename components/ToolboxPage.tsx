@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useMemo } from 'react';
 import { PromotionEvent, PricingRules, InventoryTemplate, Product } from '../types';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, FileText, Download, Tag, Calendar, CheckSquare, ShieldCheck, ArrowRight, Database, FileSpreadsheet, Settings, AlertTriangle, Play, Save, ChevronDown, Link as LinkIcon, Filter, Trash2, Edit, Plus } from 'lucide-react';
@@ -87,7 +88,7 @@ const PromoCheckerTool = ({ promotions, pricingRules, products = [], themeColor 
                     const worksheet = workbook.Sheets[sheetName];
                     const json = XLSX.utils.sheet_to_json(worksheet) as any[];
 
-                    const uploadedItems: UploadedItem[] = json.map(row => {
+                    const uploadedItems: UploadedItem[] = json.map((row: any) => {
                         // Intelligent column finding
                         const keys = Object.keys(row);
                         const skuKey = keys.find(k => k.toLowerCase().includes('sku')) || keys[0];

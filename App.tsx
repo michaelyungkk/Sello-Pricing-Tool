@@ -39,6 +39,7 @@ import { analyzePriceAdjustment, parseSearchQuery, SearchIntent } from './servic
 import { processDataForSearch } from './services/searchExecution';
 import { getThresholdConfig, ThresholdConfig, saveThresholdConfig } from './services/thresholdsConfig';
 import { useTranslation } from 'react-i18next';
+import { TAX_NOTE_SHORT } from './services/taxPolicy';
 
 // Helper functions
 const formatDate = (date: Date) => {
@@ -750,7 +751,15 @@ const App: React.FC = () => {
                     <header className="sticky top-0 z-50 flex justify-between items-center gap-8 px-8 py-4 bg-custom-glass backdrop-blur-custom border-b border-custom-glass/50 shadow-sm mb-4 transition-all duration-300">
                         <div> <h1 className="text-2xl font-bold transition-colors" style={headerStyle}> {currentView === 'search' ? t('header_search') : currentView === 'products' ? t('header_products') : currentView === 'dashboard' ? t('header_dashboard') : currentView === 'strategy' ? t('header_strategy') : currentView === 'costs' ? t('header_costs') : currentView === 'definitions' ? t('header_definitions') : currentView === 'promotions' ? t('header_promotions') : currentView === 'tools' ? t('header_toolbox') : t('header_settings')} </h1> <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}> {currentView === 'search' ? t('desc_search') : currentView === 'dashboard' ? t('desc_dashboard') : currentView === 'strategy' ? t('desc_strategy') : currentView === 'products' ? t('desc_products') : currentView === 'costs' ? t('desc_costs') : currentView === 'definitions' ? t('desc_definitions') : currentView === 'promotions' ? t('desc_promotions') : currentView === 'tools' ? t('desc_toolbox') : t('desc_settings')} </p> </div>
                         <div className="flex-1 max-w-2xl"> <GlobalSearch onSearch={handleSearch} isLoading={isSearchLoading} platforms={Object.keys(pricingRules)} products={products} /> </div>
-                        <div className="flex items-center gap-4"> {userProfile.name && <span className="text-sm font-semibold animate-in fade-in slide-in-from-top-2" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>} {hasInventory && <QuickUploadMenu />} <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button> <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div> <UserProfile profile={userProfile} onUpdate={setUserProfile} /> </div>
+                        <div className="flex items-center gap-4">
+                            <span className="text-xs" style={{...headerStyle, opacity: 0.6}}>{TAX_NOTE_SHORT}</span>
+                            <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
+                            {userProfile.name && <span className="text-sm font-semibold animate-in fade-in slide-in-from-top-2" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>} 
+                            {hasInventory && <QuickUploadMenu />} 
+                            <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button> 
+                            <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div> 
+                            <UserProfile profile={userProfile} onUpdate={setUserProfile} /> 
+                        </div>
                     </header>
                     <div className="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-8">
                         <div style={{ display: currentView === 'search' ? 'block' : 'none' }}>
