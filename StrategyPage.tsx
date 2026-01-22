@@ -1,4 +1,3 @@
-
 // ... (imports)
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -12,7 +11,6 @@ import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download
 import ManualPriceChangeModal from './ManualPriceChangeModal';
 import ManualCostChangeModal from './ManualCostChangeModal';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../services/dateUtils';
-import { formatMoney, formatNumber, formatPct } from '../utils/format';
 
 interface StrategyPageProps {
     products: Product[];
@@ -588,6 +586,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     }, [products, pricingRules]);
 
     const handleExport = (platform: string = 'All') => {
+// ... (export logic remains same)
         // Helper to sanitize CSV fields
         const clean = (val: any) => {
             if (val === null || val === undefined) return '';
@@ -643,6 +642,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     };
 
     const handleHistoryExport = () => {
+// ... (export logic remains same)
         const clean = (val: any) => {
             if (val === null || val === undefined) return '';
             const str = String(val).replace(/[\r\n]+/g, ' '); 
@@ -893,7 +893,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                         <dt className="mt-1 border-t pt-1">Revenue Sum:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">£{auditStats.local.revenue.toFixed(2)}</dd>
                                         <dt>Qty Sum:</dt><dd className="font-mono font-medium text-gray-900">{auditStats.local.qty}</dd>
                                         <dt>Profit Sum:</dt><dd className="font-mono font-medium text-gray-900">£{auditStats.local.profit.toFixed(2)}</dd>
-                                        <dt className="mt-1 border-t pt-1">Profit Coverage:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">{auditStats.local.profitLogsWith} / {auditStats.local.logs} ({(safeNum(auditStats.local.profitLogsWith / auditStats.local.logs * 100)).toFixed(0)}%)</dd>
+                                        <dt className="mt-1 border-t pt-1">Profit Coverage:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">{auditStats.local.profitLogsWith} / {auditStats.local.logs} ({safeFormat(auditStats.local.profitLogsWith / auditStats.local.logs * 100, 0)}%)</dd>
                                         <dt>Est. Profit Contrib:</dt><dd className="font-mono font-medium text-gray-900">£{auditStats.local.estimatedProfit.toFixed(2)}</dd>
                                     </dl>
                                 </div>
@@ -907,7 +907,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                         <dt className="mt-1 border-t pt-1">Revenue Sum:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">£{auditStats.global.revenue.toFixed(2)}</dd>
                                         <dt>Qty Sum:</dt><dd className="font-mono font-medium text-gray-900">{auditStats.global.qty}</dd>
                                         <dt>Profit Sum:</dt><dd className="font-mono font-medium text-gray-900">£{auditStats.global.profit.toFixed(2)}</dd>
-                                        <dt className="mt-1 border-t pt-1">Profit Coverage:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">{auditStats.global.profitLogsWith} / {auditStats.global.logs} ({(safeNum(auditStats.global.profitLogsWith / auditStats.global.logs * 100)).toFixed(0)}%)</dd>
+                                        <dt className="mt-1 border-t pt-1">Profit Coverage:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">{auditStats.global.profitLogsWith} / {auditStats.global.logs} ({safeFormat(auditStats.global.profitLogsWith / auditStats.global.logs * 100, 0)}%)</dd>
                                         <dt>Est. Profit Contrib:</dt><dd className="font-mono font-medium text-gray-900">£{auditStats.global.estimatedProfit.toFixed(2)}</dd>
                                     </dl>
                                 </div>
