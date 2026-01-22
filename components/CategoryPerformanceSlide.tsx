@@ -67,6 +67,91 @@ const createEmptyMetric = (): CategoryMetric => ({
     prevRevenue: 0, prevUnits: 0, prevProfit: 0, prevAdSpend: 0, prevMargin: 0, prevTacos: 0
 });
 
+interface CellRendererProps {
+    cat: MainCategoryData;
+    plat: string;
+    getCellValue: (cat: MainCategoryData, plat: string) => number;
+    colorScale: (val: number) => string;
+    resolveTargetMargin: (mainCat: string, subCat?: string, platform?: string) => number | null;
+    metric: MetricType;
+    mode: PopMode;
+}
+
+const CellRenderer = ({ cat, plat, getCellValue, colorScale, resolveTargetMargin, metric, mode }: CellRendererProps) => {
+    const val = getCellValue(cat, plat);
+    const m = plat === 'All' ? cat.total : cat.platforms[plat];
+    const hasData = m && (m.revenue > 0 || m.prevRevenue > 0);
+    
+    const target = resolveTargetMargin(cat.name, undefined, plat === 'All' ? undefined : plat);
+    const actualMargin = m?.margin || 0;
+    const isBelow = hasData && metric === 'MARGIN' && target !== null && actualMargin < target;
+    
+    const renderPopContent = () => {
+        let value, prevValue;
+        switch (metric) {
+            case 'REVENUE': value = m.revenue; prevValue = m.prevRevenue; break;
+            case 'PROFIT': value = m.profit; prevValue = m.prevProfit; break;
+            case 'MARGIN': value = m.margin; prevValue = m.prevMargin; break;
+            case 'TACOS': value = m.tacos; prevValue = m.prevTacos; break;
+            default: return null;
+        }
+
+        const deltaAbs = value - prevValue;
+        const deltaPct = prevValue !== 0 ? (deltaAbs / Math.abs(prevValue)) * 100 : (value > 0 ? Infinity : 0);
+
+        let primaryDisplay: string;
+        let secondaryDisplay: string | null = null;
+        
+        const isTacos = metric === 'TACOS';
+        const isImprovement = isTacos ? deltaAbs < 0 : deltaAbs > 0;
+
+        if (metric === 'REVENUE' || metric === 'PROFIT') {
+            primaryDisplay = `${deltaAbs >= 0 ? '+' : ''}${METRIC_CONFIG[metric].format(Math.abs(deltaAbs))}`;
+            if (isFinite(deltaPct)) {
+                secondaryDisplay = `(${(deltaPct >= 0 ? '+' : '')}${deltaPct.toFixed(1)}%)`;
+            } else if (deltaPct === Infinity) {
+                secondaryDisplay = '(New)';
+            }
+        } else { // MARGIN or TACOS
+            primaryDisplay = `${deltaAbs > 0 && !isTacos ? '+' : ''}${deltaAbs.toFixed(1)}pp`;
+        }
+
+        const colorClass = isImprovement ? 'text-green-700' : deltaAbs !== 0 ? 'text-red-600' : 'text-gray-500';
+        const secondaryColorClass = isImprovement ? 'text-green-600' : deltaAbs !== 0 ? 'text-red-500' : 'text-gray-400';
+        
+        return (
+            <div className="flex flex-col items-center justify-center gap-0.5">
+                <span className={`font-bold text-xs relative z-10 flex items-center justify-center gap-1 ${colorClass}`}>
+                    {deltaAbs !== 0 ? (isImprovement ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>) : null}
+                    {primaryDisplay}
+                </span>
+                {secondaryDisplay && (
+                    <span className={`text-[10px] font-medium z-10 ${secondaryColorClass}`}>
+                        {secondaryDisplay}
+                    </span>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full h-full p-3 text-center flex flex-col justify-center relative" style={{ backgroundColor: hasData ? colorScale(val) : '#f9fafb' }}>
+            {hasData ? (
+                mode === 'ABSOLUTE' ? (
+                    <span className="font-bold text-gray-800 text-xs relative z-10">
+                        {METRIC_CONFIG[metric].format(val)}
+                    </span>
+                ) : renderPopContent()
+            ) : <span className="text-gray-300">-</span>}
+            {isBelow && (
+                <div className="absolute top-1 right-1 z-10" title={`Below Target! Actual: ${actualMargin.toFixed(1)}%, Target: ${target}%`}>
+                    <AlertCircle className="w-3 h-3 text-red-500 fill-white" />
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> = ({
     products,
     priceHistoryMap,
@@ -726,7 +811,7 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                                                 const subTarget = resolveTargetMargin(selectedCell.category, sub.name, selectedCell.platform === 'All' ? undefined : selectedCell.platform);
                                                 const subMargin = sub.metric.margin;
                                                 const isSubBelow = subTarget !== null && subMargin < subTarget;
-                                                return <tr key={sub.name} className="hover:bg-gray-50 transition-colors"><td className="py-2 pl-2 font-medium text-gray-700 truncate max-w-[100px]" title={sub.name}>{sub.name}</td><td className="py-2 text-right text-gray-600">£{sub.metric.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td className={`py-2 text-right font-bold flex items-center justify-end gap-1 ${isSubBelow ? 'text-red-500' : sub.metric.margin < 15 ? 'text-orange-500' : 'text-green-600'}`}>{sub.metric.margin.toFixed(1)}%{isSubBelow && <AlertCircle className="w-3 h-3 text-red-500" title={`Below Target`}/>}</td><td className={`py-2 text-right pr-2 ${sub.metric.tacos > 15 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>{sub.metric.tacos.toFixed(1)}%</td></tr>;
+                                                return <tr key={sub.name} className="hover:bg-gray-50 transition-colors"><td className="py-2 pl-2 font-medium text-gray-700 truncate max-w-[100px]" title={sub.name}>{sub.name}</td><td className="py-2 text-right text-gray-600">£{sub.metric.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td className={`py-2 text-right font-bold flex items-center justify-end gap-1 ${isSubBelow ? 'text-red-500' : sub.metric.margin < 15 ? 'text-orange-500' : 'text-green-600'}`}>{sub.metric.margin.toFixed(1)}%{isSubBelow && <span title={`Below Target! Actual: ${sub.metric.margin.toFixed(1)}%, Target: ${subTarget}%`}><AlertCircle className="w-3 h-3 text-red-500" /></span>}</td><td className={`py-2 text-right pr-2 ${sub.metric.tacos > 15 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>{sub.metric.tacos.toFixed(1)}%</td></tr>;
                                             })}
                                         </tbody>
                                     </table>
@@ -736,81 +821,6 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                     </div>
                 )}
             </div>
-        </div>
-    );
-};
-
-const CellRenderer = ({ cat, plat, getCellValue, colorScale, resolveTargetMargin, metric, mode }: any) => {
-    const val = getCellValue(cat, plat);
-    const m = plat === 'All' ? cat.total : cat.platforms[plat];
-    const hasData = m && (m.revenue > 0 || m.prevRevenue > 0);
-    
-    const target = resolveTargetMargin(cat.name, undefined, plat === 'All' ? undefined : plat);
-    const actualMargin = m?.margin || 0;
-    const isBelow = hasData && metric === 'MARGIN' && target !== null && actualMargin < target;
-    
-    const renderPopContent = () => {
-        let value, prevValue;
-        switch (metric) {
-            case 'REVENUE': value = m.revenue; prevValue = m.prevRevenue; break;
-            case 'PROFIT': value = m.profit; prevValue = m.prevProfit; break;
-            case 'MARGIN': value = m.margin; prevValue = m.prevMargin; break;
-            case 'TACOS': value = m.tacos; prevValue = m.prevTacos; break;
-            default: return null;
-        }
-
-        const deltaAbs = value - prevValue;
-        const deltaPct = prevValue !== 0 ? (deltaAbs / Math.abs(prevValue)) * 100 : (value > 0 ? Infinity : 0);
-
-        let primaryDisplay: string;
-        let secondaryDisplay: string | null = null;
-        
-        const isTacos = metric === 'TACOS';
-        const isImprovement = isTacos ? deltaAbs < 0 : deltaAbs > 0;
-
-        if (metric === 'REVENUE' || metric === 'PROFIT') {
-            primaryDisplay = `${deltaAbs >= 0 ? '+' : ''}${METRIC_CONFIG[metric].format(Math.abs(deltaAbs))}`;
-            if (isFinite(deltaPct)) {
-                secondaryDisplay = `(${(deltaPct >= 0 ? '+' : '')}${deltaPct.toFixed(1)}%)`;
-            } else if (deltaPct === Infinity) {
-                secondaryDisplay = '(New)';
-            }
-        } else { // MARGIN or TACOS
-            primaryDisplay = `${deltaAbs > 0 && !isTacos ? '+' : ''}${deltaAbs.toFixed(1)}pp`;
-        }
-
-        const colorClass = isImprovement ? 'text-green-700' : deltaAbs !== 0 ? 'text-red-600' : 'text-gray-500';
-        const secondaryColorClass = isImprovement ? 'text-green-600' : deltaAbs !== 0 ? 'text-red-500' : 'text-gray-400';
-        
-        return (
-            <div className="flex flex-col items-center justify-center gap-0.5">
-                <span className={`font-bold text-xs relative z-10 flex items-center justify-center gap-1 ${colorClass}`}>
-                    {deltaAbs !== 0 ? (isImprovement ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>) : null}
-                    {primaryDisplay}
-                </span>
-                {secondaryDisplay && (
-                    <span className={`text-[10px] font-medium z-10 ${secondaryColorClass}`}>
-                        {secondaryDisplay}
-                    </span>
-                )}
-            </div>
-        );
-    }
-
-    return (
-        <div className="w-full h-full p-3 text-center flex flex-col justify-center relative" style={{ backgroundColor: hasData ? colorScale(val) : '#f9fafb' }}>
-            {hasData ? (
-                mode === 'ABSOLUTE' ? (
-                    <span className="font-bold text-gray-800 text-xs relative z-10">
-                        {METRIC_CONFIG[metric].format(val)}
-                    </span>
-                ) : renderPopContent()
-            ) : <span className="text-gray-300">-</span>}
-            {isBelow && (
-                <div className="absolute top-1 right-1 z-10" title={`Below Target! Actual: ${actualMargin.toFixed(1)}%, Target: ${target}%`}>
-                    <AlertCircle className="w-3 h-3 text-red-500 fill-white" />
-                </div>
-            )}
         </div>
     );
 };
