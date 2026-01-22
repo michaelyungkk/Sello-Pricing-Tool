@@ -12,6 +12,7 @@ interface ProductListProps {
     onEditTags?: (product: Product) => void;
     onViewShipments?: (sku: string) => void; // New Callback
     onViewElasticity?: (product: Product) => void; // New Callback for Elasticity
+    onDeepDive?: (sku: string) => void; // New callback for Deep Dive
     dateLabels?: { current: string, last: string };
     pricingRules?: PricingRules;
     themeColor: string;
@@ -84,6 +85,7 @@ interface ProductRowProps {
     onEditTags?: (p: Product) => void;
     onViewShipments?: (sku: string) => void;
     onViewElasticity?: (p: Product) => void;
+    onDeepDive?: (sku: string) => void;
     hoveredProduct: { id: string; rect: DOMRect } | null;
     handleMouseEnter: (id: string, e: React.MouseEvent) => void;
     handleMouseLeave: () => void;
@@ -96,6 +98,7 @@ const ProductRow = React.memo(({
     onEditTags,
     onViewShipments,
     onViewElasticity,
+    onDeepDive,
     handleMouseEnter,
     handleMouseLeave
 }: ProductRowProps) => {
@@ -219,6 +222,15 @@ const ProductRow = React.memo(({
             </td>
             <td className="px-4 py-3 text-right">
                 <div className="flex items-center justify-end gap-2">
+                    {onDeepDive && (
+                        <button
+                            onClick={() => onDeepDive(product.sku)}
+                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1 rounded hover:bg-indigo-50"
+                            title="Deep Dive SKU Analysis"
+                        >
+                            <Search className="w-4 h-4" />
+                        </button>
+                    )}
                     {onViewElasticity && (
                         <button
                             onClick={() => onViewElasticity(product)}
@@ -252,7 +264,7 @@ const ProductRow = React.memo(({
     );
 });
 
-const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEditTags, onViewShipments, onViewElasticity, dateLabels, pricingRules, themeColor }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEditTags, onViewShipments, onViewElasticity, onDeepDive, dateLabels, pricingRules, themeColor }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -963,6 +975,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                                     onEditTags={onEditTags}
                                     onViewShipments={onViewShipments} // Pass handler down
                                     onViewElasticity={onViewElasticity} // Pass Elasticity Handler
+                                    onDeepDive={onDeepDive}
                                     hoveredProduct={hoveredProduct}
                                     handleMouseEnter={handleMouseEnter}
                                     handleMouseLeave={handleMouseLeave}

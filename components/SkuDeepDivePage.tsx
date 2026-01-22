@@ -6,7 +6,11 @@ import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea, ComposedChart, Bar } from 'recharts';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 import { GradeBadge } from './GradeBadge';
-import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from '../services/metrics';
+import { calcRevenue, calcProfit, calcUnits, calcAdSpend, marginPct, calcTACoSPct } from '../services/metrics';
+import { buildWindow } from '../services/dateWindow';
+import { asDateKey, isDateKeyBetween } from '../services/dateUtils';
+import AuditPanel from './AuditPanel';
+import { formatMoney, formatPct, formatNumber } from '../utils/format';
 
 interface SkuDeepDivePageProps {
     data: {
@@ -310,7 +314,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
                 <div className="mt-auto pt-2 border-t border-gray-100 bg-orange-50/50 -m-4 mt-2 px-4 py-2 rounded-b-xl">
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-600 font-medium">Ad-Only Spend (7d):</span>
-                        <span className="font-bold text-orange-700">£{adOnly7.toFixed(2)}</span>
+                        <span className="font-bold text-orange-700">{formatMoney(adOnly7)}</span>
                     </div>
                 </div>
             )}
@@ -336,8 +340,16 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const [chartPeriod, setChartPeriod] = useState<string>('30 Days');
     const [chartLayout, setChartLayout] = useState<'horizontal' | 'vertical'>('horizontal');
     const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number } | null>(null);
+    const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
     
     const activeSignalRef = useRef<HTMLDivElement>(null);
+
+    // Calculate Date Window Keys
+    const { startKey, endKey, expectedDays } = useMemo(() => buildWindow({
+        mode: 'days',
+        days: txDays,
+        excludeToday: true 
+    }), [txDays]);
 
     useEffect(() => {
         if (focus && activeSignalRef.current) {
@@ -366,14 +378,34 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         return [...sales, ...refundLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [transactions, refunds]);
 
+    const filteredTransactions = useMemo(() => {
+        let list = sortedTransactions;
+        
+        // Date Filter
+        list = list.filter(t => {
+            const dKey = asDateKey(t.date);
+            return dKey && isDateKeyBetween(dKey, startKey, endKey);
+        });
+
+        if (txFilterPlatform !== 'All') {
+            list = list.filter(t => t.platform === txFilterPlatform);
+        }
+        if (txFilterType !== 'All') {
+            list = list.filter(t => {
+                if (txFilterType === 'Sale') return t.velocity > 0;
+                if (txFilterType === 'Ad Cost') return t.price === 0 && (t.adsSpend || 0) > 0;
+                if (txFilterType === 'Refund') return t.velocity < 0;
+                return true;
+            });
+        }
+        return list; 
+    }, [sortedTransactions, txFilterPlatform, txFilterType, startKey, endKey]);
+
     const periodSalesQty = useMemo(() => {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - txDays);
-        cutoff.setHours(0, 0, 0, 0);
-        return sortedTransactions
-            .filter(t => new Date(t.date) >= cutoff && t.velocity > 0)
+        return filteredTransactions
+            .filter(t => t.velocity > 0)
             .reduce((acc, t) => acc + t.velocity, 0);
-    }, [sortedTransactions, txDays]);
+    }, [filteredTransactions]);
 
     const allTimeMarginPct = useMemo(() => {
         if (!transactions || transactions.length === 0) return 0;
@@ -390,7 +422,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         const totalRefundValue = refunds ? refunds.reduce((sum, r) => sum + r.amount, 0) : 0;
         const netSales = allTimeSales - totalRefundValue;
     
-        return calcMarginPct(netSales, totalProfit);
+        return marginPct(totalProfit, netSales) || 0;
     }, [transactions, refunds, allTimeSales]);
 
     const diagnostics = useMemo(() => {
@@ -496,10 +528,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const platforms = useMemo(() => Array.from(new Set(sortedTransactions.map(t => t.platform || 'Unknown'))).sort(), [sortedTransactions]);
 
     const getStats = (days: number, valueFn: (t: PriceLog) => number | null) => {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - days);
+        const { startKey, endKey } = buildWindow({ mode: 'days', days, excludeToday: true });
+        
         const filtered = sortedTransactions
-            .filter(t => new Date(t.date) >= cutoff && t.velocity > 0)
+            .filter(t => {
+                const dKey = asDateKey(t.date);
+                if (!dKey || !isDateKeyBetween(dKey, startKey, endKey)) return false;
+                return t.velocity > 0;
+            })
             .map(valueFn)
             .filter((v): v is number => v !== null);
         return calculateQuantiles(filtered);
@@ -507,15 +543,13 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
     const analytics = useMemo(() => {
         const getDailyQtyStats = (days: number) => {
-            const cutoff = new Date();
-            cutoff.setDate(cutoff.getDate() - days);
+            const { startKey, endKey } = buildWindow({ mode: 'days', days, excludeToday: true });
             const dailyMap: Record<string, number> = {};
             
             sortedTransactions.forEach(t => {
-                const tDate = new Date(t.date);
-                if (tDate >= cutoff && t.velocity > 0) {
-                    const d = t.date.split('T')[0];
-                    dailyMap[d] = (dailyMap[d] || 0) + t.velocity;
+                const dKey = asDateKey(t.date);
+                if (dKey && isDateKeyBetween(dKey, startKey, endKey) && t.velocity > 0) {
+                    dailyMap[dKey] = (dailyMap[dKey] || 0) + t.velocity;
                 }
             });
             
@@ -529,9 +563,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 d90: getStats(90, t => { const r = calcRevenue(t); return r > 0.01 ? r : null; })
             },
             margin: {
-                d7: getStats(7, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return calcMarginPct(rev, profit); } return null; }),
-                d30: getStats(30, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return calcMarginPct(rev, profit); } return null; }),
-                d90: getStats(90, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return calcMarginPct(rev, profit); } return null; })
+                d7: getStats(7, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return marginPct(profit, rev); } return null; }),
+                d30: getStats(30, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return marginPct(profit, rev); } return null; }),
+                d90: getStats(90, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return marginPct(profit, rev); } return null; })
             },
             qty: {
                 d7: getDailyQtyStats(7),
@@ -548,9 +582,11 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
     const tacosStats = useMemo(() => {
         const calculateForDays = (days: number) => {
-            const cutoff = new Date();
-            cutoff.setDate(cutoff.getDate() - days);
-            const periodTx = sortedTransactions.filter(t => new Date(t.date) >= cutoff);
+            const { startKey, endKey } = buildWindow({ mode: 'days', days, excludeToday: true });
+            const periodTx = sortedTransactions.filter(t => {
+                const dKey = asDateKey(t.date);
+                return dKey && isDateKeyBetween(dKey, startKey, endKey);
+            });
             
             let totalAdSpend = 0;
             let totalRevenue = 0;
@@ -569,14 +605,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 }
             });
             
-            let tacosPct: number | string;
-            if (totalRevenue > 0) {
-                tacosPct = calcTACoSPct(totalAdSpend, totalRevenue);
-            } else if (totalAdSpend > 0) {
-                tacosPct = 'N/A (0 sales)';
-            } else {
-                tacosPct = 0;
-            }
+            const tacosPct = calcTACoSPct(totalAdSpend, totalRevenue);
             
             return { totalAdSpend, totalRevenue, tacosPct, adOnlySpend };
         };
@@ -618,10 +647,12 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         };
 
         buckets.forEach(bucket => {
-            const cutoff = new Date();
-            cutoff.setDate(cutoff.getDate() - bucket.days);
+            const { startKey, endKey } = buildWindow({ mode: 'days', days: bucket.days, excludeToday: true });
             
-            const bucketTx = validTx.filter(t => new Date(t.date) >= cutoff);
+            const bucketTx = validTx.filter(t => {
+                const dKey = asDateKey(t.date);
+                return dKey && isDateKeyBetween(dKey, startKey, endKey);
+            });
             
             const BAND_SIZE = 0.5;
             const groups: Record<string, { totalQty: number, totalRev: number, sumDelta: number, sumPrice: number }> = {};
@@ -685,27 +716,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         return priceVolumeAnalysis.periodStats.filter(d => d.period === chartPeriod);
     }, [priceVolumeAnalysis, chartPeriod]);
 
-    const filteredTransactions = useMemo(() => {
-        let list = sortedTransactions;
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - txDays);
-        cutoff.setHours(0, 0, 0, 0);
-        list = list.filter(t => new Date(t.date) >= cutoff);
-
-        if (txFilterPlatform !== 'All') {
-            list = list.filter(t => t.platform === txFilterPlatform);
-        }
-        if (txFilterType !== 'All') {
-            list = list.filter(t => {
-                if (txFilterType === 'Sale') return t.velocity > 0;
-                if (txFilterType === 'Ad Cost') return t.price === 0 && (t.adsSpend || 0) > 0;
-                if (txFilterType === 'Refund') return t.velocity < 0;
-                return true;
-            });
-        }
-        return list; 
-    }, [sortedTransactions, txFilterPlatform, txFilterType, txDays]);
-
     const platformSubtotals = useMemo(() => {
         const subtotals: Record<string, {
             platform: string;
@@ -749,7 +759,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     
         return Object.values(subtotals).map(group => ({
             ...group,
-            margin: calcMarginPct(group.revenue, group.profit),
+            margin: marginPct(group.profit, group.revenue),
             revenueSharePct: totalRevenueAllPlatforms > 0 ? (group.revenue / totalRevenueAllPlatforms) * 100 : 0,
         })).sort((a, b) => b.revenue - a.revenue);
     }, [filteredTransactions]);
@@ -783,20 +793,22 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300 pb-20">
-            <div className="flex items-center gap-2">
-                {onBack && (
-                    <button onClick={onBack} className="text-gray-500 hover:text-gray-700 transition-colors p-2 rounded-full hover:bg-gray-100">
-                        <ArrowLeft className="w-5 h-5" />
-                    </button>
-                )}
-                <div>
-                    <h2 className="text-xl font-bold text-gray-900">SKU Deep Dive</h2>
-                    {initialTimeWindow && (
-                        <div className="text-xs text-indigo-600 font-medium flex items-center gap-1 mt-0.5 bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100">
-                            <Info className="w-3 h-3" />
-                            Dashboard window: Last {txDays} days
-                        </div>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    {onBack && (
+                        <button onClick={onBack} className="text-gray-500 hover:text-gray-700 transition-colors p-2 rounded-full hover:bg-gray-100">
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
                     )}
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900">SKU Deep Dive</h2>
+                        {initialTimeWindow && (
+                            <div className="text-xs text-indigo-600 font-medium flex items-center gap-1 mt-0.5 bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100">
+                                <Info className="w-3 h-3" />
+                                Dashboard window: Last {txDays} days
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -855,7 +867,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     <Activity className="w-3 h-3"/> Velocity
                                 </span>
                                 <div className="text-xl font-bold text-gray-900">
-                                    {product.averageDailySales.toFixed(1)} <span className="text-xs font-normal text-gray-400">/day</span>
+                                    {formatNumber(product.averageDailySales, 1)} <span className="text-xs font-normal text-gray-400">/day</span>
                                 </div>
                             </div>
 
@@ -864,7 +876,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     <Warehouse className="w-3 h-3"/> On Hand
                                 </span>
                                 <div className="text-xl font-bold text-gray-900">
-                                    {product.stockLevel.toLocaleString()} <span className="text-xs font-normal text-gray-400">units</span>
+                                    {formatNumber(product.stockLevel)} <span className="text-xs font-normal text-gray-400">units</span>
                                 </div>
                             </div>
 
@@ -873,7 +885,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     <Ship className="w-3 h-3"/> Inbound
                                 </span>
                                 <div className="text-xl font-bold text-gray-900">
-                                    {product.incomingStock || 0} <span className="text-xs font-normal text-gray-400">units</span>
+                                    {formatNumber(product.incomingStock)} <span className="text-xs font-normal text-gray-400">units</span>
                                 </div>
                             </div>
 
@@ -882,21 +894,21 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     <Box className="w-3 h-3"/> Lifetime Qty
                                 </span>
                                 <div className="text-xl font-bold text-gray-900">
-                                    {allTimeQty.toLocaleString()}
+                                    {formatNumber(allTimeQty)}
                                 </div>
                             </div>
 
                             <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">All-Time Sales</span>
                                 <div className="text-2xl font-bold text-gray-900">
-                                    £{allTimeSales.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    {formatMoney(allTimeSales, 0)}
                                 </div>
                             </div>
 
                             <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Lifetime Net Margin</span>
                                 <div className={`text-2xl font-bold ${allTimeMarginPct >= 15 ? 'text-green-600' : allTimeMarginPct > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {allTimeMarginPct.toFixed(1)}%
+                                    {formatPct(allTimeMarginPct, 1)}
                                 </div>
                             </div>
 
@@ -1064,7 +1076,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     <button
                                         key={p}
                                         onClick={() => setChartPeriod(p)}
-                                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${chartPeriod === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${chartPeriod === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                     >
                                         {p}
                                     </button>
@@ -1169,10 +1181,20 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             {sortedTransactions.length > 0 && (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                            <Layers className="w-5 h-5 text-indigo-600" />
-                            Transaction Ledger
-                        </h3>
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                <Layers className="w-5 h-5 text-indigo-600" />
+                                Transaction Ledger
+                            </h3>
+                            <button
+                                onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                title="Show Data Audit"
+                            >
+                                <Activity className="w-3 h-3" />
+                                Audit
+                            </button>
+                        </div>
                         <div className="flex gap-2">
                             <div className="relative">
                                 <select 
@@ -1213,6 +1235,20 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         </div>
                     </div>
 
+                    {isAuditPanelVisible && (
+                        <AuditPanel
+                            title="Ledger Reconciliation"
+                            startKey={startKey}
+                            endKey={endKey}
+                            rows={filteredTransactions}
+                            getDateKey={(row: any) => asDateKey(row.date)}
+                            getRevenue={(row: any) => calcRevenue(row)}
+                            getQty={(row: any) => calcUnits(row)}
+                            getProfit={(row: any) => calcProfit(row)}
+                            getAdSpend={(row: any) => calcAdSpend(row)}
+                        />
+                    )}
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm text-sm">
                         <div className="flex flex-col">
                             <span className="text-xs text-gray-500 uppercase font-bold">Sales Rows</span>
@@ -1229,13 +1265,13 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     <Info className="w-3 h-3 text-gray-400" />
                                 </span>
                             </span>
-                            <div className="text-xl font-bold text-orange-700">£{ledgerStats.adOnlySpend.toFixed(2)}</div>
+                            <div className="text-xl font-bold text-orange-700">{formatMoney(ledgerStats.adOnlySpend)}</div>
                         </div>
                         <div className="flex flex-col">
                             <span className="text-xs text-gray-500 uppercase font-bold">Refunds (Detected)</span>
                             <div className="text-xl font-bold text-red-700 flex items-center gap-1">
                                 {ledgerStats.refundCount}
-                                {ledgerStats.refundValue > 0 && <span className="text-sm font-medium opacity-70">(-£{ledgerStats.refundValue.toFixed(0)})</span>}
+                                {ledgerStats.refundValue > 0 && <span className="text-sm font-medium opacity-70">(-{formatMoney(ledgerStats.refundValue, 0)})</span>}
                             </div>
                         </div>
                     </div>
@@ -1251,32 +1287,32 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     <div className="flex items-center justify-end gap-4 text-xs w-4/5">
                                         <div className="text-right w-20">
                                             <div className="text-gray-400">Qty Sold</div>
-                                            <div className="font-mono font-bold text-gray-700">{sub.soldQty.toLocaleString()}</div>
+                                            <div className="font-mono font-bold text-gray-700">{formatNumber(sub.soldQty)}</div>
                                         </div>
                                         <div className="text-right w-24">
                                             <div className="text-gray-400">Ad Spend</div>
-                                            <div className="font-mono font-bold text-orange-600">£{sub.adSpend.toFixed(2)}</div>
+                                            <div className="font-mono font-bold text-orange-600">{formatMoney(sub.adSpend)}</div>
                                         </div>
                                         <div className="text-right w-24">
                                             <div className="text-gray-400">Revenue</div>
-                                            <div className="font-mono font-bold text-indigo-600">£{sub.revenue.toFixed(2)}</div>
+                                            <div className="font-mono font-bold text-indigo-600">{formatMoney(sub.revenue)}</div>
                                         </div>
                                         <div className="text-right w-20">
                                             <div className="text-gray-400">Sales Share %</div>
                                             <div className="font-mono font-bold text-gray-700">
-                                                {'>'} {sub.revenueSharePct.toFixed(1)}%
+                                                {'>'} {formatPct(sub.revenueSharePct, 1)}
                                             </div>
                                         </div>
                                         <div className="text-right w-24">
                                             <div className="text-gray-400">Profit</div>
                                             <div className={`font-mono font-bold ${sub.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                £{sub.profit.toFixed(2)}
+                                                {formatMoney(sub.profit)}
                                             </div>
                                         </div>
                                         <div className="text-right w-20">
                                             <div className="text-gray-400">Margin %</div>
-                                            <div className={`font-mono font-bold ${sub.margin >= thresholds.marginBelowTargetPct ? 'text-green-600' : sub.margin >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
-                                                {sub.margin.toFixed(1)}%
+                                            <div className={`font-mono font-bold ${sub.margin !== null && sub.margin >= thresholds.marginBelowTargetPct ? 'text-green-600' : sub.margin !== null && sub.margin >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                                                {formatPct(sub.margin)}
                                             </div>
                                         </div>
                                     </div>
@@ -1306,6 +1342,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     const isRefund = tx._type === 'REFUND_LOG' || tx.velocity < 0;
                                     const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
                                     const isZeroRev = Math.abs(tx.price * tx.velocity) < 0.01 && !isAdRow && !isRefund;
+                                    const margin = marginPct(calcProfit(tx), calcRevenue(tx));
 
                                     return (
                                         <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${
@@ -1325,17 +1362,17 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                                 </div>
                                             </td>
                                             <td className="p-3 text-right font-medium">
-                                                {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : `£${tx.price.toFixed(2)}`}
+                                                {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : formatMoney(tx.price)}
                                             </td>
-                                            <td className="p-3 text-right font-bold opacity-90">{tx.velocity}</td>
+                                            <td className="p-3 text-right font-bold opacity-90">{formatNumber(tx.velocity)}</td>
                                             <td className={`p-3 text-right ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
-                                                £{(tx.price * tx.velocity).toFixed(2)}
+                                                {formatMoney(tx.price * tx.velocity)}
                                             </td>
                                             <td className="p-3 text-right text-orange-600 font-medium">
-                                                {(tx.adsSpend || 0) > 0 ? `£${tx.adsSpend?.toFixed(2)}` : '-'}
+                                                {(tx.adsSpend || 0) > 0 ? formatMoney(tx.adsSpend) : '-'}
                                             </td>
-                                            <td className={`p-3 text-right font-bold ${(tx.margin || 0) < 10 ? 'text-red-600' : 'text-green-600'}`}>
-                                                {tx.margin !== undefined && !isAdRow && !isRefund ? `${tx.margin.toFixed(1)}%` : '-'}
+                                            <td className={`p-3 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-600' : 'text-green-600'}`}>
+                                                {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '—' : '-'}
                                             </td>
                                         </tr>
                                     );

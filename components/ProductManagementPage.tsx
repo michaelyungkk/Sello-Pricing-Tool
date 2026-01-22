@@ -10,8 +10,10 @@ import { getDiagnosisMeta, CanonicalDiagnosisId } from './diagnostics/diagnosisR
 import { getThresholdConfig, ThresholdConfig } from '../services/thresholdsConfig';
 import UkSalesMap from './UkSalesMap';
 import { GradeBadge } from './GradeBadge';
-import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne } from '../services/dateUtils';
-import { CategoryPerformanceSlide } from './CategoryPerformanceSlide'; // Import new component
+import { asDateKey } from '../services/dateUtils';
+import { buildWindow, getTodayKey, addDays, isBetweenInclusive } from '../services/dateWindow';
+import { CategoryPerformanceSlide } from './CategoryPerformanceSlide';
+import AuditPanel from './AuditPanel';
 
 interface ProductManagementPageProps {
     products: Product[];
@@ -26,10 +28,10 @@ interface ProductManagementPageProps {
     onUpdateProduct?: (product: Product) => void;
     onViewElasticity?: (product: Product) => void;
     onDeepDive: (sku: string) => void; 
-    onSearch?: (query: string | SearchChip[]) => void; // New Prop
+    onSearch?: (query: string | SearchChip[]) => void;
     themeColor: string;
     headerStyle: React.CSSProperties;
-    thresholds?: ThresholdConfig; // New Prop for Reactivity
+    thresholds?: ThresholdConfig;
 }
 
 type Tab = 'dashboard' | 'catalog' | 'pricing' | 'shipments' | 'returns';
@@ -186,7 +188,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
     onSearch,
     themeColor,
     headerStyle,
-    thresholds // Destructure
+    thresholds
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('dashboard');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
@@ -262,7 +264,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                         themeColor={themeColor}
                         onAnalyze={onAnalyze}
                         onDeepDive={onDeepDive}
-                        onSearch={onSearch} // Pass it down
+                        onSearch={onSearch}
                         thresholds={thresholds}
                     />
                 )}
@@ -274,6 +276,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                         onEditTags={setProductForTags}
                         onViewShipments={handleViewShipments}
                         onViewElasticity={onViewElasticity}
+                        onDeepDive={onDeepDive}
                         dateLabels={dateLabels}
                         pricingRules={pricingRules}
                         themeColor={themeColor}
@@ -644,14 +647,15 @@ const DashboardView = ({
     thresholds?: ThresholdConfig
 }) => {
     const [range, setRange] = useState<DateRange>('30d');
-    const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
-    const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
+    const [customStart, setCustomStart] = useState(getTodayKey());
+    const [customEnd, setCustomEnd] = useState(getTodayKey());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [platformScope, setPlatformScope] = useState<string>('All');
     const [currentSlide, setCurrentSlide] = useState(0);
     const [selectedAlert, setSelectedAlert] = useState<AlertType>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
+    const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
 
     // Fallback if prop is missing (e.g. initial load or parent hasn't updated yet)
     // IMPORTANT: Dependencies must include propThresholds to trigger re-calc on change
@@ -673,40 +677,26 @@ const DashboardView = ({
         }
     };
 
-    const { processedData, periodLabel, dateRange, periodDays } = useMemo(() => {
-        let startDate = new Date();
-        let endDate = new Date();
+    const { processedData, periodLabel, dateRange, periodDays, startKey, endKey, distinctDaysFound } = useMemo(() => {
+        const { startKey, endKey, expectedDays } = buildWindow({
+            mode: range === 'custom' ? 'custom' : 'days',
+            days: range === 'yesterday' ? 1 : range === '7d' ? 7 : range === '30d' ? 30 : 30,
+            startKey: customStart,
+            endKey: customEnd,
+            excludeToday: true
+        });
 
-        if (range === 'yesterday') {
-            startDate.setDate(startDate.getDate() - 1);
-            endDate.setDate(endDate.getDate() - 1);
-        } else if (range === '7d') {
-            startDate.setDate(startDate.getDate() - 7);
-            endDate.setDate(endDate.getDate() - 1);
-        } else if (range === '30d') {
-            startDate.setDate(startDate.getDate() - 30);
-            endDate.setDate(endDate.getDate() - 1);
-        } else if (range === 'custom') {
-            startDate = new Date(customStart);
-            endDate = new Date(customEnd);
-        }
-
-        const format = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
-        const sameYear = startDate.getFullYear() === endDate.getFullYear();
+        const startDate = new Date(startKey);
+        const endDate = new Date(endKey);
+        const format = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined, timeZone: 'UTC' });
+        const sameYear = startDate.getUTCFullYear() === endDate.getUTCFullYear();
         const label = `${format(startDate, !sameYear)} – ${format(endDate, true)}`;
         
-        const sStr = asDateKey(startDate);
-        const eStr = asDateKey(endDate);
-        
-        if (!sStr || !eStr) {
-            return { processedData: [], periodLabel: label, dateRange: { start: startDate, end: endDate }, periodDays: 0 };
-        }
+        // Calculate previous period for trends
+        const prevEndKey = addDays(startKey, -1);
+        const prevStartKey = addDays(prevEndKey, -(expectedDays - 1));
 
-        const durationMs = endDate.getTime() - startDate.getTime();
-        const durationDays = Math.round(durationMs / (1000 * 60 * 60 * 24)) + 1;
-
-        const peStr = addDaysToDateKey(sStr, -1);
-        const psStr = addDaysToDateKey(peStr, -(durationDays - 1));
+        const distinctDaysSet = new Set<string>();
 
         const data = products.map(p => {
             const logs = priceHistoryMap.get(p.sku) || [];
@@ -722,7 +712,9 @@ const DashboardView = ({
                 const d = asDateKey(l.date);
                 if (!d) return;
 
-                if (isDateKeyBetween(d, sStr, eStr)) {
+                if (isBetweenInclusive(d, startKey, endKey)) {
+                    distinctDaysSet.add(d); // Track globally distinct days found
+
                     curUnits += l.velocity;
                     curRev += (l.velocity * l.price);
                     
@@ -748,7 +740,7 @@ const DashboardView = ({
                         }
                     }
 
-                } else if (isDateKeyBetween(d, psStr, peStr)) {
+                } else if (isBetweenInclusive(d, prevStartKey, prevEndKey)) {
                     prevUnits += l.velocity;
                 }
             });
@@ -772,7 +764,7 @@ const DashboardView = ({
                                 name: plat,
                                 margin: m,
                                 revenue: stats.rev,
-                                velocity: stats.units / durationDays
+                                velocity: stats.units / expectedDays
                             });
                         }
                     }
@@ -783,7 +775,7 @@ const DashboardView = ({
             const signals: CanonicalDiagnosisId[] = [];
             
             // --- FIX: Use period-specific velocity for alerts ---
-            const periodDailyVelocity = durationDays > 0 ? curUnits / durationDays : 0;
+            const periodDailyVelocity = expectedDays > 0 ? curUnits / expectedDays : 0;
             const periodRunway = periodDailyVelocity > 0 ? p.stockLevel / periodDailyVelocity : 999;
             const tacos = curRev > 0 ? (curAdSpend / curRev) * 100 : 0;
             const stockValue = p.stockLevel * (p.costPrice || 0);
@@ -829,7 +821,15 @@ const DashboardView = ({
             };
         });
         
-        return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, periodDays: durationDays };
+        return { 
+            processedData: data, 
+            periodLabel: label, 
+            dateRange: { start: startDate, end: endDate }, 
+            periodDays: expectedDays,
+            startKey,
+            endKey,
+            distinctDaysFound: distinctDaysSet.size
+        };
     }, [products, priceHistoryMap, range, customStart, customEnd, platformScope, thresholds]); 
 
     const alerts = useMemo(() => ({
@@ -999,7 +999,34 @@ const DashboardView = ({
                         </span>
                     </div>
                 </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                        title="Show Data Audit"
+                    >
+                        <Activity className="w-3 h-3" />
+                        Audit
+                    </button>
+                </div>
             </div>
+
+            {isAuditPanelVisible && (
+                <div className="mb-4">
+                    <AuditPanel
+                        title="Decision Engine Data"
+                        startKey={startKey}
+                        endKey={endKey}
+                        rows={processedData}
+                        getDateKey={() => null}
+                        getRevenue={(row: any) => row.periodRevenue}
+                        getQty={(row: any) => row.periodUnits}
+                        getProfit={(row: any) => row.periodProfit}
+                        getAdSpend={(row: any) => row.periodAdSpend}
+                        distinctDaysCount={distinctDaysFound}
+                    />
+                </div>
+            )}
 
             <div className="min-h-[850px] flex flex-col relative group">
                 {/* NAVIGATION HEADER ROW */}

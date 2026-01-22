@@ -6,6 +6,8 @@ import { isAdsEnabled } from '../services/platformCapabilities';
 import SkuDeepDivePage from './SkuDeepDivePage';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 import { GradeBadge } from './GradeBadge';
+import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct } from '../services/metrics';
+import { formatMoney, formatPct, formatNumber } from '../utils/format';
 
 interface SearchResultsPageProps {
   data: { results: any[], query: string, params: SearchIntent, id?: string };
@@ -27,14 +29,14 @@ interface SubGroup {
     label: string;
     productName?: string;
     count: number;
-    weightedMargin: number;
+    weightedMargin: number | null; // Nullable for safety
     totalRevenue: number;
     totalProfit: number;
     totalQty: number;
     totalAdSpend: number;
     totalRefundAmount: number;
     totalRefundQty: number;
-    tacos: number;
+    tacos: number | null; // Nullable for safety
     organicShare: number | null; 
     contribution: number; 
     agedStockPct: number;
@@ -43,7 +45,7 @@ interface SubGroup {
     platformVelocity?: number;
     platformCover?: number;
     // Return Context Specific
-    periodReturnRate?: number;
+    periodReturnRate: number | null; // Nullable for safety
     allTimeReturnRate?: number;
     // Ad Context
     adEnabledRevenue: number;
@@ -61,14 +63,14 @@ interface TopGroup {
     label: string;
     productName?: string;
     count: number;
-    weightedMargin: number;
+    weightedMargin: number | null; // Nullable for safety
     totalRevenue: number;
     totalProfit: number;
     totalQty: number;
     totalAdSpend: number;
     totalRefundAmount: number;
     totalRefundQty: number;
-    tacos: number;
+    tacos: number | null; // Nullable for safety
     organicShare: number | null;
     contribution: number; 
     agedStockPct: number;
@@ -77,7 +79,7 @@ interface TopGroup {
     globalVelocity?: number;
     globalCover?: number;
     // Return Context Specific
-    periodReturnRate?: number;
+    periodReturnRate: number | null; // Nullable for safety
     allTimeReturnRate?: number;
     // Ad Context
     adEnabledRevenue: number;
@@ -325,21 +327,21 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
           label: mainKey,
           productName: groupBy === 'sku' ? item.productName : undefined,
           count: 0,
-          weightedMargin: 0,
+          weightedMargin: null,
           totalRevenue: 0,
           totalProfit: 0,
           totalQty: 0,
           totalAdSpend: 0,
           totalRefundAmount: 0,
           totalRefundQty: 0,
-          tacos: 0,
+          tacos: null,
           organicShare: null,
           contribution: 0,
           agedStockPct: 0,
           subGroups: {},
           globalVelocity: 0,
           globalCover: 0,
-          periodReturnRate: 0,
+          periodReturnRate: null,
           allTimeReturnRate: 0,
           adEnabledRevenue: 0,
           totalPrevRevenue: 0,
@@ -388,20 +390,21 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                           label: subKey,
                           productName: undefined,
                           count: 1,
-                          weightedMargin: 0,
+                          weightedMargin: null,
                           totalRevenue: 0,
                           totalProfit: 0,
                           totalQty: 0,
                           totalAdSpend: 0,
                           totalRefundAmount: 0,
                           totalRefundQty: 0,
-                          tacos: 0,
+                          tacos: null,
                           organicShare: null,
                           contribution: 0,
                           agedStockPct: 0,
                           items: [],
                           platformVelocity: ch.velocity,
                           platformCover: ch.velocity > 0 ? (item.stockLevel / ch.velocity) : 999,
+                          periodReturnRate: null,
                           adEnabledRevenue: 0,
                           totalPrevRevenue: 0,
                           totalPrevQty: 0,
@@ -432,19 +435,19 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
               label: subKey,
               productName: groupBy === 'platform' ? item.productName : undefined,
               count: 0,
-              weightedMargin: 0,
+              weightedMargin: null,
               totalRevenue: 0,
               totalProfit: 0,
               totalQty: 0,
               totalAdSpend: 0,
               totalRefundAmount: 0,
               totalRefundQty: 0,
-              tacos: 0,
+              tacos: null,
               organicShare: null,
               contribution: 0,
               agedStockPct: 0,
               items: [],
-              periodReturnRate: 0,
+              periodReturnRate: null,
               allTimeReturnRate: item.allTimeReturnRate || 0,
               adEnabledRevenue: 0,
               totalPrevRevenue: 0,
@@ -492,7 +495,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
     // Calculate aggregations & Trend Summation
     Object.keys(groups).forEach(key => {
         const g = groups[key];
-        g.weightedMargin = g.totalRevenue > 0 ? (g.totalProfit / g.totalRevenue) * 100 : 0;
+        g.weightedMargin = g.totalRevenue > 0 ? (g.totalProfit / g.totalRevenue) * 100 : null;
         
         // --- PREV STATS AGGREGATION ---
         const skuSet = new Set<string>();
@@ -526,36 +529,37 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
             }
 
             if (!sg.platformVelocity) { 
-                sg.weightedMargin = sg.totalRevenue > 0 ? (sg.totalProfit / sg.totalRevenue) * 100 : 0;
+                sg.weightedMargin = sg.totalRevenue > 0 ? (sg.totalProfit / sg.totalRevenue) * 100 : null;
                 // Calculate SubGroup Margin Change
+                // Note: Prev margin assumes 0 if no prev rev, which is an acceptable baseline for change calc
                 const sgPrevMargin = sg.totalPrevRevenue > 0 ? (sg.totalPrevProfit / sg.totalPrevRevenue) * 100 : 0;
-                sg.weightedMarginChange = sg.weightedMargin - sgPrevMargin;
+                sg.weightedMarginChange = (sg.weightedMargin || 0) - sgPrevMargin;
                 
                 if (sg.adEnabledRevenue > 0) {
                     sg.tacos = (sg.totalAdSpend / sg.adEnabledRevenue) * 100;
                     sg.organicShare = Math.max(0, 100 - sg.tacos);
                 } else {
-                    sg.tacos = 0;
+                    sg.tacos = null;
                     sg.organicShare = null;
                 }
 
-                sg.periodReturnRate = sg.totalQty > 0 ? (sg.totalRefundQty / sg.totalQty) * 100 : 0;
+                sg.periodReturnRate = sg.totalQty > 0 ? (sg.totalRefundQty / sg.totalQty) * 100 : null;
             }
         });
         
         // Calculate Top Group Margin Change
         const prevGroupMargin = g.totalPrevRevenue > 0 ? (g.totalPrevProfit / g.totalPrevRevenue) * 100 : 0;
-        g.weightedMarginChange = g.weightedMargin - prevGroupMargin;
+        g.weightedMarginChange = (g.weightedMargin || 0) - prevGroupMargin;
 
         if (g.adEnabledRevenue > 0) {
             g.tacos = (g.totalAdSpend / g.adEnabledRevenue) * 100;
             g.organicShare = Math.max(0, 100 - g.tacos);
         } else {
-            g.tacos = 0;
+            g.tacos = null;
             g.organicShare = null;
         }
         
-        g.periodReturnRate = g.totalQty > 0 ? (g.totalRefundQty / g.totalQty) * 100 : 0;
+        g.periodReturnRate = g.totalQty > 0 ? (g.totalRefundQty / g.totalQty) * 100 : null;
         
         if (groupBy === 'sku') {
             const firstSub = Object.values(g.subGroups)[0];
@@ -587,7 +591,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
             if (field === 'profit' || field === 'net_profit') return (a.totalProfit - b.totalProfit) * dirMult;
             if (field === 'revenue') return (a.totalRevenue - b.totalRevenue) * dirMult;
             if (field === 'velocity' || field === 'qty' || field === 'sales_qty') return (a.totalQty - b.totalQty) * dirMult;
-            if (field === 'tacos' || field === 'tacos_pct' || field === 'adsSpend') return (a.tacos - b.tacos) * dirMult;
+            if (field === 'tacos' || field === 'tacos_pct' || field === 'adsSpend') return ((a.tacos || 0) - (b.tacos || 0)) * dirMult;
             if (field === 'stockLevel') return (a.totalQty - b.totalQty) * dirMult;
             if (field === 'daysRemaining' || field === 'stock_cover_days') return ((a.globalCover || 0) - (b.globalCover || 0)) * dirMult;
             if (field === 'periodReturnRate' || field === 'returnRate' || field === 'RETURN_RATE_PCT') return ((a.periodReturnRate || 0) - (b.periodReturnRate || 0)) * dirMult;
@@ -605,7 +609,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
         if (isReturnContext) return (b.periodReturnRate || 0) - (a.periodReturnRate || 0);
         if (isInventoryContext) return a.totalQty - b.totalQty;
         if (isVolumeContext) return b.totalQty - a.totalQty;
-        if (isAdContext) return b.tacos - a.tacos;
+        if (isAdContext) return (b.tacos || 0) - (a.tacos || 0);
         if (isMarginContext) return b.totalProfit - a.totalProfit;
         return b.totalRevenue - a.totalRevenue;
     });
@@ -691,6 +695,13 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
 
     return (
       <div className="space-y-4">
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50/50 border border-blue-100 rounded-lg text-[10px] text-blue-700 mb-2">
+            <Info className="w-3 h-3 flex-shrink-0" />
+            <span>
+                <strong>Data Basis:</strong> Some metrics are proxies (from Product Master), others are exact (from Transactions). 
+                Hover over values for calculation details. "—" indicates insufficient data.
+            </span>
+        </div>
         {hierarchicalData.map(group => {
             // Volume Context Visuals
             let volumeBadge = null;
@@ -750,16 +761,16 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                         
                         {isTrendContext ? (
                             <div className="flex flex-col items-end">
-                                <span className="font-bold text-gray-900 text-sm">{group.totalQty.toLocaleString()}</span>
+                                <span className="font-bold text-gray-900 text-sm">{formatNumber(group.totalQty)}</span>
                                 <div className={`flex items-center gap-1 text-xs font-bold ${volDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                     {volDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-                                    {volDiff > 0 ? '+' : ''}{volDiff.toLocaleString()} ({volDiffPct.toFixed(1)}%)
+                                    {volDiff > 0 ? '+' : ''}{formatNumber(volDiff)} ({volDiffPct.toFixed(1)}%)
                                 </div>
                             </div>
                         ) : (
                             <div className="flex flex-col items-end">
                                 <div className={`font-bold text-lg ${isVolumeContext ? 'text-indigo-700' : 'text-gray-800'}`}>
-                                    {group.totalQty.toLocaleString()}
+                                    {formatNumber(group.totalQty)}
                                 </div>
                                 {volumeBadge}
                             </div>
@@ -774,17 +785,17 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                         
                         {isTrendContext ? (
                             <div className="flex flex-col items-end">
-                                <span className="font-bold text-gray-900 text-sm">£{group.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+                                <span className="font-bold text-gray-900 text-sm">{formatMoney(group.totalRevenue, 0)}</span>
                                 <div className={`flex items-center gap-1 text-xs font-bold ${revDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                     {revDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-                                    {revDiff > 0 ? '+' : '-'}£{Math.abs(revDiff).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} ({revDiffPct.toFixed(1)}%)
+                                    {revDiff > 0 ? '+' : '-'}{formatMoney(Math.abs(revDiff), 0)} ({revDiffPct.toFixed(1)}%)
                                 </div>
                             </div>
                         ) : (
                             <div className="font-bold text-lg text-gray-800">
                                 {isInventoryContext || isAgedContext
                                     ? `${(group.globalVelocity || 0).toFixed(1)}/day`
-                                    : `£${group.totalRevenue.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`
+                                    : formatMoney(group.totalRevenue, 0)
                                 }
                             </div>
                         )}
@@ -800,7 +811,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                 <div className="text-right">
                                     <span className="block text-[9px] text-gray-400 uppercase">Period (Qty)</span>
                                     <span className={`block font-bold ${(group.periodReturnRate || 0) > thresholds.returnRatePct ? 'text-red-600' : 'text-gray-800'}`}>
-                                        {(group.periodReturnRate || 0).toFixed(1)}%
+                                        {formatPct(group.periodReturnRate)}
                                     </span>
                                 </div>
                                 <div className="w-px h-6 bg-gray-300"></div>
@@ -838,10 +849,10 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                             {isMarginContext ? (
                                 <div className="flex flex-col items-end">
                                     <div className={`font-bold text-lg ${group.totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>
-                                        £{group.totalProfit.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+                                        {formatMoney(group.totalProfit, 0)}
                                     </div>
-                                    <div className={`text-xs flex items-center gap-1 ${group.weightedMargin < thresholds.marginBelowTargetPct ? 'text-red-400' : 'text-gray-400'}`}>
-                                        {group.weightedMargin.toFixed(1)}% 
+                                    <div className={`text-xs flex items-center gap-1 ${group.weightedMargin !== null && group.weightedMargin < thresholds.marginBelowTargetPct ? 'text-red-400' : 'text-gray-400'}`} title="Net Profit / Revenue. Shows '—' if no revenue recorded.">
+                                        {formatPct(group.weightedMargin)} 
                                         {isTrendContext && (
                                             <span className={`font-bold ${group.weightedMarginChange > 0 ? 'text-green-500' : 'text-red-500'}`}>
                                                 ({group.weightedMarginChange > 0 ? '+' : ''}{group.weightedMarginChange.toFixed(1)}%)
@@ -854,16 +865,16 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                     isInventoryContext
                                         ? ((group.globalCover || 999) < 14 ? 'text-red-600' : (group.globalCover || 0) > thresholds.overstockDays ? 'text-orange-600' : 'text-green-600')
                                         : isAdContext 
-                                            ? (group.tacos > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-800')
+                                            ? (group.tacos !== null && group.tacos > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-800')
                                             : isOrganicContext
                                                 ? (group.organicShare !== null && group.organicShare > 80 ? 'text-green-600' : group.organicShare !== null && group.organicShare < 40 ? 'text-red-600' : 'text-gray-800')
                                             : isAgedContext
                                                 ? (group.agedStockPct > 20 ? 'text-red-600' : group.agedStockPct > 10 ? 'text-orange-600' : 'text-green-600')
                                             : 'text-indigo-600'
-                                }`}>
+                                }`} title={isAdContext ? "Ad Spend / Ad-Enabled Revenue. Shows '—' if no revenue on ad platforms." : undefined}>
                                     {isInventoryContext 
                                         ? `${(group.globalCover || 0) > 730 ? '>2y' : (group.globalCover || 0).toFixed(0) + ' days'}`
-                                        : isAdContext ? `${group.tacos.toFixed(1)}%` 
+                                        : isAdContext ? formatPct(group.tacos)
                                         : isOrganicContext 
                                             ? (group.organicShare !== null ? `${group.organicShare.toFixed(1)}%` : <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded">N/A <span className="hidden group-hover:inline">- Ads not enabled</span></span>)
                                         : isAgedContext ? `${group.agedStockPct.toFixed(1)}%`
@@ -908,7 +919,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                         if (field === 'profit' || field === 'net_profit') return (a.totalProfit - b.totalProfit) * dirMult;
                                         if (field === 'revenue') return (a.totalRevenue - b.totalRevenue) * dirMult;
                                         if (field === 'velocity' || field === 'qty' || field === 'sales_qty') return (a.totalQty - b.totalQty) * dirMult;
-                                        if (field === 'tacos' || field === 'tacos_pct' || field === 'adsSpend') return (a.tacos - b.tacos) * dirMult;
+                                        if (field === 'tacos' || field === 'tacos_pct' || field === 'adsSpend') return ((a.tacos || 0) - (b.tacos || 0)) * dirMult;
                                         if (field === 'periodReturnRate' || field === 'returnRate') return ((a.periodReturnRate || 0) - (b.periodReturnRate || 0)) * dirMult;
                                         if (field === 'organicShare' || field === 'ORGANIC_SHARE_PCT') return ((a.organicShare || 0) - (b.organicShare || 0)) * dirMult;
                                         if (field === 'agedStockPct' || field === 'AGED_STOCK_PCT') return ((a.agedStockPct || 0) - (b.agedStockPct || 0)) * dirMult;
@@ -922,7 +933,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                     return isReturnContext ? (b.periodReturnRate || 0) - (a.periodReturnRate || 0)
                                     : isInventoryContext ? (b.platformVelocity || 0) - (a.platformVelocity || 0)
                                     : isVolumeContext ? b.totalQty - a.totalQty 
-                                    : isAdContext ? b.tacos - a.tacos
+                                    : isAdContext ? (b.tacos || 0) - (a.tacos || 0)
                                     : isOrganicContext ? (b.organicShare || 0) - (a.organicShare || 0)
                                     : isAgedContext ? b.agedStockPct - a.agedStockPct
                                     : isMarginContext ? b.totalProfit - a.totalProfit
@@ -986,7 +997,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                         <>
                                                             <div className="text-right w-16">
                                                                 <div className="text-xs text-gray-400">Units</div>
-                                                                <div className="text-sm font-bold text-gray-700">{sub.totalQty}</div>
+                                                                <div className="text-sm font-bold text-gray-700">{formatNumber(sub.totalQty)}</div>
                                                             </div>
                                                             <div className="text-right w-16">
                                                                 <div className="text-xs text-gray-400">Refunded</div>
@@ -995,7 +1006,7 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                             <div className="text-right w-20">
                                                                 <div className="text-xs text-gray-400">Period RR</div>
                                                                 <div className={`text-sm font-bold ${(sub.periodReturnRate || 0) > thresholds.returnRatePct ? 'text-red-600' : 'text-gray-800'}`}>
-                                                                    {(sub.periodReturnRate || 0).toFixed(1)}%
+                                                                    {formatPct(sub.periodReturnRate)}
                                                                 </div>
                                                             </div>
                                                             <div className="text-right w-20">
@@ -1024,16 +1035,16 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                         <>
                                                             <div className="text-right w-16">
                                                                 <div className="text-xs text-gray-400">Qty</div>
-                                                                <div className="text-sm font-bold text-gray-700">{sub.totalQty}</div>
+                                                                <div className="text-sm font-bold text-gray-700">{formatNumber(sub.totalQty)}</div>
                                                             </div>
                                                             <div className="text-right">
                                                                 <div className="text-xs text-gray-400">Revenue</div>
-                                                                <div className="text-sm font-medium text-gray-700">£{sub.totalRevenue.toFixed(0)}</div>
+                                                                <div className="text-sm font-medium text-gray-700">{formatMoney(sub.totalRevenue, 0)}</div>
                                                             </div>
                                                             {(isMarginContext || isAdContext || isOrganicContext) && (
                                                                 <div className="text-right">
                                                                     <div className="text-xs text-gray-400">Ad Spent</div>
-                                                                    <div className="text-sm font-medium text-orange-700">£{sub.totalAdSpend.toFixed(0)}</div>
+                                                                    <div className="text-sm font-medium text-orange-700">{formatMoney(sub.totalAdSpend, 0)}</div>
                                                                 </div>
                                                             )}
                                                             <div className="text-right w-24">
@@ -1041,14 +1052,14 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                     {isAdContext ? 'TACoS' : isOrganicContext ? 'Organic (Ads)' : isMarginContext ? 'Net Profit' : 'Share %'}
                                                                 </div>
                                                                 <span className={`text-sm font-bold ${
-                                                                    isAdContext ? (sub.tacos > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-700') :
+                                                                    isAdContext ? (sub.tacos !== null && sub.tacos > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-700') :
                                                                     isOrganicContext ? (sub.organicShare !== null && sub.organicShare > 80 ? 'text-green-600' : sub.organicShare !== null && sub.organicShare < 40 ? 'text-red-600' : 'text-gray-700') :
                                                                     isMarginContext ? (sub.totalProfit < 0 ? 'text-red-600' : 'text-green-600') :
                                                                     'text-indigo-600'
                                                                 }`}>
-                                                                    {isAdContext ? `${sub.tacos.toFixed(1)}%` :
+                                                                    {isAdContext ? formatPct(sub.tacos) :
                                                                      isOrganicContext ? (sub.organicShare !== null ? `${sub.organicShare.toFixed(1)}%` : <span className="text-xs text-gray-400 font-medium">N/A</span>) :
-                                                                     isMarginContext ? `£${sub.totalProfit.toFixed(0)}` :
+                                                                     isMarginContext ? formatMoney(sub.totalProfit, 0) :
                                                                      `${sub.contribution.toFixed(1)}%`}
                                                                 </span>
                                                             </div>
@@ -1110,115 +1121,121 @@ const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ data, products, p
                                                                         return tB - tA;
                                                                     })
                                                                     .slice(0, 50) 
-                                                                    .map((tx, idx) => (
-                                                                    <tr key={idx} className="hover:bg-indigo-50/30">
-                                                                        <td className="p-2 pl-3 font-mono text-gray-600">
-                                                                            {new Date(tx.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                                        </td>
+                                                                    .map((tx, idx) => {
+                                                                        const revenue = calcRevenue(tx);
+                                                                        const profit = calcProfit(tx);
+                                                                        const margin = revenue !== 0 ? calcMarginPct(revenue, profit) : null;
+                                                                        const isAdRow = tx.type === 'AD_COST'; // Added definition here
                                                                         
-                                                                        {isReturnContext ? (
-                                                                            <>
-                                                                                <td className="p-2 text-right font-medium text-red-600">
-                                                                                    -£{Math.abs(tx.refundAmount || tx.profit || 0).toFixed(2)}
-                                                                                </td>
-                                                                                <td className="p-2 text-right font-bold text-gray-800">{tx.velocity}</td>
-                                                                                <td className="p-2 text-gray-600 truncate max-w-[200px]" title={tx.platformReason || tx.customerReason || tx.reason}>
-                                                                                    {tx.platformReason || tx.customerReason || tx.reason || 'Unknown Reason'}
-                                                                                </td>
-                                                                                <td className="p-2 text-right text-xs text-gray-500">{tx.platform}</td>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <td className={`p-2 text-right font-medium ${tx.type === 'AD_COST' ? 'text-orange-600' : tx.type === 'REFUND' ? 'text-red-600' : 'text-gray-900'}`}>
-                                                                                    {tx.type === 'AD_COST' ? (
-                                                                                        <span className="text-[9px] bg-orange-50 text-orange-700 px-1 rounded border border-orange-100 uppercase font-bold">Ad Spend</span>
-                                                                                    ) : (
-                                                                                        `£${Math.abs(tx.price || 0).toFixed(2)}`
-                                                                                    )}
-                                                                                </td>
-                                                                                <td className="p-2 text-right text-gray-900 font-bold">
-                                                                                    {isInventoryContext || isAgedContext ? tx.velocity.toFixed(3) : tx.velocity}
-                                                                                </td>
-                                                                                <td className="p-2 text-right text-gray-700">£{(tx.revenue || 0).toFixed(2)}</td>
-                                                                                {(isAdContext || isMarginContext || isOrganicContext) && (
-                                                                                    <td className="p-2 text-right text-orange-700">
-                                                                                        {tx.adsSpend > 0 ? `£${tx.adsSpend.toFixed(2)}` : '-'}
+                                                                        return (
+                                                                        <tr key={idx} className="hover:bg-indigo-50/30">
+                                                                            <td className="p-2 pl-3 font-mono text-gray-600">
+                                                                                {new Date(tx.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                            </td>
+                                                                            
+                                                                            {isReturnContext ? (
+                                                                                <>
+                                                                                    <td className="p-2 text-right font-medium text-red-600">
+                                                                                        -{formatMoney(Math.abs(tx.refundAmount || tx.profit || 0))}
                                                                                     </td>
-                                                                                )}
-                                                                                {isAdContext && (
-                                                                                    <td className="p-2 text-right">
-                                                                                        {tx.tacos > 0 ? (
-                                                                                            <span className={`${tx.tacos > thresholds.highAdDependencyPct ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
-                                                                                                {tx.tacos.toFixed(1)}%
-                                                                                            </span>
-                                                                                        ) : '-'}
+                                                                                    <td className="p-2 text-right font-bold text-gray-800">{tx.velocity}</td>
+                                                                                    <td className="p-2 text-gray-600 truncate max-w-[200px]" title={tx.platformReason || tx.customerReason || tx.reason}>
+                                                                                        {tx.platformReason || tx.customerReason || tx.reason || 'Unknown Reason'}
                                                                                     </td>
-                                                                                )}
-                                                                                {isOrganicContext && (
-                                                                                    <td className="p-2 text-right">
-                                                                                        {tx.organicShare !== null ? (
-                                                                                            <span className={`${tx.organicShare < 40 ? 'text-red-600 font-bold' : 'text-green-600'}`}>
-                                                                                                {tx.organicShare.toFixed(1)}%
-                                                                                            </span>
-                                                                                        ) : <span className="text-gray-400 italic">N/A</span>}
+                                                                                    <td className="p-2 text-right text-xs text-gray-500">{tx.platform}</td>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <td className={`p-2 text-right font-medium ${tx.type === 'AD_COST' ? 'text-orange-600' : tx.type === 'REFUND' ? 'text-red-600' : 'text-gray-900'}`}>
+                                                                                        {tx.type === 'AD_COST' ? (
+                                                                                            <span className="text-[9px] bg-orange-50 text-orange-700 px-1 rounded border border-orange-100 uppercase font-bold">Ad Spend</span>
+                                                                                        ) : (
+                                                                                            formatMoney(Math.abs(tx.price || 0))
+                                                                                        )}
                                                                                     </td>
-                                                                                )}
-                                                                                
-                                                                                {(isInventoryContext || isAgedContext) && (
-                                                                                    <>
-                                                                                        <td className="p-2 text-right text-gray-800 font-medium">
-                                                                                            {tx.stockLevel !== undefined ? tx.stockLevel : '-'}
+                                                                                    <td className="p-2 text-right text-gray-900 font-bold">
+                                                                                        {isInventoryContext || isAgedContext ? tx.velocity.toFixed(3) : formatNumber(tx.velocity)}
+                                                                                    </td>
+                                                                                    <td className="p-2 text-right text-gray-700">{formatMoney(tx.revenue)}</td>
+                                                                                    {(isAdContext || isMarginContext || isOrganicContext) && (
+                                                                                        <td className="p-2 text-right text-orange-700">
+                                                                                            {tx.adsSpend > 0 ? formatMoney(tx.adsSpend) : '-'}
                                                                                         </td>
-                                                                                        {isAgedContext && <td className="p-2 text-right text-amber-700 font-medium">{tx.agedStockQty || '-'}</td>}
-                                                                                        {isAgedContext && <td className="p-2 text-right font-bold">{(tx.agedStockPct || 0).toFixed(1)}%</td>}
-                                                                                        
-                                                                                        {!isAgedContext && <td className="p-2 text-right">
-                                                                                            {tx.daysRemaining !== undefined ? (
-                                                                                                <span className={`${tx.daysRemaining < 14 ? 'text-red-600 font-bold' : 'text-green-600'}`}>
-                                                                                                    {tx.daysRemaining.toFixed(0)}d
+                                                                                    )}
+                                                                                    {isAdContext && (
+                                                                                        <td className="p-2 text-right">
+                                                                                            {tx.tacos > 0 ? (
+                                                                                                <span className={`${tx.tacos > thresholds.highAdDependencyPct ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                                                                                                    {formatPct(tx.tacos)}
                                                                                                 </span>
                                                                                             ) : '-'}
-                                                                                        </td>}
-                                                                                    </>
-                                                                                )}
-                                                                                {isTrendContext && (
-                                                                                    <td className="p-2 text-right">
-                                                                                        {tx.velocityChange !== undefined ? (
-                                                                                            <span className={`${tx.velocityChange < -thresholds.velocityDropPct ? 'text-red-600' : tx.velocityChange > 20 ? 'text-green-600' : 'text-gray-500'}`}>
-                                                                                                {tx.velocityChange > 0 ? '+' : ''}{tx.velocityChange.toFixed(0)}%
-                                                                                            </span>
-                                                                                        ) : '-'}
-                                                                                    </td>
-                                                                                )}
-                                                                                {isPostcodeContext && (
-                                                                                    <td className="p-2 text-right text-gray-600 font-mono text-[10px]">
-                                                                                        {tx.postcode || '-'}
-                                                                                    </td>
-                                                                                )}
-                                                                                
-                                                                                <td className={`p-2 text-right font-medium ${tx.profit < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                                                                    £{(tx.profit || 0).toFixed(2)}
-                                                                                </td>
-                                                                                <td className="p-2 text-right font-bold">
-                                                                                    {tx.type === 'REFUND' ? (
-                                                                                        <span className="text-red-500 text-[10px] uppercase bg-red-50 px-1 rounded border border-red-100">Refund</span>
-                                                                                    ) : tx.margin === -Infinity || (Math.abs(tx.revenue) < 0.01 && tx.adsSpend > 0) ? (
-                                                                                        <span className="text-gray-900 font-normal cursor-help" title="Margin N/A (No Revenue)">
-                                                                                            N/A
-                                                                                        </span>
-                                                                                    ) : (
-                                                                                        <span className={`${(tx.margin || 0) < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>
-                                                                                            {(tx.margin || 0).toFixed(1)}%
-                                                                                        </span>
+                                                                                        </td>
                                                                                     )}
-                                                                                </td>
-                                                                                <td className="p-2 text-right text-xs text-gray-400 font-medium">
-                                                                                    {tx.contribution ? `${tx.contribution.toFixed(1)}%` : '-'}
-                                                                                </td>
-                                                                            </>
-                                                                        )}
-                                                                    </tr>
-                                                                ))}
+                                                                                    {isOrganicContext && (
+                                                                                        <td className="p-2 text-right">
+                                                                                            {tx.organicShare !== null ? (
+                                                                                                <span className={`${tx.organicShare < 40 ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                                                                                                    {tx.organicShare.toFixed(1)}%
+                                                                                                </span>
+                                                                                            ) : <span className="text-gray-400 italic">N/A</span>}
+                                                                                        </td>
+                                                                                    )}
+                                                                                    
+                                                                                    {(isInventoryContext || isAgedContext) && (
+                                                                                        <>
+                                                                                            <td className="p-2 text-right text-gray-800 font-medium">
+                                                                                                {tx.stockLevel !== undefined ? tx.stockLevel : '-'}
+                                                                                            </td>
+                                                                                            {isAgedContext && <td className="p-2 text-right text-amber-700 font-medium">{tx.agedStockQty || '-'}</td>}
+                                                                                            {isAgedContext && <td className="p-2 text-right font-bold">{(tx.agedStockPct || 0).toFixed(1)}%</td>}
+                                                                                            
+                                                                                            {!isAgedContext && <td className="p-2 text-right">
+                                                                                                {tx.daysRemaining !== undefined ? (
+                                                                                                    <span className={`${tx.daysRemaining < 14 ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                                                                                                        {tx.daysRemaining.toFixed(0)}d
+                                                                                                    </span>
+                                                                                                ) : '-'}
+                                                                                            </td>}
+                                                                                        </>
+                                                                                    )}
+                                                                                    {isTrendContext && (
+                                                                                        <td className="p-2 text-right">
+                                                                                            {tx.velocityChange !== undefined ? (
+                                                                                                <span className={`${tx.velocityChange < -thresholds.velocityDropPct ? 'text-red-600' : tx.velocityChange > 20 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                                                                    {tx.velocityChange > 0 ? '+' : ''}{tx.velocityChange.toFixed(0)}%
+                                                                                                </span>
+                                                                                            ) : '-'}
+                                                                                        </td>
+                                                                                    )}
+                                                                                    {isPostcodeContext && (
+                                                                                        <td className="p-2 text-right text-gray-600 font-mono text-[10px]">
+                                                                                            {tx.postcode || '-'}
+                                                                                        </td>
+                                                                                    )}
+                                                                                    
+                                                                                    <td className={`p-2 text-right font-medium ${tx.profit < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                                                        {formatMoney(tx.profit)}
+                                                                                    </td>
+                                                                                    <td className="p-2 text-right font-bold">
+                                                                                        {tx.type === 'REFUND' ? (
+                                                                                            <span className="text-red-500 text-[10px] uppercase bg-red-50 px-1 rounded border border-red-100">Refund</span>
+                                                                                        ) : tx.margin === -Infinity || (Math.abs(tx.revenue) < 0.01 && tx.adsSpend > 0) ? (
+                                                                                            <span className="text-gray-900 font-normal cursor-help" title="Margin N/A (No Revenue)">
+                                                                                                N/A
+                                                                                            </span>
+                                                                                        ) : (
+                                                                                            <span className={`${(margin || 0) < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>
+                                                                                                {margin !== null ? formatPct(margin) : isAdRow ? '—' : '-'}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </td>
+                                                                                    <td className="p-2 text-right text-xs text-gray-400 font-medium">
+                                                                                        {tx.contribution ? `${tx.contribution.toFixed(1)}%` : '-'}
+                                                                                    </td>
+                                                                                </>
+                                                                            )}
+                                                                        </tr>
+                                                                    )})}
                                                             </tbody>
                                                         </table>
                                                         {sub.items.length > 50 && <div className="p-2 text-center text-xs text-gray-400 bg-gray-50 border-t border-gray-100">...and {sub.items.length - 50} more records</div>}

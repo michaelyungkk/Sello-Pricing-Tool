@@ -1,5 +1,3 @@
-
-
 // ... existing imports ...
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES, DEFAULT_SEARCH_CONFIG, VAT_MULTIPLIER } from './constants';
@@ -175,6 +173,22 @@ const App: React.FC = () => {
     const [strategyRules, setStrategyRules] = useState<StrategyConfig>(DEFAULT_STRATEGY_RULES);
     const [searchConfig, setSearchConfig] = useState<SearchConfig>(DEFAULT_SEARCH_CONFIG);
     
+    // NEW: Timestamp State
+    const [uploadTimestamps, setUploadTimestamps] = useState<Record<string, string>>(() => {
+        try {
+            return JSON.parse(localStorage.getItem('sello_upload_timestamps') || '{}');
+        } catch { return {}; }
+    });
+
+    const updateTimestamp = (key: string) => {
+        const now = new Date().toISOString();
+        setUploadTimestamps(prev => {
+            const next = { ...prev, [key]: now };
+            localStorage.setItem('sello_upload_timestamps', JSON.stringify(next));
+            return next;
+        });
+    };
+    
     // NEW: Threshold State
     const [thresholds, setThresholds] = useState<ThresholdConfig>(getThresholdConfig());
 
@@ -217,6 +231,7 @@ const App: React.FC = () => {
     const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
     const [currentView, setCurrentView] = useState<'dashboard' | 'strategy' | 'products' | 'settings' | 'costs' | 'definitions' | 'promotions' | 'tools' | 'search'>('products');
     const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [isFreshnessExpanded, setIsFreshnessExpanded] = useState(false);
     const fileRestoreRef = useRef<HTMLInputElement>(null);
 
     // Derived State
@@ -364,7 +379,39 @@ const App: React.FC = () => {
     const handleViewElasticity = (product: Product) => { setSelectedElasticityProduct(product); };
     const handleAnalyze = async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } };
     const handleApplyPrice = (productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = prev.find(p => p.id === productId); if (!productToUpdate) { return prev; } const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...prevHistory, change]); return prev.map(p => { if (p.id !== productId) { return p; } return Object.assign({}, p, { caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }); }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); };
-    const handleBackup = () => { const data = { products, priceHistory, refundHistory, shipmentHistory, priceChangeHistory, costChangeHistory, promotions, learnedAliases, pricingRules, logisticsRules, strategyRules, searchConfig, velocityLookback, userProfile, inventoryTemplates, thresholds, exportDate: new Date().toISOString() }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `sello_backup_${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); };
+    
+    // Updated Backup to include timestamps
+    const handleBackup = () => { 
+        const data = { 
+            products, 
+            priceHistory, 
+            refundHistory, 
+            shipmentHistory, 
+            priceChangeHistory, 
+            costChangeHistory, 
+            promotions, 
+            learnedAliases, 
+            pricingRules, 
+            logisticsRules, 
+            strategyRules, 
+            searchConfig, 
+            velocityLookback, 
+            userProfile, 
+            inventoryTemplates, 
+            thresholds, 
+            uploadTimestamps, // NEW
+            exportDate: new Date().toISOString() 
+        }; 
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); 
+        const url = URL.createObjectURL(blob); 
+        const link = document.createElement('a'); 
+        link.href = url; 
+        link.download = `sello_backup_${new Date().toISOString().slice(0, 10)}.json`; 
+        document.body.appendChild(link); 
+        link.click(); 
+        document.body.removeChild(link); 
+        URL.revokeObjectURL(url); 
+    };
     
     // --- UPDATED RESTORE HANDLER ---
     const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -394,6 +441,11 @@ const App: React.FC = () => {
                 if (json.thresholds) {
                     saveThresholdConfig(json.thresholds);
                     setThresholds(json.thresholds);
+                }
+
+                if (json.uploadTimestamps) {
+                    setUploadTimestamps(json.uploadTimestamps);
+                    localStorage.setItem('sello_upload_timestamps', JSON.stringify(json.uploadTimestamps));
                 }
 
                 let loadedVelocity = velocityLookback;
@@ -563,6 +615,7 @@ const App: React.FC = () => {
             }); 
         } 
         
+        updateTimestamp('Sales');
         setIsSalesImportModalOpen(false); 
     };
 
@@ -650,12 +703,13 @@ const App: React.FC = () => {
         if (costChanges.length > 0) {
             setCostChangeHistory(prev => [...costChanges, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
         }
-    
+        
+        updateTimestamp('Inventory');
         setIsUploadModalOpen(false);
     };
-    const handleSkuDetailImport = (data: { masterSku: string; detail: SkuCostDetail }[]) => { setProducts(prev => prev.map(p => { const update = data.find(d => d.masterSku === p.sku); if (update) { return { ...p, costDetail: update.detail }; } return p; })); setIsSkuDetailModalOpen(false); };
+    const handleSkuDetailImport = (data: { masterSku: string; detail: SkuCostDetail }[]) => { setProducts(prev => prev.map(p => { const update = data.find(d => d.masterSku === p.sku); if (update) { return { ...p, costDetail: update.detail }; } return p; })); updateTimestamp('SKU Details'); setIsSkuDetailModalOpen(false); };
     const handleMappingImport = (mappings: any[], mode: 'merge' | 'replace', platform: string) => { setProducts(prev => prev.map(p => { const productMappings = mappings.filter(m => m.masterSku === p.sku); if (productMappings.length === 0 && mode === 'merge') return p; let newChannels = [...p.channels]; if (mode === 'replace') { const chIdx = newChannels.findIndex(c => c.platform === platform); if (chIdx >= 0) { newChannels[chIdx] = { ...newChannels[chIdx], skuAlias: '' }; } } if (productMappings.length > 0) { const aliases = productMappings.map(m => m.alias).join(', '); const chIdx = newChannels.findIndex(c => c.platform === platform); if (chIdx >= 0) { const existingAliases = newChannels[chIdx].skuAlias ? newChannels[chIdx].skuAlias?.split(',').map(s => s.trim()) : []; const newSet = new Set(mode === 'merge' ? existingAliases : []); productMappings.forEach(m => newSet.add(m.alias)); newChannels[chIdx] = { ...newChannels[chIdx], skuAlias: Array.from(newSet).join(', ') }; } else { newChannels.push({ platform: platform, manager: pricingRules[platform]?.manager || 'Unassigned', velocity: 0, skuAlias: aliases }); } } return { ...p, channels: newChannels }; })); setIsMappingModalOpen(false); };
-    const handleReturnsImport = (refunds: RefundLog[]) => { setRefundHistory(prev => { const existingIds = new Set(prev.map(r => r.id)); const newLogs = refunds.filter(r => !existingIds.has(r.id)); if (newLogs.length > 0) { const skuRefundCounts: Record<string, number> = {}; [...prev, ...newLogs].forEach(r => { skuRefundCounts[r.sku] = (skuRefundCounts[r.sku] || 0) + r.quantity; }); setProducts(products => products.map(p => { if (skuRefundCounts[p.sku] !== undefined) { const estimatedMonthlySales = Math.max(1, p.averageDailySales * 30); const rate = Math.min(100, (skuRefundCounts[p.sku] / estimatedMonthlySales) * 100); return { ...p, returnRate: Number(rate.toFixed(2)) }; } return p; })); } return [...newLogs, ...prev]; }); setIsReturnsModalOpen(false); };
+    const handleReturnsImport = (refunds: RefundLog[]) => { setRefundHistory(prev => { const existingIds = new Set(prev.map(r => r.id)); const newLogs = refunds.filter(r => !existingIds.has(r.id)); if (newLogs.length > 0) { const skuRefundCounts: Record<string, number> = {}; [...prev, ...newLogs].forEach(r => { skuRefundCounts[r.sku] = (skuRefundCounts[r.sku] || 0) + r.quantity; }); setProducts(products => products.map(p => { if (skuRefundCounts[p.sku] !== undefined) { const estimatedMonthlySales = Math.max(1, p.averageDailySales * 30); const rate = Math.min(100, (skuRefundCounts[p.sku] / estimatedMonthlySales) * 100); return { ...p, returnRate: Number(rate.toFixed(2)) }; } return p; })); } return [...newLogs, ...prev]; }); updateTimestamp('Refunds'); setIsReturnsModalOpen(false); };
     
     const handleCAImport = (data: { sku: string; caPrice: number }[], reportDate: string) => {
         const changes: PriceChangeRecord[] = [];
@@ -723,10 +777,11 @@ const App: React.FC = () => {
         if (changes.length > 0) {
             setPriceChangeHistory(prev => [...changes, ...prev]);
         }
+        updateTimestamp('CA Prices');
         setIsCAUploadModalOpen(false);
     };
 
-    const handleShipmentImport = (updates: { sku: string; shipments: ShipmentDetail[] }[]) => { setProducts(prev => prev.map(p => { const update = updates.find(u => u.sku === p.sku); if (update) { const totalIncoming = update.shipments.reduce((sum, s) => sum + s.quantity, 0); return { ...p, shipments: update.shipments, incomingStock: totalIncoming }; } return p; })); setIsShipmentModalOpen(false); };
+    const handleShipmentImport = (updates: { sku: string; shipments: ShipmentDetail[] }[]) => { setProducts(prev => prev.map(p => { const update = updates.find(u => u.sku === p.sku); if (update) { const totalIncoming = update.shipments.reduce((sum, s) => sum + s.quantity, 0); return { ...p, shipments: update.shipments, incomingStock: totalIncoming }; } return p; })); updateTimestamp('Shipments'); setIsShipmentModalOpen(false); };
 
     return (
         <>
@@ -744,7 +799,42 @@ const App: React.FC = () => {
                     </nav>
                     <div className="p-4 border-t border-custom-glass space-y-3">
                         <div className="px-2 space-y-2"> <button onClick={handleBackup} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-transparent hover:border-custom-glass"><Download className="w-3.5 h-3.5" /> {t('backup_db')}</button> <button onClick={() => fileRestoreRef.current?.click()} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-transparent hover:border-custom-glass"><Upload className="w-3.5 h-3.5" /> {t('restore_db')}</button> <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} /> </div>
-                        <div className="bg-gray-50/50 rounded-xl p-4 border border-custom-glass"> <div className="flex justify-between items-center mb-1"><p className="text-xs font-semibold text-gray-500">{t('tool_status')}</p><span className="text-[10px] text-gray-400">v1.6.0</span></div> <div className={`flex items-center gap-2 text-sm ${isOnline ? 'text-green-600' : 'text-gray-500'}`}>{isOnline ? <><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span> {t('system_online')}</> : <><WifiOff className="w-3 h-3" /> {t('offline_mode')}</>}</div> </div>
+                        
+                        <div className="bg-gray-50/50 rounded-xl border border-custom-glass overflow-hidden transition-all duration-300">
+                            <button 
+                                onClick={() => setIsFreshnessExpanded(!isFreshnessExpanded)}
+                                className="w-full flex justify-between items-center p-3 hover:bg-gray-100/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Data Freshness</span>
+                                    <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isFreshnessExpanded ? 'rotate-180' : ''}`} />
+                                </div>
+                                <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                            </button>
+                            
+                            {isFreshnessExpanded && (
+                                <div className="px-3 pb-3 space-y-1.5 pt-0 animate-in slide-in-from-top-1 duration-200">
+                                     <div className="border-t border-gray-200/50 mb-2"></div>
+                                    {[
+                                        { label: 'Inventory', key: 'Inventory' },
+                                        { label: 'Sales', key: 'Sales' },
+                                        { label: 'SKU Detail', key: 'SKU Details' },
+                                        { label: 'Refunds', key: 'Refunds' },
+                                        { label: 'CA Prices', key: 'CA Prices' },
+                                        { label: 'Shipments', key: 'Shipments' },
+                                    ].map(item => (
+                                        <div key={item.key} className="flex justify-between items-center text-[10px]">
+                                            <span className="text-gray-500">{item.label}</span>
+                                            <span className={`font-mono ${uploadTimestamps[item.key] ? 'text-gray-700 font-medium' : 'text-gray-300 italic'}`}>
+                                                {uploadTimestamps[item.key] 
+                                                    ? new Date(uploadTimestamps[item.key]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) 
+                                                    : '-'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </aside>
                 <main className="flex-1 md:ml-64 min-w-0 relative z-10">

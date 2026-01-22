@@ -1,4 +1,3 @@
-
 import { PriceLog } from '../types';
 
 /**
@@ -83,6 +82,50 @@ export const calcProfit = (log: PriceLog): number => {
     return revenue * (margin / 100);
 };
 
+// --- SUM FUNCTIONS ---
+
+export const sumRevenue = (rows: PriceLog[]): number => {
+    return rows.reduce((sum, log) => sum + calcRevenue(log), 0);
+};
+
+export const sumQty = (rows: PriceLog[]): number => {
+    return rows.reduce((sum, log) => sum + calcUnits(log), 0);
+};
+
+export const sumProfit = (rows: PriceLog[]): number => {
+    return rows.reduce((sum, log) => sum + calcProfit(log), 0);
+};
+
+export const sumAdSpend = (rows: PriceLog[]): number => {
+    return rows.reduce((sum, log) => sum + calcAdSpend(log), 0);
+};
+
+// --- RATIO FUNCTIONS ---
+
+/**
+ * Calculates the margin percentage from revenue and profit. Returns null on invalid division.
+ * @param profit - Total profit.
+ * @param revenue - Total revenue.
+ * @returns The margin percentage or null.
+ */
+export const marginPct = (profit: number, revenue: number): number | null => {
+    if (revenue <= 0) return null;
+    const margin = (profit / revenue) * 100;
+    return isNaN(margin) ? null : margin;
+};
+
+/**
+ * Calculates the Total Advertising Cost of Sales (TACoS) percentage. Returns null on invalid division.
+ * @param adSpend - Total ad spend.
+ * @param revenue - Total revenue.
+ * @returns The TACoS percentage or null.
+ */
+export const tacosPct = (adSpend: number, revenue: number): number | null => {
+    if (revenue <= 0) return null;
+    const tacos = (adSpend / revenue) * 100;
+    return isNaN(tacos) ? null : tacos;
+};
+
 /**
  * Calculates the margin percentage from revenue and profit.
  * @param revenue - Total revenue.
@@ -102,3 +145,25 @@ export const calcMarginPct = (revenue: number, profit: number): number => {
 export const calcTACoSPct = (adSpend: number, revenue: number): number => {
     return safeDiv(adSpend, revenue) * 100;
 };
+
+
+// --- COVERAGE HELPERS ---
+export const coverageCount = (rows: any[], fieldName: string): { present: number; missing: number; pct: number } => {
+    if (rows.length === 0) {
+        return { present: 0, missing: 0, pct: 0 };
+    }
+
+    let present = 0;
+    for (const row of rows) {
+        const val = row[fieldName];
+        if (val !== undefined && val !== null && !Number.isNaN(val)) {
+            present++;
+        }
+    }
+
+    const total = rows.length;
+    const missing = total - present;
+    const pct = (present / total) * 100;
+    
+    return { present, missing, pct };
+}
