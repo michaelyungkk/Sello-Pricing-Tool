@@ -300,7 +300,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
     const [hoveredProduct, setHoveredProduct] = useState<{ id: string; rect: DOMRect } | null>(null);
 
     // Sorting State
-    const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'status', direction: 'desc' });
+    const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'status', dir: 'desc' });
 
     // Helper to resolve manager from config if available (Dynamic Lookup)
     const getEffectiveManager = (platform: string, storedManager: string) => {
