@@ -5,6 +5,8 @@ import { TagSearchInput } from './TagSearchInput';
 import { GradeBadge } from './GradeBadge';
 import { Plus, ChevronRight, Search, Trash2, ArrowLeft, CheckCircle, Check, Download, Calendar, Lock, Unlock, LayoutDashboard, List, Calculator, Edit2, AlertCircle, Save, X, RotateCcw, Eye, EyeOff, ArrowUpDown, ChevronUp, ChevronDown, Upload, FileText, Loader2, RefreshCw, TrendingUp, TrendingDown, Target, ShoppingBag, Coins, Truck, Info, HelpCircle, Archive, Zap, Clock, Star, Filter } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { SortState, sortRows } from '../utils/tableSort';
+import { SortableHeader } from './common/SortableHeader';
 
 interface PromotionPageProps {
     products: Product[];
@@ -295,7 +297,7 @@ const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: any) => 
 
 const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateEvent, onDeletePromo, themeColor }: any) => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'startDate', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'startDate', dir: 'asc' });
     const [statusFilter, setStatusFilter] = useState('ALL');
 
     const handleDeleteClick = (e: React.MouseEvent, id: string, name: string) => {
@@ -321,14 +323,6 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
         };
     };
 
-    const handleSort = (key: string) => {
-        let direction: 'asc' | 'desc' = 'asc';
-        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
-        setSortConfig({ key, direction });
-    };
-
     const filteredPromotions = useMemo(() => {
         return promotions.filter((p: any) => {
             if (statusFilter !== 'ALL' && p.status !== statusFilter) return false;
@@ -337,45 +331,24 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
     }, [promotions, statusFilter]);
 
     const sortedPromotions = useMemo(() => {
-        return [...filteredPromotions].sort((a: any, b: any) => {
-            if (!sortConfig) return 0;
-            const { key, direction } = sortConfig;
-            let valA = a[key];
-            let valB = b[key];
-
-            // Special handling for dates
-            if (['startDate', 'endDate', 'submissionDeadline'].includes(key)) {
-                valA = valA ? new Date(valA).getTime() : 0;
-                valB = valB ? new Date(valB).getTime() : 0;
-            } else if (typeof valA === 'string') {
-                valA = valA.toLowerCase();
-                valB = valB.toLowerCase();
+        const getValue = (promo: PromotionEvent, key: string) => {
+            switch (key) {
+                case 'startDate':
+                case 'endDate':
+                case 'submissionDeadline':
+                    const dateVal = (promo as any)[key];
+                    return dateVal ? new Date(dateVal).getTime() : 0;
+                case 'items':
+                    return promo.items.length;
+                case 'status':
+                    const priority = { 'ACTIVE': 3, 'UPCOMING': 2, 'ENDED': 1 };
+                    return priority[promo.status as keyof typeof priority] || 0;
+                default:
+                    return (promo as any)[key];
             }
-
-            if (valA < valB) return direction === 'asc' ? -1 : 1;
-            if (valA > valB) return direction === 'asc' ? 1 : -1;
-            return 0;
-        });
+        };
+        return sortRows(filteredPromotions, sortConfig, getValue);
     }, [filteredPromotions, sortConfig]);
-
-    const SortIcon = ({ colKey }: { colKey: string }) => {
-        if (sortConfig?.key !== colKey) return <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />;
-        return sortConfig.direction === 'asc' 
-            ? <ChevronUp className="w-3 h-3" style={{ color: themeColor }} /> 
-            : <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />;
-    };
-
-    const SortableHeader = ({ label, colKey, className = "" }: { label: string, colKey: string, className?: string }) => (
-        <th 
-            className={`p-4 cursor-pointer hover:bg-gray-100/50 transition-colors select-none group ${className}`}
-            onClick={() => handleSort(colKey)}
-        >
-            <div className="flex items-center gap-1">
-                {label}
-                <SortIcon colKey={colKey} />
-            </div>
-        </th>
-    );
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -417,13 +390,13 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
                 <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass">
                         <tr>
-                            <SortableHeader label="Campaign Name" colKey="name" />
-                            <SortableHeader label="Platform" colKey="platform" />
-                            <SortableHeader label="Start Date" colKey="startDate" />
-                            <SortableHeader label="End Date" colKey="endDate" />
-                            <SortableHeader label="Deadline" colKey="submissionDeadline" />
-                            <th className="p-4 text-right">Items</th>
-                            <th className="p-4 text-center">Status</th>
+                            <SortableHeader label="Campaign Name" sortKey="name" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="Platform" sortKey="platform" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="Start Date" sortKey="startDate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="End Date" sortKey="endDate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="Deadline" sortKey="submissionDeadline" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="Items" sortKey="items" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                            <SortableHeader label="Status" sortKey="status" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="center" />
                             <th className="p-4 text-right">Actions</th>
                         </tr>
                     </thead>
@@ -620,6 +593,7 @@ const PromoPerformanceHeader = ({ promo, products, priceHistoryMap, themeColor }
 
 const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProducts, onDeleteItem, onUpdateMeta, themeColor }: any) => {
     const [isUploadOpen, setIsUploadOpen] = useState(false);
+    const [sortConfig, setSortConfig] = useState<SortState<string> | null>(null);
 
     const formatPromoDate = (dStr: string, withYear: boolean = true) => {
         return new Date(dStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
@@ -631,6 +605,29 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
         const sameYear = sDate.getFullYear() === eDate.getFullYear();
         return `${formatPromoDate(promo.startDate, !sameYear)} – ${formatPromoDate(promo.endDate, true)}`;
     }, [promo.startDate, promo.endDate]);
+
+    const sortedItems = useMemo(() => {
+        const itemsWithData = promo.items.map((item: any) => {
+            const product = products.find((p: Product) => p.sku === item.sku);
+            const currentMargin = product ? ((item.promoPrice / VAT - (product.costPrice || 0)) / (item.promoPrice / VAT) * 100) : 0;
+            let platformPrice = product ? (product.currentPrice * VAT) : 0;
+            if (product && promo.platform !== 'All') {
+                const channel = product.channels.find((c: any) => c.platform === promo.platform);
+                if (channel && channel.price) platformPrice = channel.price * VAT;
+            }
+            const discountPercent = item.basePrice > 0 ? ((item.basePrice - item.promoPrice) / item.basePrice * 100) : 0;
+
+            return {
+                ...item,
+                caPrice: product?.caPrice,
+                platformPrice,
+                discountPercent,
+                currentMargin
+            };
+        });
+        const getValue = (row: any, key: string) => (row as any)[key];
+        return sortRows(itemsWithData, sortConfig, getValue);
+    }, [promo.items, products, promo.platform, sortConfig]);
 
     return (
         <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-right duration-300">
@@ -676,27 +673,19 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
                 <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass">
                         <tr>
-                            <th className="p-4">SKU</th>
-                            <th className="p-4 text-right">CA Price</th>
-                            <th className="p-4 text-right">Platform Price</th>
-                            <th className="p-4 text-right">Promo Price</th>
-                            <th className="p-4 text-right">Discount</th>
-                            <th className="p-4 text-right">Proj. Margin</th>
+                            <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="CA Price" sortKey="caPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                            <SortableHeader label="Platform Price" sortKey="platformPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                            <SortableHeader label="Promo Price" sortKey="promoPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                            <SortableHeader label="Discount" sortKey="discountPercent" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                            <SortableHeader label="Proj. Margin" sortKey="currentMargin" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                             <th className="p-4 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
-                        {promo.items.map((item: any) => {
+                        {sortedItems.map((item: any) => {
                             const product = products.find((p: Product) => p.sku === item.sku);
-                            const currentMargin = product ? ((item.promoPrice / VAT - (product.costPrice || 0)) / (item.promoPrice / VAT) * 100) : 0;
-                            const discountPercent = item.basePrice > 0 ? ((item.basePrice - item.promoPrice) / item.basePrice * 100).toFixed(1) : "0.0";
-
-                            let platformPrice = product ? (product.currentPrice * VAT) : 0;
-                            if (product && promo.platform !== 'All') {
-                                const channel = product.channels.find((c: any) => c.platform === promo.platform);
-                                if (channel && channel.price) platformPrice = channel.price * VAT;
-                            }
-
+                            
                             return (
                                 <tr key={item.sku} className="even:bg-gray-50/30 hover:bg-gray-100/50">
                                     <td className="p-4">
@@ -706,18 +695,18 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
                                         </div>
                                     </td>
                                     <td className="p-4 text-right">
-                                        {product?.caPrice ? (
-                                            <span className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded border border-purple-100">£{product.caPrice.toFixed(2)}</span>
+                                        {item.caPrice ? (
+                                            <span className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded border border-purple-100">£{item.caPrice.toFixed(2)}</span>
                                         ) : <span className="text-gray-300">-</span>}
                                     </td>
-                                    <td className="p-4 text-right text-gray-500">£{platformPrice.toFixed(2)}</td>
+                                    <td className="p-4 text-right text-gray-500">£{item.platformPrice.toFixed(2)}</td>
                                     <td className="p-4 text-right font-bold" style={{ color: themeColor }}>£{item.promoPrice.toFixed(2)}</td>
                                     <td className="p-4 text-right">
                                         <span className="bg-red-50 text-red-700 px-2 py-1 rounded text-xs font-bold">
-                                            {discountPercent}% OFF
+                                            {item.discountPercent.toFixed(1)}% OFF
                                         </span>
                                     </td>
-                                    <td className="p-4 text-right font-mono">{currentMargin.toFixed(1)}%</td>
+                                    <td className="p-4 text-right font-mono">{item.currentMargin.toFixed(1)}%</td>
                                     <td className="p-4 text-right">
                                         <button
                                             onClick={() => onDeleteItem(item.sku)}
@@ -770,6 +759,7 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
     const [searchQuery, setSearchQuery] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [platformFilter, setPlatformFilter] = useState('All Platforms');
+    const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'startDate', dir: 'asc' });
 
     const productMap = useMemo(() => {
         const map = new Map<string, Product>();
@@ -800,41 +790,55 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
         return rows.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
     }, [promotions]);
 
-    const filteredRows = allRows.filter(row => {
-        const product = products.find(p => p.sku === row.sku);
-        
-        const matchesTerm = (term: string) => {
-            if (!term) return true; 
-            const t = term.toLowerCase().trim();
-            if (!t) return true; 
-
-            if (row.sku.toLowerCase().includes(t)) return true;
-            if (row.eventName.toLowerCase().includes(t)) return true;
-            if (product && product.name.toLowerCase().includes(t)) return true;
+    const sortedRows = useMemo(() => {
+        const filtered = allRows.filter(row => {
+            const product = products.find(p => p.sku === row.sku);
             
-            // Safe navigation for channels array
-            if (product && Array.isArray(product.channels)) {
-                return product.channels.some(c => {
-                    const aliases = c.skuAlias || '';
-                    return aliases.toLowerCase().includes(t);
-                });
+            const matchesTerm = (term: string) => {
+                if (!term) return true; 
+                const t = term.toLowerCase().trim();
+                if (!t) return true; 
+
+                if (row.sku.toLowerCase().includes(t)) return true;
+                if (row.eventName.toLowerCase().includes(t)) return true;
+                if (product && product.name.toLowerCase().includes(t)) return true;
+                
+                if (product && Array.isArray(product.channels)) {
+                    return product.channels.some(c => {
+                        const aliases = c.skuAlias || '';
+                        return aliases.toLowerCase().includes(t);
+                    });
+                }
+                return false;
+            };
+
+            if (searchTags.length > 0) {
+                const matchesTag = searchTags.some(tag => matchesTerm(tag));
+                const matchesText = searchQuery.trim() ? matchesTerm(searchQuery) : true;
+                
+                if (!matchesTag) return false;
+                if (!matchesText) return false;
+            } else if (searchQuery.trim()) {
+                if (!matchesTerm(searchQuery)) return false;
             }
-            return false;
-        };
+                
+            const matchesPlatform = platformFilter === 'All Platforms' || row.platform === platformFilter;
+            return matchesPlatform;
+        });
 
-        if (searchTags.length > 0) {
-            const matchesTag = searchTags.some(tag => matchesTerm(tag));
-            const matchesText = searchQuery.trim() ? matchesTerm(searchQuery) : true;
-            
-            if (!matchesTag) return false;
-            if (!matchesText) return false;
-        } else if (searchQuery.trim()) {
-            if (!matchesTerm(searchQuery)) return false;
-        }
-            
-        const matchesPlatform = platformFilter === 'All Platforms' || row.platform === platformFilter;
-        return matchesPlatform;
-    });
+        const getValue = (row: any, key: string) => {
+            if (key === 'startDate' || key === 'endDate') {
+                return new Date((row as any)[key]).getTime();
+            }
+            if (key === 'status') {
+                const priority = { 'ACTIVE': 3, 'UPCOMING': 2, 'ENDED': 1 };
+                return priority[row.status as keyof typeof priority] || 0;
+            }
+            return (row as any)[key];
+        };
+        return sortRows(filtered, sortConfig, getValue);
+
+    }, [allRows, products, searchQuery, searchTags, platformFilter, sortConfig]);
 
     const formatDate = (date: Date) => {
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -843,7 +847,7 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
     const handleExport = () => {
         const clean = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
         const headers = ['SKU', 'Event Name', 'Platform', 'Promo Price', 'Start Date', 'End Date', 'Status'];
-        const rows = filteredRows.map(r => [
+        const rows = sortedRows.map(r => [
             clean(r.sku),
             clean(r.eventName),
             clean(r.platform),
@@ -906,16 +910,16 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
                 <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass">
                         <tr>
-                            <th className="p-4">SKU</th>
-                            <th className="p-4">Event</th>
-                            <th className="p-4">Platform</th>
-                            <th className="p-4 text-right">Promo Price</th>
-                            <th className="p-4">Dates</th>
-                            <th className="p-4">Status</th>
+                            <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="Event" sortKey="eventName" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="Platform" sortKey="platform" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="Promo Price" sortKey="promoPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                            <SortableHeader label="Dates" sortKey="startDate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="Status" sortKey="status" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
-                        {filteredRows.map(row => {
+                        {sortedRows.map(row => {
                             const product = productMap.get(row.sku);
                             return (
                                 <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
@@ -943,7 +947,7 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
                                 </tr>
                             );
                         })}
-                        {filteredRows.length === 0 && (
+                        {sortedRows.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="p-12 text-center text-gray-400">
                                     No promotions found matching your criteria.

@@ -1,11 +1,11 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, SkuCostDetail } from '../types';
 import { TagSearchInput } from './TagSearchInput';
 import { ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Percent, Hash, Divide } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { GradeBadge } from './GradeBadge';
+import { SortState, sortRows } from '../utils/tableSort';
+import { SortableHeader } from './common/SortableHeader';
 
 interface CostManagementPageProps {
     products: Product[];
@@ -13,7 +13,7 @@ interface CostManagementPageProps {
     headerStyle: React.CSSProperties;
 }
 
-type SortKey = keyof SkuCostDetail | 'sku' | 'caPrice' | 'currentPrice';
+type SortKey = keyof SkuCostDetail | 'sku' | 'caPrice';
 
 const VAT_RATE = 1.20;
 
@@ -21,7 +21,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
     const { t } = useTranslation();
     const [search, setSearch] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
-    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
+    const [sortConfig, setSortConfig] = useState<SortState<SortKey> | null>(null);
     const [showInactive, setShowInactive] = useState(false);
     const [includeVat, setIncludeVat] = useState(true);
     const [showPercentPrimary, setShowPercentPrimary] = useState(false);
@@ -30,14 +30,6 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
-
-    const handleSort = (key: SortKey) => {
-        let direction: 'asc' | 'desc' = 'asc';
-        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
-        setSortConfig({ key, direction });
-    };
 
     const filteredAndSorted = useMemo(() => {
         let result = products.filter(p => {
@@ -57,60 +49,45 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
             return matchesTerm(search);
         });
 
-        if (sortConfig) {
-            result.sort((a, b) => {
-                let aValue: any = a.costDetail ? (a.costDetail as any)[sortConfig.key] : 0;
-                let bValue: any = b.costDetail ? (b.costDetail as any)[sortConfig.key] : 0;
+        const getValue = (p: Product, key: string): string | number => {
+            if (key === 'sku') return p.sku;
+            if (key === 'caPrice') {
+                const price = p.caPrice || 0;
+                return includeVat ? price * VAT_RATE : price;
+            }
+            
+            const detail = p.costDetail;
+            if (!detail) return 0;
+            
+            const skuQty = detail.skuQty > 0 ? detail.skuQty : 1;
+            const perUnit = (value: number) => viewMode === 'PER_UNIT' ? value / skuQty : value;
 
-                // Handle derived/root keys
-                if (sortConfig.key === 'sku') { aValue = a.sku; bValue = b.sku; }
-                if (sortConfig.key === 'caPrice') { aValue = a.caPrice || 0; bValue = b.caPrice || 0; }
-                if (sortConfig.key === 'currentPrice') { aValue = a.currentPrice || 0; bValue = b.currentPrice || 0; }
+            let val: any;
+            if (key in detail) {
+                val = perUnit((detail as any)[key]);
+            } else {
+                return 0; // Fallback for keys not in detail
+            }
 
-                if (typeof aValue === 'string') aValue = aValue.toLowerCase();
-                if (typeof bValue === 'string') bValue = bValue.toLowerCase();
-                
-                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-        }
-        return result;
-    }, [products, search, searchTags, sortConfig, showInactive]);
+            const currencyKeys: (keyof SkuCostDetail)[] = ['unitPrice', 'salesAmt', 'cogs', 'postage', 'sellingFee', 'adsFee', 'otherFee', 'subscriptionFee', 'wmsFee', 'refundAmt', 'profitInclRn', 'extraFreight', 'promoRebate', 'resendAmt'];
+            if (includeVat && currencyKeys.includes(key as keyof SkuCostDetail)) {
+                return val * VAT_RATE;
+            }
+            return val;
+        };
 
-    useEffect(() => { setCurrentPage(1); }, [search, searchTags, showInactive]);
+        return sortRows(result, sortConfig, getValue);
+    }, [products, search, searchTags, sortConfig, showInactive, includeVat, viewMode]);
+
+    useEffect(() => { setCurrentPage(1); }, [search, searchTags, showInactive, includeVat, viewMode]);
 
     const totalPages = Math.ceil(filteredAndSorted.length / itemsPerPage);
     const paginatedProducts = filteredAndSorted.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-    const SortHeader = ({ label, sortKey, alignRight = false, minWidth, className }: { label: string, sortKey: SortKey, alignRight?: boolean, minWidth?: string, className?: string }) => {
-        const isActive = sortConfig?.key === sortKey;
-        return (
-            <th
-                className={`px-3 py-3 sticky top-0 bg-gray-50/90 backdrop-blur-md z-10 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none ${alignRight ? 'text-right' : 'text-left'} ${minWidth || ''} ${className || ''}`}
-                onClick={() => handleSort(sortKey)}
-            >
-                <div className={`flex items-center gap-1 ${alignRight ? 'justify-end' : 'justify-start'}`}>
-                    {label}
-                    <div className="flex flex-col">
-                        {isActive ? (
-                            sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" style={{ color: themeColor }} /> : <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />
-                        ) : (
-                            <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />
-                        )}
-                    </div>
-                </div>
-            </th>
-        );
-    };
 
     const CombinedCell = ({ value, percent, isCurrency = true, highlight = false }: { value: number, percent?: number, isCurrency?: boolean, highlight?: boolean }) => {
         const safeValue = value ?? 0;
         const displayVal = includeVat && isCurrency ? safeValue * VAT_RATE : safeValue;
         
-        // Logic for flipping: 
-        // Normal: Top = Absolute, Bottom = %
-        // Flipped: Top = %, Bottom = Absolute
         const top = showPercentPrimary && percent !== undefined ? `${(percent ?? 0).toFixed(2)}%` : (isCurrency ? `£${displayVal.toFixed(2)}` : displayVal.toFixed(2));
         const bottom = showPercentPrimary && percent !== undefined ? (isCurrency ? `£${displayVal.toFixed(2)}` : displayVal.toFixed(2)) : (percent !== undefined ? `${(percent ?? 0).toFixed(2)}%` : null);
 
@@ -133,7 +110,6 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
                 </div>
                 
                 <div className="flex items-center gap-3">
-                    {/* Toggles */}
                     <button 
                         onClick={() => setIncludeVat(!includeVat)}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${includeVat ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200'}`}
@@ -158,7 +134,6 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
                 </div>
             </div>
 
-            {/* Search Bar */}
             <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-center gap-4 relative z-20">
                 <div className="relative flex-1">
                     <TagSearchInput 
@@ -175,32 +150,32 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
                 </div>
             </div>
 
-            {/* Table */}
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                 <div className="overflow-x-auto max-h-[600px] overflow-y-auto relative">
                     <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead className="bg-gray-50/50 text-gray-500 uppercase text-xs font-semibold">
                             <tr>
-                                <th className="px-3 py-3 sticky left-0 top-0 bg-white/90 backdrop-blur-md z-20 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none min-w-[200px] border-r border-gray-100" onClick={() => handleSort('sku')}>
+                                <th className="px-3 py-3 sticky left-0 top-0 bg-white/90 backdrop-blur-md z-20 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors select-none min-w-[200px] border-r border-gray-100" onClick={() => setSortConfig(prev => ({ key: 'sku', dir: prev?.key === 'sku' && prev.dir === 'desc' ? 'asc' : 'desc' }))}>
                                     SKU / Name
                                 </th>
-                                <SortHeader label={`CA Price${taxLabel}`} sortKey="caPrice" alignRight />
-                                <SortHeader label={`Unit Price${taxLabel}`} sortKey="unitPrice" alignRight />
-                                <SortHeader label={(viewMode === 'PER_UNIT' ? "Avg Price" : "Sales Amt") + taxLabel} sortKey={viewMode === 'PER_UNIT' ? "unitPrice" : "salesAmt"} alignRight />
-                                <SortHeader label={`COGS${taxLabel}`} sortKey="cogs" alignRight />
-                                <SortHeader label={`Postage${taxLabel}`} sortKey="postage" alignRight />
-                                <SortHeader label={`Sell Fee${taxLabel}`} sortKey="sellingFee" alignRight />
-                                <SortHeader label={`Ads Fee${taxLabel}`} sortKey="adsFee" alignRight />
-                                <SortHeader label={`Other Fee${taxLabel}`} sortKey="otherFee" alignRight />
-                                <SortHeader label={`Sub Fee${taxLabel}`} sortKey="subscriptionFee" alignRight />
-                                <SortHeader label={`WMS Fee${taxLabel}`} sortKey="wmsFee" alignRight />
-                                <SortHeader label={`Refunds${taxLabel}`} sortKey="refundAmt" alignRight />
-                                <SortHeader 
+                                <SortableHeader<SortKey> label={`CA Price${taxLabel}`} sortKey="caPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={`Unit Price${taxLabel}`} sortKey="unitPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={(viewMode === 'PER_UNIT' ? "Avg Price" : "Sales Amt") + taxLabel} sortKey={viewMode === 'PER_UNIT' ? "unitPrice" : "salesAmt"} sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={`COGS${taxLabel}`} sortKey="cogs" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={`Postage${taxLabel}`} sortKey="postage" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={`Sell Fee${taxLabel}`} sortKey="sellingFee" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={`Ads Fee${taxLabel}`} sortKey="adsFee" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={`Other Fee${taxLabel}`} sortKey="otherFee" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={`Sub Fee${taxLabel}`} sortKey="subscriptionFee" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={`WMS Fee${taxLabel}`} sortKey="wmsFee" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                <SortableHeader<SortKey> label={`Refunds${taxLabel}`} sortKey="refundAmt" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                {/* FIX: Moved 'minWidth' value to 'className' prop. */}
+                                <SortableHeader<SortKey> 
                                     label={`Net Profit${taxLabel}`} 
                                     sortKey="profitInclRn" 
-                                    alignRight 
-                                    minWidth="min-w-[100px]" 
-                                    className="sticky right-0 z-20 bg-gray-50 border-l border-gray-200"
+                                    sort={sortConfig} onChange={setSortConfig} themeColor={themeColor}
+                                    align="right"
+                                    className="sticky right-0 z-20 bg-gray-50 border-l border-gray-200 min-w-[100px]"
                                 />
                             </tr>
                         </thead>
@@ -279,7 +254,6 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
                     </table>
                 </div>
 
-                {/* Pagination Footer */}
                 {filteredAndSorted.length > 0 && (
                     <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6">
                         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">

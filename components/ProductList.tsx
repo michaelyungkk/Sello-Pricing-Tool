@@ -5,6 +5,8 @@ import { VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
 import { GradeBadge } from './GradeBadge';
 import { Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart } from 'lucide-react';
+import { SortState, sortRows } from '../utils/tableSort';
+import { SortableHeader } from './common/SortableHeader';
 
 interface ProductListProps {
     products: Product[];
@@ -17,8 +19,6 @@ interface ProductListProps {
     pricingRules?: PricingRules;
     themeColor: string;
 }
-
-type SortKey = keyof Product | 'estNewPrice';
 
 const RecommendationTooltip = ({ product, rect }: { product: Product, rect: DOMRect }) => {
     // Add Scroll Offset to ensure fixed position works correctly on scrolled pages
@@ -300,7 +300,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
     const [hoveredProduct, setHoveredProduct] = useState<{ id: string; rect: DOMRect } | null>(null);
 
     // Sorting State
-    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
+    const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'status', direction: 'desc' });
 
     // Helper to resolve manager from config if available (Dynamic Lookup)
     const getEffectiveManager = (platform: string, storedManager: string) => {
@@ -350,14 +350,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
         const subs = new Set(relevantProducts.map(p => p.subcategory).filter(Boolean) as string[]);
         return Array.from(subs).sort();
     }, [products, mainCatFilter]);
-
-    const handleSort = (key: SortKey) => {
-        let direction: 'asc' | 'desc' = 'asc';
-        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
-        setSortConfig({ key, direction });
-    };
 
     const filteredProducts = useMemo(() => {
         const searchQueryLower = debouncedSearch.toLowerCase();
@@ -450,25 +442,16 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
             };
         }).filter(p => p._isVisible);
 
-        if (sortConfig) {
-            aggregatedData.sort((a, b) => {
-                let aValue: any = a[sortConfig.key as keyof Product];
-                let bValue: any = b[sortConfig.key as keyof Product];
-                if (typeof aValue === 'string') aValue = aValue.toLowerCase();
-                if (typeof bValue === 'string') bValue = bValue.toLowerCase();
-                if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-        } else {
-            aggregatedData.sort((a, b) => {
-                if (a.status === 'Critical' && b.status !== 'Critical') return -1;
-                if (a.status !== 'Critical' && b.status === 'Critical') return 1;
-                return a.sku.localeCompare(b.sku);
-            });
-        }
+        const getValue = (row: any, key: string) => {
+            if (key === 'status') {
+                const priority = { 'Critical': 4, 'Overstock': 3, 'Warning': 2, 'Healthy': 1 };
+                return priority[row.status as keyof typeof priority] || 0;
+            }
+            return (row as any)[key];
+        };
 
-        return aggregatedData;
+        return sortRows(aggregatedData, sortConfig, getValue);
+
     }, [products, debouncedSearch, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, showInactive, showOOS]);
 
     useEffect(() => {
@@ -505,27 +488,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
     // ... [Same Export logic as before] ...
     
     // ... [Same Render logic as before] ...
-
-    const SortHeader = ({ label, sortKey, alignRight = false, subLabel, width }: { label: string, sortKey: SortKey, alignRight?: boolean, subLabel?: string, width?: string }) => {
-        const isActive = sortConfig?.key === sortKey;
-        return (
-            <th
-                className={`px-4 py-3 font-semibold cursor-pointer select-none hover:bg-gray-100/50 transition-colors ${alignRight ? 'text-right' : 'text-left'} ${width || ''}`}
-                onClick={() => handleSort(sortKey)}
-            >
-                <div className={`flex items-center gap-1 ${alignRight ? 'justify-end' : 'justify-start'}`}>
-                    {label}
-                    <div className="flex flex-col">
-                        {isActive ? (
-                            sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3" style={{ color: themeColor }} /> : <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />
-                        ) : (
-                            <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />
-                        )}
-                    </div>
-                </div>
-            </th>
-        );
-    };
 
     const isContextFiltered = platformFilters.length > 0 || managerFilter !== 'All';
 
@@ -954,14 +916,14 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-medium">
-                                <SortHeader label="Product" sortKey="sku" width="min-w-[250px]" />
-                                <SortHeader label="Optimal Ref." sortKey="optimalPrice" alignRight width="w-[110px]" />
-                                <SortHeader label="Last Week" sortKey="oldPrice" alignRight subLabel={dateLabels?.last} width="w-[110px]" />
-                                <SortHeader label={isContextFiltered ? "Current (Filt.)" : "Current"} sortKey="currentPrice" alignRight subLabel={dateLabels?.current} width="w-[110px]" />
-                                <SortHeader label="CA Price" sortKey="caPrice" alignRight width="w-[100px]" />
-                                <SortHeader label="Inventory" sortKey="stockLevel" alignRight width="w-[120px]" />
-                                <SortHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" alignRight width="w-[140px]" />
-                                <SortHeader label="Returns" sortKey="returnRate" alignRight width="w-[100px]" />
+                                <SortableHeader label="Product" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} className="min-w-[250px]" />
+                                <SortableHeader label="Optimal Ref." sortKey="optimalPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
+                                <SortableHeader label="Last Week" sortKey="oldPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
+                                <SortableHeader label={isContextFiltered ? "Current (Filt.)" : "Current"} sortKey="currentPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
+                                <SortableHeader label="CA Price" sortKey="caPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
+                                <SortableHeader label="Inventory" sortKey="stockLevel" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[120px]" />
+                                <SortableHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[140px]" />
+                                <SortableHeader label="Returns" sortKey="returnRate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
                                 <th className="px-4 py-3 font-semibold text-right w-[60px]">Action</th>
                             </tr>
                         </thead>

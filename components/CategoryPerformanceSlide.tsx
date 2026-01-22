@@ -1,5 +1,3 @@
-
-
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Product, PriceLog, CategoryPolicy } from '../types';
 import { aggregateCategoryData, MainCategoryData, SubCategoryData, CategoryMetric } from '../services/categoryAgg';
@@ -9,6 +7,8 @@ import { DollarSign, PieChart, Megaphone, ChevronDown, ChevronRight, Layers, Lay
 import { scaleLinear } from 'd3-scale';
 import { Treemap, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import * as XLSX from 'xlsx';
+import { SortState, sortRows } from '../utils/tableSort';
+import { SortableHeader } from './common/SortableHeader';
 
 // Helper to determine text color based on background luminance
 const getTextColorForBackground = (hexColor: string): string => {
@@ -78,6 +78,7 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
     const [selectedCell, setSelectedCell] = useState<{ category: string, platform: string } | null>(null);
     const [topCatMode, setTopCatMode] = useState<TopCatMode>('TOTAL');
     const [mode, setMode] = useState<PopMode>('ABSOLUTE');
+    const [drilldownSort, setDrilldownSort] = useState<SortState<string>>({ key: 'revenue', dir: 'desc' });
     
     // Treemap State
     const [treemapPlatform, setTreemapPlatform] = useState<string>('All');
@@ -105,18 +106,14 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
         
         if (!startKey || !endKey) return '';
     
-        // Calculate duration in days, inclusive
         const durationMs = new Date(endKey).getTime() - new Date(startKey).getTime();
         const durationDays = Math.round(durationMs / (1000 * 60 * 60 * 24)) + 1;
     
-        // Calculate previous period
         const prevEndKey = addDaysToDateKey(startKey, -1);
         const prevStartKey = addDaysToDateKey(prevEndKey, -(durationDays - 1));
     
         const formatDate = (d: string) => {
-            // new Date('YYYY-MM-DD') creates date at midnight UTC.
             const dateObj = new Date(d);
-            // toLocaleDateString with UTC timezone specified ensures we format the date as-is without local shifts.
             return dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
         };
     
@@ -126,7 +123,6 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
         return `Comparing ${currentRangeStr} vs ${prevRangeStr}`;
     }, [dateRange]);
 
-    // KPI Calculations
     const kpiStats = useMemo(() => {
         const skuCounts: Record<string, number> = {};
         products.forEach(p => {
@@ -138,7 +134,6 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
         const totalProfit = categories.reduce((sum, c) => sum + c.total.profit, 0);
         const totalMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
         
-        // PoP Totals
         const totalPrevRevenue = categories.reduce((sum, c) => sum + c.total.prevRevenue, 0);
         const totalRevenueChange = totalRevenue - totalPrevRevenue;
         const totalRevenueChangePct = totalPrevRevenue > 0 ? (totalRevenueChange / totalPrevRevenue) * 100 : (totalRevenue > 0 ? Infinity : 0);
@@ -147,10 +142,8 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
         const totalPrevMargin = totalPrevRevenue > 0 ? (totalPrevProfit / totalPrevRevenue) * 100 : 0;
         const totalMarginChange = totalMargin - totalPrevMargin;
         
-        // 1. Top Total Revenue
         const topTotal = [...categories].sort((a,b) => b.total.revenue - a.total.revenue)[0];
         
-        // 2. Top Revenue Per SKU (Efficiency)
         const topPerSku = [...categories]
             .filter(c => c.total.revenue > 0)
             .map(c => ({
@@ -159,7 +152,6 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
             }))
             .sort((a,b) => b.val - a.val)[0];
 
-        // 3. Top Revenue Per Order (Transaction Value)
         const topPerOrder = [...categories]
             .filter(c => c.total.revenue > 0 && c.total.orders > 5) // Min sample size
             .map(c => ({
@@ -182,24 +174,21 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
         };
     }, [categories, products]);
 
-    // Load All Policies for Heatmap rendering
     useEffect(() => {
         setAllPolicies(getCategoryPolicies());
     }, [policyLastUpdated]);
 
-    // Reset policy scope when selection changes
     useEffect(() => {
         setPolicyScope('__MAIN__');
     }, [selectedCell?.category]);
 
-    // Load Policy Data for Editor
     useEffect(() => {
         if (!selectedCell) return;
         
         const mainCat = selectedCell.category;
         const subCat = policyScope === '__MAIN__' ? undefined : policyScope;
         
-        const policy = getPolicyForProduct(mainCat, subCat, undefined); // Global (no platform specific) for editor default
+        const policy = getPolicyForProduct(mainCat, subCat, undefined);
         
         if (policy) {
             setTargetMargin(policy.targetMarginPct !== undefined && policy.targetMarginPct !== null ? policy.targetMarginPct.toString() : '');
@@ -383,7 +372,6 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
 
         if (mode === 'CHANGE') {
             const isTacosInverted = metric === 'TACOS';
-            // Professional, less saturated diverging palette
             const colors = isTacosInverted ? ['#34d399', '#f1f5f9', '#f87171'] : ['#f87171', '#f1f5f9', '#34d399'];
             const absMax = Math.max(Math.abs(min), Math.abs(max));
             
@@ -394,15 +382,12 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
         }
 
         if (metric === 'MARGIN') {
-            // More professional Red -> Yellow -> Green palette
             return scaleLinear<string>().domain([0, 15, 30]).range(['#f87171', '#fcd34d', '#34d399']).clamp(true);
         }
         if (metric === 'TACOS') {
-            // Inverted professional palette for TACoS (lower is better)
             return scaleLinear<string>().domain([8, 20, 35]).range(['#34d399', '#fcd34d', '#f87171']).clamp(true);
         }
         
-        // Default sequential scale for Revenue & Profit, using a professional blue palette
         return scaleLinear<string>().domain([0, max * 0.5, max]).range(['#dbeafe', '#60a5fa', '#1e40af']).clamp(true);
     }, [colorScaleDomain, metric, mode]);
 
@@ -417,10 +402,15 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                 name: sub.name,
                 metric: m || createEmptyMetric()
             };
-        }).sort((a, b) => b.metric.revenue - a.metric.revenue);
+        });
 
-        return subs;
-    }, [selectedCell, categories]);
+        const getValue = (row: { name: string, metric: CategoryMetric }, key: string) => {
+            if (key === 'name') return row.name;
+            return (row.metric as any)[key];
+        };
+
+        return sortRows(subs, drilldownSort, getValue);
+    }, [selectedCell, categories, drilldownSort]);
 
     const treemapData = useMemo(() => {
         return categories.map(cat => {
@@ -723,7 +713,14 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                                 </div>
                                 <div className="p-2">
                                     <table className="w-full text-xs text-left">
-                                        <thead className="text-gray-500 font-bold border-b border-gray-100 bg-white sticky top-0"><tr><th className="py-2 pl-2">Subcat</th><th className="py-2 text-right">Rev</th><th className="py-2 text-right">Margin</th><th className="py-2 text-right pr-2">TACoS</th></tr></thead>
+                                        <thead className="text-gray-500 font-bold border-b border-gray-100 bg-white sticky top-0">
+                                            <tr>
+                                                <SortableHeader sortKey="name" label="Subcat" sort={drilldownSort} onChange={setDrilldownSort} className="py-2 pl-2" />
+                                                <SortableHeader sortKey="revenue" label="Rev" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="py-2" />
+                                                <SortableHeader sortKey="margin" label="Margin" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="py-2" />
+                                                <SortableHeader sortKey="tacos" label="TACoS" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="py-2 pr-2" />
+                                            </tr>
+                                        </thead>
                                         <tbody className="divide-y divide-gray-50">
                                             {drilldownData.map(sub => {
                                                 const subTarget = resolveTargetMargin(selectedCell.category, sub.name, selectedCell.platform === 'All' ? undefined : selectedCell.platform);
@@ -769,7 +766,6 @@ const CellRenderer = ({ cat, plat, getCellValue, colorScale, resolveTargetMargin
         let secondaryDisplay: string | null = null;
         
         const isTacos = metric === 'TACOS';
-        // A good change for TACOS is negative, for others it's positive
         const isImprovement = isTacos ? deltaAbs < 0 : deltaAbs > 0;
 
         if (metric === 'REVENUE' || metric === 'PROFIT') {
