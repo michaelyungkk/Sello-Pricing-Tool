@@ -1,0 +1,166 @@
+import React from 'react';
+import { Product, AnalysisResult } from '../types';
+import StockChart from './StockChart';
+import { Check, AlertTriangle, X, TrendingUp, TrendingDown, WifiOff } from 'lucide-react';
+import { GradeBadge } from './GradeBadge';
+import { useTranslation } from 'react-i18next';
+import { VAT_MULTIPLIER } from '../constants';
+
+interface AnalysisModalProps {
+  product: Product;
+  analysis: AnalysisResult | null;
+  isLoading: boolean;
+  onClose: () => void;
+  onApplyPrice: (productId: string, newPrice: number) => void;
+  themeColor: string;
+}
+
+const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoading, onClose, onApplyPrice, themeColor }) => {
+  const { t } = useTranslation();
+  if (!product) return null;
+
+  const isOffline = analysis?.reasoning?.includes('[OFFLINE MODE]');
+  const currentPriceWithVat = (product.currentPrice || 0) * VAT_MULTIPLIER;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col border border-white/20">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-100/50 flex justify-between items-start bg-gray-50/50">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2 py-0.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded uppercase tracking-wide">
+                {product.platform || (product.channels?.[0]?.platform) || 'Multi-Channel'}
+              </span>
+              <div className="flex items-center">
+                <span className="text-sm text-gray-500">{product.sku}</span>
+                <GradeBadge gradeLevel={product.gradeLevel} />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">{product.name}</h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200/50 rounded-full transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: themeColor }}></div>
+              <p className="text-gray-500 animate-pulse">{t('analysis_consulting_ai')}</p>
+            </div>
+          ) : analysis ? (
+            <div className="space-y-8">
+              {/* Top Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-blue-50/80 rounded-xl border border-blue-100">
+                  <p className="text-sm text-blue-600 mb-1 font-medium">{t('analysis_current_status')}</p>
+                  <div className="flex items-end gap-2">
+                    <span className="text-2xl font-bold text-blue-900">{analysis.daysRemaining.toFixed(0)} Days</span>
+                    <span className="text-sm text-blue-700 mb-1">{t('stock_remaining')}</span>
+                  </div>
+                  <p className="text-xs text-blue-500 mt-2">{t('restock_in_days', { days: product.leadTimeDays })}</p>
+                </div>
+
+                <div className={`p-4 rounded-xl border ${
+                  analysis.status === 'Critical' ? 'bg-red-50/80 border-red-100' :
+                  analysis.status === 'Warning' ? 'bg-amber-50/80 border-amber-100' :
+                  analysis.status === 'Overstock' ? 'bg-orange-50/80 border-orange-100' :
+                  'bg-green-50/80 border-green-100'
+                }`}>
+                  <p className={`text-sm mb-1 font-medium ${
+                    analysis.status === 'Critical' ? 'text-red-600' :
+                    analysis.status === 'Warning' ? 'text-amber-600' :
+                    analysis.status === 'Overstock' ? 'text-orange-600' :
+                    'text-green-600'
+                  }`}>{t('analysis_health_assessment')}</p>
+                  <div className="flex items-center gap-2">
+                    {analysis.status === 'Critical' && <AlertTriangle className="w-6 h-6 text-red-600" />}
+                    <span className={`text-2xl font-bold ${
+                      analysis.status === 'Critical' ? 'text-red-900' :
+                      analysis.status === 'Warning' ? 'text-amber-900' :
+                      analysis.status === 'Overstock' ? 'text-orange-900' :
+                      'text-green-900'
+                    }`}>{analysis.status}</span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border flex flex-col justify-between" style={{ backgroundColor: `${themeColor}10`, borderColor: `${themeColor}20` }}>
+                  <p className="text-sm font-medium" style={{ color: themeColor }}>{t('analysis_recommended_action')}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <div>
+                      <span className="text-2xl font-bold text-gray-900">£{analysis.recommendedPrice.toFixed(2)}</span>
+                      <span className="text-xs text-gray-500 ml-2">{t('currently_price', { price: currentPriceWithVat.toFixed(2) })}</span>
+                    </div>
+                  </div>
+                  <div className={`text-sm mt-2 font-semibold flex items-center gap-1 ${
+                    analysis.percentageChange > 0 ? 'text-emerald-600' : analysis.percentageChange < 0 ? 'text-red-600' : 'text-gray-500'
+                  }`}>
+                    {analysis.percentageChange > 0 ? <TrendingUp className="w-4 h-4" /> : analysis.percentageChange < 0 ? <TrendingDown className="w-4 h-4" /> : null}
+                    {analysis.percentageChange > 0 ? '+' : ''}{analysis.percentageChange.toFixed(2)}{t('adjustment_percent')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Reasoning */}
+              <div className={`bg-white/80 border rounded-xl p-5 shadow-sm ${isOffline ? 'border-amber-200' : 'border-gray-200'}`}>
+                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isOffline ? '#d97706' : themeColor }}></span>
+                  {isOffline ? t('analysis_offline_engine') : t('analysis_ai_reasoning')}
+                  {isOffline && <WifiOff className="w-3.5 h-3.5 text-amber-500" />}
+                </h3>
+                {isOffline && (
+                    <div className="mb-3 text-[10px] uppercase font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block border border-amber-100">
+                        {t('analysis_connection_limit')}
+                    </div>
+                )}
+                <p className="text-gray-600 leading-relaxed">{analysis.reasoning}</p>
+              </div>
+
+              {/* Chart */}
+              <StockChart 
+                currentStock={product.stockLevel}
+                dailySalesCurrent={product.averageDailySales}
+                dailySalesProjected={
+                  // Simple heuristic for chart visualization: Price up 5% = Sales down 10% (elasticity assumption for visual)
+                  // In a real app, AI would return projected velocity.
+                  analysis.percentageChange > 0 
+                    ? product.averageDailySales * 0.85 
+                    : analysis.percentageChange < 0 
+                      ? product.averageDailySales * 1.2 
+                      : product.averageDailySales
+                }
+                leadTimeDays={product.leadTimeDays}
+              />
+
+            </div>
+          ) : null}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-gray-100/50 bg-gray-50/50 rounded-b-2xl flex justify-end gap-3">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200/50 rounded-lg transition-colors"
+          >
+            {t('cancel')}
+          </button>
+          {analysis && (
+            <button 
+              onClick={() => onApplyPrice(product.id, analysis.recommendedPrice)}
+              className="px-6 py-2 text-white font-medium rounded-lg shadow-md transition-all flex items-center gap-2"
+              style={{ backgroundColor: themeColor, boxShadow: `0 4px 6px -1px ${themeColor}40` }}
+            >
+              <Check className="w-4 h-4" />
+              {t('apply_new_price')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AnalysisModal;
