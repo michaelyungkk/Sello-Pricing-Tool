@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES, DEFAULT_SEARCH_CONFIG, VAT_MULTIPLIER } from './constants';
 import { Product, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback, RefundLog, ShipmentDetail, HistoryPayload, PriceChangeRecord, AnalysisResult, SearchChip, SearchConfig, SkuCostDetail, InventoryTemplate, SearchSession, CostChangeRecord, InventoryChangeRecord } from './types';
@@ -563,7 +564,23 @@ const App: React.FC = () => {
                     existing.lastUpdated = reportDate;
                     newProducts[existingIndex] = existing;
                 } else {
-                    newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, averageDailySales: 0, leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, category: item.category || 'Uncategorized', dailyAverageSales: item.dailyAverageSales || 0 });
+                    newProducts.push({ 
+                        id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, 
+                        sku: item.sku, 
+                        name: item.name || item.sku, 
+                        stockLevel: item.stock || 0, 
+                        costPrice: item.cost || 0, 
+                        currentPrice: 0, // Initialized to 0 as per requirements
+                        averageDailySales: 0, 
+                        leadTimeDays: 30, 
+                        status: 'Healthy', 
+                        recommendation: 'New Product', 
+                        daysRemaining: 999, 
+                        channels: [], 
+                        lastUpdated: reportDate, 
+                        category: item.category || 'Uncategorized', 
+                        dailyAverageSales: item.dailyAverageSales || 0 
+                    });
                 }
             });
             return newProducts;

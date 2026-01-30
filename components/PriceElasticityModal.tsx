@@ -1,3 +1,5 @@
+
+
 import React, { useMemo } from 'react';
 import { Product, PriceLog, PriceChangeRecord } from '../types';
 import { X, TrendingUp, TrendingDown, Activity, Calendar, ArrowRight } from 'lucide-react';
@@ -212,14 +214,14 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
                             <XAxis 
                                 dataKey="date" 
                                 tickFormatter={(val) => new Date(val).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                                tick={{fontSize: 10, fill: '#9ca3af'}}
+                                tick={{fontSize: 10, fill: '#9ca3af', style: { userSelect: 'none' }}}
                                 axisLine={false}
                                 tickLine={false}
                             />
                             <YAxis 
                                 yAxisId="left" 
                                 orientation="left" 
-                                tick={{fontSize: 10, fill: '#6366f1'}} 
+                                tick={{fontSize: 10, fill: '#6366f1', style: { userSelect: 'none' }}} 
                                 axisLine={false}
                                 tickLine={false}
                                 label={{ value: 'Price (£)', angle: -90, position: 'insideLeft', fill: '#6366f1', fontSize: 10 }}
@@ -228,7 +230,7 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
                             <YAxis 
                                 yAxisId="right" 
                                 orientation="right" 
-                                tick={{fontSize: 10, fill: '#10b981'}} 
+                                tick={{fontSize: 10, fill: '#10b981', style: { userSelect: 'none' }}} 
                                 axisLine={false}
                                 tickLine={false}
                                 label={{ value: 'Qty Sold', angle: 90, position: 'insideRight', fill: '#10b981', fontSize: 10 }}

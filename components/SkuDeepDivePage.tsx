@@ -1,3 +1,5 @@
+
+
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows, Bookmark, History, FileText } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
@@ -207,7 +209,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
                             <YAxis 
                                 domain={yDomain} 
                                 tickFormatter={format} 
-                                tick={{fontSize: 10, userSelect: 'none'}}
+                                tick={{fontSize: 10, style: { userSelect: 'none' }}}
                                 width={45}
                                 tickLine={false}
                                 axisLine={false}
@@ -1206,8 +1208,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 <ResponsiveContainer width="100%" height="100%">
                                     <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                         <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis type="category" dataKey="period" name="Period" allowDuplicatedCategory={false} tick={{fontSize: 12, userSelect: 'none'}} />
-                                        <YAxis type="number" dataKey="delta" name="Price Deviation" unit="£" domain={['auto', 'auto']} tick={{fontSize: 12, userSelect: 'none'}} label={{ value: 'Price Deviation (£)', angle: -90, position: 'insideLeft' }} />
+                                        <XAxis type="category" dataKey="period" name="Period" allowDuplicatedCategory={false} tick={{fontSize: 12, style: { userSelect: 'none' }}} />
+                                        <YAxis type="number" dataKey="delta" name="Price Deviation" unit="£" domain={['auto', 'auto']} tick={{fontSize: 12, style: { userSelect: 'none' }}} label={{ value: 'Price Deviation (£)', angle: -90, position: 'insideLeft' }} />
                                         <ZAxis type="number" dataKey="totalQty" range={[60, 600]} name="Volume" />
                                         
                                         <ReferenceArea y1={priceVolumeAnalysis.thresholds.amber} y2={1000} fill="green" fillOpacity={0.05} />
@@ -1374,6 +1376,15 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             />
                         )}
                     </div>
+                    
+                    {/* Price History Panel Component */}
+                    <PriceChangeHistoryPanel 
+                        history={priceChangeHistory} 
+                        sku={product.sku}
+                        windowStart={startKey} // Passed for potential future filtering
+                        windowEnd={endKey}     // Passed for potential future filtering
+                        themeColor={themeColor}
+                    />
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm text-sm">
                         <div className="flex flex-col">
