@@ -1,21 +1,115 @@
-
-
 import { Product, PriceLog, PromotionEvent, PricingRules, LogisticsRule, StrategyConfig, SearchConfig } from './types';
 
 export const VAT_MULTIPLIER = 1.20;
 
 export const DEFAULT_PRICING_RULES: PricingRules = {
-  'Amazon(UK) FBA': { markup: 0, commission: 15.0, manager: 'Bella Qin', color: '#FF9900', isExcluded: true },
-  'Amazon(UK) FBM': { markup: 0, commission: 15.0, manager: 'Bella Qin', color: '#E68A00' },
-  'eBay': { markup: 0, commission: 10.0, manager: 'Sophie Nie', color: '#E53238' },
-  'The Range': { markup: 0, commission: 12.0, manager: 'Queenie Wong', color: '#2C3E50' },
-  'ManoMano': { markup: 0, commission: 18.0, manager: 'Queenie Wong', color: '#00D09C' },
-  'Wayfair': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#7F187F', isExcluded: true },
-  'Onbuy': { markup: 0, commission: 9.0, manager: 'Queenie Wong', color: '#3B82F6' },
-  'Groupon(UK)': { markup: 0, commission: 15.0, manager: 'Queenie Wong', color: '#53A318', isExcluded: true },
-  'Temu(UK)': { markup: 0, commission: 5.0, manager: 'Elaine Wang', color: '#FB7701', isExcluded: true },
-  'Tesco': { markup: 0, commission: 10.0, manager: 'Queenie Wong', color: '#00539F' },
-  'Debenhams': { markup: 0, commission: 26.0, manager: 'Queenie Wong', color: '#1B4D3E' }
+  'Amazon(UK) FBA': { 
+    markup: 0, 
+    commission: 15.0, 
+    manager: 'Bella Qin', 
+    color: '#FF9900', 
+    isExcluded: true,
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: true,
+    adsAttribution: 'SKU_LEVEL'
+  },
+  'Amazon(UK) FBM': { 
+    markup: 0, 
+    commission: 15.0, 
+    manager: 'Bella Qin', 
+    color: '#E68A00',
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: true,
+    adsAttribution: 'SKU_LEVEL'
+  },
+  'eBay': { 
+    markup: 0, 
+    commission: 10.0, 
+    manager: 'Sophie Nie', 
+    color: '#E53238',
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: true,
+    adsAttribution: 'SKU_LEVEL'
+  },
+  'The Range': { 
+    markup: 0, 
+    commission: 12.0, 
+    manager: 'Queenie Wong', 
+    color: '#2C3E50',
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: false
+  },
+  'ManoMano': { 
+    markup: 0, 
+    commission: 18.0, 
+    manager: 'Queenie Wong', 
+    color: '#00D09C',
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: false
+  },
+  'Wayfair': { 
+    markup: 0, 
+    commission: 15.0, 
+    manager: 'Queenie Wong', 
+    color: '#7F187F', 
+    isExcluded: true,
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: false
+  },
+  'Onbuy': { 
+    markup: 0, 
+    commission: 9.0, 
+    manager: 'Queenie Wong', 
+    color: '#3B82F6',
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: false
+  },
+  'Groupon(UK)': { 
+    markup: 0, 
+    commission: 15.0, 
+    manager: 'Queenie Wong', 
+    color: '#53A318', 
+    isExcluded: true,
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: false
+  },
+  'Temu(UK)': { 
+    markup: 0, 
+    commission: 5.0, 
+    manager: 'Elaine Wang', 
+    color: '#FB7701', 
+    isExcluded: true,
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: true,
+    adsAttribution: 'SKU_LEVEL'
+  },
+  'Tesco': { 
+    markup: 0, 
+    commission: 10.0, 
+    manager: 'Queenie Wong', 
+    color: '#00539F',
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: false
+  },
+  'Debenhams': { 
+    markup: 0, 
+    commission: 26.0, 
+    manager: 'Queenie Wong', 
+    color: '#1B4D3E',
+    pricingControl: 'MERCHANT',
+    feeModel: 'COMMISSION_PCT',
+    adsEnabled: false
+  }
 };
 
 export const DEFAULT_LOGISTICS_RULES: LogisticsRule[] = [
@@ -54,7 +148,8 @@ export const DEFAULT_STRATEGY_RULES: StrategyConfig = {
     minMarginPercent: 25,
     adjustmentPercent: 5,
     adjustmentFixed: 1, // Default 1 GBP decrease minimum
-    includeNewProducts: false
+    includeNewProducts: false,
+    freshStockGuardDays: 14
   },
   safety: {
     minMarginPercent: 10

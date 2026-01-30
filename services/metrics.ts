@@ -69,9 +69,10 @@ export const calcAdSpend = (log: PriceLog): number => {
 
 /**
  * Calculates the profit from a transaction log.
- * Prioritizes the explicit `profit` field if available, otherwise calculates from margin.
+ * DEFINITION: This returns Net Profit (After Ads) as per standard system formulas.
+ * If the source data is Gross Profit, it should be adjusted before calling this.
  * @param log - The PriceLog object.
- * @returns The calculated profit.
+ * @returns The calculated net profit.
  */
 export const calcProfit = (log: PriceLog): number => {
     if (log.profit !== undefined && log.profit !== null) {

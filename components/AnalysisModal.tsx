@@ -4,6 +4,7 @@ import StockChart from './StockChart';
 import { Check, AlertTriangle, X, TrendingUp, TrendingDown, WifiOff } from 'lucide-react';
 import { GradeBadge } from './GradeBadge';
 import { useTranslation } from 'react-i18next';
+import { VAT_MULTIPLIER } from '../constants';
 
 interface AnalysisModalProps {
   product: Product;
@@ -19,6 +20,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
   if (!product) return null;
 
   const isOffline = analysis?.reasoning?.includes('[OFFLINE MODE]');
+  const currentPriceWithVat = (product.currentPrice || 0) * VAT_MULTIPLIER;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -90,7 +92,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
                   <div className="flex items-center gap-3 mt-1">
                     <div>
                       <span className="text-2xl font-bold text-gray-900">£{analysis.recommendedPrice.toFixed(2)}</span>
-                      <span className="text-xs text-gray-500 ml-2">{t('currently_price', { price: product.currentPrice.toFixed(2) })}</span>
+                      <span className="text-xs text-gray-500 ml-2">{t('currently_price', { price: currentPriceWithVat.toFixed(2) })}</span>
                     </div>
                   </div>
                   <div className={`text-sm mt-2 font-semibold flex items-center gap-1 ${

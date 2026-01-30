@@ -107,7 +107,7 @@ const ProductRow = React.memo(({
     const oldPriceWithVat = product.oldPrice ? product.oldPrice * VAT_MULTIPLIER : null;
     const optimalPriceWithVat = product.optimalPrice ? product.optimalPrice * VAT_MULTIPLIER : null;
 
-    const runwayWeeks = product.daysRemaining / 7;
+    const runwayWeeks = (product.daysRemaining || 0) / 7;
     const runwayBin = {
         label: runwayWeeks > 104 ? '> 2 Years' : `${runwayWeeks.toFixed(1)} Weeks`,
         color: product.status === 'Critical' ? 'bg-red-50 text-red-600 border-red-200' :
@@ -207,7 +207,7 @@ const ProductRow = React.memo(({
                         {product._trendData?.velocityChange && product._trendData.velocityChange < -0.2 && <TrendingDown className="w-3 h-3 text-red-400" />}
                         {product._trendData?.velocityChange && product._trendData.velocityChange > 0.2 && <TrendingUp className="w-3 h-3 text-green-400" />}
                         <span className="text-xs font-semibold text-gray-700">
-                            {product.averageDailySales.toFixed(1)} / day
+                            {(product.averageDailySales || 0).toFixed(1)} / day
                         </span>
                     </div>
                 </div>
@@ -264,45 +264,142 @@ const ProductRow = React.memo(({
     );
 });
 
-const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEditTags, onViewShipments, onViewElasticity, onDeepDive, dateLabels, pricingRules, themeColor }) => {
+const FilterDropdown = ({ label, icon: Icon, value, onChange, options, themeColor }: any) => (
+    <div
+        className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-opacity-50"
+        style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+    >
+        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
+            {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+        </div>
+        <div className="relative flex-1 min-w-[120px]">
+            <select
+                value={value}
+                onChange={onChange}
+                className="w-full px-3 py-2 bg-transparent text-sm text-gray-900 border-none focus:ring-0 cursor-pointer appearance-none pr-8 truncate"
+            >
+                <option value="All">All</option>
+                {options && options.map((opt: string) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+        </div>
+    </div>
+);
+
+const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, themeColor }: any) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const currentSelected = selected || [];
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const toggleOption = (option: string) => {
+        if (currentSelected.includes(option)) {
+            onChange(currentSelected.filter((item: string) => item !== option));
+        } else {
+            onChange([...currentSelected, option]);
+        }
+    };
+
+    const displayText = currentSelected.length === 0 ? 'All' : currentSelected.length === 1 ? currentSelected[0] : `${currentSelected.length} Selected`;
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <div
+                className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden cursor-pointer"
+                onClick={() => setIsOpen(!isOpen)}
+                style={{ borderColor: isOpen ? themeColor : '#d1d5db' }}
+            >
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
+                    {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+                </div>
+                <div className="flex-1 min-w-[120px] px-3 py-2 flex items-center justify-between">
+                    <span className="text-sm text-gray-900 truncate max-w-[140px]">{displayText}</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </div>
+            </div>
+
+            {isOpen && (
+                <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-100">
+                    <div className="p-2 border-b border-gray-100 flex justify-between">
+                        <button
+                            className="text-[10px] text-gray-500 hover:text-gray-800"
+                            onClick={() => onChange(options)}
+                        >Select All</button>
+                        <button
+                            className="text-[10px] text-gray-500 hover:text-gray-800"
+                            onClick={() => onChange([])}
+                        >Clear</button>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto p-1">
+                        {options && options.map((opt: string) => {
+                            const isSelected = currentSelected.includes(opt);
+                            return (
+                                <div
+                                    key={opt}
+                                    className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer rounded-md"
+                                    onClick={() => toggleOption(opt)}
+                                >
+                                    {isSelected ? (
+                                        <CheckSquare className="w-4 h-4 text-indigo-600 flex-shrink-0" style={{ color: themeColor }} />
+                                    ) : (
+                                        <Square className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                                    )}
+                                    <span className={`text-sm ${isSelected ? 'font-medium text-gray-900' : 'text-gray-600'}`}>{opt}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases, onEditTags, onViewShipments, onViewElasticity, onDeepDive, dateLabels, pricingRules, themeColor }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [managerFilter, setManagerFilter] = useState('All');
-    const [platformFilters, setPlatformFilters] = useState<string[]>([]); // Multi-select array
+    const [platformFilters, setPlatformFilters] = useState<string[]>([]);
 
-    // Debounce search input
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // New Filters
     const [brandFilter, setBrandFilter] = useState('All');
     const [mainCatFilter, setMainCatFilter] = useState('All');
     const [subCatFilter, setSubCatFilter] = useState('All');
 
-    // Visibility Toggles
     const [showInactive, setShowInactive] = useState(false);
     const [showOOS, setShowOOS] = useState(true);
 
-    // Advanced Filter State
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [velocityFilter, setVelocityFilter] = useState<{ min: string, max: string }>({ min: '', max: '' });
     const [runwayFilter, setRunwayFilter] = useState<{ min: string, max: string }>({ min: '', max: '' });
 
-    // Export Menu State
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
     const [hoveredProduct, setHoveredProduct] = useState<{ id: string; rect: DOMRect } | null>(null);
 
-    // Sorting State
     const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'status', dir: 'desc' });
 
-    // Helper to resolve manager from config if available (Dynamic Lookup)
     const getEffectiveManager = (platform: string, storedManager: string) => {
         if (pricingRules && pricingRules[platform]?.manager && pricingRules[platform].manager !== 'Unassigned') {
             return pricingRules[platform].manager;
@@ -312,12 +409,12 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
 
     const uniqueManagers = useMemo(() => {
         const managerSet = new Set<string>();
-        products.forEach(p => p.channels.forEach(c => {
+        (products || []).forEach(p => (p.channels || []).forEach(c => {
             managerSet.add(getEffectiveManager(c.platform, c.manager));
         }));
         if (pricingRules) {
             Object.values(pricingRules).forEach((r: any) => {
-                if (r.manager && r.manager !== 'Unassigned') managerSet.add(r.manager);
+                if (r && r.manager && r.manager !== 'Unassigned') managerSet.add(r.manager);
             });
         }
         return Array.from(managerSet).sort();
@@ -325,7 +422,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
 
     const uniquePlatforms = useMemo(() => {
         const platformSet = new Set<string>();
-        products.forEach(p => p.channels.forEach(c => platformSet.add(c.platform)));
+        (products || []).forEach(p => (p.channels || []).forEach(c => platformSet.add(c.platform)));
         if (pricingRules) {
             Object.keys(pricingRules).forEach(k => platformSet.add(k));
         }
@@ -333,42 +430,41 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
     }, [products, pricingRules]);
 
     const uniqueBrands = useMemo(() => {
-        const brands = new Set(products.map(p => p.brand).filter(Boolean) as string[]);
+        const brands = new Set((products || []).map(p => p.brand).filter(Boolean) as string[]);
         return Array.from(brands).sort();
     }, [products]);
 
     const uniqueMainCats = useMemo(() => {
-        const cats = new Set(products.map(p => p.category).filter(Boolean) as string[]);
+        const cats = new Set((products || []).map(p => p.category).filter(Boolean) as string[]);
         return Array.from(cats).sort();
     }, [products]);
 
     const uniqueSubCats = useMemo(() => {
-        let relevantProducts = products;
+        let relevantProducts = products || [];
         if (mainCatFilter !== 'All') {
-            relevantProducts = products.filter(p => p.category === mainCatFilter);
+            relevantProducts = (products || []).filter(p => p.category === mainCatFilter);
         }
         const subs = new Set(relevantProducts.map(p => p.subcategory).filter(Boolean) as string[]);
         return Array.from(subs).sort();
     }, [products, mainCatFilter]);
 
     const filteredProducts = useMemo(() => {
-        const searchQueryLower = debouncedSearch.toLowerCase();
-        let filtered = products.filter(p => {
-            // Enhanced Search Logic with Tags
-            if (searchTags.length > 0) {
+        const searchQueryLower = (debouncedSearch || '').toLowerCase();
+        let filtered = (products || []).filter(p => {
+            if (searchTags && searchTags.length > 0) {
                 const matchesTag = searchTags.some(tag => {
                     const t = tag.toLowerCase();
-                    return p.sku.toLowerCase().includes(t) || 
-                           p.name.toLowerCase().includes(t) ||
-                           p.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
+                    return (p.sku || '').toLowerCase().includes(t) || 
+                           (p.name || '').toLowerCase().includes(t) ||
+                           (p.channels || []).some(c => c.skuAlias?.toLowerCase().includes(t));
                 });
                 if (!matchesTag) return false;
             } else if (searchQueryLower) {
-                if (!p.sku.toLowerCase().includes(searchQueryLower) && !p.name.toLowerCase().includes(searchQueryLower)) return false;
+                if (!(p.sku || '').toLowerCase().includes(searchQueryLower) && !(p.name || '').toLowerCase().includes(searchQueryLower)) return false;
             }
 
-            if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) return false;
-            if (!showOOS && p.stockLevel <= 0) return false;
+            if (!showInactive && (p.stockLevel || 0) <= 0 && (p.averageDailySales || 0) === 0) return false;
+            if (!showOOS && (p.stockLevel || 0) <= 0) return false;
             if (brandFilter !== 'All' && p.brand !== brandFilter) return false;
             if (mainCatFilter !== 'All' && p.category !== mainCatFilter) return false;
             if (subCatFilter !== 'All' && p.subcategory !== subCatFilter) return false;
@@ -376,27 +472,28 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
         });
 
         const aggregatedData = filtered.map(p => {
-            const isPlatformFiltered = platformFilters.length > 0;
-            const matchingChannels = p.channels.filter(c => {
-                const matchPlatform = !isPlatformFiltered || platformFilters.includes(c.platform);
+            const currentPlatformFilters = platformFilters || [];
+            const isPlatformFiltered = currentPlatformFilters.length > 0;
+            const matchingChannels = (p.channels || []).filter(c => {
+                const matchPlatform = !isPlatformFiltered || currentPlatformFilters.includes(c.platform);
                 const effectiveManager = getEffectiveManager(c.platform, c.manager);
                 const matchManager = managerFilter === 'All' || effectiveManager === managerFilter;
                 return matchPlatform && matchManager;
             });
 
             const isFiltering = isPlatformFiltered || managerFilter !== 'All';
-            let displayVelocity = p.averageDailySales;
+            let displayVelocity = p.averageDailySales || 0;
             let displayPrice = p.currentPrice || 0;
 
             if (isFiltering) {
-                const totalFilteredVelocity = matchingChannels.reduce((sum, c) => sum + c.velocity, 0);
+                const totalFilteredVelocity = matchingChannels.reduce((sum, c) => sum + (c.velocity || 0), 0);
                 let weightedPriceSum = 0;
                 let weightedDivisor = 0;
 
                 matchingChannels.forEach(c => {
                     const price = c.price || p.currentPrice || 0;
-                    weightedPriceSum += (price * c.velocity);
-                    weightedDivisor += c.velocity;
+                    weightedPriceSum += (price * (c.velocity || 0));
+                    weightedDivisor += (c.velocity || 0);
                 });
 
                 if (weightedDivisor > 0) {
@@ -408,8 +505,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                 displayVelocity = totalFilteredVelocity;
             }
 
-            const stock = p.stockLevel;
-            const leadTime = p.leadTimeDays;
+            const stock = p.stockLevel || 0;
+            const leadTime = p.leadTimeDays || 30;
             const displayRunway = stock <= 0 ? 0 : (displayVelocity > 0 ? stock / displayVelocity : 999);
 
             let displayStatus: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
@@ -462,8 +559,8 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
         setSubCatFilter('All');
     }, [mainCatFilter]);
 
-    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-    const paginatedProducts = filteredProducts.slice(
+    const totalPages = Math.ceil((filteredProducts || []).length / itemsPerPage);
+    const paginatedProducts = (filteredProducts || []).slice(
         (currentPage - 1) * itemsPerPage,
         currentPage * itemsPerPage
     );
@@ -483,122 +580,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
         setHoveredProduct(null);
     };
 
-    // ... (rest of ProductList)
-    
-    // ... [Same Export logic as before] ...
-    
-    // ... [Same Render logic as before] ...
+    const isContextFiltered = (platformFilters && platformFilters.length > 0) || managerFilter !== 'All';
 
-    const isContextFiltered = platformFilters.length > 0 || managerFilter !== 'All';
-
-    // Helper for filter pills
-    const FilterDropdown = ({ label, icon: Icon, value, onChange, options, themeColor }: any) => (
-        <div
-            className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-opacity-50"
-            style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
-        >
-            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
-                {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
-            </div>
-            <div className="relative flex-1 min-w-[120px]">
-                <select
-                    value={value}
-                    onChange={onChange}
-                    className="w-full px-3 py-2 bg-transparent text-sm text-gray-900 border-none focus:ring-0 cursor-pointer appearance-none pr-8 truncate"
-                >
-                    <option value="All">All</option>
-                    {options.map((opt: string) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-            </div>
-        </div>
-    );
-
-    // Multi-Select Dropdown Component
-    const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, themeColor }: any) => {
-        const [isOpen, setIsOpen] = useState(false);
-        const dropdownRef = useRef<HTMLDivElement>(null);
-
-        useEffect(() => {
-            const handleClickOutside = (event: MouseEvent) => {
-                if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                    setIsOpen(false);
-                }
-            };
-            document.addEventListener('mousedown', handleClickOutside);
-            return () => document.removeEventListener('mousedown', handleClickOutside);
-        }, []);
-
-        const toggleOption = (option: string) => {
-            if (selected.includes(option)) {
-                onChange(selected.filter((item: string) => item !== option));
-            } else {
-                onChange([...selected, option]);
-            }
-        };
-
-        const displayText = selected.length === 0 ? 'All' : selected.length === 1 ? selected[0] : `${selected.length} Selected`;
-
-        return (
-            <div className="relative" ref={dropdownRef}>
-                <div
-                    className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden cursor-pointer"
-                    onClick={() => setIsOpen(!isOpen)}
-                    style={{ borderColor: isOpen ? themeColor : '#d1d5db' }}
-                >
-                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
-                        {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
-                    </div>
-                    <div className="flex-1 min-w-[120px] px-3 py-2 flex items-center justify-between">
-                        <span className="text-sm text-gray-900 truncate max-w-[140px]">{displayText}</span>
-                        <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                    </div>
-                </div>
-
-                {isOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-100">
-                        <div className="p-2 border-b border-gray-100 flex justify-between">
-                            <button
-                                className="text-[10px] text-gray-500 hover:text-gray-800"
-                                onClick={() => onChange(options)}
-                            >Select All</button>
-                            <button
-                                className="text-[10px] text-gray-500 hover:text-gray-800"
-                                onClick={() => onChange([])}
-                            >Clear</button>
-                        </div>
-                        <div className="max-h-60 overflow-y-auto p-1">
-                            {options.map((opt: string) => {
-                                const isSelected = selected.includes(opt);
-                                return (
-                                    <div
-                                        key={opt}
-                                        className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer rounded-md"
-                                        onClick={() => toggleOption(opt)}
-                                    >
-                                        {isSelected ? (
-                                            <CheckSquare className="w-4 h-4 text-indigo-600 flex-shrink-0" style={{ color: themeColor }} />
-                                        ) : (
-                                            <Square className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                                        )}
-                                        <span className={`text-sm ${isSelected ? 'font-medium text-gray-900' : 'text-gray-600'}`}>{opt}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    // Helper for export logic (same as before)
     const handleExport = (platform: string = 'All') => {
-        // ... (existing export logic from previous file content)
         const cleanChar = (val: any) => {
             if (val === null || val === undefined) return '';
             const str = String(val).replace(/[\r\n]+/g, ' ');
@@ -608,7 +592,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
         const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost', 'Return Rate %'];
         const rows: (string | number)[][] = [];
 
-        filteredProducts.forEach(p => {
+        (filteredProducts || []).forEach(p => {
             const commonData = [
                 cleanChar(p.sku),
                 cleanChar(p.name),
@@ -616,9 +600,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                 cleanChar(p.category || ''),
                 cleanChar(p.subcategory || ''),
                 (p.currentPrice || 0).toFixed(2),
-                p.stockLevel,
-                p.averageDailySales.toFixed(2),
-                p.daysRemaining.toFixed(0),
+                p.stockLevel || 0,
+                (p.averageDailySales || 0).toFixed(2),
+                (p.daysRemaining || 0).toFixed(0),
                 cleanChar(p.status),
                 p.costPrice ? p.costPrice.toFixed(2) : '0.00',
                 (p.returnRate || 0).toFixed(2)
@@ -627,11 +611,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
             if (platform === 'All') {
                 rows.push([cleanChar(p.sku), ...commonData]);
             } else {
-                const normalize = (s: string) => s.toLowerCase().trim();
+                const normalize = (s: string) => (s || '').toLowerCase().trim();
                 const targetPlatform = normalize(platform);
-                let channel = p.channels.find(c => normalize(c.platform) === targetPlatform);
+                let channel = (p.channels || []).find(c => normalize(c.platform) === targetPlatform);
                 if (!channel) {
-                    channel = p.channels.find(c => normalize(c.platform).includes(targetPlatform) || targetPlatform.includes(normalize(c.platform)));
+                    channel = (p.channels || []).find(c => normalize(c.platform).includes(targetPlatform) || targetPlatform.includes(normalize(c.platform)));
                 }
 
                 if (channel && channel.skuAlias) {
@@ -666,12 +650,10 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
         setIsExportMenuOpen(false);
     };
 
-    // Calculate tooltip product safely
-    const tooltipProduct = hoveredProduct ? filteredProducts.find(p => p.id === hoveredProduct.id) : null;
+    const tooltipProduct = hoveredProduct ? (filteredProducts || []).find(p => p.id === hoveredProduct.id) : null;
 
     return (
         <div className="space-y-4">
-            {/* Simulation & Action Bar */}
             <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative overflow-hidden backdrop-blur-custom">
                 <div className="flex items-center gap-6 w-full xl:w-auto">
                     <div className="flex items-center gap-2">
@@ -690,12 +672,11 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                         <ChevronDown className="w-3 h-3 text-gray-400" />
                     </button>
 
-                    {/* Floating Modal for Export */}
                     {isExportMenuOpen && createPortal(
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
                             <div
                                 className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20"
-                                onClick={e => e.stopPropagation()} // Prevent close on modal click
+                                onClick={e => e.stopPropagation()}
                             >
                                 <div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50">
                                     <h3 className="font-bold text-gray-900">Export Options</h3>
@@ -740,12 +721,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                 </div>
             </div>
 
-            {/* Filters Toolbar */}
             <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg flex flex-col backdrop-blur-custom relative z-20">
                 <div className="p-4 space-y-4">
-                    {/* Top Row: Search + Main Filters */}
                     <div className="flex flex-col lg:flex-row gap-4">
-                        {/* Search - Flexible Width */}
                         <div className="flex-1 min-w-[250px]">
                             <TagSearchInput 
                                 tags={searchTags}
@@ -756,7 +734,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                             />
                         </div>
 
-                        {/* Primary Filters */}
                         <div className="flex flex-wrap gap-3 items-center">
                             <FilterDropdown
                                 label="Brand"
@@ -803,7 +780,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                                 </div>
                             </div>
 
-                            {/* Advanced Toggle */}
                             <button
                                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                                 className={`px-3 py-2.5 border rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ml-auto lg:ml-0`}
@@ -820,12 +796,9 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                     </div>
                 </div>
 
-                {/* Collapsible Advanced Filters */}
                 {showAdvancedFilters && (
                     <div className="px-4 pb-4 border-t border-gray-100/50 bg-gray-50/50 rounded-b-xl animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-sm">
                         <div className="flex flex-col lg:flex-row gap-4 pt-4 items-start lg:items-center">
-
-                            {/* Row 2 Filters */}
                             <div className="flex flex-wrap gap-3 flex-1">
                                 <MultiSelectDropdown
                                     label="Platform"
@@ -844,7 +817,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                                     themeColor={themeColor}
                                 />
 
-                                {/* Velocity Range */}
                                 <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden h-[38px]">
                                     <div className="px-3 py-2 bg-gray-50 border-r border-gray-200 text-[10px] font-bold text-gray-500 uppercase">Velocity</div>
                                     <input
@@ -867,9 +839,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                                 </div>
                             </div>
 
-                            {/* Toggles Container */}
                             <div className="flex flex-wrap gap-3">
-                                {/* Show OOS Toggle */}
                                 <button
                                     onClick={() => setShowOOS(!showOOS)}
                                     className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors hover:bg-gray-50 ${showOOS ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
@@ -879,7 +849,6 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                                     {showOOS ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                                 </button>
 
-                                {/* Show Inactive (Ghost) Toggle */}
                                 <button
                                     onClick={() => setShowInactive(!showInactive)}
                                     className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors hover:bg-gray-50 ${showInactive ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
@@ -902,15 +871,14 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                     <Info className="w-4 h-4" />
                     <span>
                         Showing data aggregated for
-                        {platformFilters.length > 0 && <strong> {platformFilters.length} Platform(s) </strong>}
-                        {platformFilters.length > 0 && managerFilter !== 'All' && <span>and</span>}
+                        {platformFilters && platformFilters.length > 0 && <strong> {platformFilters.length} Platform(s) </strong>}
+                        {platformFilters && platformFilters.length > 0 && managerFilter !== 'All' && <span>and</span>}
                         {managerFilter !== 'All' && <strong> {managerFilter} </strong>}
                         only. Prices are recalculated weighted averages for this selection.
                     </span>
                 </div>
             )}
 
-            {/* Main Table - Updated with bg-custom-glass */}
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -935,26 +903,26 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                                     themeColor={themeColor}
                                     onEditAliases={onEditAliases}
                                     onEditTags={onEditTags}
-                                    onViewShipments={onViewShipments} // Pass handler down
-                                    onViewElasticity={onViewElasticity} // Pass Elasticity Handler
+                                    onViewShipments={onViewShipments} 
+                                    onViewElasticity={onViewElasticity} 
                                     onDeepDive={onDeepDive}
                                     hoveredProduct={hoveredProduct}
                                     handleMouseEnter={handleMouseEnter}
                                     handleMouseLeave={handleMouseLeave}
                                 />
                             )}
-                            {filteredProducts.length === 0 && (
+                            {(!filteredProducts || filteredProducts.length === 0) && (
                                 <tr>
                                     <td colSpan={9} className="p-8 text-center text-gray-500">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <p>No products found matching your filters.</p>
-                                            {products.length > 0 && !showInactive && (
+                                            {products && products.length > 0 && !showInactive && (
                                                 <button
                                                     onClick={() => setShowInactive(true)}
                                                     className="text-indigo-600 text-sm font-medium hover:underline flex items-center gap-1"
                                                 >
                                                     <Eye className="w-4 h-4" />
-                                                    Show {products.length - filteredProducts.length} hidden items (Inactive/Ghost)
+                                                    Show {products.length - (filteredProducts?.length || 0)} hidden items (Inactive/Ghost)
                                                 </button>
                                             )}
                                         </div>
@@ -965,8 +933,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onEditAliases, onEd
                     </table>
                 </div>
 
-                {/* Pagination Footer */}
-                {filteredProducts.length > 0 && (
+                {filteredProducts && filteredProducts.length > 0 && (
                     <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6">
                         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                             <div className="flex items-center gap-4">

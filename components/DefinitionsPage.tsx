@@ -1,5 +1,6 @@
 
 
+
 import React, { useState } from 'react';
 import { Calculator, Calendar, AlertTriangle, TrendingUp, DollarSign, Target, Scale, Divide, Megaphone, Clock, Activity, Layers, Eye, ShieldAlert, Package, RotateCcw, CornerDownLeft, Ship, BookOpen, Rocket, Link, Wrench, Save, Info, ArrowRight, Database, Search, Layout, Settings, History, Tag, ShieldCheck, Zap, Globe, Cpu } from 'lucide-react';
 interface DefinitionsPageProps {
@@ -94,7 +95,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                         <Ship className="w-3 h-3" /> Strategy Engine: "Include Incoming" Toggle
                                     </p>
                                     <p className="text-xs text-gray-600 mb-2">
-                                        In the Strategy Engine, you can toggle whether "Incoming Stock" (shipments on the water) counts towards your effective stock.
+                                        By default, 'Effective Stock' is your 'On Hand' quantity. In the Strategy Engine, you can toggle a switch to also include 'Incoming Stock' for more aggressive planning.
                                     </p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div className="bg-white p-2 rounded border border-gray-200">
@@ -127,10 +128,10 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                             <CornerDownLeft className="w-3 h-3" /> Return Rate Formula
                                         </h4>
                                         <div className="font-mono text-xs bg-white px-2 py-2 rounded border border-gray-200 mb-2">
-                                            (Total Returned / (Avg Daily Sales × Period Days)) × 100
+                                            (Total Returned Units / Total Sold Units) × 100
                                         </div>
                                         <p className="text-xs text-gray-500">
-                                            We use <strong>Projected Sales</strong> (Velocity × Days) as the denominator to smooth out volatility. This provides a stable metric even if actual sales fluctuate day-to-day.
+                                            The return rate is calculated as a direct percentage of units returned versus units sold within the same period. This provides a clear, factual measure of product returns.
                                         </p>
                                     </div>
                                     <div className="border rounded-lg p-4 bg-white/50">
@@ -155,8 +156,15 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                             </div>
                             <div className="prose prose-sm text-gray-600 max-w-none">
                                 <p>
-                                    The "Average Daily Sales" metric is the heartbeat of the system. You can change how this is calculated in <strong>Settings</strong>.
+                                    The "Average Daily Sales" metric is the heartbeat of the system. It is calculated based on the sales history you import, within the selected date range (e.g., Last 30 Days).
                                 </p>
+                                <div className="bg-amber-50/50 p-3 rounded-lg border border-amber-200 text-sm text-amber-800 my-4">
+                                    <p className="font-bold flex items-center gap-2"><Info className="w-4 h-4" /> ERP Override Logic</p>
+                                    <p className="mt-2 text-xs">
+                                        <strong>Important:</strong> If your ERP Inventory Report provides a <code>dailyAverageSales</code> value for a product, that value will <strong>override</strong> any calculation from your imported sales report. This ensures inventory runway calculations are always consistent with your primary management system.
+                                    </p>
+                                </div>
+                                <p>You can change the default calculation lookback period in <strong>Settings</strong>.</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                                     <div className="border rounded-lg p-3 bg-white/50">
                                         <span className="font-bold text-gray-900 block mb-1">7 Days Lookback</span>
@@ -284,11 +292,10 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                 <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100">
                                     <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">TACoS Formula (Total Advertising Cost of Sales)</h4>
                                     <div className="font-mono text-xs bg-white px-2 py-2 rounded border border-gray-200 mb-2">
-                                        (Sum of All Ad Spend in Period) / (Total Units Sold in Period)
+                                        (Total Ad Spend / Total Revenue) × 100
                                     </div>
                                     <p className="text-xs text-gray-500">
-                                        We bucket standalone ad costs (e.g. "Sponsored Products Charge") by week and divide by the total units sold in that same week
-                                        to determine the "Ad Cost per Unit".
+                                        This represents the percentage of total sales revenue consumed by advertising costs. It is the primary measure of advertising campaign efficiency.
                                     </p>
                                 </div>
                             </div>

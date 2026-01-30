@@ -1,9 +1,11 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Product, AnalysisResult, PlatformConfig, RefundLog, PriceLog, PricingRules } from "../types";
 import { buildQueryPlanFromText } from "../components/search/aiParser";
 import { QueryPlan } from "../components/search/queryPlan";
 import { ThresholdConfig, DEFAULT_THRESHOLDS } from "../services/thresholdsConfig";
+import { VAT_MULTIPLIER } from "../constants";
 
 // ... (Existing imports and Analyze function)
 // Initialize the Gemini AI client
@@ -13,10 +15,11 @@ const MODEL_ID = "gemini-3-pro-preview";
 
 export const analyzePriceAdjustment = async (product: Product, platformRule: PlatformConfig, context?: string, thresholds: ThresholdConfig = DEFAULT_THRESHOLDS): Promise<AnalysisResult> => {
   const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General');
+  const currentPriceWithVat = (product.currentPrice || 0) * VAT_MULTIPLIER;
 
   // --- AI PROMPT CONSTRUCTION ---
   const primaryGoal = context === 'margin'
-    ? `The primary goal is to resolve a critical low margin issue on this platform. The current price of £${product.currentPrice} is not profitable enough given the costs. Your recommendation should prioritize increasing the price to improve the margin. Balance this against sales velocity; we want to be more profitable, not stall sales completely. The low margin threshold is ${thresholds.marginBelowTargetPct}%.`
+    ? `The primary goal is to resolve a critical low margin issue on this platform. The current price of £${currentPriceWithVat.toFixed(2)} is not profitable enough given the costs. Your recommendation should prioritize increasing the price to improve the margin. Balance this against sales velocity; we want to be more profitable, not stall sales completely. The low margin threshold is ${thresholds.marginBelowTargetPct}%.`
     : `The primary goal is to optimize inventory runway. We need to ensure we do not run out of stock before the replenishment arrives, but also avoid holding too much stock if sales are slow. The stockout risk buffer is ${thresholds.stockoutRunwayMultiplier}x lead time.`;
 
   const prompt = `
@@ -25,7 +28,7 @@ export const analyzePriceAdjustment = async (product: Product, platformRule: Pla
     Current Scenario:
     Product: ${product.name}
     Platform: ${platformName}
-    Current Price: £${product.currentPrice.toFixed(2)} (Gross, VAT inclusive)
+    Current Price: £${currentPriceWithVat.toFixed(2)} (Gross, VAT inclusive)
     Cost of Goods (COGS): £${(product.costPrice || 0).toFixed(2)} (Net, VAT exclusive)
     Current Stock Level: ${product.stockLevel} units
     Average Daily Sales Velocity: ${product.averageDailySales.toFixed(2)} units/day
@@ -40,6 +43,7 @@ export const analyzePriceAdjustment = async (product: Product, platformRule: Pla
       - Average Ad Fee: £${(product.adsFee || 0).toFixed(2)}
       - Average Postage: £${(product.postage || 0).toFixed(2)}
       - WMS/Other Fees: £${((product.wmsFee || 0) + (product.otherFee || 0)).toFixed(2)}
+    - Extra Freight Income per unit (VAT exclusive): £${(product.extraFreight || 0).toFixed(2)}
 
     Task:
     1. Analyze the situation based on the Primary Goal.
@@ -88,7 +92,7 @@ export const analyzePriceAdjustment = async (product: Product, platformRule: Pla
     const stock = product.stockLevel;
     const leadTime = product.leadTimeDays;
     const daysRemaining = stock / velocity;
-    const currentPrice = product.currentPrice;
+    const currentPrice = currentPriceWithVat;
 
     // Simulate Calculation
     let newPrice = currentPrice;

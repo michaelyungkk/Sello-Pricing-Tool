@@ -1,19 +1,21 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent, PriceLog, ShipmentDetail, PriceChangeRecord, RefundLog, SearchChip } from '../types';
 import { TagSearchInput } from './TagSearchInput';
+import { GradeBadge } from './GradeBadge';
 import { Search, Link as LinkIcon, Package, Filter, User, Eye, EyeOff, ChevronLeft, ChevronRight, LayoutDashboard, List, DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle, X, Save, ExternalLink, Tag, Globe, ArrowUpDown, ChevronUp, ChevronDown, Plus, Download, Calendar, Clock, BarChart2, Edit2, Ship, Maximize2, Minimize2, ArrowRight, Database, Layers, RotateCcw, Upload, FileBarChart, PieChart as PieIcon, AlertTriangle, Activity, Megaphone, Coins, Wrench, Map as MapIcon, Info, Repeat } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, LineChart, Line, ComposedChart, Legend } from 'recharts';
 import ProductList from './ProductList';
 import { getDiagnosisMeta, CanonicalDiagnosisId } from './diagnostics/diagnosisRegistry';
 import { getThresholdConfig, ThresholdConfig } from '../services/thresholdsConfig';
 import UkSalesMap from './UkSalesMap';
-import { GradeBadge } from './GradeBadge';
 import { asDateKey } from '../services/dateUtils';
 import { buildWindow, getTodayKey, addDays, isBetweenInclusive } from '../services/dateWindow';
 import { CategoryPerformanceSlide } from './CategoryPerformanceSlide';
 import AuditPanel from './AuditPanel';
+import { SortState, sortRows } from '../utils/tableSort';
+import { SortableHeader } from './common/SortableHeader';
+import { VAT_MULTIPLIER } from '../constants';
 
 interface ProductManagementPageProps {
     products: Product[];
@@ -126,7 +128,7 @@ const TagsDrawer: React.FC<TagsDrawerProps> = ({ product, products, onClose, onS
                     value={inputValue}
                     onChange={e => setInputValue(e.target.value)}
                     onKeyDown={e => handleKeyDown(e, type)}
-                    onPaste={e => handlePaste(e, type)}
+                    onPaste={handlePaste}
                     placeholder={`Add a ${type} tag...`}
                     className="flex-1 min-w-[120px] outline-none text-sm bg-transparent border-none focus:ring-0 p-1"
                 />
@@ -458,7 +460,7 @@ const ReturnsView = ({ refundHistory = [], products, themeColor, pricingRules }:
         }));
     };
 
-    const SortableHeader = ({ label, sortKey, align = 'left' }: { label: string, sortKey: string, align?: 'left' | 'right' }) => {
+    const SortableHeaderLocal = ({ label, sortKey, align = 'left' }: { label: string, sortKey: string, align?: 'left' | 'right' }) => {
         const isActive = sortConfig.key === sortKey;
         return (
             <th className={`p-3 cursor-pointer hover:bg-gray-100 transition-colors text-${align}`} onClick={() => handleSort(sortKey)}>
@@ -560,16 +562,16 @@ const ReturnsView = ({ refundHistory = [], products, themeColor, pricingRules }:
                             <thead className="bg-gray-50 text-gray-500 uppercase font-medium sticky top-0">
                                 {viewMode === 'reason' ? (
                                     <tr>
-                                        <SortableHeader label="Reason" sortKey="reason" />
-                                        <SortableHeader label="Count" sortKey="count" align="right"/>
-                                        <SortableHeader label="Value" sortKey="totalValue" align="right"/>
+                                        <SortableHeaderLocal label="Reason" sortKey="reason" />
+                                        <SortableHeaderLocal label="Count" sortKey="count" align="right"/>
+                                        <SortableHeaderLocal label="Value" sortKey="totalValue" align="right"/>
                                         <th className="p-3 text-right">SKUs</th>
                                     </tr>
                                 ) : (
                                     <tr>
-                                        <SortableHeader label="SKU" sortKey="sku" />
-                                        <SortableHeader label="Count" sortKey="count" align="right"/>
-                                        <SortableHeader label="Value" sortKey="totalValue" align="right"/>
+                                        <SortableHeaderLocal label="SKU" sortKey="sku" />
+                                        <SortableHeaderLocal label="Count" sortKey="count" align="right"/>
+                                        <SortableHeaderLocal label="Value" sortKey="totalValue" align="right"/>
                                         <th className="p-3">Top Reason</th>
                                     </tr>
                                 )}
@@ -656,6 +658,7 @@ const DashboardView = ({
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
     const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
+    const [sort, setSort] = useState<SortState<string> | null>(null);
 
     // Fallback if prop is missing (e.g. initial load or parent hasn't updated yet)
     // IMPORTANT: Dependencies must include propThresholds to trigger re-calc on change
@@ -663,7 +666,7 @@ const DashboardView = ({
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [selectedAlert, range, platformScope]);
+    }, [selectedAlert, range, platformScope, sort]);
 
     const nextSlide = () => setCurrentSlide(prev => (prev + 1) % 5); // Increased to 5 for Category Slide
     const prevSlide = () => setCurrentSlide(prev => (prev - 1 + 5) % 5);
@@ -677,7 +680,7 @@ const DashboardView = ({
         }
     };
 
-    const { processedData, periodLabel, dateRange, periodDays, startKey, endKey, distinctDaysFound } = useMemo(() => {
+    const { processedData, periodLabel, dateRange, periodDays, startKey, endKey, distinctDaysFound, totalLogsInWindow } = useMemo(() => {
         const { startKey, endKey, expectedDays } = buildWindow({
             mode: range === 'custom' ? 'custom' : 'days',
             days: range === 'yesterday' ? 1 : range === '7d' ? 7 : range === '30d' ? 30 : 30,
@@ -697,6 +700,7 @@ const DashboardView = ({
         const prevStartKey = addDays(prevEndKey, -(expectedDays - 1));
 
         const distinctDaysSet = new Set<string>();
+        let logsInWindow = 0;
 
         const data = products.map(p => {
             const logs = priceHistoryMap.get(p.sku) || [];
@@ -714,6 +718,7 @@ const DashboardView = ({
 
                 if (isBetweenInclusive(d, startKey, endKey)) {
                     distinctDaysSet.add(d); // Track globally distinct days found
+                    logsInWindow++;
 
                     curUnits += l.velocity;
                     curRev += (l.velocity * l.price);
@@ -774,15 +779,17 @@ const DashboardView = ({
 
             const signals: CanonicalDiagnosisId[] = [];
             
-            // --- FIX: Use period-specific velocity for alerts ---
-            const periodDailyVelocity = expectedDays > 0 ? curUnits / expectedDays : 0;
-            const periodRunway = periodDailyVelocity > 0 ? p.stockLevel / periodDailyVelocity : 999;
+            // --- DECISION ENGINE VELOCITY FIX: Always use system average daily sales for inventory alerts ---
+            const globalDailyVelocity = p.averageDailySales || 0;
+            const globalRunway = globalDailyVelocity > 0 ? p.stockLevel / globalDailyVelocity : 999;
+            
             const tacos = curRev > 0 ? (curAdSpend / curRev) * 100 : 0;
             const stockValue = p.stockLevel * (p.costPrice || 0);
 
             if (p.stockLevel > 0) {
-                if (periodRunway < (p.leadTimeDays * thresholds.stockoutRunwayMultiplier)) signals.push('STOCKOUT_RISK');
-                else if (periodRunway > thresholds.overstockDays) signals.push('OVERSTOCK_RISK');
+                // Use globalRunway instead of periodRunway so alerts remain constant across windows
+                if (globalRunway < (p.leadTimeDays * thresholds.stockoutRunwayMultiplier)) signals.push('STOCKOUT_RISK');
+                else if (globalRunway > thresholds.overstockDays) signals.push('OVERSTOCK_RISK');
             }
             if ((p.returnRate || 0) > thresholds.returnRatePct) signals.push('HIGH_RETURN_RATE');
             if (tacos > thresholds.highAdDependencyPct) signals.push('HIGH_AD_DEPENDENCY');
@@ -790,11 +797,11 @@ const DashboardView = ({
             if (netMargin < 0) signals.push('NEGATIVE_LOSS');
             else if (netMargin < thresholds.marginBelowTargetPct) signals.push('BELOW_TARGET');
             
-            // Use local trend for Velocity Drop signal
+            // Use local trend for Velocity Drop signal (this still needs to be context-aware)
             if (velocityChange < -thresholds.velocityDropPct) signals.push('VELOCITY_DROP_WOW');
             
-            // Dead Stock: Use period velocity to determine if active items are dormant
-            if (stockValue > thresholds.deadStockMinValueGBP && periodDailyVelocity === 0) signals.push('DORMANT_NO_SALES');
+            // Dead Stock: Use global velocity to determine if active items are dormant
+            if (stockValue > thresholds.deadStockMinValueGBP && globalDailyVelocity === 0) signals.push('DORMANT_NO_SALES');
 
             // Sort signals by priority
             const priorityOrder: Record<string, number> = { High: 1, Medium: 2, Low: 3 };
@@ -804,17 +811,22 @@ const DashboardView = ({
                 return pA - pB;
             });
 
+            // Apply VAT Scaling to Summary Metrics - Displayed incl tax per app standard
+            const periodRevenue = curRev * VAT_MULTIPLIER;
+            const periodProfit = curProfit * VAT_MULTIPLIER;
+            const periodAdSpend = curAdSpend * VAT_MULTIPLIER;
+
             return {
                 ...p,
                 periodUnits: curUnits,
-                periodRevenue: curRev,
-                periodProfit: curProfit,
-                periodAdSpend: curAdSpend,
+                periodRevenue,
+                periodProfit,
+                periodAdSpend,
                 periodMargin: netMargin,
                 prevPeriodUnits: prevUnits,
                 velocityChange, // Local trend for table display & alerts
-                periodDailyVelocity, // For alerts
-                periodRunway, // For alerts
+                periodDailyVelocity: globalDailyVelocity, // Switched to global per user request
+                periodRunway: globalRunway, // Switched to global per user request
                 displayPrice,
                 toxicPlatforms,
                 signals,
@@ -828,7 +840,8 @@ const DashboardView = ({
             periodDays: expectedDays,
             startKey,
             endKey,
-            distinctDaysFound: distinctDaysSet.size
+            distinctDaysFound: distinctDaysSet.size,
+            totalLogsInWindow: logsInWindow
         };
     }, [products, priceHistoryMap, range, customStart, customEnd, platformScope, thresholds]); 
 
@@ -836,24 +849,48 @@ const DashboardView = ({
         margin: processedData.filter(p => (p.periodUnits > 0 && p.periodMargin < thresholds.marginBelowTargetPct) || p.toxicPlatforms.length > 0),
         // Use local trend for Velocity Alert
         velocity: processedData.filter(p => p.velocityChange < -thresholds.velocityCrashPct),
-        // Use local period runway for Stock Alert
+        // Use consistent global runway for Stock Alert
         stock: processedData.filter(p => {
             return p.periodRunway < (p.leadTimeDays * thresholds.stockoutRunwayMultiplier) && p.stockLevel > 0;
         }),
-        // Use local period velocity for Dead Stock check
+        // Use consistent global velocity for Dead Stock check
         dead: processedData.filter(p => p.stockLevel * (p.costPrice || 0) > thresholds.deadStockMinValueGBP && p.periodDailyVelocity === 0)
     }), [processedData, thresholds]);
 
     const workbenchData = useMemo(() => {
-        if (!selectedAlert) return processedData.filter(p => p.periodRevenue > 0).sort((a, b) => b.periodRevenue - a.periodRevenue).slice(0, 50);
-        return alerts[selectedAlert].sort((a, b) => {
-            if (selectedAlert === 'margin') return a.periodMargin - b.periodMargin;
+        let data = !selectedAlert ? processedData.filter(p => p.periodRevenue > 0) : alerts[selectedAlert];
+        
+        const getValue = (row: any, key: string) => {
+            switch(key) {
+                case 'sku': return row.sku;
+                case 'price': return row.displayPrice;
+                case 'caPrice': return row.caPrice;
+                case 'qtySold': return row.periodUnits;
+                case 'revenue': return row.periodRevenue;
+                case 'profit': return row.periodProfit;
+                case 'margin': return row.periodMargin;
+                case 'inventory': return row.stockLevel;
+                case 'prevQty': return row.prevPeriodUnits;
+                case 'change': return row.velocityChange;
+                case 'runway': return row.periodRunway;
+                default: return 0;
+            }
+        };
+
+        if (sort) {
+            return sortRows(data, sort, getValue);
+        }
+
+        // Default sorts per alert type (when no manual sort is active)
+        return [...data].sort((a, b) => {
+            if (!selectedAlert) return b.periodRevenue - a.periodRevenue;
+            if (selectedAlert === 'margin') return a.periodMargin - b.margin;
             if (selectedAlert === 'velocity') return a.velocityChange - b.velocityChange;
             if (selectedAlert === 'stock') return a.periodRunway - b.periodRunway;
             if (selectedAlert === 'dead') return (b.stockLevel * (b.costPrice || 0)) - (a.stockLevel * (a.costPrice || 0));
             return 0;
         });
-    }, [selectedAlert, alerts, processedData]);
+    }, [selectedAlert, alerts, processedData, sort, thresholds]);
 
     const paginatedData = workbenchData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     const totalPages = Math.ceil(workbenchData.length / itemsPerPage);
@@ -907,7 +944,14 @@ const DashboardView = ({
             const [y, m, dStr] = day.split('-');
             const dateObj = new Date(Number(y), Number(m) - 1, Number(dStr));
             const displayDate = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-            return { day: displayDate, revenue: dayRev, ads: dayAds, profit: dayProfit };
+            
+            // Scale daily chart data to be inclusive of tax
+            return { 
+                day: displayDate, 
+                revenue: dayRev * VAT_MULTIPLIER, // Displayed incl tax per app standard
+                ads: dayAds * VAT_MULTIPLIER,     // Displayed incl tax per app standard
+                profit: dayProfit * VAT_MULTIPLIER // Displayed incl tax per app standard
+            };
         });
         return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
     }, [processedData, dateRange, priceHistoryMap, products]);
@@ -918,10 +962,11 @@ const DashboardView = ({
         processedData.forEach(p => {
             const stockVal = p.stockLevel * (p.costPrice || 0);
             totalStockValue += stockVal;
-            // Dead Stock check using Period Velocity
+            
+            // Consistent global velocity check for dead stock value
             if (p.periodDailyVelocity === 0) deadStockValue += stockVal;
             
-            const runway = p.periodRunway;
+            const runway = p.periodRunway; // This is now globalRunway from processedData
             
             if (p.stockLevel <= 0) runwayDistribution['OOS']++;
             else if (runway < 14) runwayDistribution['< 2w']++;
@@ -929,6 +974,7 @@ const DashboardView = ({
             else if (runway < 84) runwayDistribution['4-12w']++;
             else runwayDistribution['12w+']++;
             
+            // Calculate lost revenue projection based on global velocity (conservative state management)
             if (runway < p.leadTimeDays && p.periodDailyVelocity > 0) {
                 const daysOOS = p.leadTimeDays - runway;
                 lostRevenue += (daysOOS * p.periodDailyVelocity * (p.currentPrice || 0));
@@ -936,7 +982,7 @@ const DashboardView = ({
         });
         const chartData = Object.entries(runwayDistribution).map(([name, value]) => ({ name, value }));
         return { totalStockValue, deadStockValue, lostRevenue, chartData };
-    }, [processedData]);
+    }, [processedData, thresholds]);
 
     // Format range label for search
     const getRangeLabel = () => {
@@ -998,6 +1044,13 @@ const DashboardView = ({
                             {periodLabel}
                         </span>
                     </div>
+                    <div className="ml-3 flex flex-col justify-center pl-2 border-l border-gray-200">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-0.5">Data Coverage</span>
+                        <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5" title={`${totalLogsInWindow} individual transaction logs analyzed across ${distinctDaysFound} distinct days in this period.`}>
+                            <Database className="w-3 h-3" />
+                            {totalLogsInWindow} logs / {distinctDaysFound} days
+                        </span>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
@@ -1057,7 +1110,7 @@ const DashboardView = ({
                         <div className="animate-in fade-in slide-in-from-right-8 duration-300">
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 mb-6">
                                 <AlertCard title="Margin Thieves" count={alerts.margin.length} icon={AlertTriangle} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc={`Net Margin < ${thresholds.marginBelowTargetPct}% (Scan all)`} />
-                                <AlertCard title="Velocity Crashes" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`Vol. Drop > ${thresholds.velocityCrashPct}%`} />
+                                <AlertCard title="Volume Crashes" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`Vol. Drop > ${thresholds.velocityCrashPct}%`} />
                                 <AlertCard title="Stockout Risk" count={alerts.stock.length} icon={Clock} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Runway < Lead Time" />
                                 <AlertCard title="Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc={`>£${thresholds.deadStockMinValueGBP} Value, 0 Sales`} />
                             </div>
@@ -1084,29 +1137,46 @@ const DashboardView = ({
                                         <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50 sticky top-0 z-10 backdrop-blur-sm">
                                             <tr>
                                                 <th className="p-4 w-12 text-center">Action</th>
-                                                <th className="p-4">Product</th>
+                                                <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
                                                 <th className="p-4">Signals</th>
-                                                <th className="p-4 text-right">Price (Inc VAT)</th>
-                                                {selectedAlert === null && <>
-                                                    <th className="p-4 text-right">CA Price</th>
-                                                    <th className="p-4 text-right">Qty Sold</th>
-                                                    <th className="p-4 text-right">Period Sales</th>
-                                                    <th className="p-4 text-right">Period Profit</th>
-                                                    <th className="p-4 text-right">Net Margin %</th>
-                                                    <th className="p-4 text-right">Inventory</th>
-                                                </>}
-                                                {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && <>
-                                                    {selectedAlert === 'margin' && <th className="p-4 text-right">Cost (Inc VAT)</th>}
-                                                    <th className="p-4 text-right">Period Sales</th>
-                                                    <th className="p-4 text-right">Period Profit</th>
-                                                    <th className="p-4 text-right">Net Margin %</th>
-                                                </>}
-                                                {selectedAlert === 'velocity' && <>
-                                                    <th className="p-4 text-right">Prev Qty</th>
-                                                    <th className="p-4 text-right">Curr Qty</th>
-                                                    <th className="p-4 text-right">% Change</th>
-                                                    <th className="p-4 text-right">Inventory</th>
-                                                </>}
+                                                <SortableHeader label="Price (Inc VAT)" sortKey="price" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                
+                                                {selectedAlert === null && (
+                                                    <>
+                                                        <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="text-purple-600" />
+                                                        <SortableHeader label="Qty Sold" sortKey="qtySold" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Period Sales" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Period Profit" sortKey="profit" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Net Margin %" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                    </>
+                                                )}
+
+                                                {(selectedAlert === 'margin' || selectedAlert === 'dead') && (
+                                                    <>
+                                                        <SortableHeader label="Period Sales" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Period Profit" sortKey="profit" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Net Margin %" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                    </>
+                                                )}
+
+                                                {selectedAlert === 'stock' && (
+                                                    <>
+                                                        <SortableHeader label="Period Sales" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Net Margin %" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Runway" sortKey="runway" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="bg-purple-50/30" />
+                                                        <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                    </>
+                                                )}
+
+                                                {selectedAlert === 'velocity' && (
+                                                    <>
+                                                        <SortableHeader label="Prev Qty" sortKey="prevQty" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Curr Qty" sortKey="qtySold" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="% Change" sortKey="change" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                        <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                    </>
+                                                )}
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100/50">
@@ -1141,9 +1211,8 @@ const DashboardView = ({
                                                             <td className="p-4 text-right font-bold text-gray-800">{p.stockLevel}</td>
                                                         </>
                                                     )}
-                                                    {(selectedAlert === 'margin' || selectedAlert === 'stock' || selectedAlert === 'dead') && (
+                                                    {(selectedAlert === 'margin' || selectedAlert === 'dead') && (
                                                         <>
-                                                            {selectedAlert === 'margin' && <td className="p-4 text-right text-gray-500">£{((p.costPrice || 0) * VAT).toFixed(2)}</td>}
                                                             <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
                                                             <td className="p-4 text-right font-medium">£{p.periodProfit.toFixed(0)}</td>
                                                             <td className="p-4 text-right">
@@ -1151,6 +1220,23 @@ const DashboardView = ({
                                                                     <span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
                                                                 </div>
                                                             </td>
+                                                        </>
+                                                    )}
+                                                    {selectedAlert === 'stock' && (
+                                                        <>
+                                                            <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
+                                                            <td className="p-4 text-right">
+                                                                <span className={`font-bold ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span>
+                                                            </td>
+                                                            <td className="p-4 text-right">
+                                                                <div className="flex flex-col items-end">
+                                                                    <span className={`font-bold ${p.periodRunway < p.leadTimeDays ? 'text-red-600' : 'text-amber-600'}`}>
+                                                                        {p.periodRunway > 365 ? '> 1 Year' : `${p.periodRunway.toFixed(0)} Days`}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-gray-400">LT: {p.leadTimeDays}d</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-4 text-right font-bold text-gray-800">{p.stockLevel}</td>
                                                         </>
                                                     )}
                                                     {selectedAlert === 'velocity' && (
@@ -1176,9 +1262,9 @@ const DashboardView = ({
                                             <div>
                                                 {totalPages > 1 && (
                                                     <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                                                        <button onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
+                                                        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
                                                         <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {currentPage} of {totalPages}</span>
-                                                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
+                                                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
                                                     </nav>
                                                 )}
                                             </div>
@@ -1222,7 +1308,7 @@ const DashboardView = ({
                         <div className="animate-in fade-in slide-in-from-right-8 duration-300">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1 mb-6">
                                 <MetricCard title="Total Stock Value" value={`£${inventoryStats.totalStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Package} color="blue" desc="Based on Cost Price" />
-                                <MetricCard title="Dead Stock Value" value={`£${inventoryStats.deadStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={AlertTriangle} color="gray" desc="0 Sales in Period" />
+                                <MetricCard title="Dead Stock Value" value={`£${inventoryStats.deadStockValue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={AlertTriangle} color="gray" desc="0 Global System Velocity" />
                                 <MetricCard title="Projected Lost Revenue" value={`£${inventoryStats.lostRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={TrendingDown} color="red" desc="Due to Stockouts" />
                             </div>
                             <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[400px]">
@@ -1725,7 +1811,7 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: any
             <div className="bg-white w-full max-w-md h-full shadow-2xl relative flex flex-col animate-in slide-in-from-right">
                 <div className="p-6 border-b flex justify-between items-center bg-gray-50">
                     <h3 className="font-bold text-lg">Manage Aliases</h3>
-                    <button onClick={onClose}><X className="w-5 h-5" /></button>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
                 </div>
                 <div className="p-6 flex-1 overflow-y-auto space-y-6">
                     {platformTags.map(item => (
@@ -1756,7 +1842,7 @@ const AliasDrawer = ({ product, pricingRules, onClose, onSave, themeColor }: any
                 </div>
                 <div className="p-4 border-t flex justify-end gap-2">
                     <button onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-50">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Save</button>
+                    <button handleSave={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Save</button>
                 </div>
             </div>
         </div>

@@ -38,7 +38,7 @@ const StockChart: React.FC<StockChartProps> = ({ currentStock, dailySalesCurrent
   }
 
   return (
-    <div className="h-64 w-full bg-white p-4 rounded-lg border border-gray-100 shadow-sm flex flex-col">
+    <div className="h-64 w-full bg-white p-4 rounded-lg border border-gray-100 shadow-sm flex flex-col select-none">
       <h3 className="text-sm font-semibold text-gray-700 mb-4 flex-shrink-0">{t('analysis_stock_depletion')}</h3>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -47,9 +47,9 @@ const StockChart: React.FC<StockChartProps> = ({ currentStock, dailySalesCurrent
             <XAxis 
               dataKey="day" 
               label={{ value: t('chart_days'), position: 'insideBottomRight', offset: -5 }} 
-              tick={{fontSize: 12}}
+              tick={{fontSize: 12, userSelect: 'none'}}
             />
-            <YAxis label={{ value: t('chart_stock'), angle: -90, position: 'insideLeft' }} tick={{fontSize: 12}} />
+            <YAxis label={{ value: t('chart_stock'), angle: -90, position: 'insideLeft' }} tick={{fontSize: 12, userSelect: 'none'}} />
             <Tooltip 
               contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}
             />

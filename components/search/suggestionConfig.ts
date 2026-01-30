@@ -1,10 +1,9 @@
-
 import { MetricConfig, ConditionConfig, MetricId, ConditionId, PlatformId, Suggestion, ChipSelectionState, TimePresetId } from './types';
 
 // --- A) METRIC DEFINITIONS ---
 export const METRICS: MetricConfig[] = [
   // Profit & Value
-  { id: "CMA_PCT", label: "Contribution Margin %", group: "Profit", defaultPriority: "RISK", description: "Net margin after Ad Spend" },
+  { id: "CMA_PCT", label: "Net Margin %", group: "Profit", defaultPriority: "RISK", description: "Net margin after Ad Spend" },
   { id: "NET_PROFIT", label: "Net Profit (£)", group: "Profit", defaultPriority: "RISK", description: "True bottom line profit" },
   { id: "PROFIT_PER_UNIT", label: "Profit Per Unit", group: "Profit", defaultPriority: "DECLINE", description: "Unit economics health" },
   

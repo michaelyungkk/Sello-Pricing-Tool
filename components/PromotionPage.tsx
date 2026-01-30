@@ -1,12 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, PricingRules, PromotionEvent, PromotionItem, PriceLog, LogisticsRule } from '../types';
+import { Product, PricingRules, PromotionEvent, PromotionItem, PriceLog, LogisticsRule, PriceChangeRecord } from '../types';
 import { TagSearchInput } from './TagSearchInput';
 import { GradeBadge } from './GradeBadge';
-import { Plus, ChevronRight, Search, Trash2, ArrowLeft, CheckCircle, Check, Download, Calendar, Lock, Unlock, LayoutDashboard, List, Calculator, Edit2, AlertCircle, Save, X, RotateCcw, Eye, EyeOff, ArrowUpDown, ChevronUp, ChevronDown, Upload, FileText, Loader2, RefreshCw, TrendingUp, TrendingDown, Target, ShoppingBag, Coins, Truck, Info, HelpCircle, Archive, Zap, Clock, Star, Filter } from 'lucide-react';
+import { Plus, ChevronRight, Search, Trash2, ArrowLeft, CheckCircle, Check, Download, Calendar, Lock, Unlock, LayoutDashboard, List, Calculator, Edit2, AlertCircle, Save, X, RotateCcw, Eye, EyeOff, ArrowUpDown, ChevronUp, ChevronDown, Upload, FileText, Loader2, RefreshCw, TrendingUp, TrendingDown, Target, ShoppingBag, Coins, Truck, Info, HelpCircle, Archive, Zap, Clock, Star, Filter, BarChart3, PieChart as PieIcon, Activity } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SortState, sortRows } from '../utils/tableSort';
 import { SortableHeader } from './common/SortableHeader';
+import { asDateKey } from '../services/dateUtils';
+import { computePromoWindows, computePromoEffectiveness, PromoPhase, deriveDiscountedPrice } from '../services/promotionAnalytics';
+import { formatMoney, formatPct, formatNumber } from '../utils/format';
 
 interface PromotionPageProps {
     products: Product[];
@@ -19,6 +22,7 @@ interface PromotionPageProps {
     onDeletePromotion: (id: string) => void;
     themeColor: string;
     headerStyle: React.CSSProperties;
+    priceChangeHistory?: PriceChangeRecord[];
 }
 
 type ViewMode = 'dashboard' | 'event_detail' | 'add_products';
@@ -26,6 +30,30 @@ type Tab = 'dashboard' | 'all_skus' | 'simulator';
 
 // Standard UK VAT
 const VAT = 1.20;
+
+// --- HELPERS ---
+
+const calculateEffectivePrice = (baseline: number, type: string, value: number): number => {
+    if (!value && type !== 'PERCENT_OFF') return 0;
+    switch (type) {
+        case 'PERCENT_OFF':
+        case 'PERCENTAGE':
+            return baseline * (1 - (value / 100));
+        case 'FIXED_OFF':
+            return Math.max(0, baseline - value);
+        case 'FIXED_PRICE':
+        default:
+            return value;
+    }
+};
+
+const getBaselineForProduct = (promo: PromotionEvent, product?: Product): number => {
+    if (promo.baselineMode === 'MANUAL') return promo.baselineManualPrice || 0;
+    if (!product) return 0;
+    if (promo.baselineMode === 'CA_PRICE' && product.caPrice) return product.caPrice;
+    // Fallback: Pre-event average (VAT Inc)
+    return (product.currentPrice || 0) * VAT;
+};
 
 // --- HELPER COMPONENTS ---
 
@@ -42,53 +70,6 @@ const StatusBadge = ({ status }: { status: 'UPCOMING' | 'ACTIVE' | 'ENDED' }) =>
             {status === 'ENDED' && <Archive className="w-3 h-3 mr-1" />}
             {status}
         </span>
-    );
-};
-
-const MarginTooltip = ({ details, marginStandard, promoPrice, rect }: any) => {
-    const style: React.CSSProperties = {
-        position: 'fixed',
-        top: `${rect.top}px`,
-        left: `${rect.left}px`,
-        transform: 'translate(-100%, -50%) translateX(-12px)',
-        zIndex: 9999,
-        pointerEvents: 'none'
-    };
-
-    return createPortal(
-        <div style={style} className="bg-gray-900 text-white p-4 rounded-xl shadow-xl w-64 text-xs z-50 animate-in fade-in zoom-in duration-200">
-            <h4 className="font-bold text-gray-200 mb-2 border-b border-gray-700 pb-1 flex justify-between">
-                Promo Analysis
-                <span className={marginStandard > 0 ? 'text-green-400' : 'text-red-400'}>
-                    {marginStandard.toFixed(1)}%
-                </span>
-            </h4>
-            <div className="space-y-1 mb-2">
-                <div className="flex justify-between">
-                    <span className="text-gray-400">Promo Price (Gross)</span>
-                    <span className="font-mono text-white">£{promoPrice.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                    <span>- Commission ({details?.commissionRate ?? 15}%)</span>
-                    <span className="text-red-300">£{(details?.commissionCost ?? 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                    <span>- Postage (Est.)</span>
-                    <span className="text-red-300">£{(details?.standardPostage ?? 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                    <span>- COGS & Fees</span>
-                    <span className="text-red-300">£{(details?.otherCosts ?? 0).toFixed(2)}</span>
-                </div>
-            </div>
-            <div className="flex justify-between items-center font-bold text-sm">
-                <span className="text-gray-300">Net Profit</span>
-                <span className={(details?.profitStandard ?? 0) > 0 ? 'text-white' : 'text-red-400'}>
-                    £{(details?.profitStandard ?? 0).toFixed(2)}
-                </span>
-            </div>
-        </div>,
-        document.body
     );
 };
 
@@ -114,8 +95,8 @@ const PromoUploadModal = ({ products, themeColor, onClose, onConfirm }: { produc
                     rows = XLSX.utils.sheet_to_json(sheet);
                 } else {
                     const text = data as string;
-                    rows = text.split('\n').map(r => {
-                        const [sku, price] = r.split(',');
+                    rows = text.split('\n').map(l => {
+                        const [sku, price] = l.split(',');
                         return { sku: sku?.trim(), price: price?.trim() };
                     }).filter(r => r.sku);
                 }
@@ -181,13 +162,18 @@ const PromoUploadModal = ({ products, themeColor, onClose, onConfirm }: { produc
 };
 
 const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: any) => {
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<Partial<PromotionEvent>>({
         name: '',
         platform: 'All',
         startDate: '',
         endDate: '',
         submissionDeadline: '',
-        remark: ''
+        remark: '',
+        promotionScope: 'SKU',
+        baselineMode: 'CA_PRICE',
+        baselineManualPrice: 0,
+        shopDiscountType: 'PERCENT_OFF',
+        shopDiscountValue: 0
     });
     const [errors, setErrors] = useState<Record<string, boolean>>({});
 
@@ -213,41 +199,111 @@ const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: any) => 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-gray-900">Create New Campaign</h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold text-gray-900">Create New Campaign</h3>
+                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
                 </div>
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">
-                            Campaign Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 ${errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                            value={formData.name}
-                            onChange={e => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: false }); }}
-                            placeholder="e.g. Black Friday Sale"
-                        />
-                        {errors.name && <p className="text-xs text-red-500 mt-1">Campaign name is required.</p>}
+                <div className="space-y-5">
+                    {/* Basic Info */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Campaign Name <span className="text-red-500">*</span></label>
+                            <input
+                                type="text"
+                                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 ${errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                                value={formData.name}
+                                onChange={e => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: false }); }}
+                                placeholder="e.g. Winter Clearance"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Platform <span className="text-red-500">*</span></label>
+                            <select
+                                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 bg-white"
+                                value={formData.platform}
+                                onChange={e => setFormData({ ...formData, platform: e.target.value })}
+                            >
+                                <option value="All">All Platforms</option>
+                                {(platforms || []).map((p: string) => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Promotion Scope</label>
+                            <select
+                                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 bg-white"
+                                value={formData.promotionScope}
+                                onChange={e => setFormData({ ...formData, promotionScope: e.target.value as any })}
+                            >
+                                <option value="SKU">SKU (Individual Pricing)</option>
+                                <option value="SHOP">SHOP (Global Shop Rule)</option>
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Platform <span className="text-red-500">*</span></label>
-                        <select
-                            className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 border-gray-300"
-                            value={formData.platform}
-                            onChange={e => setFormData({ ...formData, platform: e.target.value })}
-                        >
-                            <option value="All">All Platforms</option>
-                            {platforms.map((p: string) => <option key={p} value={p}>{p}</option>)}
-                        </select>
+
+                    {/* Baseline Settings */}
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 grid grid-cols-2 gap-4">
+                        <div className={formData.baselineMode === 'MANUAL' ? 'col-span-1' : 'col-span-2'}>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Baseline Mode</label>
+                            <select
+                                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 bg-white"
+                                value={formData.baselineMode}
+                                onChange={e => setFormData({ ...formData, baselineMode: e.target.value as any })}
+                            >
+                                <option value="CA_PRICE">Channel Advisor Price</option>
+                                <option value="PRE_EVENT_AVG_PRICE">Pre-Event Avg Selling Price</option>
+                                <option value="MANUAL">Manual Baseline Price</option>
+                            </select>
+                        </div>
+                        {formData.baselineMode === 'MANUAL' && (
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Manual Baseline (£)</label>
+                                <input
+                                    type="number"
+                                    className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300"
+                                    value={formData.baselineManualPrice}
+                                    onChange={e => setFormData({ ...formData, baselineManualPrice: parseFloat(e.target.value) || 0 })}
+                                />
+                            </div>
+                        )}
                     </div>
+
+                    {/* Shop Discount Settings - ONLY if scope is SHOP */}
+                    {formData.promotionScope === 'SHOP' && (
+                        <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 animate-in zoom-in-95 duration-200">
+                            <h4 className="text-[10px] font-black text-indigo-500 uppercase mb-3 tracking-widest">Global Shop Discount Rule</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Discount Type</label>
+                                    <select
+                                        className="w-full border rounded-lg px-3 py-2 text-sm border-indigo-200 bg-white"
+                                        value={formData.shopDiscountType}
+                                        onChange={e => setFormData({ ...formData, shopDiscountType: e.target.value as any })}
+                                    >
+                                        <option value="PERCENT_OFF">% Off Baseline</option>
+                                        <option value="FIXED_OFF">Fixed Amount Off Baseline</option>
+                                        <option value="FIXED_PRICE">Set Fixed Promo Price</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
+                                        Value {formData.shopDiscountType === 'PERCENT_OFF' ? '(%)' : '(£)'}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        className="w-full border rounded-lg px-3 py-2 text-sm border-indigo-200"
+                                        value={formData.shopDiscountValue}
+                                        onChange={e => setFormData({ ...formData, shopDiscountValue: parseFloat(e.target.value) || 0 })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Schedule */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">
-                                Start Date <span className="text-red-500">*</span>
-                            </label>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Start Date <span className="text-red-500">*</span></label>
                             <input
                                 type="date"
                                 className={`w-full border rounded-lg px-3 py-2 text-sm ${errors.startDate ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
@@ -256,9 +312,7 @@ const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: any) => 
                             />
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">
-                                End Date <span className="text-red-500">*</span>
-                            </label>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">End Date <span className="text-red-500">*</span></label>
                             <input
                                 type="date"
                                 className={`w-full border rounded-lg px-3 py-2 text-sm ${errors.endDate ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
@@ -267,28 +321,20 @@ const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: any) => 
                             />
                         </div>
                     </div>
+
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Submission Deadline (Optional)</label>
-                        <input
-                            type="date"
-                            className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300"
-                            value={formData.submissionDeadline}
-                            onChange={e => setFormData({ ...formData, submissionDeadline: e.target.value })}
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Remark (Optional)</label>
+                        <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Internal Remark</label>
                         <textarea
-                            className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 resize-none h-20"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none h-20"
                             value={formData.remark}
                             onChange={e => setFormData({ ...formData, remark: e.target.value })}
-                            placeholder="Add internal notes or objectives..."
+                            placeholder="Objectives, requirements, or notes..."
                         />
                     </div>
                 </div>
-                <div className="flex justify-end gap-3 mt-6">
+                <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100">
                     <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
-                    <button onClick={handleSubmit} className="px-4 py-2 text-white rounded-lg text-sm font-medium shadow-md" style={{ backgroundColor: themeColor }}>Create Campaign</button>
+                    <button onClick={handleSubmit} className="px-6 py-2 text-white rounded-lg text-sm font-bold shadow-md hover:opacity-90" style={{ backgroundColor: themeColor }}>Create Campaign</button>
                 </div>
             </div>
         </div>
@@ -308,23 +354,20 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
     };
 
     const getPlatformStyle = (platform: string) => {
-        const rule = pricingRules[platform];
+        const rule = pricingRules && pricingRules[platform];
         if (rule?.color) {
             return {
-                backgroundColor: `${rule.color}15`, // Low opacity background
+                backgroundColor: `${rule.color}15`,
                 color: rule.color,
                 borderColor: `${rule.color}30`
             };
         }
-        return {
-            backgroundColor: '#f3f4f6',
-            color: '#374151',
-            borderColor: '#e5e7eb'
-        };
+        return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' };
     };
 
     const filteredPromotions = useMemo(() => {
-        return promotions.filter((p: any) => {
+        return (promotions || []).filter((p: any) => {
+            if (!p) return false;
             if (statusFilter !== 'ALL' && p.status !== statusFilter) return false;
             return true;
         });
@@ -332,14 +375,14 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
 
     const sortedPromotions = useMemo(() => {
         const getValue = (promo: PromotionEvent, key: string) => {
+            if (!promo) return 0;
             switch (key) {
                 case 'startDate':
                 case 'endDate':
-                case 'submissionDeadline':
                     const dateVal = (promo as any)[key];
                     return dateVal ? new Date(dateVal).getTime() : 0;
                 case 'items':
-                    return promo.items.length;
+                    return (promo.items || []).length;
                 case 'status':
                     const priority = { 'ACTIVE': 3, 'UPCOMING': 2, 'ENDED': 1 };
                     return priority[promo.status as keyof typeof priority] || 0;
@@ -351,7 +394,10 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
     }, [filteredPromotions, sortConfig]);
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
     return (
@@ -392,9 +438,8 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
                         <tr>
                             <SortableHeader label="Campaign Name" sortKey="name" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
                             <SortableHeader label="Platform" sortKey="platform" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="Start Date" sortKey="startDate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="End Date" sortKey="endDate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="Deadline" sortKey="submissionDeadline" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="Dates" sortKey="startDate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <th className="p-4">Scope</th>
                             <SortableHeader label="Items" sortKey="items" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                             <SortableHeader label="Status" sortKey="status" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="center" />
                             <th className="p-4 text-right">Actions</th>
@@ -420,17 +465,16 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
                                     </span>
                                 </td>
                                 <td className="p-4 text-gray-600 text-xs font-mono">
-                                    {formatDate(promo.startDate)}
+                                    {formatDate(promo.startDate)} - {formatDate(promo.endDate)}
                                 </td>
-                                <td className="p-4 text-gray-600 text-xs font-mono">
-                                    {formatDate(promo.endDate)}
-                                </td>
-                                <td className="p-4 text-gray-500 text-xs font-mono">
-                                    {promo.submissionDeadline ? formatDate(promo.submissionDeadline) : '-'}
+                                <td className="p-4">
+                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${promo.promotionScope === 'SHOP' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200'}`}>
+                                        {promo.promotionScope || 'SKU'}
+                                    </span>
                                 </td>
                                 <td className="p-4 text-right">
                                     <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded">
-                                        {promo.items.length}
+                                        {(promo.items || []).length}
                                     </span>
                                 </td>
                                 <td className="p-4 text-center">
@@ -439,7 +483,7 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
                                 <td className="p-4 text-right">
                                     <button
                                         onClick={(e) => handleDeleteClick(e, promo.id, promo.name)}
-                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                         title="Delete Campaign"
                                     >
                                         <Trash2 className="w-4 h-4" />
@@ -447,13 +491,6 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
                                 </td>
                             </tr>
                         ))}
-                        {sortedPromotions.length === 0 && (
-                            <tr>
-                                <td colSpan={8} className="p-12 text-center text-gray-400">
-                                    {statusFilter === 'ALL' ? 'No campaigns found. Create one to get started.' : `No ${statusFilter.toLowerCase()} campaigns found.`}
-                                </td>
-                            </tr>
-                        )}
                     </tbody>
                 </table>
             </div>
@@ -462,7 +499,7 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
                 <CreateEventModal
                     onClose={() => setIsCreateOpen(false)}
                     onCreate={onCreateEvent}
-                    platforms={Object.keys(pricingRules)}
+                    platforms={pricingRules ? Object.keys(pricingRules) : []}
                     themeColor={themeColor}
                 />
             )}
@@ -470,164 +507,262 @@ const PromotionDashboard = ({ promotions, pricingRules, onSelectPromo, onCreateE
     );
 };
 
-const PromoPerformanceHeader = ({ promo, products, priceHistoryMap, themeColor }: { promo: PromotionEvent, products: Product[], priceHistoryMap: Map<string, PriceLog[]>, themeColor: string }) => {
-    // ... [Content identical to original, omitted for brevity]
-    const stats = useMemo(() => {
-        let totalDailyProfitBase = 0;
-        let totalDailyProfitPromo = 0;
-        let totalBaseRevenue = 0;
-        let totalActualSold = 0;
-        let totalActualRevenue = 0;
+interface EventDetailViewProps {
+    promo: PromotionEvent;
+    products: Product[];
+    priceHistoryMap: Map<string, PriceLog[]>;
+    priceChangeHistory?: PriceChangeRecord[];
+    onBack: () => void;
+    onAddProducts: () => void;
+    onDeleteItem: (sku: string) => void;
+    onUpdateMeta: (updates: Partial<PromotionEvent>) => void;
+    onUpdateItem: (sku: string, updates: Partial<PromotionItem>) => void;
+    themeColor: string;
+}
 
-        const startDate = new Date(promo.startDate);
-        const now = new Date();
-        const hasStarted = now >= startDate;
-
-        const historyMap = priceHistoryMap || new Map();
-        const items = promo.items || [];
-
-        items.forEach(item => {
-            const product = products.find(p => p.sku === item.sku);
-            if (!product) return;
-
-            const velocity = product.averageDailySales || 0;
-            const cost = (product.costPrice || 0) + (product.wmsFee || 0) + (product.otherFee || 0) + (product.subscriptionFee || 0);
-
-            const baseProfit = (item.basePrice / VAT) - cost;
-            totalDailyProfitBase += (baseProfit * velocity);
-            totalBaseRevenue += (item.basePrice * velocity);
-
-            const promoProfit = (item.promoPrice / VAT) - cost;
-            totalDailyProfitPromo += (promoProfit * velocity);
-
-            if (hasStarted) {
-                const logs = historyMap.get(item.sku) || [];
-                const filteredLogs = logs.filter((l: any) => {
-                    const d = l.date.split('T')[0];
-                    const isDateMatch = d >= promo.startDate && d <= promo.endDate;
-                    const isPlatformMatch = promo.platform === 'All' || l.platform === promo.platform;
-                    return isDateMatch && isPlatformMatch;
-                });
-
-                filteredLogs.forEach((l: any) => {
-                    totalActualSold += l.velocity;
-                    totalActualRevenue += (l.price * l.velocity);
-                });
-            }
-        });
-
-        const profitGap = totalDailyProfitBase - totalDailyProfitPromo;
-        const breakevenLift = totalDailyProfitPromo > 0
-            ? ((totalDailyProfitBase / totalDailyProfitPromo) - 1) * 100
-            : 0;
-
-        return {
-            totalDailyProfitBase,
-            totalDailyProfitPromo,
-            profitGap,
-            breakevenLift,
-            totalActualSold,
-            totalActualRevenue,
-            hasStarted
-        };
-    }, [promo, products, priceHistoryMap]);
-
-    return (
-        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass p-5 mb-6 animate-in fade-in slide-in-from-top-4 backdrop-blur-custom">
-            <div className="flex items-center gap-2 mb-4">
-                <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">
-                    <TrendingUp className="w-4 h-4" />
-                </div>
-                <h3 className="font-bold text-gray-900 text-sm uppercase tracking-wide">Campaign Intelligence</h3>
-                <span className="text-xs text-gray-400 ml-auto">Live Estimates</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 divide-y md:divide-y-0 md:divide-x divide-gray-200/50">
-                <div className="flex flex-col gap-1 pr-4">
-                    <span className="text-xs text-gray-500 font-medium">Daily Profit Projection</span>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-bold text-gray-900">£{stats.totalDailyProfitPromo.toFixed(0)}</span>
-                        <span className="text-xs text-gray-400">vs £{stats.totalDailyProfitBase.toFixed(0)} BAU</span>
-                    </div>
-                    <div className={`text-xs font-medium flex items-center gap-1 ${stats.profitGap > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                        {stats.profitGap > 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-                        {stats.profitGap > 0 ? `Sacrificing £${stats.profitGap.toFixed(0)} / day` : `Gaining £${Math.abs(stats.profitGap).toFixed(0)} / day`}
-                    </div>
-                </div>
-
-                <div className="flex flex-col gap-1 md:px-4 pt-4 md:pt-0">
-                    <span className="text-xs text-gray-500 font-medium">Breakeven Velocity Target</span>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-bold text-indigo-600">+{stats.breakevenLift.toFixed(0)}%</span>
-                        <span className="text-xs text-gray-400">unit sales needed</span>
-                    </div>
-                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <Target className="w-3 h-3" />
-                        To match normal profit levels
-                    </div>
-                </div>
-
-                <div className="flex flex-col gap-1 md:pl-4 pt-4 md:pt-0">
-                    <span className="text-xs text-gray-500 font-medium">Real-time Performance</span>
-                    {stats.hasStarted ? (
-                        <>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-2xl font-bold text-gray-900">£{stats.totalActualRevenue.toFixed(0)}</span>
-                                <span className="text-xs text-gray-400">Revenue</span>
-                            </div>
-                            <div className="text-xs text-green-600 font-medium flex items-center gap-1">
-                                <ShoppingBag className="w-3 h-3" />
-                                {stats.totalActualSold.toFixed(0)} Units Sold (Approx)
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex flex-col justify-center h-full">
-                            <span className="text-sm font-medium text-gray-400 italic">Event has not started</span>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProducts, onDeleteItem, onUpdateMeta, themeColor }: any) => {
+const EventDetailView = ({ promo, products, priceHistoryMap, priceChangeHistory, onBack, onAddProducts, onDeleteItem, onUpdateMeta, onUpdateItem, themeColor }: EventDetailViewProps) => {
     const [isUploadOpen, setIsUploadOpen] = useState(false);
-    const [sortConfig, setSortConfig] = useState<SortState<string> | null>(null);
+    const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'startDate', dir: 'asc' });
+    const [activeSection, setActiveSection] = useState<'nomination' | 'analytics'>('nomination');
+    
+    // Lifecycle windows & effectiveness
+    const nowKey = useMemo(() => asDateKey(new Date())!, []);
+    const windows = useMemo(() => computePromoWindows(promo, nowKey), [promo, nowKey]);
+    
+    const aggregatedEffectiveness = useMemo(() => {
+        const results = (promo?.items || []).map((item: any) => {
+            const product = products.find(p => p.sku.toUpperCase() === item.sku.toUpperCase());
+            return computePromoEffectiveness(promo, item.sku, Array.from((priceHistoryMap || new Map()).values()).flat(), priceChangeHistory || [], product);
+        });
+        
+        const totals = {
+            baselineDailyUnits: results.reduce((sum, r) => sum + (r.baselineDailyUnits || 0), 0),
+            forecastUnits: results.reduce((sum, r) => sum + (r.forecastUnits || 0), 0),
+            actualUnits: results.reduce((sum, r) => sum + (r.actualUnits || 0), 0),
+            actualRevenue: results.reduce((sum, r) => sum + (r.actualRevenue || 0), 0),
+            actualProfit: results.reduce((sum, r) => sum + (r.actualProfit || 0), 0),
+            upliftUnits: results.reduce((sum, r) => sum + (r.upliftUnits || 0), 0),
+            upliftRevenue: results.reduce((sum, r) => sum + (r.upliftRevenue || 0), 0),
+            upliftProfit: results.reduce((sum, r) => sum + (r.upliftProfit || 0), 0),
+            baselineRevenue: results.reduce((sum, r) => sum + ((r.baselineDailyUnits || 0) * (windows.event?.days || 0) * (r.baselinePrice || 0)), 0)
+        };
+        
+        return { items: results, totals };
+    }, [promo, priceHistoryMap, priceChangeHistory, windows.event.days, products]);
 
     const formatPromoDate = (dStr: string, withYear: boolean = true) => {
-        return new Date(dStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
+        if (!dStr) return '-';
+        const d = new Date(dStr);
+        if (isNaN(d.getTime())) return dStr;
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined });
     };
 
     const dateRangeStr = useMemo(() => {
+        if (!promo?.startDate || !promo?.endDate) return '-';
         const sDate = new Date(promo.startDate);
         const eDate = new Date(promo.endDate);
         const sameYear = sDate.getFullYear() === eDate.getFullYear();
         return `${formatPromoDate(promo.startDate, !sameYear)} – ${formatPromoDate(promo.endDate, true)}`;
-    }, [promo.startDate, promo.endDate]);
+    }, [promo?.startDate, promo?.endDate]);
+
+    const isSkuScope = promo?.promotionScope === 'SKU';
 
     const sortedItems = useMemo(() => {
-        const itemsWithData = promo.items.map((item: any) => {
-            const product = products.find((p: Product) => p.sku === item.sku);
-            const currentMargin = product ? ((item.promoPrice / VAT - (product.costPrice || 0)) / (item.promoPrice / VAT) * 100) : 0;
-            let platformPrice = product ? (product.currentPrice * VAT) : 0;
-            if (product && promo.platform !== 'All') {
-                const channel = product.channels.find((c: any) => c.platform === promo.platform);
-                if (channel && channel.price) platformPrice = channel.price * VAT;
+        const itemsWithData = (aggregatedEffectiveness.items || []).map((item: any) => {
+            const product = (products || []).find((p: Product) => p.sku.toUpperCase() === item.sku.toUpperCase());
+            const rawItem = (promo?.items || []).find(i => i.sku.toUpperCase() === item.sku.toUpperCase());
+
+            const resolvedPrice = (item.promoPrice > 0) 
+                ? item.promoPrice 
+                : (rawItem?.promoPrice && rawItem.promoPrice > 0) 
+                    ? rawItem.promoPrice 
+                    : 0;
+
+            let projMargin = item.marginPctDuring;
+            if (product && resolvedPrice > 0) {
+                const totalCost = (Number(product.costPrice) || 0) +
+                    (Number(product.sellingFee) || 0) +
+                    (Number(product.adsFee) || 0) +
+                    (Number(product.postage) || 0) +
+                    (Number(product.otherFee) || 0) +
+                    (Number(product.subscriptionFee) || 0) +
+                    (Number(product.wmsFee) || 0);
+
+                const totalIncome = resolvedPrice + (Number(product.extraFreight) || 0);
+                const netProfit = totalIncome - totalCost;
+                projMargin = (netProfit / resolvedPrice) * 100;
             }
-            const discountPercent = item.basePrice > 0 ? ((item.basePrice - item.promoPrice) / item.basePrice * 100) : 0;
 
             return {
                 ...item,
-                caPrice: product?.caPrice,
-                platformPrice,
-                discountPercent,
-                currentMargin
+                product,
+                promoPrice: resolvedPrice,
+                discountPercent: item.baselinePrice > 0 ? ((item.baselinePrice - resolvedPrice) / item.baselinePrice * 100) : 0,
+                isIncomplete: isSkuScope && resolvedPrice <= 0,
+                projectedMargin: projMargin
             };
         });
         const getValue = (row: any, key: string) => (row as any)[key];
         return sortRows(itemsWithData, sortConfig, getValue);
-    }, [promo.items, products, promo.platform, sortConfig]);
+    }, [aggregatedEffectiveness, products, sortConfig, promo, isSkuScope]);
+
+    const handleExportPostMortem = () => {
+        const { totals } = aggregatedEffectiveness;
+        
+        // 1. Management Summary Block
+        const summary = [
+            ['CAMPAIGN PERFORMANCE REPORT', ''],
+            ['Campaign Name', promo.name],
+            ['Platform', promo.platform],
+            ['Date Range', dateRangeStr],
+            ['Days Active', windows.event.days],
+            ['Status', promo.status],
+            [''],
+            ['FINANCIAL AGGREGATES', ''],
+            ['Total Units Sold', totals.actualUnits],
+            ['Total Net Revenue', `£${totals.actualRevenue.toFixed(2)}`],
+            ['Total Net Profit', `£${totals.actualProfit.toFixed(2)}`],
+            ['Unit Uplift vs Baseline', `+${totals.upliftUnits.toFixed(0)} units`],
+            ['Revenue Delta vs Baseline', `£${totals.upliftRevenue.toFixed(2)}`],
+            ['Profit Delta vs Baseline', `£${totals.upliftProfit.toFixed(2)}`],
+            ['Overall ROI (Uplift/Sacrifice)', totals.upliftProfit > 0 ? 'Profitable' : 'Margin Sacrificed'],
+            [''],
+            ['SKU PERFORMANCE DEEP DIVE', '']
+        ];
+
+        // 2. Detailed Table Headers
+        const headers = [
+            'SKU', 'Product Name', 'Baseline Price', 'Promo Price', 'Discount %',
+            'Baseline Daily Units', 'Actual Units Sold',
+            'Actual Revenue', 'Actual Profit', 'Uplift Units', 'Uplift Profit',
+            'Margin % During', 'Management Insight'
+        ];
+
+        // 3. Row Construction with Intelligent Commentary
+        const rows = sortedItems.map(item => {
+            const upliftUnits = item.upliftUnits || 0;
+            const upliftProfit = item.upliftProfit || 0;
+            const actualUnits = item.actualUnits || 0;
+
+            let comment = "Stable";
+            if (actualUnits === 0) {
+                comment = "No Impact: Item had zero sales activity.";
+            } else if (upliftUnits > 0) {
+                if (upliftProfit > 0) comment = "Winner: Profitable volume uplift.";
+                else comment = "Review: Volume gain did not cover margin sacrifice.";
+            } else {
+                comment = "Ineffective: No significant volume growth detected vs baseline.";
+            }
+
+            return [
+                item.sku,
+                item.product?.name || 'Unknown',
+                item.baselinePrice.toFixed(2),
+                item.promoPrice.toFixed(2),
+                item.discountPercent.toFixed(1) + '%',
+                item.baselineDailyUnits.toFixed(2),
+                item.actualUnits.toFixed(0),
+                item.actualRevenue.toFixed(2),
+                item.actualProfit.toFixed(2),
+                item.upliftUnits.toFixed(0),
+                item.upliftProfit.toFixed(2),
+                (item.marginPctDuring || 0).toFixed(1) + '%',
+                comment
+            ];
+        });
+
+        // 4. Grand Totals Row for bottom of table
+        const grandTotalsRow = [
+            'GRAND TOTALS', '', '', '', '', '',
+            totals.actualUnits.toFixed(0),
+            totals.actualRevenue.toFixed(2),
+            totals.actualProfit.toFixed(2),
+            totals.upliftUnits.toFixed(0),
+            totals.upliftProfit.toFixed(2),
+            '',
+            ''
+        ];
+
+        // Combine all sections with blank line separators for structure
+        const csvContent = [
+            ...summary.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')),
+            headers.map(v => `"${v}"`).join(','),
+            ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')),
+            grandTotalsRow.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+        ].join('\n');
+
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Post_Mortem_${promo.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const getRecommendation = () => {
+        const { totals } = aggregatedEffectiveness;
+        if (totals.actualUnits === 0 && windows.phase === 'POST') return { label: "Zero Impact", style: "text-gray-500", desc: "No sales recorded during this event." };
+        if (totals.upliftUnits < (totals.baselineDailyUnits * 0.1) && windows.phase === 'POST') return { label: "Inefficient", style: "text-red-600", desc: "Uplift was negligible compared to baseline." };
+        if (totals.upliftUnits > 0 && windows.phase === 'POST') return { label: "Successful Uplift", style: "text-green-600", desc: "Promotion generated meaningful volume growth." };
+        return { label: "Monitoring", style: "text-indigo-600", desc: "Performance tracking in progress." };
+    };
+
+    const getStrategicRecommendation = () => {
+        const { totals } = aggregatedEffectiveness;
+        if (windows.phase !== 'POST') return null;
+
+        if (totals.upliftUnits > 0) {
+            if (totals.upliftProfit > 0) {
+                return { 
+                    label: "Repeat similar promotion", 
+                    explanation: "Event was profitable with positive sales uplift. This is a winning configuration.", 
+                    style: "bg-green-50 border-green-200 text-green-800" 
+                };
+            } else {
+                return { 
+                    label: "Reduce discount depth next time", 
+                    explanation: "Uplift was positive but profit decreased vs baseline. Margin sacrifice was too high.", 
+                    style: "bg-amber-50 border-amber-200 text-amber-800" 
+                };
+            }
+        }
+        return { 
+            label: "Do not repeat promotion", 
+            explanation: "No significant unit uplift detected. Customer response did not justify the discount.", 
+            style: "bg-red-50 border-red-200 text-red-800" 
+        };
+    };
+
+    const recommendation = getRecommendation();
+    const stratRec = getStrategicRecommendation();
+
+    // VARIANCE CALCULATIONS FOR LIVE PANEL
+    const varianceStats = useMemo(() => {
+        const { totals } = aggregatedEffectiveness;
+        
+        // Forecast Variance
+        const forecastDiff = totals.actualUnits - totals.forecastUnits;
+        const forecastDiffPct = totals.forecastUnits > 0 ? (forecastDiff / totals.forecastUnits) * 100 : 0;
+        
+        // Baseline Variance (Actual vs what would have sold at baseline rate)
+        const baselineTotal = totals.actualUnits - totals.upliftUnits;
+        const baselineDiff = totals.upliftUnits;
+        const baselineDiffPct = baselineTotal > 0 ? (baselineDiff / baselineTotal) * 100 : 0;
+
+        const getColor = (pct: number) => {
+            if (pct > 5) return 'text-green-600';
+            if (pct < -5) return 'text-red-600';
+            return 'text-gray-500';
+        };
+
+        return {
+            forecastDiff, forecastDiffPct, forecastColor: getColor(forecastDiffPct),
+            baselineDiff, baselineDiffPct, baselineColor: getColor(baselineDiffPct)
+        };
+    }, [aggregatedEffectiveness]);
 
     return (
         <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-right duration-300">
@@ -636,98 +771,378 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
                     <ArrowLeft className="w-4 h-4" /> Back to Dashboard
                 </button>
                 <div className="flex gap-2">
-                    <button
-                        onClick={() => setIsUploadOpen(true)}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium shadow-sm hover:bg-gray-50 flex items-center gap-2"
-                    >
-                        <Upload className="w-4 h-4" /> Batch Upload Items
-                    </button>
+                    {isSkuScope && (
+                        <button
+                            onClick={() => setIsUploadOpen(true)}
+                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium shadow-sm hover:bg-gray-50 flex items-center gap-2"
+                        >
+                            <Upload className="w-4 h-4" /> Batch Upload Items
+                        </button>
+                    )}
                     <button
                         onClick={onAddProducts}
                         className="px-4 py-2 text-white rounded-lg text-sm font-medium shadow-md hover:opacity-90 flex items-center gap-2"
                         style={{ backgroundColor: themeColor }}
                     >
-                        <Plus className="w-4 h-4" /> Add Products
+                        <Plus className="w-4 h-4" /> Add SKUs
                     </button>
                 </div>
             </div>
 
-            <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm">
-                <div className="flex justify-between items-start mb-4">
+            {/* Lifecycle Banner */}
+            <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm animate-in zoom-in duration-300 ${
+                windows.phase === 'PRE' ? 'bg-blue-50 border-blue-100 text-blue-800' :
+                windows.phase === 'LIVE' ? 'bg-green-50 border-green-100 text-green-800' :
+                'bg-indigo-50 border-indigo-100 text-indigo-800'
+            }`}>
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg bg-white/60`}>
+                        {windows.phase === 'PRE' ? <Calendar className="w-5 h-5" /> : windows.phase === 'LIVE' ? <Activity className="w-5 h-5" /> : <BarChart3 className="w-5 h-5" />}
+                    </div>
                     <div>
-                        <div className="flex items-center gap-3 mb-1">
-                            <h2 className="text-2xl font-bold text-gray-900">{promo.name}</h2>
-                            <StatusBadge status={promo.status} />
+                        <h4 className="font-bold uppercase text-xs tracking-widest">
+                            {windows.phase === 'PRE' ? 'Pre-Event Forecast' : windows.phase === 'LIVE' ? 'Live Tracking' : 'Post-Event Analysis'}
+                        </h4>
+                        <p className="text-sm opacity-80">{dateRangeStr}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="text-right">
+                        <div className="text-[10px] uppercase font-black opacity-40">Status</div>
+                        <div className="font-bold flex items-center gap-2">
+                            {windows.phase === 'LIVE' && <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
+                            {promo.status}
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                            <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {dateRangeStr}</span>
-                            <span className="flex items-center gap-1"><Target className="w-4 h-4" /> {promo.platform}</span>
+                    </div>
+                    <div className="h-8 w-px bg-current opacity-10" />
+                    <div className="flex bg-white/40 p-1 rounded-lg border border-current/5">
+                        <button onClick={() => setActiveSection('nomination')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeSection === 'nomination' ? 'bg-white shadow text-gray-900' : 'opacity-60 hover:opacity-100'}`}>Nomination</button>
+                        <button onClick={() => setActiveSection('analytics')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeSection === 'analytics' ? 'bg-white shadow text-gray-900' : 'opacity-60 hover:opacity-100'}`}>Analytics</button>
+                    </div>
+                </div>
+            </div>
+
+            {activeSection === 'nomination' ? (
+                <div className="space-y-6">
+                    {/* Meta Editor Card */}
+                    <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm">
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900">{promo.name}</h2>
+                                <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                    <span className="flex items-center gap-1 font-medium"><Target className="w-4 h-4" /> {promo.platform}</span>
+                                    <span className="text-xs font-black uppercase bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100">{promo.promotionScope || 'SKU'} SCOPE</span>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                                <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
+                                    BASELINE: <span className="text-gray-900">{promo.baselineMode?.replace(/_/g, ' ')}</span>
+                                    {promo.baselineMode === 'MANUAL' && <span className="text-indigo-600"> (£{promo.baselineManualPrice})</span>}
+                                </div>
+                            </div>
+                        </div>
+
+                        {!isSkuScope && (
+                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6 animate-in slide-in-from-top-2">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h4 className="font-bold text-indigo-900 text-sm">Shop-Wide Discount Rule</h4>
+                                        <p className="text-xs text-indigo-700 mt-0.5">All nominated SKUs will inherit this rule based on their individual baseline prices.</p>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-indigo-400 uppercase block mb-1">Type</label>
+                                            <select 
+                                                value={promo.shopDiscountType}
+                                                onChange={(e) => onUpdateMeta({ shopDiscountType: e.target.value })}
+                                                className="text-sm font-bold border-indigo-200 rounded-lg py-1.5 px-3 bg-white focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="PERCENT_OFF">% Off</option>
+                                                <option value="FIXED_OFF">£ Off</option>
+                                                <option value="FIXED_PRICE">Fixed Price</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-indigo-400 uppercase block mb-1">Value</label>
+                                            <input 
+                                                type="number"
+                                                value={promo.shopDiscountValue}
+                                                onChange={(e) => onUpdateMeta({ shopDiscountValue: parseFloat(e.target.value) || 0 })}
+                                                className="w-24 text-sm font-bold border-indigo-200 rounded-lg py-1.5 px-3 bg-white focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <table className="w-full text-left text-sm whitespace-nowrap bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                            <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200 uppercase text-[10px] tracking-wider">
+                                <tr>
+                                    <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                                    <th className="p-4 text-right">Baseline Price</th>
+                                    <th className="p-4">{isSkuScope ? 'Discount Type' : 'Rule Status'}</th>
+                                    <th className="p-4 text-right">{isSkuScope ? 'Value' : ''}</th>
+                                    <th className="p-4 text-right">Effective Promo Price</th>
+                                    <th className="p-4 text-right">Proj. Margin</th>
+                                    <th className="p-4 text-right w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {sortedItems.map((item: any) => (
+                                    <tr key={item.sku} className="hover:bg-gray-50 transition-colors group">
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-1">
+                                                <div className="font-bold text-gray-900">{item.sku}</div>
+                                                <GradeBadge gradeLevel={item.product?.gradeLevel} />
+                                                {item.isIncomplete && (
+                                                    <span className="ml-2 text-[8px] bg-red-100 text-red-700 px-1 py-0.5 rounded-full font-black uppercase flex items-center gap-1 border border-red-200">
+                                                        <AlertCircle className="w-2.5 h-2.5" /> Incomplete
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[150px]">{item.product?.name}</div>
+                                        </td>
+                                        <td className="p-4 text-right text-gray-500 font-medium">£{item.baselinePrice.toFixed(2)}</td>
+                                        <td className="p-4">
+                                            {isSkuScope ? (
+                                                <select 
+                                                    value={item.discountType || 'FIXED_PRICE'}
+                                                    onChange={(e) => onUpdateItem(item.sku, { discountType: e.target.value })}
+                                                    className="text-xs font-bold border-gray-200 rounded-lg p-1.5 bg-white group-hover:border-indigo-300 transition-colors focus:ring-2 focus:ring-indigo-500"
+                                                >
+                                                    <option value="PERCENT_OFF">% Off</option>
+                                                    <option value="FIXED_OFF">£ Off</option>
+                                                    <option value="FIXED_PRICE">Fixed Price</option>
+                                                </select>
+                                            ) : (
+                                                <span className="text-[10px] font-bold text-indigo-500 flex items-center gap-1.5 italic">
+                                                    <RotateCcw className="w-3 h-3" /> Inherits shop rule
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            {isSkuScope && (
+                                                <input 
+                                                    type="number"
+                                                    value={item.discountValue || ''}
+                                                    onChange={(e) => onUpdateItem(item.sku, { discountValue: parseFloat(e.target.value) || 0 })}
+                                                    placeholder="0.00"
+                                                    className="w-20 text-right text-xs font-bold border-gray-200 rounded-lg p-1.5 bg-white group-hover:border-indigo-300 transition-colors focus:ring-2 focus:ring-indigo-500"
+                                                />
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <div className="flex flex-col items-end">
+                                                <span className="text-sm font-black text-gray-900">£{item.promoPrice.toFixed(2)}</span>
+                                                <span className="text-[9px] font-bold text-red-500">-{item.discountPercent.toFixed(1)}% OFF</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold border ${item.projectedMargin > 20 ? 'bg-green-100 text-green-700 border-green-200' : item.projectedMargin > 0 ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                                                {item.projectedMargin !== null && item.projectedMargin !== undefined ? item.projectedMargin.toFixed(1) : '0.0'}%
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button
+                                                onClick={() => onDeleteItem(item.sku)}
+                                                className="text-gray-300 hover:text-red-600 transition-colors p-1"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {(!promo?.items || promo.items.length === 0) && (
+                                    <tr><td colSpan={7} className="p-12 text-center text-gray-400 italic">No SKUs nominated for this campaign.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in slide-in-from-left duration-300">
+                    {/* Panel A: Forecast */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                        <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                            <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                <Zap className="w-4 h-4 text-indigo-600" />
+                                Pre-Event Forecast
+                            </h4>
+                            <div className="flex items-center gap-1">
+                                <span className="text-[9px] font-black text-gray-400 uppercase">Lift %</span>
+                                <input 
+                                    type="number"
+                                    value={promo.expectedLiftPct || 0}
+                                    onChange={(e) => onUpdateMeta({ expectedLiftPct: parseFloat(e.target.value) || 0 })}
+                                    className="w-12 text-right text-[9px] font-bold border border-gray-200 rounded p-0.5 bg-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <p className="text-sm text-gray-600 italic">If nothing unusual happens, this promotion is expected to generate:</p>
+
+                            <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-indigo-800">Forecast Totals</span>
+                                    <span className="text-lg font-black text-indigo-700">{formatNumber(aggregatedEffectiveness.totals.forecastUnits, 0)} <span className="text-xs font-normal">units</span></span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-indigo-800">Expected Revenue</span>
+                                    <span className="text-lg font-bold text-indigo-900">{formatMoney(aggregatedEffectiveness.totals.forecastUnits * (aggregatedEffectiveness.totals.baselineRevenue / (aggregatedEffectiveness.totals.baselineDailyUnits * (windows.event?.days || 1) || 1)), 0)}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 text-center">
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Baseline Units</div>
+                                    <div className="text-xl font-black text-gray-900">{formatNumber(aggregatedEffectiveness.totals.baselineDailyUnits, 1)} <span className="text-[10px] font-normal">/day</span></div>
+                                </div>
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 text-center">
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Days in Window</div>
+                                    <div className="text-xl font-black text-gray-900">{windows.event?.days || 0}</div>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-blue-50/50 p-3 rounded-lg text-[11px] text-blue-700 flex gap-2">
+                                <Info className="w-4 h-4 shrink-0" />
+                                <p>Baseline calculated using weighted performance from {windows.pre?.days || 0} days prior to event start.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Panel B: Live Tracking */}
+                    <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col ${windows.phase === 'PRE' ? 'opacity-40 grayscale' : ''}`}>
+                        <div className="p-4 border-b border-gray-100 bg-gray-50">
+                            <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                <Activity className="w-4 h-4 text-green-600" />
+                                Live Performance
+                            </h4>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Units to Date</div>
+                                    <div className="text-3xl font-black text-gray-900">{formatNumber(aggregatedEffectiveness.totals.actualUnits)}</div>
+                                    
+                                    {/* Variance Indicators */}
+                                    <div className="mt-3 space-y-1">
+                                        <div className={`text-[11px] font-bold flex items-center gap-1 ${varianceStats.forecastColor}`}>
+                                            {varianceStats.forecastDiff >= 0 ? '+' : ''}{formatNumber(varianceStats.forecastDiff)} vs forecast ({varianceStats.forecastDiffPct >= 0 ? '+' : ''}{varianceStats.forecastDiffPct.toFixed(0)}%)
+                                        </div>
+                                        <div className={`text-[11px] font-bold flex items-center gap-1 ${varianceStats.baselineColor}`}>
+                                            {varianceStats.baselineDiff >= 0 ? '+' : ''}{formatNumber(varianceStats.baselineDiff)} vs baseline ({varianceStats.baselineDiffPct >= 0 ? '+' : ''}{varianceStats.baselineDiffPct.toFixed(0)}%)
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    {aggregatedEffectiveness.totals.upliftUnits > 0 ? (
+                                        <div className="flex items-center gap-1 text-green-600 font-bold animate-in slide-in-from-bottom-1">
+                                            <TrendingUp className="w-4 h-4" />
+                                            {formatNumber(aggregatedEffectiveness.totals.upliftUnits)} units uplift
+                                        </div>
+                                    ) : (
+                                        <div className="text-gray-400 text-xs font-medium italic">Pending tracking...</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-3 bg-gray-50 rounded-xl">
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase">Revenue</div>
+                                    <div className="text-lg font-bold text-gray-900">{formatMoney(aggregatedEffectiveness.totals.actualRevenue, 0)}</div>
+                                </div>
+                                <div className="p-3 bg-gray-50 rounded-xl">
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase">Profit</div>
+                                    <div className="text-lg font-bold text-gray-900">{formatMoney(aggregatedEffectiveness.totals.actualProfit, 0)}</div>
+                                </div>
+                            </div>
+                            
+                            <div className="pt-2">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Goal Progress</span>
+                                    <span className="text-[10px] font-bold text-indigo-600">{Math.min(100, (aggregatedEffectiveness.totals.actualUnits / (aggregatedEffectiveness.totals.forecastUnits || 1) * 100)).toFixed(0)}%</span>
+                                </div>
+                                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
+                                        style={{ width: `${Math.min(100, (aggregatedEffectiveness.totals.actualUnits / (aggregatedEffectiveness.totals.forecastUnits || 1) * 100))}%` }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Panel C: Post-Analysis */}
+                    <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col ${windows.phase !== 'POST' ? 'opacity-40 grayscale' : ''}`}>
+                        <div className="p-4 border-b border-gray-100 bg-gray-50">
+                            <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                <BarChart3 className="w-4 h-4 text-purple-600" />
+                                Campaign Efficiency
+                            </h4>
+                        </div>
+                        <div className="p-6 space-y-5">
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">Rule-Based Assessment</div>
+                                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <div className={`font-black text-sm flex items-center gap-2 ${recommendation.style}`}>
+                                            <Star className="w-4 h-4 fill-current" />
+                                            {recommendation.label}
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{recommendation.desc}</p>
+                                    </div>
+                                </div>
+
+                                {/* Strategic Recommendation Block */}
+                                {stratRec && (
+                                    <div>
+                                        <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">Strategic Recommendation</div>
+                                        <div className={`p-3 rounded-xl border ${stratRec.style} animate-in fade-in slide-in-from-top-1`}>
+                                            <div className="font-black text-xs uppercase flex items-center gap-2 mb-1">
+                                                <Target className="w-3.5 h-3.5" />
+                                                {stratRec.label}
+                                            </div>
+                                            <p className="text-[10px] opacity-90 leading-normal">{stratRec.explanation}</p>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                                        <span className="text-xs text-gray-500">Total Unit Uplift</span>
+                                        <span className={`text-sm font-black ${aggregatedEffectiveness.totals.upliftUnits > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                            {aggregatedEffectiveness.totals.upliftUnits > 0 ? '+' : ''}{formatNumber(aggregatedEffectiveness.totals.upliftUnits)} u
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                                        <span className="text-xs text-gray-500">Revenue Yield Change</span>
+                                        <span className={`text-sm font-black ${aggregatedEffectiveness.totals.upliftRevenue > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                            {aggregatedEffectiveness.totals.upliftRevenue > 0 ? '+' : ''}{formatMoney(aggregatedEffectiveness.totals.upliftRevenue, 0)}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                                        <span className="text-xs text-gray-500">Profit Yield Change</span>
+                                        <span className={`text-sm font-black ${aggregatedEffectiveness.totals.upliftProfit > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                            {aggregatedEffectiveness.totals.upliftProfit > 0 ? '+' : ''}{formatMoney(aggregatedEffectiveness.totals.upliftProfit, 0)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {windows.phase === 'POST' && (
+                                <button 
+                                    onClick={handleExportPostMortem}
+                                    className="w-full py-2 bg-gray-900 text-white rounded-lg text-xs font-bold shadow-md hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Download className="w-3.5 h-3.5" />
+                                    Export Post-Mortem CSV
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
-
-                <PromoPerformanceHeader promo={promo} products={products} priceHistoryMap={priceHistoryMap} themeColor={themeColor} />
-            </div>
-
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
-                <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass">
-                        <tr>
-                            <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="CA Price" sortKey="caPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Platform Price" sortKey="platformPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Promo Price" sortKey="promoPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Discount" sortKey="discountPercent" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Proj. Margin" sortKey="currentMargin" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                            <th className="p-4 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100/50">
-                        {sortedItems.map((item: any) => {
-                            const product = products.find((p: Product) => p.sku === item.sku);
-                            
-                            return (
-                                <tr key={item.sku} className="even:bg-gray-50/30 hover:bg-gray-100/50">
-                                    <td className="p-4">
-                                        <div className="flex items-center">
-                                            <div className="font-bold text-gray-900">{item.sku}</div>
-                                            <GradeBadge gradeLevel={product?.gradeLevel} />
-                                        </div>
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        {item.caPrice ? (
-                                            <span className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded border border-purple-100">£{item.caPrice.toFixed(2)}</span>
-                                        ) : <span className="text-gray-300">-</span>}
-                                    </td>
-                                    <td className="p-4 text-right text-gray-500">£{item.platformPrice.toFixed(2)}</td>
-                                    <td className="p-4 text-right font-bold" style={{ color: themeColor }}>£{item.promoPrice.toFixed(2)}</td>
-                                    <td className="p-4 text-right">
-                                        <span className="bg-red-50 text-red-700 px-2 py-1 rounded text-xs font-bold">
-                                            {item.discountPercent.toFixed(1)}% OFF
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-right font-mono">{item.currentMargin.toFixed(1)}%</td>
-                                    <td className="p-4 text-right">
-                                        <button
-                                            onClick={() => onDeleteItem(item.sku)}
-                                            className="text-gray-400 hover:text-red-600 transition-colors"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        {promo.items.length === 0 && (
-                            <tr>
-                                <td colSpan={7} className="p-8 text-center text-gray-400">
-                                    No products in this campaign yet.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            )}
 
             {isUploadOpen && (
                 <PromoUploadModal
@@ -735,17 +1150,21 @@ const EventDetailView = ({ promo, products, priceHistoryMap, onBack, onAddProduc
                     themeColor={themeColor}
                     onClose={() => setIsUploadOpen(false)}
                     onConfirm={(items) => {
-                        const newItems = items.map((i: any) => ({
-                            sku: i.sku,
-                            basePrice: (products.find((p: Product) => p.sku === i.sku)?.currentPrice || 0) * VAT,
-                            promoPrice: i.price,
-                            discountType: 'FIXED',
-                            discountValue: 0
-                        }));
+                        const newItems: PromotionItem[] = items.map((i: any) => {
+                            const product = (products || []).find(p => p.sku.toUpperCase() === i.sku.toUpperCase());
+                            const basePrice = getBaselineForProduct(promo, product);
+                            return {
+                                sku: i.sku,
+                                basePrice,
+                                discountType: 'FIXED_PRICE',
+                                discountValue: i.price,
+                                promoPrice: i.price
+                            };
+                        });
 
-                        const currentItems = promo.items;
-                        const existing = new Set(currentItems.map((i: any) => i.sku));
-                        const uniqueNew = newItems.filter((i: any) => !existing.has(i.sku));
+                        const currentItems = promo.items || [];
+                        const existing = new Set(currentItems.map((i: any) => i.sku.toUpperCase()));
+                        const uniqueNew = newItems.filter((i: any) => !existing.has(i.sku.toUpperCase()));
                         onUpdateMeta({ items: [...currentItems, ...uniqueNew] });
                         setIsUploadOpen(false);
                     }}
@@ -763,24 +1182,34 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
 
     const productMap = useMemo(() => {
         const map = new Map<string, Product>();
-        products.forEach(p => map.set(p.sku, p));
+        (products || []).forEach(p => map.set(p.sku.toUpperCase(), p));
         return map;
     }, [products]);
 
     const allRows = useMemo(() => {
         const rows: any[] = [];
-        promotions.forEach(promo => {
-            const seenSkus = new Set<string>();
-            promo.items.forEach(item => {
-                if (seenSkus.has(item.sku)) return;
-                seenSkus.add(item.sku);
+        (promotions || []).forEach(promo => {
+            if (!promo) return;
+            (promo.items || []).forEach(item => {
+                if (!item) return;
+                const product = productMap.get(item.sku.toUpperCase());
+                const baseline = getBaselineForProduct(promo, product);
+                
+                let computed = 0;
+                if (promo.promotionScope === 'SHOP') {
+                    computed = calculateEffectivePrice(baseline, promo.shopDiscountType || 'PERCENT_OFF', promo.shopDiscountValue || 0);
+                } else {
+                    computed = calculateEffectivePrice(baseline, item.discountType || 'FIXED_PRICE', item.discountValue || 0);
+                }
+                
+                const resolved = (computed > 0) ? computed : (item.promoPrice > 0 ? item.promoPrice : 0);
 
                 rows.push({
                     id: `${promo.id}-${item.sku}`,
                     sku: item.sku,
                     eventName: promo.name,
                     platform: promo.platform,
-                    promoPrice: item.promoPrice,
+                    promoPrice: resolved,
                     startDate: new Date(promo.startDate),
                     endDate: new Date(promo.endDate),
                     status: promo.status
@@ -788,48 +1217,39 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
             });
         });
         return rows.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-    }, [promotions]);
+    }, [promotions, productMap]);
 
     const sortedRows = useMemo(() => {
+        const currentSearchTags = searchTags || [];
+        const currentSearchQuery = searchQuery || '';
+
         const filtered = allRows.filter(row => {
-            const product = products.find(p => p.sku === row.sku);
+            const product = productMap.get(row.sku.toUpperCase());
             
             const matchesTerm = (term: string) => {
                 if (!term) return true; 
                 const t = term.toLowerCase().trim();
                 if (!t) return true; 
 
-                if (row.sku.toLowerCase().includes(t)) return true;
-                if (row.eventName.toLowerCase().includes(t)) return true;
-                if (product && product.name.toLowerCase().includes(t)) return true;
-                
-                if (product && Array.isArray(product.channels)) {
-                    return product.channels.some(c => {
-                        const aliases = c.skuAlias || '';
-                        return aliases.toLowerCase().includes(t);
-                    });
-                }
+                if ((row.sku || '').toLowerCase().includes(t)) return true;
+                if ((row.eventName || '').toLowerCase().includes(t)) return true;
+                if (product && (product.name || '').toLowerCase().includes(t)) return true;
                 return false;
             };
 
-            if (searchTags.length > 0) {
-                const matchesTag = searchTags.some(tag => matchesTerm(tag));
-                const matchesText = searchQuery.trim() ? matchesTerm(searchQuery) : true;
-                
-                if (!matchesTag) return false;
-                if (!matchesText) return false;
-            } else if (searchQuery.trim()) {
-                if (!matchesTerm(searchQuery)) return false;
+            if (currentSearchTags.length > 0) {
+                const matchesTag = currentSearchTags.some(tag => matchesTerm(tag));
+                const matchesText = currentSearchQuery.trim() ? matchesTerm(currentSearchQuery) : true;
+                if (!matchesTag || !matchesText) return false;
+            } else if (currentSearchQuery.trim()) {
+                if (!matchesTerm(currentSearchQuery)) return false;
             }
                 
-            const matchesPlatform = platformFilter === 'All Platforms' || row.platform === platformFilter;
-            return matchesPlatform;
+            return platformFilter === 'All Platforms' || row.platform === platformFilter;
         });
 
         const getValue = (row: any, key: string) => {
-            if (key === 'startDate' || key === 'endDate') {
-                return new Date((row as any)[key]).getTime();
-            }
+            if (key === 'startDate' || key === 'endDate') return new Date((row as any)[key]).getTime();
             if (key === 'status') {
                 const priority = { 'ACTIVE': 3, 'UPCOMING': 2, 'ENDED': 1 };
                 return priority[row.status as keyof typeof priority] || 0;
@@ -838,36 +1258,11 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
         };
         return sortRows(filtered, sortConfig, getValue);
 
-    }, [allRows, products, searchQuery, searchTags, platformFilter, sortConfig]);
+    }, [allRows, productMap, searchQuery, searchTags, platformFilter, sortConfig]);
 
     const formatDate = (date: Date) => {
+        if (!date || isNaN(date.getTime())) return '-';
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    };
-
-    const handleExport = () => {
-        const clean = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
-        const headers = ['SKU', 'Event Name', 'Platform', 'Promo Price', 'Start Date', 'End Date', 'Status'];
-        const rows = sortedRows.map(r => [
-            clean(r.sku),
-            clean(r.eventName),
-            clean(r.platform),
-            r.promoPrice.toFixed(2),
-            formatDate(r.startDate),
-            formatDate(r.endDate),
-            clean(r.status)
-        ]);
-
-        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = url;
-        const filename = `all_promotions_export_${new Date().toISOString().slice(0, 10)}.csv`;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => { if (document.body.contains(link)) document.body.removeChild(link); URL.revokeObjectURL(url); }, 60000);
     };
 
     return (
@@ -878,37 +1273,27 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
                         tags={searchTags}
                         onTagsChange={setSearchTags}
                         onInputChange={setSearchQuery}
-                        placeholder="Filter by SKU, Name, Alias or Event..."
+                        placeholder="Filter by SKU, Name or Event..."
                         themeColor={themeColor}
                     />
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-48">
-                        <select
-                            value={platformFilter}
-                            onChange={(e) => setPlatformFilter(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white/50"
-                        >
-                            <option>All Platforms</option>
-                            {Array.from(new Set(promotions.map(p => p.platform))).sort().map(p => (
-                                <option key={p} value={p}>{p}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <button
-                        onClick={handleExport}
-                        className="px-3 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 flex items-center gap-2 transition-colors"
-                        title="Export filtered list to CSV"
+                <div className="w-48">
+                    <select
+                        value={platformFilter}
+                        onChange={(e) => setPlatformFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white/50 text-sm font-medium"
                     >
-                        <Download className="w-4 h-4" />
-                        Export
-                    </button>
+                        <option>All Platforms</option>
+                        {Array.from(new Set((promotions || []).filter(Boolean).map(p => p.platform))).sort().map(p => (
+                            <option key={p} value={p}>{p}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                 <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass">
+                    <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass text-[10px] uppercase tracking-wider">
                         <tr>
                             <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
                             <SortableHeader label="Event" sortKey="eventName" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
@@ -920,7 +1305,7 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
                         {sortedRows.map(row => {
-                            const product = productMap.get(row.sku);
+                            const product = productMap.get(row.sku.toUpperCase());
                             return (
                                 <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
                                     <td className="p-4">
@@ -931,29 +1316,14 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
                                     </td>
                                     <td className="p-4 text-gray-600">{row.eventName}</td>
                                     <td className="p-4">
-                                        <span className="bg-gray-100/80 text-gray-700 px-2 py-1 rounded text-xs font-medium border border-gray-200">
-                                            {row.platform}
-                                        </span>
+                                        <span className="bg-gray-100/80 text-gray-700 px-2 py-1 rounded text-xs font-medium border border-gray-200">{row.platform}</span>
                                     </td>
-                                    <td className="p-4 text-right font-bold" style={{ color: themeColor }}>
-                                        £{row.promoPrice.toFixed(2)}
-                                    </td>
-                                    <td className="p-4 text-gray-500 text-xs">
-                                        {formatDate(row.startDate)} - {formatDate(row.endDate)}
-                                    </td>
-                                    <td className="p-4">
-                                        <StatusBadge status={row.status} />
-                                    </td>
+                                    <td className="p-4 text-right font-black" style={{ color: themeColor }}>£{row.promoPrice.toFixed(2)}</td>
+                                    <td className="p-4 text-gray-500 text-xs">{formatDate(row.startDate)} - {formatDate(row.endDate)}</td>
+                                    <td className="p-4"><StatusBadge status={row.status} /></td>
                                 </tr>
                             );
                         })}
-                        {sortedRows.length === 0 && (
-                            <tr>
-                                <td colSpan={6} className="p-12 text-center text-gray-400">
-                                    No promotions found matching your criteria.
-                                </td>
-                            </tr>
-                        )}
                     </tbody>
                 </table>
             </div>
@@ -961,85 +1331,32 @@ const AllPromoSkusView = ({ promotions, products, themeColor }: { promotions: Pr
     );
 };
 
-// ... (Rest of component including SimulatorView, ProductSelector, and Main Page Component remains unchanged)
-const SimulatorView = ({ themeColor }: { themeColor: string }) => {
-    return (
-        <div className="flex flex-col items-center justify-center min-h-[400px] border-2 border-dashed border-custom-glass rounded-2xl bg-custom-glass">
-            <div className="text-center p-8">
-                <div className="w-16 h-16 bg-gray-200/50 rounded-lg flex items-center justify-center mx-auto mb-4 text-gray-400">
-                    <Calculator className="w-8 h-8" />
-                </div>
-                <h3 className="text-lg font-bold text-gray-600 mb-2">Advanced Simulator</h3>
-                <p className="text-gray-400 text-sm max-w-sm mx-auto">
-                    Break-even velocity and sophisticated margin analysis coming soon.
-                </p>
-            </div>
-        </div>
-    );
-};
-
-const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules, onCancel, onConfirm, themeColor }: {
+const ProductSelector = ({ products, currentPromo, onCancel, onConfirm, themeColor }: {
     products: Product[],
     currentPromo: PromotionEvent,
-    pricingRules: PricingRules,
-    logisticsRules?: LogisticsRule[],
     onCancel: () => void,
     onConfirm: (items: PromotionItem[]) => void,
     themeColor: string
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState('All Categories');
-    const [bulkRule, setBulkRule] = useState<{ type: 'PERCENTAGE' | 'FIXED', value: number }>({ type: 'PERCENTAGE', value: 10 });
     const [selectedSkus, setSelectedSkus] = useState<Set<string>>(new Set());
-    const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
-    const [showInactive, setShowInactive] = useState(false);
-    const [hoveredMargin, setHoveredMargin] = useState<{ id: string, rect: DOMRect } | null>(null);
 
-    const existingSkuSet = useMemo(() => new Set(currentPromo.items.map(i => i.sku)), [currentPromo]);
+    const existingSkuSet = useMemo(() => new Set((currentPromo?.items || []).map(i => i.sku.toUpperCase())), [currentPromo]);
 
     const filteredProducts = useMemo(() => {
-        return products.filter(p => {
-            if (existingSkuSet.has(p.sku)) return false;
-            if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) return false;
-            if (currentPromo.platform !== 'All') {
-                const isSoldOnPlatform = p.channels.some(c => c.platform === currentPromo.platform);
-                if (!isSoldOnPlatform) return false;
-            }
-            
+        return (products || []).filter(p => {
+            if (!p) return false;
+            if (existingSkuSet.has(p.sku.toUpperCase())) return false;
+            if ((p.stockLevel || 0) <= 0 && (p.averageDailySales || 0) === 0) return false;
             const matchesTerm = (term: string) => {
                 const t = term.toLowerCase();
-                return p.sku.toLowerCase().includes(t) || 
-                       p.name.toLowerCase().includes(t) || 
-                       p.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
+                return (p.sku || '').toLowerCase().includes(t) || (p.name || '').toLowerCase().includes(t);
             };
-
-            let matchSearch = true;
-            if (searchTags.length > 0) {
-                const matchesTag = searchTags.some(tag => matchesTerm(tag));
-                const matchesText = searchQuery ? matchesTerm(searchQuery) : true;
-                matchSearch = matchesTag && matchesText;
-            } else {
-                matchSearch = matchesTerm(searchQuery);
-            }
-
-            const matchCat = selectedCategory === 'All Categories' || p.category === selectedCategory;
-            return matchSearch && matchCat;
-        }).map(p => {
-            if (currentPromo.platform !== 'All') {
-                const channel = p.channels.find(c => c.platform === currentPromo.platform);
-                if (channel && channel.price) {
-                    return { ...p, currentPrice: channel.price };
-                }
-            }
-            return p;
+            if (searchTags && searchTags.length > 0) return searchTags.some(tag => matchesTerm(tag));
+            return matchesTerm(searchQuery);
         });
-    }, [products, searchQuery, searchTags, selectedCategory, existingSkuSet, currentPromo.platform, showInactive]);
-
-    const uniqueCategories = useMemo(() => {
-        const cats = new Set(products.map(p => p.category || 'Uncategorized'));
-        return Array.from(cats).filter(Boolean).sort();
-    }, [products]);
+    }, [products, searchQuery, searchTags, existingSkuSet]);
 
     const handleRowClick = (sku: string) => {
         const newSet = new Set(selectedSkus);
@@ -1048,340 +1365,80 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
         setSelectedSkus(newSet);
     };
 
-    const toggleAll = () => {
-        if (selectedSkus.size === filteredProducts.length) setSelectedSkus(new Set());
-        else setSelectedSkus(new Set(filteredProducts.map(p => p.sku)));
-    };
-
-    const roundTo95 = (price: number, originalPrice: number): number => {
-        const candidate = Math.floor(price) + 0.95;
-        if (candidate > price) {
-            return Math.max(0.95, candidate - 1);
-        }
-        return Number(candidate.toFixed(2));
-    };
-
-    const calculatePromoPrice = (product: Product) => {
-        if (priceOverrides[product.sku] !== undefined) {
-            return priceOverrides[product.sku];
-        }
-
-        let price = product.currentPrice * VAT;
-        if (currentPromo.platform !== 'All') {
-            const channel = product.channels.find(c => c.platform === currentPromo.platform);
-            if (channel && channel.price) price = channel.price * VAT;
-        }
-
-        if (product.caPrice && product.caPrice > 0) {
-            price = product.caPrice;
-        }
-
-        let targetPrice = price;
-        if (bulkRule.type === 'PERCENTAGE') {
-            targetPrice = price * (1 - bulkRule.value / 100);
-        } else {
-            targetPrice = Math.max(0, price - bulkRule.value);
-        }
-        const result = roundTo95(targetPrice, price);
-        return Number(result.toFixed(2));
-    };
-
-    const handlePriceOverride = (sku: string, val: string) => {
-        const num = parseFloat(val);
-        if (isNaN(num)) {
-            const newO = { ...priceOverrides };
-            delete newO[sku];
-            setPriceOverrides(newO);
-        } else {
-            setPriceOverrides({ ...priceOverrides, [sku]: num });
-        }
-    };
-
-    const calculateDynamicMargin = (product: Product, promoPrice: number) => {
-        const netRevenue = promoPrice / VAT;
-        const platformKey = currentPromo.platform !== 'All' ? currentPromo.platform : (product.platform || 'Amazon(UK)');
-        const rule = pricingRules[platformKey];
-        const commissionRate = rule ? rule.commission : 15;
-        const commissionCost = promoPrice * (commissionRate / 100);
-        const weight = product.cartonDimensions?.weight || 0;
-        let standardPostage = product.postage || 0;
-        
-        if (logisticsRules && logisticsRules.length > 0) {
-            const isValidRule = (r: LogisticsRule) => {
-                if (!r.price || r.price <= 0) return false;
-                if (r.id === 'pickup' || r.name.toUpperCase() === 'PICKUP' || r.carrier.toUpperCase() === 'COLLECTION') return false;
-                if (r.id === 'na' || r.name.toUpperCase() === 'NA') return false;
-                if (r.maxWeight !== undefined && r.maxWeight < weight) return false;
-                return true;
-            };
-            const validStandard = logisticsRules.filter(r =>
-                isValidRule(r) &&
-                !r.name.includes('-Z') && !r.name.includes('-NI') && !r.name.includes('REMOTE')
-            ).sort((a, b) => a.price - b.price);
-
-            if (validStandard.length > 0) standardPostage = validStandard[0].price;
-        }
-
-        const otherCosts = (product.costPrice || 0) + (product.adsFee || 0) + (product.otherFee || 0) + (product.subscriptionFee || 0) + (product.wmsFee || 0);
-        
-        const totalCosts = commissionCost + standardPostage + otherCosts;
-        const netProfit = netRevenue - totalCosts;
-        const margin = netRevenue > 0 ? (netProfit / netRevenue) * 100 : -100;
-        
-        return {
-            margin,
-            netProfit,
-            netRevenue,
-            commissionCost,
-            standardPostage,
-            otherCosts,
-            commissionRate
-        };
-    };
-
     const handleConfirm = () => {
         const items = Array.from(selectedSkus).map(sku => {
-            const product = products.find(p => p.sku === sku);
-            if (!product) return null;
-            const promoPrice = calculatePromoPrice(product);
-            
-            let basePrice = product.currentPrice * VAT;
-            if (currentPromo.platform !== 'All') {
-                const channel = product.channels.find(c => c.platform === currentPromo.platform);
-                if (channel && channel.price) basePrice = channel.price * VAT;
-            }
-            if (product.caPrice) basePrice = product.caPrice;
-
+            const product = (products || []).find(p => p.sku === sku);
+            const basePrice = getBaselineForProduct(currentPromo, product);
             return {
                 sku,
                 basePrice: Number(basePrice.toFixed(2)),
-                promoPrice,
-                discountType: 'FIXED',
-                discountValue: 0
-            };
-        }).filter(Boolean) as PromotionItem[];
-        
+                discountType: 'FIXED_PRICE',
+                discountValue: 0,
+                promoPrice: 0
+            } as PromotionItem;
+        });
         onConfirm(items);
     };
 
     return (
-        <div className="space-y-6 pb-20 animate-in slide-in-from-right">
-            <div className="flex items-center gap-2 mb-2">
-                <button onClick={onCancel} className="text-gray-500 hover:text-gray-700">
-                    <ArrowLeft className="w-5 h-5" />
-                </button>
-                <div>
-                    <h2 className="text-xl font-bold text-gray-900">Add Products to {currentPromo.name}</h2>
-                    <p className="text-sm text-indigo-600 font-medium">Filtering for: {currentPromo.platform}</p>
+        <div className="space-y-6 animate-in slide-in-from-right">
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                    <button onClick={onCancel} className="p-2 hover:bg-gray-100 rounded-full"><ArrowLeft className="w-5 h-5" /></button>
+                    <h2 className="text-xl font-bold text-gray-900">Nominate SKUs for {currentPromo?.name || 'Campaign'}</h2>
                 </div>
-                <div className="flex-1"></div>
                 <button 
-                    onClick={handleConfirm}
+                    onClick={handleConfirm} 
                     disabled={selectedSkus.size === 0}
-                    className="px-6 py-2 text-white rounded-lg font-medium shadow-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-6 py-2 text-white rounded-lg font-bold shadow-md hover:opacity-90 disabled:opacity-50"
                     style={{ backgroundColor: themeColor }}
                 >
-                    <Check className="w-4 h-4" />
-                    Add {selectedSkus.size} Products
+                    Add {selectedSkus.size} SKUs
                 </button>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col xl:flex-row gap-4 items-center justify-between shadow-sm">
-                <div className="flex-1 flex flex-col md:flex-row gap-4 w-full">
-                    <div className="flex-1">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Search</label>
-                        <TagSearchInput 
-                            tags={searchTags}
-                            onTagsChange={setSearchTags}
-                            onInputChange={setSearchQuery}
-                            placeholder="Search SKU, Name or Alias..."
-                            themeColor={themeColor}
-                        />
-                    </div>
-
-                    <div className="flex flex-col min-w-[200px]">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase mb-1">Category</label>
-                        <select 
-                            value={selectedCategory}
-                            onChange={(e) => setSelectedCategory(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-                        >
-                            <option>All Categories</option>
-                            {uniqueCategories.map(c => <option key={c}>{c}</option>)}
-                        </select>
-                    </div>
-                </div>
-                
-                <div className="flex items-end gap-6 bg-gray-50/50 p-2 rounded-lg border border-gray-100">
-                    <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-indigo-600 uppercase mb-1">Bulk Discount Rule</label>
-                        <div className="flex items-center">
-                            <select 
-                                value={bulkRule.type}
-                                onChange={(e) => setBulkRule({...bulkRule, type: e.target.value as any})}
-                                className="text-sm bg-transparent border-none focus:ring-0 font-medium pr-1 pl-0 text-gray-700"
-                            >
-                                <option value="PERCENTAGE">% Off</option>
-                                <option value="FIXED">£ Off</option>
-                            </select>
-                            <input 
-                                type="number" 
-                                value={bulkRule.value}
-                                onChange={(e) => setBulkRule({...bulkRule, value: parseFloat(e.target.value)})}
-                                className="w-16 px-2 py-1 rounded border border-gray-300 text-center font-bold text-sm"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col items-center pb-1">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Show Inactive</label>
-                        <button 
-                            onClick={() => setShowInactive(!showInactive)}
-                            className={`p-1.5 rounded transition-colors ${showInactive ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}
-                        >
-                            {showInactive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                        </button>
-                    </div>
-                </div>
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <TagSearchInput 
+                    tags={searchTags}
+                    onTagsChange={setSearchTags}
+                    onInputChange={setSearchQuery}
+                    placeholder="Search SKU or Name..."
+                    themeColor={themeColor}
+                />
             </div>
 
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-gray-50 font-bold border-b border-gray-200 text-gray-500 uppercase text-xs tracking-wider">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden max-h-[60vh] overflow-y-auto">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-50 font-bold border-b border-gray-200 text-gray-500 uppercase text-[10px] tracking-wider sticky top-0 z-10">
                         <tr>
-                            <th className="p-4 w-10">
-                                <input 
-                                    type="checkbox" 
-                                    checked={selectedSkus.size === filteredProducts.length && filteredProducts.length > 0}
-                                    onChange={toggleAll}
-                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                            </th>
+                            <th className="p-4 w-10"></th>
                             <th className="p-4">SKU / Title</th>
-                            <th className="p-4 text-right">Platform Price</th>
-                            <th className="p-4 text-right">Optimal</th>
-                            <th className="p-4 text-right text-purple-600">CA Price</th>
-                            <th className="p-4 text-right bg-indigo-50/30 border-l border-indigo-100 w-32">Promo Price</th>
-                            <th className="p-4 text-right">Min Price</th>
-                            <th className="p-4 text-right">Proj. Margin</th>
+                            <th className="p-4 text-right">CA Price</th>
+                            <th className="p-4 text-right">Current Stock</th>
+                            <th className="p-4 text-right">Daily Vel.</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {filteredProducts.map(p => {
-                            const promoPrice = calculatePromoPrice(p);
-                            const marginDetails = calculateDynamicMargin(p, promoPrice);
-                            
-                            let basePrice = p.currentPrice * VAT;
-                            if (currentPromo.platform !== 'All') {
-                                const channel = p.channels.find(c => c.platform === currentPromo.platform);
-                                if (channel && channel.price) basePrice = channel.price * VAT;
-                            }
-
-                            const optimal = p.optimalPrice ? p.optimalPrice * VAT : null;
-                            const caPrice = p.caPrice;
-                            const minPrice = p.floorPrice ? p.floorPrice * VAT : null;
-
-                            return (
-                                <tr 
-                                    key={p.sku} 
-                                    className={`group hover:bg-gray-50/80 transition-colors cursor-pointer ${selectedSkus.has(p.sku) ? 'bg-indigo-50/20' : ''}`}
-                                    onClick={(e) => {
-                                        const target = e.target as HTMLElement;
-                                        if (['INPUT', 'BUTTON', 'TEXTAREA'].includes(target.tagName)) return;
-                                        if (window.getSelection()?.toString()) return;
-                                        handleRowClick(p.sku);
-                                    }}
-                                >
-                                    <td className="p-4">
-                                        <input 
-                                            type="checkbox"
-                                            checked={selectedSkus.has(p.sku)}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleRowClick(p.sku);
-                                            }}
-                                            onChange={() => {}}
-                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                        />
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="flex items-center">
-                                            <div className="font-bold text-gray-900">{p.sku}</div>
-                                            <GradeBadge gradeLevel={p.gradeLevel} />
-                                        </div>
-                                        <div 
-                                            className="text-xs text-gray-600 font-medium my-1 select-text"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {p.name}
-                                        </div>
-                                        {p.subcategory && (
-                                            <span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded border border-gray-200">
-                                                {p.subcategory}
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-right font-medium text-gray-700">
-                                        £{basePrice.toFixed(2)}
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        {optimal ? (
-                                            <div className="flex items-center justify-end gap-1 text-indigo-600 font-medium">
-                                                <Star className="w-3 h-3 fill-indigo-100" /> £{optimal.toFixed(2)}
-                                            </div>
-                                        ) : <span className="text-gray-300">-</span>}
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        {caPrice ? (
-                                            <span className="text-purple-600 font-bold font-mono">
-                                                £{caPrice.toFixed(2)}
-                                            </span>
-                                        ) : <span className="text-gray-300">-</span>}
-                                    </td>
-                                    <td className="p-4 text-right bg-indigo-50/30 border-l border-indigo-100">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <span className="text-gray-400 text-xs">£</span>
-                                            <input 
-                                                type="number"
-                                                value={priceOverrides[p.sku] || promoPrice}
-                                                onChange={(e) => handlePriceOverride(p.sku, e.target.value)}
-                                                className="w-20 text-right font-bold bg-transparent border-none focus:ring-0 p-0 text-gray-900"
-                                                onClick={(e) => e.stopPropagation()}
-                                            />
-                                        </div>
-                                        <div className="h-px bg-gray-300 border-dashed w-full mt-1"></div>
-                                    </td>
-                                    <td className="p-4 text-right text-gray-400 text-xs">
-                                        {minPrice ? `£${minPrice.toFixed(2)}` : '-'}
-                                    </td>
-                                    <td 
-                                        className="p-4 text-right cursor-help"
-                                        onMouseEnter={(e) => setHoveredMargin({ id: p.sku, rect: e.currentTarget.getBoundingClientRect() })}
-                                        onMouseLeave={() => setHoveredMargin(null)}
-                                    >
-                                        <span className={`px-2 py-1 rounded text-xs font-bold border ${marginDetails.margin > 20 ? 'bg-green-100 text-green-700 border-green-200' : marginDetails.margin > 0 ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-                                            {marginDetails.margin.toFixed(1)}%
-                                        </span>
-                                        {hoveredMargin?.id === p.sku && (
-                                            <MarginTooltip 
-                                                details={{
-                                                    netRevenue: marginDetails.netRevenue,
-                                                    commissionRate: marginDetails.commissionRate,
-                                                    commissionCost: marginDetails.commissionCost,
-                                                    standardPostage: marginDetails.standardPostage,
-                                                    otherCosts: marginDetails.otherCosts,
-                                                    profitStandard: marginDetails.netProfit,
-                                                    netProfit: marginDetails.netProfit // Added for tooltip consistency
-                                                }}
-                                                marginStandard={marginDetails.margin}
-                                                promoPrice={promoPrice}
-                                                rect={hoveredMargin.rect}
-                                            />
-                                        )}
-                                    </td>
-                                </tr>
-                            );
-                        })}
+                        {filteredProducts.map(p => (
+                            <tr 
+                                key={p.sku} 
+                                className={`group hover:bg-gray-50 cursor-pointer ${selectedSkus.has(p.sku) ? 'bg-indigo-50/30' : ''}`}
+                                onClick={() => handleRowClick(p.sku)}
+                            >
+                                <td className="p-4">
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedSkus.has(p.sku) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 bg-white'}`}>
+                                        {selectedSkus.has(p.sku) && <Check className="w-3.5 h-3.5 text-white" />}
+                                    </div>
+                                </td>
+                                <td className="p-4">
+                                    <div className="font-bold text-gray-900">{p.sku}</div>
+                                    <div className="text-xs text-gray-500 truncate max-w-[300px]">{p.name}</div>
+                                </td>
+                                <td className="p-4 text-right font-mono text-indigo-600 font-bold">£{p.caPrice?.toFixed(2) || '0.00'}</td>
+                                <td className="p-4 text-right text-gray-500 font-mono">{p.stockLevel}</td>
+                                <td className="p-4 text-right text-gray-500 font-mono">{(p.averageDailySales || 0).toFixed(1)}</td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
             </div>
@@ -1389,26 +1446,25 @@ const ProductSelector = ({ products, currentPromo, pricingRules, logisticsRules,
     );
 };
 
-// --- MAIN PAGE COMPONENT ---
-
 const PromotionPage: React.FC<PromotionPageProps> = ({ 
-    products, 
-    pricingRules, 
-    logisticsRules,
-    promotions, 
+    products = [], 
+    pricingRules = {}, 
+    logisticsRules = [],
+    promotions = [], 
     priceHistoryMap,
     onAddPromotion, 
     onUpdatePromotion, 
     onDeletePromotion, 
     themeColor, 
-    headerStyle 
+    headerStyle,
+    priceChangeHistory
 }) => {
     const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
     const [selectedPromoId, setSelectedPromoId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
     const selectedPromo = useMemo(() =>
-        promotions.find(p => p.id === selectedPromoId),
+        (promotions || []).find(p => p && p.id === selectedPromoId),
         [promotions, selectedPromoId]);
 
     const handleCreateEvent = (newEvent: PromotionEvent) => {
@@ -1419,69 +1475,66 @@ const PromotionPage: React.FC<PromotionPageProps> = ({
     };
 
     const handleUpdateEventMeta = (id: string, updates: Partial<PromotionEvent>) => {
-        const promo = promotions.find(p => p.id === id);
+        const promo = (promotions || []).find(p => p && p.id === id);
         if (!promo) return;
         onUpdatePromotion({ ...promo, ...updates });
     };
 
-    const handleDeleteItem = (sku: string) => {
+    const handleUpdateItem = (sku: string, updates: Partial<PromotionItem>) => {
         if (!selectedPromo) return;
-        const updatedItems = selectedPromo.items.filter(i => i.sku !== sku);
+        const updatedItems = (selectedPromo.items || []).map(i => {
+            if (i && i.sku.toUpperCase() === sku.toUpperCase()) {
+                const newItem = { ...i, ...updates };
+                const baseline = getBaselineForProduct(selectedPromo, (products || []).find(p => p && p.sku.toUpperCase() === sku.toUpperCase()));
+                newItem.promoPrice = deriveDiscountedPrice(baseline, newItem.discountType || 'FIXED_PRICE', newItem.discountValue || 0);
+                return newItem;
+            }
+            return i;
+        });
         onUpdatePromotion({ ...selectedPromo, items: updatedItems });
     };
 
-    const handleAddItems = (newItems: PromotionItem[]) => {
+    const handleDeleteItem = (sku: string) => {
         if (!selectedPromo) return;
-        const existingSkus = new Set(selectedPromo.items.map(i => i.sku));
-        const filteredNew = newItems.filter(i => !existingSkus.has(i.sku));
+        const updatedItems = (selectedPromo.items || []).filter(i => i && i.sku.toUpperCase() !== sku.toUpperCase());
+        onUpdatePromotion({ ...selectedPromo, items: updatedItems });
+    };
 
+    const handleNominateItems = (newItems: PromotionItem[]) => {
+        if (!selectedPromo) return;
         onUpdatePromotion({
             ...selectedPromo,
-            items: [...selectedPromo.items, ...filteredNew]
+            items: [...(selectedPromo.items || []), ...newItems]
         });
         setViewMode('event_detail');
     };
 
-    const handleTabChange = (tab: Tab) => {
-        setActiveTab(tab);
-    };
-
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
-            {/* Header */}
             <div>
                 <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Promotion Manager</h2>
-                <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
-                    Plan, track, and optimize sales events across platforms.
+                <p className="mt-1 transition-colors opacity-80" style={headerStyle}>
+                    Plan, nominate SKUs, and manage cross-platform discount rules.
                 </p>
             </div>
 
-            {/* Navigation */}
             <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
                 <button
-                    onClick={() => handleTabChange('dashboard')}
+                    onClick={() => setActiveTab('dashboard')}
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     <LayoutDashboard className="w-4 h-4" />
                     Campaigns
                 </button>
                 <button
-                    onClick={() => handleTabChange('all_skus')}
+                    onClick={() => setActiveTab('all_skus')}
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'all_skus' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     <List className="w-4 h-4" />
-                    All Promo SKUs
-                </button>
-                <button
-                    onClick={() => handleTabChange('simulator')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'simulator' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    <Calculator className="w-4 h-4" />
-                    Simulator
+                    Master Promo Log
                 </button>
             </div>
 
-            {/* Content Area */}
             <div className="min-h-[500px]">
                 <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }}>
                     {viewMode === 'dashboard' && (
@@ -1500,9 +1553,11 @@ const PromotionPage: React.FC<PromotionPageProps> = ({
                             promo={selectedPromo}
                             products={products}
                             priceHistoryMap={priceHistoryMap || new Map()}
+                            priceChangeHistory={priceChangeHistory}
                             onBack={() => setViewMode('dashboard')}
                             onAddProducts={() => setViewMode('add_products')}
                             onDeleteItem={handleDeleteItem}
+                            onUpdateItem={handleUpdateItem}
                             onUpdateMeta={(updates: Partial<PromotionEvent>) => handleUpdateEventMeta(selectedPromo.id, updates)}
                             themeColor={themeColor}
                         />
@@ -1512,10 +1567,8 @@ const PromotionPage: React.FC<PromotionPageProps> = ({
                         <ProductSelector
                             products={products}
                             currentPromo={selectedPromo}
-                            pricingRules={pricingRules}
-                            logisticsRules={logisticsRules || []}
                             onCancel={() => setViewMode('event_detail')}
-                            onConfirm={handleAddItems}
+                            onConfirm={handleNominateItems}
                             themeColor={themeColor}
                         />
                     )}
@@ -1523,10 +1576,6 @@ const PromotionPage: React.FC<PromotionPageProps> = ({
 
                 <div style={{ display: activeTab === 'all_skus' ? 'block' : 'none' }}>
                     <AllPromoSkusView promotions={promotions} products={products} themeColor={themeColor} />
-                </div>
-
-                <div style={{ display: activeTab === 'simulator' ? 'block' : 'none' }}>
-                    <SimulatorView themeColor={themeColor} />
                 </div>
             </div>
         </div>

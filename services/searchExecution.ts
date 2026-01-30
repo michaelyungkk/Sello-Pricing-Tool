@@ -2,6 +2,8 @@
 import { Product, PriceLog, PricingRules, RefundLog } from '../types';
 import { SearchIntent } from './geminiService';
 import { isAdsEnabled } from './platformCapabilities';
+import { scaleMoneyInclTax } from './taxPolicy';
+import { VAT_MULTIPLIER } from '../constants';
 
 export const safeCalculateMargin = (p: Product | undefined, price: number): number => {
     if (!p || !price || isNaN(price)) return 0;
@@ -21,18 +23,24 @@ export const safeCalculateMargin = (p: Product | undefined, price: number): numb
 
 export const processDataForSearch = (intent: SearchIntent, products: Product[], priceHistory: PriceLog[], pricingRules: PricingRules, refundHistory: RefundLog[]) => {
     
+    // Guard against undefined inputs
+    const safeProducts = products || [];
+    const safePriceHistory = priceHistory || [];
+    const safeRefundHistory = refundHistory || [];
+    const safePricingRules = pricingRules || {};
+
     // --- DEEP DIVE HANDLER ---
     if (intent.primaryMetric === 'DEEP_DIVE') {
         const skuQuery = String(intent.filters[0].value).trim().toLowerCase();
         // Case-insensitive exact match
-        const product = products.find(p => p.sku.toLowerCase() === skuQuery);
+        const product = safeProducts.find(p => p.sku.toLowerCase() === skuQuery);
         
         if (product) {
             let allTimeSales = 0;
             let allTimeQty = 0;
             const transactions: PriceLog[] = [];
             
-            priceHistory.forEach(l => {
+            safePriceHistory.forEach(l => {
                 if (l.sku === product.sku) {
                     allTimeSales += (l.price * l.velocity);
                     allTimeQty += l.velocity;
@@ -40,38 +48,58 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
                 }
             });
 
-            const productRefunds = refundHistory.filter(r => r.sku === product.sku);
+            const productRefunds = safeRefundHistory.filter(r => r.sku === product.sku);
 
             return {
                 results: [{
                     type: 'DEEP_DIVE',
                     product,
-                    allTimeSales,
+                    allTimeSales: scaleMoneyInclTax(allTimeSales), // Scale Global Total
                     allTimeQty,
-                    transactions, // Pass transaction history to Deep Dive
-                    refunds: productRefunds // Pass refunds
+                    // Map transactions to tax-inclusive for display in deep dive charts/tables
+                    transactions: transactions.map(t => ({
+                        ...t,
+                        price: scaleMoneyInclTax(t.price),
+                        profit: t.profit !== undefined ? scaleMoneyInclTax(t.profit) : undefined,
+                        adsSpend: t.adsSpend !== undefined ? scaleMoneyInclTax(t.adsSpend) : undefined
+                    })), 
+                    // Map refunds to tax-inclusive for display
+                    refunds: productRefunds.map(r => ({
+                        ...r,
+                        amount: scaleMoneyInclTax(r.amount)
+                    })) 
                 }],
-                timeLabel: 'All Time'
+                timeLabel: 'All Time',
+                resultMeta: { moneyIsTaxInclusive: true, vatMultiplierUsed: VAT_MULTIPLIER }
             };
         }
         // Fallback if not found, return empty or standard search
         return { results: [], timeLabel: 'All Time' };
     }
 
-    const productMap = new Map(products.map(p => [p.sku, p]));
+    const productMap = new Map(safeProducts.map(p => [p.sku, p]));
     
     if (intent.targetData === 'refunds') {
         const results: any[] = [];
-        refundHistory.forEach(r => {
+        safeRefundHistory.forEach(r => {
             const p = productMap.get(r.sku);
-            results.push({ sku: r.sku, productName: p?.name || 'Unknown', platform: r.platform || 'Unknown', date: r.date, price: -r.amount, velocity: r.quantity, margin: -100, type: 'REFUND' });
+            results.push({ 
+                sku: r.sku, 
+                productName: p?.name || 'Unknown', 
+                platform: r.platform || 'Unknown', 
+                date: r.date, 
+                price: -scaleMoneyInclTax(r.amount), // Scale Refund Amount (Negative Price for display)
+                velocity: r.quantity, 
+                margin: -100, 
+                type: 'REFUND' 
+            });
         });
-        return { results, timeLabel: 'All Refunds' };
+        return { results, timeLabel: 'All Refunds', resultMeta: { moneyIsTaxInclusive: true, vatMultiplierUsed: VAT_MULTIPLIER } };
     }
 
     if (intent.targetData === 'inventory') {
         const results: any[] = [];
-        products.forEach(p => {
+        safeProducts.forEach(p => {
             const agedStockPct = p.stockLevel > 0 && p.agedStockQty ? (p.agedStockQty / p.stockLevel) * 100 : 0;
             const derivedMetrics: any = { 
                 daysRemaining: p.averageDailySales > 0 ? p.stockLevel / p.averageDailySales : 999, 
@@ -104,10 +132,10 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
                 platform: p.channels.length > 0 ? p.channels[0].platform : 'General', 
                 channels: p.channels,
                 date: new Date().toISOString(), 
-                price: p.currentPrice, 
+                price: scaleMoneyInclTax(p.currentPrice), // Scale Price
                 velocity: p.stockLevel, 
-                revenue: p.stockLevel * p.currentPrice, 
-                margin: safeCalculateMargin(p, p.currentPrice), 
+                revenue: scaleMoneyInclTax(p.stockLevel * p.currentPrice), // Scale Revenue Value
+                margin: safeCalculateMargin(p, p.currentPrice), // Margin % stays same
                 stockLevel: p.stockLevel, 
                 agedStockQty: p.agedStockQty,
                 agedStockPct: derivedMetrics.agedStockPct,
@@ -125,8 +153,8 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
                 return intent.sort!.direction === 'asc' ? valA - valB : valB - valA;
             });
         }
-        if (intent.limit && intent.limit > 0) { return { results: results.slice(0, intent.limit), timeLabel: 'Current Snapshot' }; }
-        return { results, timeLabel: 'Current Snapshot' };
+        if (intent.limit && intent.limit > 0) { return { results: results.slice(0, intent.limit), timeLabel: 'Current Snapshot', resultMeta: { moneyIsTaxInclusive: true, vatMultiplierUsed: VAT_MULTIPLIER } }; }
+        return { results, timeLabel: 'Current Snapshot', resultMeta: { moneyIsTaxInclusive: true, vatMultiplierUsed: VAT_MULTIPLIER } };
     }
 
     let startTime = 0; let endTime = Number.MAX_SAFE_INTEGER; let timeLabel = "All Time";
@@ -152,14 +180,14 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
     }>();
     
     // Pass 1: Aggregate stats for Refund Rate, Organic Share, and Trend comparison
-    refundHistory.forEach(r => {
+    safeRefundHistory.forEach(r => {
         const rTime = new Date(r.date).getTime();
         if (rTime >= startTime && rTime <= endTime) {
             if (!skuPeriodStats.has(r.sku)) skuPeriodStats.set(r.sku, { revenue: 0, refunds: 0, organicQty: 0, adEnabledQty: 0, qty: 0, prevRevenue: 0, prevQty: 0, prevProfit: 0 });
             skuPeriodStats.get(r.sku)!.refunds += r.amount;
         }
     });
-    priceHistory.forEach(l => {
+    safePriceHistory.forEach(l => {
         const lTime = new Date(l.date).getTime();
         
         // Ensure map entry exists
@@ -205,7 +233,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
     let grandTotalRevenue = 0;
 
     // Pass 2: Filter and Build Candidates
-    priceHistory.forEach(log => {
+    safePriceHistory.forEach(log => {
         const product = productMap.get(log.sku);
         if (!product) return;
         const logTime = new Date(log.date).getTime();
@@ -342,26 +370,28 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
                 daysRemaining: calculatedMetrics.daysRemaining,
                 postcode: log.postcode, // Pass postcode through to UI
                 
-                // Trend Metrics
+                // Trend Metrics (Percentages - Unitless)
                 velocityChange: calculatedMetrics.velocityChange,
-                velocityChangeAbs: calculatedMetrics.velocityChangeAbs,
-                revenueChangeAbs: calculatedMetrics.revenueChangeAbs,
                 revenueChangePct: calculatedMetrics.revenueChangePct,
+                
+                // Absolute Changes (Need scaling later)
+                velocityChangeAbs: calculatedMetrics.velocityChangeAbs,
+                revenueChangeAbs: calculatedMetrics.revenueChangeAbs, // EX-TAX currently
                 
                 returnRate: calculatedMetrics.returnRate,
                 periodReturnRate: calculatedMetrics.periodReturnRate,
                 allTimeReturnRate: product.returnRate || 0,
                 type: type,
                 
-                // Pass previous values for aggregation in UI
+                // Pass previous values for aggregation in UI (EX-TAX)
                 prevRevenue: pStats.prevRevenue || 0,
                 prevQty: pStats.prevQty || 0,
-                prevProfit: pStats.prevProfit || 0 // New: Passed for Margin Trend calc
+                prevProfit: pStats.prevProfit || 0
             });
         }
     });
 
-    refundHistory.forEach(r => {
+    safeRefundHistory.forEach(r => {
         const logTime = new Date(r.date).getTime();
         if (logTime < startTime || logTime > endTime) return;
         const product = productMap.get(r.sku);
@@ -382,10 +412,6 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
             
             // Explicit Postcode Matching Logic for Refunds
             if (f.field === 'postcode') {
-                // Refunds usually don't have postcode data in log unless enriched. 
-                // Currently RefundLog doesn't have postcode. 
-                // So if filtering by postcode, we sadly skip refunds or need to map it.
-                // Assuming it's missing for now.
                 return false;
             }
 
@@ -423,8 +449,24 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
     const results: any[] = [];
     candidates.forEach(cand => {
         if (validSkus.has(cand.sku)) {
+            // Contribution calculated on ex-tax values (ratio is same)
             const contribution = grandTotalRevenue > 0 ? (cand.revenue / grandTotalRevenue) * 100 : 0;
-            results.push({ ...cand, contribution: contribution });
+            
+            results.push({ 
+                ...cand, 
+                contribution: contribution,
+                // Scale monetary values for display
+                price: scaleMoneyInclTax(cand.price),
+                revenue: scaleMoneyInclTax(cand.revenue),
+                profit: scaleMoneyInclTax(cand.profit),
+                adsSpend: scaleMoneyInclTax(cand.adsSpend),
+                refundAmount: cand.refundAmount ? scaleMoneyInclTax(cand.refundAmount) : undefined,
+                
+                // Scale Trend Absolutes
+                revenueChangeAbs: scaleMoneyInclTax(cand.revenueChangeAbs),
+                prevRevenue: scaleMoneyInclTax(cand.prevRevenue),
+                prevProfit: scaleMoneyInclTax(cand.prevProfit)
+            });
         }
     });
 
@@ -437,5 +479,5 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
         });
     }
 
-    return { results, timeLabel };
+    return { results, timeLabel, resultMeta: { moneyIsTaxInclusive: true, vatMultiplierUsed: VAT_MULTIPLIER } };
 };

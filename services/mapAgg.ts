@@ -1,8 +1,8 @@
-
 import { Product, PriceLog } from '../types';
 import { POSTCODE_COORDS } from '../components/UkPostcodeMapCoords';
 import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from './metrics';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey } from './dateUtils';
+import { scaleMoneyInclTax, assertNotAlreadyScaled } from './taxPolicy';
 
 // In-component type for aggregated data
 export interface DistrictData {
@@ -26,7 +26,7 @@ export interface AreaData {
     tacos: number;
     coordinates: [number, number];
     platformBreakdown: { platform: string; revenue: number; volume: number; profit: number }[];
-    topSkus: { sku: string; name: string; profit: number; volume: number }[];
+    topSkus: { sku: string; name: string; profit: number; volume: number; revenue: number }[];
     prevRevenue: number;
     prevVolume: number;
     revenueDelta: number;
@@ -35,6 +35,8 @@ export interface AreaData {
     volumeDeltaPct: number;
     districtBreakdown: DistrictData[];
     totalShippingCost: number;
+    // Guardrail: Explicit flag to indicate monetary values are tax-inclusive
+    moneyIsTaxInclusive?: boolean;
 }
 
 
@@ -173,16 +175,35 @@ export const aggregateUkMapData = (
     }
 
     return Object.entries(areaStats).map(([code, stats]) => {
+        // Apply VAT Scaling to monetary aggregates
+        assertNotAlreadyScaled('aggregateUkMapData:revenue', stats.revenue);
+        const revenueInclTax = scaleMoneyInclTax(stats.revenue);
+        const profitInclTax = scaleMoneyInclTax(stats.profit);
+        const adSpendInclTax = scaleMoneyInclTax(stats.totalAdSpend);
+        const totalPostageInclTax = scaleMoneyInclTax(stats.totalPostage);
+        const prevRevenueInclTax = scaleMoneyInclTax(stats.prevRevenue);
+
         const platformBreakdown = Object.entries(stats.platforms)
-            .map(([platform, data]) => ({ platform, ...data }))
+            .map(([platform, data]) => ({ 
+                platform, 
+                revenue: scaleMoneyInclTax(data.revenue), 
+                volume: data.volume, 
+                profit: scaleMoneyInclTax(data.profit) 
+            }))
             .sort((a, b) => b.revenue - a.revenue);
         
         const topSkus = Object.entries(stats.skus)
-            .map(([sku, data]) => ({ sku, ...data }))
+            .map(([sku, data]) => ({ 
+                sku, 
+                name: data.name, 
+                profit: scaleMoneyInclTax(data.profit), 
+                volume: data.volume, 
+                revenue: scaleMoneyInclTax(data.revenue)
+            }))
             .sort((a, b) => b.profit - a.profit)
             .slice(0, 3);
 
-        const revenueDelta = stats.revenue - stats.prevRevenue;
+        const revenueDelta = revenueInclTax - prevRevenueInclTax;
         const volumeDelta = stats.volume - stats.prevVolume;
         
         const districtBreakdown = Object.entries(districtStats)
@@ -190,38 +211,44 @@ export const aggregateUkMapData = (
               const prefixMatch = districtCode.match(/^[A-Z]+/);
               return prefixMatch && prefixMatch[0] === code;
           })
-          .map(([districtCode, districtData]) => ({
-            code: districtCode,
-            revenue: districtData.revenue,
-            volume: districtData.volume,
-            profit: districtData.profit,
-            totalShippingCost: districtData.totalPostage,
-            avgShippingCost: districtData.volume > 0 ? districtData.totalPostage / districtData.volume : 0
-          }))
+          .map(([districtCode, districtData]) => {
+            const dRev = scaleMoneyInclTax(districtData.revenue);
+            const dProf = scaleMoneyInclTax(districtData.profit);
+            const dShip = scaleMoneyInclTax(districtData.totalPostage);
+            return {
+                code: districtCode,
+                revenue: dRev,
+                volume: districtData.volume,
+                profit: dProf,
+                totalShippingCost: dShip,
+                avgShippingCost: districtData.volume > 0 ? dShip / districtData.volume : 0
+            };
+          })
           .sort((a, b) => b.revenue - a.revenue);
 
         return {
             code,
-            revenue: stats.revenue,
+            revenue: revenueInclTax,
             volume: stats.volume,
             orders: stats.orders,
-            profit: stats.profit,
-            margin: calcMarginPct(stats.revenue, stats.profit),
+            profit: profitInclTax,
+            margin: calcMarginPct(revenueInclTax, profitInclTax),
             returnRate: stats.volume > 0 ? stats.weightedReturnRate / stats.volume : 0,
-            avgShippingCost: stats.volume > 0 ? stats.totalPostage / stats.volume : 0,
-            totalShippingCost: stats.totalPostage,
-            adSpend: stats.totalAdSpend,
-            tacos: calcTACoSPct(stats.totalAdSpend, stats.revenue),
+            avgShippingCost: stats.volume > 0 ? totalPostageInclTax / stats.volume : 0,
+            totalShippingCost: totalPostageInclTax,
+            adSpend: adSpendInclTax,
+            tacos: calcTACoSPct(adSpendInclTax, revenueInclTax),
             coordinates: POSTCODE_COORDS[code],
             platformBreakdown,
             topSkus,
-            prevRevenue: stats.prevRevenue,
+            prevRevenue: prevRevenueInclTax,
             prevVolume: stats.prevVolume,
             revenueDelta,
             volumeDelta,
-            revenueDeltaPct: stats.prevRevenue > 0 ? (revenueDelta / stats.prevRevenue) * 100 : (revenueDelta > 0 ? Infinity : 0),
+            revenueDeltaPct: prevRevenueInclTax > 0 ? (revenueDelta / prevRevenueInclTax) * 100 : (revenueDelta > 0 ? Infinity : 0),
             volumeDeltaPct: stats.prevVolume > 0 ? (volumeDelta / stats.prevVolume) * 100 : (volumeDelta > 0 ? Infinity : 0),
             districtBreakdown,
+            moneyIsTaxInclusive: true
         };
     }).filter(d => d.coordinates);
 };

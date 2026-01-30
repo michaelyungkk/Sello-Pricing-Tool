@@ -24,6 +24,7 @@ export default {
 
   // Sidebar & Navigation
   nav_overview: "Overview",
+  nav_platforms: "Marketplaces",
   nav_strategy: "Strategy Engine",
   nav_costs: "Cost Management",
   nav_promotions: "Promotions",
@@ -44,6 +45,8 @@ export default {
   desc_search: "Analyzing your inventory data based on natural language queries.",
   header_products: "Product Management",
   desc_products: "Manage Master SKUs and platform aliases.",
+  header_platforms: "Marketplace Management",
+  desc_platforms: "Monitor performance and health across all active platforms.",
   header_dashboard: "Decision Engine",
   desc_dashboard: "High-level alerts and performance dashboards.",
   header_strategy: "Pricing Strategy Engine",
@@ -192,8 +195,8 @@ export default {
   config_saved: "Configuration saved successfully.",
   config_reset: "Reset to defaults.",
   low_margin_threshold: "Low Margin Threshold",
-  velocity_crash: "Velocity Crash (Heavy)",
-  velocity_drop: "Velocity Drop (Standard)",
+  velocity_crash: "Volume Crash (Heavy)",
+  velocity_drop: "Volume Drop (Standard)",
   stockout_buffer: "Stockout Lead Time Buffer",
   overstock_definition: "Overstock Definition",
   dead_stock_value: "Dead Stock Min Value",

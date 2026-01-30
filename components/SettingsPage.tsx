@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { PricingRules, Platform, Product, PriceLog, PromotionEvent, LogisticsRule, ShipmentLog, VelocityLookback, SearchConfig } from '../types';
-import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Search, Megaphone, AlertTriangle } from 'lucide-react';
+import { PricingRules, Platform, Product, PriceLog, PromotionEvent, LogisticsRule, ShipmentLog, VelocityLookback, SearchConfig, PlatformConfig } from '../types';
+import { Save, Percent, Coins, Info, Plus, Trash2, User, Globe, Truck, Calculator, Scale, Ruler, Eye, EyeOff, BarChart2, Search, Megaphone, AlertTriangle, Settings2, ShieldCheck, CreditCard } from 'lucide-react';
 import { isAdsEnabled, setAdsCapability, ensureCapabilities } from '../services/platformCapabilities';
 import AlertThresholdSettings from './AlertThresholdSettings';
 import { useTranslation } from 'react-i18next';
@@ -52,7 +52,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
     // Extract platforms that exist in the product data but might not be in rules yet
     const discoveredPlatforms = useMemo(() => {
         const set = new Set<string>();
-        products.forEach(p => p.channels.forEach(c => set.add(c.platform)));
+        products.forEach(p => p.channels.forEach(c => add(c.platform)));
+        function add(p: string) { set.add(p); }
         return Array.from(set).sort();
     }, [products]);
 
@@ -71,47 +72,35 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
         }
     }, [isSaved]);
 
-    const handleMarkupChange = (platform: Platform, value: string) => {
-        const numValue = parseFloat(value);
-        setRules(prev => ({
-            ...prev,
-            [platform]: { ...prev[platform], markup: isNaN(numValue) ? 0 : numValue }
-        }));
-    };
+    const handleFieldChange = (platform: Platform, field: keyof PlatformConfig, value: any) => {
+        setRules(prev => {
+            const updatedPlatform = { ...prev[platform], [field]: value };
+            
+            // Validation: Clear attribution if ads disabled
+            if (field === 'adsEnabled' && value === false) {
+                updatedPlatform.adsAttribution = undefined;
+            }
+            
+            // Updated timestamp
+            updatedPlatform.updatedAt = new Date().toISOString();
 
-    const handleCommissionChange = (platform: Platform, value: string) => {
-        const numValue = parseFloat(value);
-        setRules(prev => ({
-            ...prev,
-            [platform]: { ...prev[platform], commission: isNaN(numValue) ? 0 : Math.max(0, numValue) }
-        }));
-    };
-
-    const handleManagerChange = (platform: Platform, value: string) => {
-        setRules(prev => ({
-            ...prev,
-            [platform]: { ...prev[platform], manager: value }
-        }));
-    };
-
-    const handleColorChange = (platform: Platform, value: string) => {
-        setRules(prev => ({
-            ...prev,
-            [platform]: { ...prev[platform], color: value }
-        }));
+            return {
+                ...prev,
+                [platform]: updatedPlatform
+            };
+        });
     };
 
     const toggleExclusion = (platform: Platform) => {
-        setRules(prev => ({
-            ...prev,
-            [platform]: { ...prev[platform], isExcluded: !prev[platform].isExcluded }
-        }));
+        handleFieldChange(platform, 'isExcluded', !rules[platform].isExcluded);
     };
     
     const toggleAdsSupported = (platform: Platform) => {
-        const current = isAdsEnabled(platform);
-        setAdsCapability(platform, !current);
-        setAdsRefresh(prev => prev + 1);
+        const current = rules[platform].adsEnabled;
+        handleFieldChange(platform, 'adsEnabled', !current);
+        if (!current) {
+            handleFieldChange(platform, 'adsAttribution', 'SKU_LEVEL');
+        }
     };
 
     const handleAddPlatform = () => {
@@ -124,7 +113,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                     commission: 0,
                     manager: 'Unassigned',
                     color: '#374151',
-                    isExcluded: false
+                    isExcluded: false,
+                    pricingControl: 'MERCHANT',
+                    feeModel: 'COMMISSION_PCT',
+                    adsEnabled: false,
+                    updatedAt: new Date().toISOString()
                 }
             }));
             setNewPlatformName('');
@@ -232,7 +225,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
     const platformKeys = Object.keys(rules).sort();
 
     return (
-        <div className="max-w-6xl mx-auto pb-10 flex flex-col">
+        <div className="max-w-[1600px] mx-auto pb-10 flex flex-col">
 
             {/* Updated Tab Navigation (Strict Match with Definitions Page) */}
             <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
@@ -273,49 +266,55 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                 {/* Platform Settings Section */}
                 {activeTab === 'platforms' && (
                     <div className="space-y-6">
-                        {/* ... Content remains unchanged ... */}
                         <div>
                             <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Platform Configuration</h2>
-                            <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Configure fees, capabilities, and strategic adjustments per marketplace.</p>
+                            <p className="mt-1 text-sm transition-colors opacity-80" style={headerStyle}>
+                                Platform Configuration controls platform-level commercial rules (fees, pricing control, and ads).<br />
+                                Promotion rules remain in Promotions.
+                            </p>
                         </div>
 
                         <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                             <div className="border-b border-custom-glass p-4 flex items-start gap-3" style={{ backgroundColor: `${themeColor}08` }}>
                                 <Info className="w-5 h-5 mt-0.5" style={{ color: themeColor }} />
                                 <div className="text-sm" style={{ color: themeColor }}>
-                                    <p className="font-semibold">How these settings affect analysis:</p>
+                                    <p className="font-semibold">Commercial Logic Controls:</p>
                                     <p className="mt-1">
-                                        <strong>Ads Supported:</strong> Enables "Organic Share" calculation and TACoS logic for this platform.<br />
-                                        <strong>Exclude from Global Average:</strong> If checked, sales from this platform (e.g. Wayfair, FBA) will NOT affect the "Current Price" or "Velocity" used for strategy calculations.
+                                        <strong>Pricing Control:</strong> Defines who owns the final price point. MERCHANT gives full control to the engine.
                                     </p>
                                 </div>
                             </div>
 
                             <div className="p-6">
-                                <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50/50 rounded-lg text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                                    <div className="col-span-3">Platform</div>
-                                    <div className="col-span-2 text-center">Commission (%)</div>
-                                    <div className="col-span-2 text-center">Markup (%)</div>
-                                    <div className="col-span-2">Manager</div>
+                                <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50/50 rounded-lg text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                                    <div className="col-span-3">Platform / Manager</div>
+                                    <div className="col-span-2">Pricing Control</div>
+                                    <div className="col-span-3">Fee Model & Rate</div>
                                     <div className="col-span-1 text-center">Ads?</div>
-                                    <div className="col-span-1 text-center">Global Avg</div>
+                                    <div className="col-span-2">Ad Attribution</div>
                                     <div className="col-span-1"></div>
                                 </div>
 
                                 <div className="space-y-3">
                                     {platformKeys.map((platform) => {
-                                        const currentColor = getPlatformColor(platform, rules[platform].color);
-                                        const isExcluded = rules[platform].isExcluded;
-                                        const adsEnabled = isAdsEnabled(platform);
+                                        const config = rules[platform];
+                                        const currentColor = getPlatformColor(platform, config.color);
+                                        const isExcluded = config.isExcluded;
+                                        const adsEnabled = config.adsEnabled;
+                                        
+                                        // Effective fallbacks for legacy data
+                                        const effectiveFeeModel = config.feeModel || 'COMMISSION_PCT';
+                                        const effectivePricingControl = config.pricingControl || 'MERCHANT';
 
                                         return (
                                             <div key={platform} className={`grid grid-cols-12 gap-4 items-center p-4 rounded-lg border transition-colors group ${isExcluded ? 'bg-gray-50/80 border-gray-200 opacity-90' : 'bg-white/80 border-gray-100 hover:border-gray-200'}`}>
+                                                {/* 1. Platform Info */}
                                                 <div className="col-span-3 flex items-center gap-3">
-                                                    <div className="relative group/icon cursor-pointer">
+                                                    <div className="relative group/icon cursor-pointer flex-shrink-0">
                                                         <input
                                                             type="color"
                                                             value={currentColor}
-                                                            onChange={(e) => handleColorChange(platform, e.target.value)}
+                                                            onChange={(e) => handleFieldChange(platform, 'color', e.target.value)}
                                                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                                                             title="Click to change platform color"
                                                         />
@@ -326,79 +325,117 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentRules, onSave, logis
                                                             {platform[0].toUpperCase()}
                                                         </div>
                                                     </div>
-                                                    <div className="flex flex-col">
+                                                    <div className="flex flex-col min-w-0">
                                                         <span className="font-semibold text-gray-800 text-sm truncate" title={platform}>{platform}</span>
-                                                        {isExcluded && <span className="text-[10px] text-gray-500">Excluded from Avg</span>}
-                                                    </div>
-                                                </div>
-
-                                                <div className="col-span-2 flex items-center justify-center">
-                                                    <div className="relative w-full max-w-[100px]">
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            step="0.1"
-                                                            value={rules[platform].commission}
-                                                            onChange={(e) => handleCommissionChange(platform, e.target.value)}
-                                                            className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 font-mono text-gray-900 transition-colors text-sm bg-white/50"
-                                                            style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
-                                                        />
-                                                        <Coins className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-3" />
-                                                    </div>
-                                                </div>
-
-                                                <div className="col-span-2 flex items-center justify-center">
-                                                    <div className="relative w-full max-w-[100px]">
-                                                        <input
-                                                            type="number"
-                                                            step="0.1"
-                                                            value={rules[platform].markup}
-                                                            onChange={(e) => handleMarkupChange(platform, e.target.value)}
-                                                            className="w-full pl-7 pr-3 py-2 text-right border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 font-mono text-gray-900 transition-colors text-sm bg-white/50"
-                                                            style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
-                                                        />
-                                                        <Percent className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-3" />
-                                                    </div>
-                                                </div>
-
-                                                <div className="col-span-2">
-                                                    <div className="relative w-full">
                                                         <input
                                                             type="text"
                                                             placeholder="Unassigned"
-                                                            value={rules[platform].manager || ''}
-                                                            onChange={(e) => handleManagerChange(platform, e.target.value)}
-                                                            className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-opacity-50 text-gray-900 transition-colors text-sm bg-white/50"
-                                                            style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                                                            value={config.manager || ''}
+                                                            onChange={(e) => handleFieldChange(platform, 'manager', e.target.value)}
+                                                            className="text-[10px] bg-transparent border-none p-0 focus:ring-0 text-gray-500 uppercase font-bold"
                                                         />
-                                                        <User className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                                                     </div>
                                                 </div>
-                                                
+
+                                                {/* 2. Pricing Control */}
+                                                <div className="col-span-2">
+                                                    <select
+                                                        value={effectivePricingControl}
+                                                        onChange={(e) => handleFieldChange(platform, 'pricingControl', e.target.value)}
+                                                        className="w-full text-xs border border-gray-300 rounded-lg py-1.5 px-2 bg-white/50 focus:ring-2"
+                                                        style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                                                    >
+                                                        <option value="MERCHANT">Merchant Owned</option>
+                                                        <option value="PLATFORM_COST_BASED">Platform Cost-Based</option>
+                                                        <option value="HYBRID">Hybrid Model</option>
+                                                    </select>
+                                                </div>
+
+                                                {/* 3. Fee Model & Input */}
+                                                <div className="col-span-3 space-y-1.5">
+                                                    <select
+                                                        value={effectiveFeeModel}
+                                                        onChange={(e) => handleFieldChange(platform, 'feeModel', e.target.value)}
+                                                        className="w-full text-[10px] font-bold border border-gray-300 rounded-lg py-1 px-2 bg-white/50 focus:ring-2 uppercase"
+                                                        style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                                                    >
+                                                        <option value="COMMISSION_PCT">Commission %</option>
+                                                        <option value="FIXED_PER_ORDER">Fixed Per Order</option>
+                                                        <option value="COST_BASED_MARKUP">Cost-Based Markup</option>
+                                                        <option value="NONE">No Platform Fees</option>
+                                                    </select>
+                                                    
+                                                    {effectiveFeeModel === 'COMMISSION_PCT' && (
+                                                        <div className="relative animate-in fade-in zoom-in-95 duration-200">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.1"
+                                                                value={config.commission}
+                                                                onChange={(e) => handleFieldChange(platform, 'commission', parseFloat(e.target.value) || 0)}
+                                                                className="w-full pl-7 pr-3 py-1.5 text-right border border-gray-300 rounded-lg focus:ring-2 font-mono text-gray-900 text-xs bg-white/80"
+                                                                style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                                                            />
+                                                            <Percent className="w-3 h-3 text-gray-400 absolute left-2 top-2" />
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {effectiveFeeModel === 'FIXED_PER_ORDER' && (
+                                                        <div className="relative animate-in fade-in zoom-in-95 duration-200">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                value={config.fixedFee || 0}
+                                                                onChange={(e) => handleFieldChange(platform, 'fixedFee', parseFloat(e.target.value) || 0)}
+                                                                className="w-full pl-7 pr-3 py-1.5 text-right border border-gray-300 rounded-lg focus:ring-2 font-mono text-gray-900 text-xs bg-white/80"
+                                                                style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                                                            />
+                                                            <Coins className="w-3 h-3 text-gray-400 absolute left-2 top-2" />
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* 5. Ads Enabled Toggle */}
                                                 <div className="col-span-1 flex justify-center">
                                                     <button
                                                         onClick={() => toggleAdsSupported(platform)}
-                                                        className={`p-2 rounded-lg transition-colors ${adsEnabled ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-400'}`}
-                                                        title={adsEnabled ? "Ads Enabled: Costs tracked" : "Ads Disabled: Costs ignored"}
+                                                        className={`p-2 rounded-lg transition-all shadow-sm ${adsEnabled ? 'bg-orange-100 text-orange-700 border border-orange-200' : 'bg-gray-100 text-gray-400 border border-transparent'}`}
+                                                        title={adsEnabled ? "Paid Ads Enabled" : "Ads Not Supported"}
                                                     >
                                                         <Megaphone className="w-4 h-4" />
                                                     </button>
                                                 </div>
 
-                                                <div className="col-span-1 flex justify-center">
-                                                    <button
-                                                        onClick={() => toggleExclusion(platform)}
-                                                        className={`p-2 rounded-lg transition-colors ${!isExcluded ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
-                                                        title={isExcluded ? "Click to INCLUDE in Global Average" : "Click to EXCLUDE from Global Average"}
-                                                    >
-                                                        {!isExcluded ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                                                    </button>
+                                                {/* 6. Ads Attribution */}
+                                                <div className="col-span-2">
+                                                    {adsEnabled ? (
+                                                        <select
+                                                            value={config.adsAttribution || 'SKU_LEVEL'}
+                                                            onChange={(e) => handleFieldChange(platform, 'adsAttribution', e.target.value)}
+                                                            className="w-full text-[10px] font-bold border border-orange-200 rounded-lg py-1.5 px-2 bg-orange-50/30 focus:ring-2 uppercase"
+                                                            style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
+                                                        >
+                                                            <option value="SKU_LEVEL">SKU Level</option>
+                                                            <option value="LUMP_SUM">Lump Sum / Apportioned</option>
+                                                        </select>
+                                                    ) : (
+                                                        <span className="text-[10px] text-gray-400 font-medium italic block text-center">N/A</span>
+                                                    )}
                                                 </div>
 
-                                                <div className="col-span-1 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {/* 7. Delete / Actions */}
+                                                <div className="col-span-1 flex justify-end gap-2">
+                                                    <button
+                                                        onClick={() => toggleExclusion(platform)}
+                                                        className={`p-1.5 rounded-lg transition-colors ${!isExcluded ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                                                        title={isExcluded ? "Included in Global Averages" : "Excluded from Global Averages"}
+                                                    >
+                                                        {!isExcluded ? <ShieldCheck className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                                    </button>
                                                     <button
                                                         onClick={() => handleDeletePlatform(platform)}
-                                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                        className="p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                         title="Remove Platform"
                                                     >
                                                         <Trash2 className="w-4 h-4" />

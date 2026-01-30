@@ -146,10 +146,10 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
 
         if (skuIdx === -1) throw new Error("Could not detect SKU column. Please ensure header contains 'SKU'.");
 
-        const results: BatchUpdateItem[] = [];
+        // Use a Map for deduplication within the file
+        const resultsMap = new Map<string, BatchUpdateItem>();
         const productMap = new Map<string, Product>();
         products.forEach(p => productMap.set(p.sku, p));
-        const summary = { increases: 0, decreases: 0, unchanged: 0 };
 
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
@@ -165,20 +165,20 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
             };
 
             const parseGradeLevel = (idx: number): number | undefined => {
-                if (idx === -1) return undefined; // Column not present, do not update existing values
+                if (idx === -1) return undefined; 
                 const rawVal = row[idx];
                 if (rawVal === null || rawVal === undefined || String(rawVal).trim() === '') {
-                    return 0; // Empty cell, default to 0
+                    return 0; 
                 }
                 
                 const valStr = String(rawVal);
-                const match = valStr.match(/\d+/); // Extract first number sequence
+                const match = valStr.match(/\d+/); 
                 if (match && match[0]) {
                     const num = parseInt(match[0], 10);
-                    return isNaN(num) ? 0 : num; // If parsing the extracted number fails, default 0
+                    return isNaN(num) ? 0 : num; 
                 }
                 
-                return 0; // If no number is found at all
+                return 0; 
             };
 
             const item: BatchUpdateItem = {
@@ -211,9 +211,24 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 };
             }
 
-            results.push(item);
-            
-            // Cost change summary logic
+            // Deduplication logic: Merge properties, overwriting with defined values from later rows
+            if (resultsMap.has(sku)) {
+                const existing = resultsMap.get(sku)!;
+                Object.entries(item).forEach(([k, v]) => {
+                    if (v !== undefined) {
+                        (existing as any)[k] = v;
+                    }
+                });
+            } else {
+                resultsMap.set(sku, item);
+            }
+        }
+
+        const results = Array.from(resultsMap.values());
+        const summary = { increases: 0, decreases: 0, unchanged: 0 };
+
+        results.forEach(item => {
+            // Cost change summary logic (Based on unique consolidated SKU data)
             const existingProduct = productMap.get(item.sku);
             if (existingProduct) {
                 if (item.cost !== undefined) {
@@ -233,7 +248,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                     summary.unchanged++;
                 }
             }
-        }
+        });
         
         setCostChangeSummary(summary);
         setParsedItems(results);

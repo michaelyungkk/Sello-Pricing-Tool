@@ -1,4 +1,3 @@
-
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -58,6 +57,21 @@ export interface CostChangeRecord {
   newCost: number;
   changeType: 'INCREASE' | 'DECREASE';
   percentChange: number;
+}
+
+export interface InventoryChangeRecord {
+  id: string;
+  sku: string;
+  productName: string;
+  timestamp: number;
+  date: string; // YYYY-MM-DD
+  prevStock: number;
+  newStock: number;
+  deltaStock: number;
+  source: string;
+  uploadBatchId?: string;
+  isStrategic?: boolean; // New: True if >5% increase or matched to shipment
+  reason?: string; // New: Explanation for classification
 }
 
 export interface SkuCostDetail {
@@ -225,9 +239,18 @@ export type Platform = string;
 export interface PlatformConfig {
   markup: number;
   commission: number;
+  fixedFee?: number; // Added to support FIXED_PER_ORDER fee model
   manager: string;
   color?: string; // Hex color code for the platform badge
-  isExcluded?: boolean; // New: If true, exclude from Global Weighted Averages
+  isExcluded?: boolean; // If true, exclude from Global Weighted Averages
+  
+  // New configuration fields for Strategy Engine
+  pricingControl: 'MERCHANT' | 'PLATFORM_COST_BASED' | 'HYBRID';
+  feeModel: 'COMMISSION_PCT' | 'FIXED_PER_ORDER' | 'NONE' | 'COST_BASED_MARKUP';
+  adsEnabled: boolean;
+  adsAttribution?: 'SKU_LEVEL' | 'LUMP_SUM';
+  updatedAt?: string; // ISO timestamp of last update
+  updatedBy?: string; // Optional identifier of who made the update
 }
 
 export type PricingRules = Record<Platform, PlatformConfig>;
@@ -249,6 +272,7 @@ export interface StrategyConfig {
     adjustmentPercent: number; // e.g. 5
     adjustmentFixed?: number; // e.g. 1 (GBP) - Added for fixed decrease
     includeNewProducts?: boolean; // Override to include new products in decrease logic
+    freshStockGuardDays?: number; // Days to wait before considering price decrease after restock
   };
   safety: {
     minMarginPercent: number; // e.g. 10 (Cost * 1.10)
@@ -281,9 +305,11 @@ export interface LogisticsRule {
 export interface PromotionItem {
   sku: string;
   basePrice: number;
-  discountType: 'PERCENTAGE' | 'FIXED';
+  discountType: 'PERCENTAGE' | 'FIXED' | 'FIXED_PRICE' | 'PERCENT_OFF' | 'FIXED_OFF';
   discountValue: number;
   promoPrice: number;
+  discountedPrice?: number; // New for FIXED_PRICE alias
+  discountPrice?: number; // Legacy/Migration compatibility
 }
 
 export interface PromotionEvent {
@@ -301,6 +327,14 @@ export interface PromotionEvent {
     revenue: number;
     upliftPercentage: number; // Sales uplift vs BAU
   };
+  // Task 2: Extended Promotion Meta
+  promotionScope?: 'SKU' | 'SHOP';
+  baselineMode?: 'CA_PRICE' | 'PRE_EVENT_AVG_PRICE' | 'MANUAL';
+  baselineManualPrice?: number;
+  expectedLiftPct?: number;
+  notes?: string;
+  shopDiscountType?: 'PERCENT_OFF' | 'FIXED_OFF' | 'FIXED_PRICE';
+  shopDiscountValue?: number;
 }
 
 export interface UserProfile {

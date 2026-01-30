@@ -1,16 +1,17 @@
-
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows } from 'lucide-react';
+import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows, Bookmark, History, FileText } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea, ComposedChart, Bar } from 'recharts';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 import { GradeBadge } from './GradeBadge';
-import { calcRevenue, calcProfit, calcUnits, calcAdSpend, marginPct, calcTACoSPct } from '../services/metrics';
+import { calcProfit, calcRevenue, calcUnits, calcAdSpend, marginPct, calcTACoSPct } from '../services/metrics';
 import { buildWindow } from '../services/dateWindow';
-import { asDateKey, isDateKeyBetween } from '../services/dateUtils';
+import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne } from '../services/dateUtils';
 import AuditPanel from './AuditPanel';
 import { formatMoney, formatPct, formatNumber } from '../utils/format';
+import { VAT_MULTIPLIER } from '../constants';
+import { PriceChangeHistoryPanel } from './strategy/PriceChangeHistoryPanel';
+import { createPortal } from 'react-dom';
 
 interface SkuDeepDivePageProps {
     data: {
@@ -151,16 +152,16 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
       
         return (
           <g transform={`translate(${x},${y})`}>
-            <text x={0} y={0} dy={16} textAnchor="middle" fill="#666" fontSize={10} fontWeight="bold">
+            <text x={0} y={0} dy={16} textAnchor="middle" fill="#666" fontSize={10} fontWeight="bold" style={{ userSelect: 'none' }}>
               {payload.value}
             </text>
             {dataPoint && (
-                <text x={0} y={28} dy={0} textAnchor="middle" fill="#666" fontSize={10}>
+                <text x={0} y={28} dy={0} textAnchor="middle" fill="#666" fontSize={10} style={{ userSelect: 'none' }}>
                     (n={dataPoint.n})
                 </text>
             )}
             {dataPoint && dataPoint.n < 10 && (
-                 <text x={0} y={42} dy={0} textAnchor="middle" fill="#92400e" fontSize={9} fontWeight="bold">
+                 <text x={0} y={42} dy={0} textAnchor="middle" fill="#92400e" fontSize={9} fontWeight="bold" style={{ userSelect: 'none' }}>
                     (Low Data)
                  </text>
             )}
@@ -194,7 +195,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
         const yDomain: [number, number] = [globalMin - padding, globalMax + padding];
 
         return (
-            <div className="bg-white py-4 px-2 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col">
+            <div className="bg-white py-4 px-2 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col select-none">
                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2 px-2">
                     <Activity className="w-3 h-3" /> {title}
                 </h4>
@@ -206,7 +207,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
                             <YAxis 
                                 domain={yDomain} 
                                 tickFormatter={format} 
-                                tick={{fontSize: 10}}
+                                tick={{fontSize: 10, userSelect: 'none'}}
                                 width={45}
                                 tickLine={false}
                                 axisLine={false}
@@ -257,6 +258,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
                     const rect = e.currentTarget.getBoundingClientRect();
                     setTooltip({
                         visible: true,
+                        source: title,
                         content: { label, ...stats },
                         x: rect.left + rect.width / 2,
                         y: rect.top,
@@ -301,7 +303,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
     };
 
     return (
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between h-full">
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between h-full select-none">
             <div>
                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
                     <Activity className="w-3 h-3" /> {title}
@@ -318,7 +320,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
                     </div>
                 </div>
             )}
-            {tooltip?.visible && <BoxPlotTooltip content={tooltip.content} x={tooltip.x} y={tooltip.y} format={format} />}
+            {tooltip?.visible && tooltip.source === title && <BoxPlotTooltip content={tooltip.content} x={tooltip.x} y={tooltip.y} format={format} />}
         </div>
     );
 };
@@ -339,10 +341,23 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const [hoveredBubble, setHoveredBubble] = useState<any>(null);
     const [chartPeriod, setChartPeriod] = useState<string>('30 Days');
     const [chartLayout, setChartLayout] = useState<'horizontal' | 'vertical'>('horizontal');
-    const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number } | null>(null);
+    const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number, source?: string } | null>(null);
     const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
     
     const activeSignalRef = useRef<HTMLDivElement>(null);
+
+    // Refs for quick access scrolling
+    const overviewRef = useRef<HTMLDivElement>(null);
+    const signalsRef = useRef<HTMLDivElement>(null);
+    const analysisRef = useRef<HTMLDivElement>(null);
+    const pricingRef = useRef<HTMLDivElement>(null);
+    const ledgerRef = useRef<HTMLDivElement>(null);
+
+    const scrollTo = (ref: React.RefObject<HTMLDivElement>) => {
+        if (ref.current) {
+            ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
 
     // Calculate Date Window Keys
     const { startKey, endKey, expectedDays } = useMemo(() => buildWindow({
@@ -350,6 +365,11 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         days: txDays,
         excludeToday: true 
     }), [txDays]);
+    
+    // For Price History, we extend to Today to show recent actions
+    // This handles the user case where they just lodged a price change today and expect to see it immediately
+    const todayKey = getTodayKeyMelbourne();
+    const historyEndKey = todayKey > endKey ? todayKey : endKey;
 
     useEffect(() => {
         if (focus && activeSignalRef.current) {
@@ -360,8 +380,16 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     }, [focus]);
 
     const sortedTransactions = useMemo(() => {
-        const sales = transactions.map(t => ({ ...t, _type: 'SALE' }));
-        const refundLogs = refunds.map(r => ({
+        const safeTx = Array.isArray(transactions) ? transactions : [];
+        const safeRefunds = Array.isArray(refunds) ? refunds : [];
+
+        if (process.env.NODE_ENV === 'development') {
+             if (transactions && !Array.isArray(transactions)) console.warn('SkuDeepDive: transactions is not array');
+             if (refunds && !Array.isArray(refunds)) console.warn('SkuDeepDive: refunds is not array');
+        }
+
+        const sales = safeTx.map(t => ({ ...t, _type: 'SALE' }));
+        const refundLogs = safeRefunds.map(r => ({
             id: r.id,
             sku: r.sku,
             date: r.date,
@@ -425,6 +453,18 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         return marginPct(totalProfit, netSales) || 0;
     }, [transactions, refunds, allTimeSales]);
 
+    // NEW: Calculate All-Time Return & Refund Rate
+    const allTimeReturnStats = useMemo(() => {
+        if (allTimeQty === 0) return { returnRate: 0, refundRate: 0 };
+        const totalRefundQty = refunds.reduce((sum, r) => sum + r.quantity, 0);
+        const totalRefundVal = refunds.reduce((sum, r) => sum + r.amount, 0);
+        
+        return {
+            returnRate: (totalRefundQty / allTimeQty) * 100,
+            refundRate: allTimeSales > 0 ? (totalRefundVal / allTimeSales) * 100 : 0
+        };
+    }, [refunds, allTimeQty, allTimeSales]);
+
     const diagnostics = useMemo(() => {
         const signals = [];
 
@@ -481,7 +521,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 severity: 'High',
                 color: 'text-red-700 bg-red-50 border-red-200', 
                 icon: DollarSign, 
-                desc: `Net profit margin is ${margin.toFixed(1)}%, falling below the ${thresholds.marginBelowTargetPct}% sustainability target.` 
+                desc: `Net margin is ${margin.toFixed(1)}%, below the ${thresholds.marginBelowTargetPct}% target.` 
             });
         }
 
@@ -619,24 +659,28 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
     const priceVolumeAnalysis = useMemo(() => {
         const validTx = sortedTransactions.filter(t => t.velocity > 0 && t.price > 0);
-        const refPrice = product.caPrice || product.currentPrice || 1; 
+        // Fix refPrice to be VAT inclusive for comparison with scaled transaction prices
+        const refPrice = product.caPrice || (product.currentPrice * VAT_MULTIPLIER) || 1; 
 
         const thresholdAmber = -(refPrice * 0.05); 
         const thresholdRed = -(refPrice * 0.15);   
 
+        // REORDERED: 7, 30, 90
         const buckets = [
-            { label: '90 Days', days: 90 },
+            { label: '7 Days', days: 7 },
             { label: '30 Days', days: 30 },
-            { label: '7 Days', days: 7 }
+            { label: '90 Days', days: 90 }
         ];
 
         const chartData: any[] = [];
         const periodStats: any[] = []; 
         const aggregatedPrices: Record<number, number> = {}; 
+        
+        const safeChanges = Array.isArray(priceChangeHistory) ? priceChangeHistory : [];
 
         const getEffectiveCA = (dateStr: string) => {
             const txDate = new Date(dateStr).getTime();
-            const changes = priceChangeHistory
+            const changes = safeChanges
                 .filter(c => c.sku === product.sku)
                 .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
@@ -705,6 +749,16 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
         return { chartData, pointsTable, periodStats, thresholds: { amber: thresholdAmber, red: thresholdRed } };
     }, [sortedTransactions, priceChangeHistory, product]);
+
+    const minPricePoint = useMemo(() => {
+        if (priceVolumeAnalysis.pointsTable.length === 0) return null;
+        return Math.min(...priceVolumeAnalysis.pointsTable.map(p => p.price));
+    }, [priceVolumeAnalysis.pointsTable]);
+
+    const maxPricePoint = useMemo(() => {
+        if (priceVolumeAnalysis.pointsTable.length === 0) return null;
+        return Math.max(...priceVolumeAnalysis.pointsTable.map(p => p.price));
+    }, [priceVolumeAnalysis.pointsTable]);
 
     const filteredChartData = useMemo(() => {
         if (chartPeriod === 'All') return priceVolumeAnalysis.chartData;
@@ -812,12 +866,29 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
             </div>
 
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
-                <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-4">
-                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                        <Package className="w-5 h-5" />
+            <div ref={overviewRef} className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
+                <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                            <Package className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900">SKU Overview</h3>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900">SKU Overview</h3>
+
+                    {sortedTransactions.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase mr-1 hidden sm:block select-none">Quick Access:</span>
+                            <button onClick={() => scrollTo(analysisRef)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
+                                <BarChart2 className="w-3.5 h-3.5" /> Distribution
+                            </button>
+                            <button onClick={() => scrollTo(pricingRef)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
+                                <History className="w-3.5 h-3.5" /> Pricing
+                            </button>
+                             <button onClick={() => scrollTo(ledgerRef)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5" /> Ledger
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex flex-col xl:flex-row gap-8">
@@ -880,13 +951,28 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            <div className="space-y-1">
+                            {/* INBOUND TOOLTIP */}
+                            <div className="space-y-1 group relative cursor-help">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
                                     <Ship className="w-3 h-3"/> Inbound
                                 </span>
                                 <div className="text-xl font-bold text-gray-900">
                                     {formatNumber(product.incomingStock)} <span className="text-xs font-normal text-gray-400">units</span>
                                 </div>
+                                
+                                {product.shipments && product.shipments.length > 0 && (
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50">
+                                        <div className="font-bold border-b border-gray-700 pb-1 mb-1">Active Shipments</div>
+                                        <div className="space-y-1">
+                                            {product.shipments.map((s, i) => (
+                                                <div key={i} className="flex justify-between gap-2">
+                                                    <span className="truncate">{s.containerId}</span>
+                                                    <span className="font-bold text-indigo-300">{s.eta || 'TBA'}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-1">
@@ -898,17 +984,37 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
+                            {/* UPDATED: Summary Cards Row to Include Return Stats */}
+                            <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">All-Time Sales</span>
-                                <div className="text-2xl font-bold text-gray-900">
+                                <div className="text-lg font-bold text-gray-900">
                                     {formatMoney(allTimeSales, 0)}
                                 </div>
                             </div>
 
-                            <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
+                            <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Lifetime Net Margin</span>
-                                <div className={`text-2xl font-bold ${allTimeMarginPct >= 15 ? 'text-green-600' : allTimeMarginPct > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <div className={`text-lg font-bold ${allTimeMarginPct >= 15 ? 'text-green-600' : allTimeMarginPct > 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {formatPct(allTimeMarginPct, 1)}
+                                </div>
+                            </div>
+
+                            <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">All-Time Return & Refund Rate</span>
+                                <div className="flex items-center gap-4">
+                                    <div>
+                                        <div className="text-xs text-gray-500 font-medium">Return (Qty)</div>
+                                        <div className={`text-lg font-bold ${allTimeReturnStats.returnRate > thresholds.returnRatePct ? 'text-red-600' : 'text-gray-900'}`}>
+                                            {formatPct(allTimeReturnStats.returnRate)}
+                                        </div>
+                                    </div>
+                                    <div className="w-px h-8 bg-gray-200"></div>
+                                    <div>
+                                        <div className="text-xs text-gray-500 font-medium">Refund (Value)</div>
+                                        <div className="text-lg font-bold text-gray-900">
+                                            {formatPct(allTimeReturnStats.refundRate)}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -918,7 +1024,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             </div>
 
             {diagnostics.length > 0 && (
-                <div className="bg-white/50 border border-gray-200 rounded-xl p-4 backdrop-blur-sm animate-in fade-in slide-in-from-top-2">
+                <div ref={signalsRef} className="bg-white/50 border border-gray-200 rounded-xl p-4 backdrop-blur-sm animate-in fade-in slide-in-from-top-2">
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
                             <Activity className="w-4 h-4 text-indigo-500" />
@@ -953,7 +1059,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             )}
 
             {sortedTransactions.length > 0 && (
-                <div className="space-y-4">
+                <div ref={analysisRef} className="space-y-4">
                     <div className="flex justify-between items-center">
                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                             <BarChart2 className="w-5 h-5 text-indigo-600" />
@@ -1032,7 +1138,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         </div>
                     </div>
 
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm select-none">
                         <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
                             <Megaphone className="w-3 h-3 text-orange-500" /> Advertising Efficiency (TACoS)
                         </h4>
@@ -1064,7 +1170,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             )}
 
             {sortedTransactions.length > 0 && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div ref={pricingRef} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-4">
                         <div className="flex justify-between items-center">
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -1084,7 +1190,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             </div>
                         </div>
                         
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-auto">
+                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-auto select-none">
                             <div className="flex justify-between items-start mb-4">
                                 <h4 className="text-xs font-bold text-gray-500 uppercase">
                                     Aggregated Volume by Price Delta
@@ -1100,8 +1206,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 <ResponsiveContainer width="100%" height="100%">
                                     <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                         <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis type="category" dataKey="period" name="Period" allowDuplicatedCategory={false} tick={{fontSize: 12}} />
-                                        <YAxis type="number" dataKey="delta" name="Price Deviation" unit="£" domain={['auto', 'auto']} tick={{fontSize: 12}} />
+                                        <XAxis type="category" dataKey="period" name="Period" allowDuplicatedCategory={false} tick={{fontSize: 12, userSelect: 'none'}} />
+                                        <YAxis type="number" dataKey="delta" name="Price Deviation" unit="£" domain={['auto', 'auto']} tick={{fontSize: 12, userSelect: 'none'}} label={{ value: 'Price Deviation (£)', angle: -90, position: 'insideLeft' }} />
                                         <ZAxis type="number" dataKey="totalQty" range={[60, 600]} name="Volume" />
                                         
                                         <ReferenceArea y1={priceVolumeAnalysis.thresholds.amber} y2={1000} fill="green" fillOpacity={0.05} />
@@ -1162,12 +1268,30 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {priceVolumeAnalysis.pointsTable.map((pt, i) => (
-                                        <tr key={i} className="hover:bg-gray-50">
-                                            <td className="p-3 font-mono font-bold text-gray-700">£{pt.price.toFixed(2)}</td>
-                                            <td className="p-3 text-right">{pt.qty}</td>
-                                        </tr>
-                                    ))}
+                                    {priceVolumeAnalysis.pointsTable.map((pt, i) => {
+                                        const isLowest = minPricePoint !== null && pt.price === minPricePoint;
+                                        const isHighest = maxPricePoint !== null && pt.price === maxPricePoint;
+                                        return (
+                                            <tr key={i} className={`hover:bg-gray-50 ${isLowest ? 'bg-amber-50/30' : isHighest ? 'bg-indigo-50/30' : ''}`}>
+                                                <td className="p-3 font-mono font-bold text-gray-700">
+                                                    <div className="flex items-center gap-2">
+                                                        £{pt.price.toFixed(2)}
+                                                        {isLowest && (
+                                                            <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 font-bold uppercase tracking-wide flex items-center gap-1">
+                                                                <TrendingDown className="w-2.5 h-2.5" /> Lowest
+                                                            </span>
+                                                        )}
+                                                        {isHighest && (
+                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold uppercase tracking-wide flex items-center gap-1">
+                                                                <TrendingUp className="w-2.5 h-2.5" /> Highest
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 text-right">{pt.qty}</td>
+                                            </tr>
+                                        );
+                                    })}
                                     {priceVolumeAnalysis.pointsTable.length === 0 && (
                                         <tr><td colSpan={2} className="p-4 text-center text-gray-400">No data</td></tr>
                                     )}
@@ -1179,75 +1303,77 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             )}
 
             {sortedTransactions.length > 0 && (
-                <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                <Layers className="w-5 h-5 text-indigo-600" />
-                                Transaction Ledger
-                            </h3>
-                            <button
-                                onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                                title="Show Data Audit"
-                            >
-                                <Activity className="w-3 h-3" />
-                                Audit
-                            </button>
+                <div ref={ledgerRef} className="space-y-6">
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                    <Layers className="w-5 h-5 text-indigo-600" />
+                                    Transaction Ledger
+                                </h3>
+                                <button
+                                    onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                    title="Show Data Audit"
+                                >
+                                    <Activity className="w-3 h-3" />
+                                    Audit
+                                </button>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="relative">
+                                    <select 
+                                        value={txDays}
+                                        onChange={e => setTxDays(Number(e.target.value))}
+                                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value={7}>Last 7 Days</option>
+                                        <option value={30}>Last 30 Days</option>
+                                        <option value={90}>Last 90 Days</option>
+                                    </select>
+                                    <Calendar className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                </div>
+                                <div className="relative">
+                                    <select 
+                                        value={txFilterPlatform}
+                                        onChange={e => setTxFilterPlatform(e.target.value)}
+                                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="All">All Platforms</option>
+                                        {platforms.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                    <Filter className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                </div>
+                                <div className="relative">
+                                    <select 
+                                        value={txFilterType}
+                                        onChange={e => setTxFilterType(e.target.value)}
+                                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="All">All Types</option>
+                                        <option value="Sale">Sale (Price {'>'} 0)</option>
+                                        <option value="Ad Cost">Ad Cost (Ads {'>'} 0)</option>
+                                        <option value="Refund">Refunds Only</option>
+                                    </select>
+                                    <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex gap-2">
-                            <div className="relative">
-                                <select 
-                                    value={txDays}
-                                    onChange={e => setTxDays(Number(e.target.value))}
-                                    className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value={7}>Last 7 Days</option>
-                                    <option value={30}>Last 30 Days</option>
-                                    <option value={90}>Last 90 Days</option>
-                                </select>
-                                <Calendar className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                            </div>
-                            <div className="relative">
-                                <select 
-                                    value={txFilterPlatform}
-                                    onChange={e => setTxFilterPlatform(e.target.value)}
-                                    className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value="All">All Platforms</option>
-                                    {platforms.map(p => <option key={p} value={p}>{p}</option>)}
-                                </select>
-                                <Filter className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                            </div>
-                            <div className="relative">
-                                <select 
-                                    value={txFilterType}
-                                    onChange={e => setTxFilterType(e.target.value)}
-                                    className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value="All">All Types</option>
-                                    <option value="Sale">Sale (Price {'>'} 0)</option>
-                                    <option value="Ad Cost">Ad Cost (Ads {'>'} 0)</option>
-                                    <option value="Refund">Refunds Only</option>
-                                </select>
-                                <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                            </div>
-                        </div>
-                    </div>
 
-                    {isAuditPanelVisible && (
-                        <AuditPanel
-                            title="Ledger Reconciliation"
-                            startKey={startKey}
-                            endKey={endKey}
-                            rows={filteredTransactions}
-                            getDateKey={(row: any) => asDateKey(row.date)}
-                            getRevenue={(row: any) => calcRevenue(row)}
-                            getQty={(row: any) => calcUnits(row)}
-                            getProfit={(row: any) => calcProfit(row)}
-                            getAdSpend={(row: any) => calcAdSpend(row)}
-                        />
-                    )}
+                        {isAuditPanelVisible && (
+                            <AuditPanel
+                                title="Ledger Reconciliation"
+                                startKey={startKey}
+                                endKey={endKey}
+                                rows={filteredTransactions}
+                                getDateKey={(row: any) => asDateKey(row.date)}
+                                getRevenue={(row: any) => calcRevenue(row)}
+                                getQty={(row: any) => calcUnits(row)}
+                                getProfit={(row: any) => calcProfit(row)}
+                                getAdSpend={(row: any) => calcAdSpend(row)}
+                            />
+                        )}
+                    </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm text-sm">
                         <div className="flex flex-col">
@@ -1282,7 +1408,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         </div>
                         <div className="divide-y divide-gray-100">
                             {platformSubtotals.map(sub => (
-                                <div key={sub.platform} className="flex items-center justify-between px-4 py-2 hover:bg-gray-50">
+                                <div key={sub.platform} className="flex items-center justify-between px-4 py-3.5 hover:bg-gray-50">
                                     <span className="font-bold text-sm text-gray-800 w-1/5">{sub.platform}</span>
                                     <div className="flex items-center justify-end gap-4 text-xs w-4/5">
                                         <div className="text-right w-20">

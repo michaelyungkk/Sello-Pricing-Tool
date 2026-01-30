@@ -1,12 +1,13 @@
 
+// ... existing imports ...
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog } from '../types';
+import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord } from '../types';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
 import { GradeBadge } from './GradeBadge';
-import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity, Edit2, Plus, Coins } from 'lucide-react';
+import { Settings, AlertTriangle, TrendingUp, TrendingDown, Info, Save, Download, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Ship, X, ArrowRight, Calendar, Eye, EyeOff, ChevronLeft, ChevronRight, History, Activity, Edit2, Plus, Coins, Database } from 'lucide-react';
 import ManualPriceChangeModal from './ManualPriceChangeModal';
 import ManualCostChangeModal from './ManualCostChangeModal';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../services/dateUtils';
@@ -15,6 +16,7 @@ import AuditPanel from './AuditPanel';
 import { SortState, sortRows } from '../utils/tableSort';
 import { SortableHeader } from './common/SortableHeader';
 
+// ... (Interface props remain same)
 interface StrategyPageProps {
     products: Product[];
     pricingRules: PricingRules;
@@ -26,15 +28,18 @@ interface StrategyPageProps {
     promotions: PromotionEvent[];
     priceChangeHistory: PriceChangeRecord[];
     costChangeHistory: CostChangeRecord[];
+    inventoryChangeHistory: InventoryChangeRecord[];
     onUpdatePriceChangeRecord?: (record: PriceChangeRecord) => void;
     onUpdateCostChangeRecord?: (record: CostChangeRecord) => void;
+    onUpdateInventoryChangeRecord?: (record: InventoryChangeRecord) => void;
     onManualPriceChange?: (data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
     onManualCostChange?: (data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
     velocityLookback: VelocityLookback;
     thresholds?: ThresholdConfig;
 }
 
-const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], costChangeHistory = [], onUpdatePriceChangeRecord, onUpdateCostChangeRecord, onManualPriceChange, onManualCostChange, velocityLookback, thresholds }) => {
+const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, priceHistoryMap, promotions, priceChangeHistory = [], costChangeHistory = [], inventoryChangeHistory = [], onUpdatePriceChangeRecord, onUpdateCostChangeRecord, onUpdateInventoryChangeRecord, onManualPriceChange, onManualCostChange, velocityLookback, thresholds }) => {
+    // ... (State initialization remains same)
     const [config, setConfig] = useState<StrategyConfig>(() => {
         try {
             return currentConfig ? JSON.parse(JSON.stringify(currentConfig)) : DEFAULT_STRATEGY_RULES;
@@ -62,7 +67,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [isManualLodgeOpen, setIsManualLodgeOpen] = useState(false);
     const [isManualCostLodgeOpen, setIsManualCostLodgeOpen] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<'ENGINE' | 'HISTORY' | 'COST_HISTORY'>('ENGINE');
+    const [activeTab, setActiveTab] = useState<'ENGINE' | 'HISTORY' | 'COST_HISTORY' | 'INVENTORY_HISTORY'>('ENGINE');
     const [filterTab, setFilterTab] = useState<'All' | 'INCREASE' | 'DECREASE' | 'MAINTAIN'>('All');
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -74,6 +79,9 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [costHistoryCurrentPage, setCostHistoryCurrentPage] = useState(1);
     const [costHistoryItemsPerPage, setCostHistoryItemsPerPage] = useState(25);
 
+    const [inventoryHistoryCurrentPage, setInventoryHistoryCurrentPage] = useState(1);
+    const [inventoryHistoryItemsPerPage, setInventoryHistoryItemsPerPage] = useState(25);
+
     const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
     const [editingDate, setEditingDate] = useState('');
     const [recentlySavedId, setRecentlySavedId] = useState<string | null>(null);
@@ -82,10 +90,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const [editingCostDate, setEditingCostDate] = useState('');
     const [recentlySavedCostId, setRecentlySavedCostId] = useState<string | null>(null);
 
+    const [editingInventoryHistoryId, setEditingInventoryHistoryId] = useState<string | null>(null);
+    const [editingInventoryDate, setEditingInventoryDate] = useState('');
+    const [recentlySavedInventoryId, setRecentlySavedInventoryId] = useState<string | null>(null);
+
     const [sort, setSort] = useState<SortState<string> | null>(null);
 
-    // --- LOGIC HELPERS ---
-
+    // ... (Logic helpers like safeNum, safeFormat, getRunwayBin, getCalculationWindow, formattedDateRange, calculateMetrics remain same)
     const safeNum = (val: any) => {
         const n = Number(val);
         return isNaN(n) ? 0 : n;
@@ -232,6 +243,29 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         const todayKey = getTodayKeyMelbourne();
         const limit7StartKey = addDaysToDateKey(todayKey, -7);
 
+        // --- FRESH STOCK GUARD (UPDATED) ---
+        // Only look for STRATEGIC restocks (>= 5% increase or matched to shipment)
+        const guardDays = safeNum(config.decrease.freshStockGuardDays ?? 0);
+        const guardStartKey = addDaysToDateKey(todayKey, -(guardDays - 1));
+        
+        const recentStrategicRestock = guardDays > 0 ? inventoryChangeHistory.find(log => {
+            const lKey = asDateKey(log.date);
+            return lKey && lKey >= guardStartKey && lKey <= todayKey && log.sku === product.sku && log.isStrategic;
+        }) : null;
+
+        const inFreshStockGuard = !!recentStrategicRestock;
+
+        // --- PROMOTION FLAG (NOW A WARNING ONLY) ---
+        const activePromos = promotions.filter(p => 
+            p.status === 'ACTIVE' && 
+            p.startDate <= todayKey && 
+            p.endDate >= todayKey && 
+            p.items.some(i => i.sku === product.sku)
+        );
+
+        const inPromotion = activePromos.length > 0;
+        const promoPlatforms = activePromos.map(p => p.platform);
+
         const skuLogs = priceHistoryMap.get(product.sku) || [];
         const last7Qty = skuLogs
             .filter((h: PriceLog) => {
@@ -309,9 +343,31 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
         const safetyViolation = adjustedPrice < floorPrice;
 
-        return { action, adjustedPrice, reasoning, safetyViolation, runwayDays, effectiveStock, floorPrice, isNew };
+        // Final override for Decrease Logic - Fresh Stock Guard
+        let excludedReason = '';
+        if (action === 'DECREASE' && inFreshStockGuard) {
+            action = 'MAINTAIN';
+            reasoning = 'Stable';
+            excludedReason = 'FRESH_STOCK_GUARD';
+        }
+
+        return { 
+            action, 
+            adjustedPrice, 
+            reasoning, 
+            safetyViolation, 
+            runwayDays, 
+            effectiveStock, 
+            floorPrice, 
+            isNew, 
+            inPromotion, 
+            promoPlatforms,
+            excludedReason,
+            inFreshStockGuard
+        };
     };
 
+    // ... (Memoized tableData, filteredAndSortedData, auditStats, paginatedData, etc. remain unchanged)
     const tableData = useMemo(() => {
         return products
             .filter(p => {
@@ -353,7 +409,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 if (isOOS && !showOOS) return false;
                 return true;
             });
-    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, includeIncoming, pricingRules, showOOS, thresholds]);
+    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, includeIncoming, pricingRules, showOOS, thresholds, promotions]);
 
     const filteredAndSortedData = useMemo(() => {
         let data = tableData.filter(row => filterTab === 'All' || row.action === filterTab);
@@ -388,8 +444,11 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         return data;
     }, [tableData, filterTab, sort]);
 
+    // ... (auditStats, paginatedData, etc. same as before)
     const auditStats = useMemo(() => {
-        if (filteredAndSortedData.length === 0) return null;
+        if (!isAuditPanelVisible || filteredAndSortedData.length === 0) {
+            return null;
+        }
     
         const localWindow = getCalculationWindow(selectedWindow, customStart, customEnd);
         const globalWindow = getCalculationWindow(velocityLookback, undefined, undefined);
@@ -440,7 +499,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                     } else {
                         global.profitLogsWithout++;
                         logProfit = revenue * (safeNum(log.margin) / 100);
-                        global.estimatedProfit += logProfit;
+                        local.estimatedProfit += logProfit;
                     }
                     global.profit += logProfit;
                 }
@@ -462,7 +521,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 distinctDaysCount: global.distinctDays.size
             }
         };
-    }, [filteredAndSortedData, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap]);
+    }, [isAuditPanelVisible, filteredAndSortedData, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap]);
 
     const paginatedData = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
@@ -486,7 +545,12 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     };
 
     const historyTableData = useMemo(() => {
-        let data = priceChangeHistory.map(change => {
+        const safeArr = Array.isArray(priceChangeHistory) ? priceChangeHistory : [];
+        if (process.env.NODE_ENV === 'development' && priceChangeHistory && !Array.isArray(priceChangeHistory)) {
+             console.warn('StrategyPage: priceChangeHistory is not an array', priceChangeHistory);
+        }
+
+        let data = safeArr.map(change => {
             const dateKey = asDateKey(change.date);
             if (!dateKey) return { ...change, preVel: 0, postVel: 0, velocityChange: 0 };
             
@@ -532,7 +596,8 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
     const totalHistoryPages = Math.ceil(historyTableData.length / historyItemsPerPage);
 
     const costHistoryTableData = useMemo(() => {
-        let data = [...costChangeHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const safeArr = Array.isArray(costChangeHistory) ? costChangeHistory : [];
+        let data = [...safeArr].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         if (searchTags.length > 0 || searchQuery) {
             data = data.filter(item => {
@@ -557,10 +622,49 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
     const totalCostHistoryPages = Math.ceil(costHistoryTableData.length / costHistoryItemsPerPage);
 
+    const inventoryHistoryTableData = useMemo(() => {
+        const window = getCalculationWindow(selectedWindow, customStart, customEnd);
+        const safeArr = Array.isArray(inventoryChangeHistory) ? inventoryChangeHistory : [];
+        
+        let data = [...safeArr];
+        
+        // --- Date Range Filter ---
+        if (selectedWindow !== 'ALL') {
+            data = data.filter(item => {
+                const itemKey = asDateKey(item.date);
+                return itemKey && isDateKeyBetween(itemKey, window.startKey, window.endKey);
+            });
+        }
+
+        if (searchTags.length > 0 || searchQuery) {
+            data = data.filter(item => {
+                const matchesTerm = (term: string) => {
+                    const t = term.toLowerCase();
+                    return item.sku.toLowerCase().includes(t) || 
+                           item.productName.toLowerCase().includes(t);
+                };
+                if (searchTags.length > 0) {
+                    return searchTags.some(tag => matchesTerm(tag));
+                }
+                return matchesTerm(searchQuery);
+            });
+        }
+        
+        return data.sort((a, b) => b.timestamp - a.timestamp);
+    }, [inventoryChangeHistory, searchTags, searchQuery, selectedWindow, customStart, customEnd]);
+
+    const paginatedInventoryHistoryData = useMemo(() => {
+        const start = (inventoryHistoryCurrentPage - 1) * inventoryHistoryItemsPerPage;
+        return inventoryHistoryTableData.slice(start, start + inventoryHistoryItemsPerPage);
+    }, [inventoryHistoryTableData, inventoryHistoryCurrentPage, inventoryHistoryItemsPerPage]);
+
+    const totalInventoryHistoryPages = Math.ceil(inventoryHistoryTableData.length / inventoryHistoryItemsPerPage);
+
     useEffect(() => {
         setCurrentPage(1);
         setHistoryCurrentPage(1);
         setCostHistoryCurrentPage(1);
+        setInventoryHistoryCurrentPage(1);
     }, [searchQuery, searchTags, activeTab, filterTab, selectedWindow, showOOS]);
 
     const uniquePlatforms = useMemo(() => {
@@ -579,10 +683,21 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
             return `"${str.replace(/"/g, '""')}"`;
         };
 
-        const headers = ['SKU', 'Master SKU', 'Name', 'CA Price', 'New Price', 'Runway (Days)', 'Inventory', 'Recent Avg Price', 'Recent Sales $', 'Recent Qty', 'Net PM%', 'Is New', 'Action', 'Floor Price', 'Safety Alert', 'Reason'];
+        const headers = [
+            'SKU', 'Master SKU', 'Name', 'CA Price', 'New Price', 
+            'Runway (Days)', 'Inventory', 'Recent Avg Price', 'Recent Sales $', 
+            'Recent Qty', 'Net PM%', 'Is New', 'Action', 'Floor Price', 
+            'Safety Alert', 'Reason', 'On Promotion', 'Promo Platforms',
+            'In Fresh Stock Guard', 'Exclusion Reason'
+        ];
+        
         const rows: string[][] = [];
 
         tableData.forEach((r: any) => {
+            const finalReasoning = r.inPromotion 
+                ? `[PROMOTION WARNING] ${r.reasoning}`
+                : r.reasoning;
+
             const commonData = [
                 clean(r.name),
                 safeFormat(r.caPrice, 2),
@@ -597,7 +712,11 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 clean(r.action),
                 safeFormat(r.floorPrice, 2),
                 r.safetyViolation ? 'VIOLATION' : '',
-                clean(r.reasoning)
+                clean(finalReasoning),
+                r.inPromotion ? 'TRUE' : 'FALSE',
+                clean(r.promoPlatforms?.join(', ') || ''),
+                r.inFreshStockGuard ? 'TRUE' : 'FALSE',
+                clean(r.excludedReason)
             ];
 
             rows.push([clean(r.sku), clean(r.sku), ...commonData]);
@@ -697,8 +816,47 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
         }, 100);
     };
 
+    const handleInventoryHistoryExport = () => {
+        const clean = (val: any) => {
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/[\r\n]+/g, ' ');
+            return `"${str.replace(/"/g, '""')}"`;
+        };
+    
+        const headers = ['Date', 'SKU', 'Product Name', 'Stock Before', 'Stock After', '+Delta', 'Source', 'Is Strategic', 'Reason'];
+        
+        const rows = inventoryHistoryTableData.map(row => [
+            row.date,
+            clean(row.sku),
+            clean(row.productName),
+            row.prevStock,
+            row.newStock,
+            row.deltaStock,
+            row.source,
+            row.isStrategic ? 'YES' : 'NO',
+            clean(row.reason)
+        ]);
+    
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        const filename = `inventory_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        
+        setTimeout(() => {
+            if (document.body.contains(link)) document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+    };
+
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
+            {/* ... (Header and Tabs remain same) ... */}
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Strategy Engine</h2>
@@ -708,14 +866,16 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                 </div>
             </div>
 
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-                <button onClick={() => setActiveTab('ENGINE')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'ENGINE' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Strategy Simulator</button>
-                <button onClick={() => setActiveTab('HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><History className="w-4 h-4" />Price Change Log</button>
-                <button onClick={() => setActiveTab('COST_HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Cost Change Log</button>
+            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
+                <button onClick={() => setActiveTab('ENGINE')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ENGINE' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Strategy Simulator</button>
+                <button onClick={() => setActiveTab('HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><History className="w-4 h-4" />Price Change Log</button>
+                <button onClick={() => setActiveTab('COST_HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Cost Change Log</button>
+                <button onClick={() => setActiveTab('INVENTORY_HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'INVENTORY_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Database className="w-4 h-4" />Inventory Change Log</button>
             </div>
 
             {activeTab === 'ENGINE' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                    {/* ... (Engine Controls) ... */}
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative z-20 backdrop-blur-custom">
                         <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
                             <div className="flex items-center gap-3">
@@ -735,7 +895,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                             <div className="relative">
                                 <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition-colors shadow-sm"><Download className="w-4 h-4" />Export Matrix<ChevronDown className="w-3 h-3 text-gray-400" /></button>
                                 {isExportMenuOpen && createPortal(
-                                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}><div className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20" onClick={e => e.stopPropagation()}><div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50"><h3 className="font-bold text-gray-900">Export Strategy</h3><button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200/50 rounded-full transition-colors"><X className="w-4 h-4 text-gray-500" /></button></div><div className="p-2"><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div><button onClick={() => handleExport('All')} className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between group rounded-lg transition-colors"><span className="font-medium">Standard (Master SKUs)</span><ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" /></button><div className="my-2 border-t border-gray-100/50"></div><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div><div className="max-h-60 overflow-y-auto">{uniquePlatforms.map(platform => (<button key={platform} onClick={() => handleExport(platform)} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between rounded-lg transition-colors"><span>{platform}</span><span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span></button>))}{uniquePlatforms.length === 0 && (<div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>)}</div></div></div></div>, document.body
+                                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}><div className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20" onClick={e => e.stopPropagation()}><div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50"><h3 className="font-bold text-gray-900">Export Strategy</h3><button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200/50 rounded-full transition-colors"><X className="w-4 h-4 text-gray-500" /></button></div><div className="p-2"><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div><button onClick={() => handleExport('All')} className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between group rounded-lg transition-colors"><span className="font-medium">Standard (Master SKUs)</span><ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" /></button><div className="my-2 border-t border-gray-100/50"></div><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div><div className="max-h-60 overflow-y-auto">{uniquePlatforms.map(platform => (<button key={platform} onClick={() => handleExport(platform)} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between rounded-lg transition-colors"><span>{platform}</span><span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span></button>))}{uniquePlatforms.length === 0 && (<div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>)}</div></div></div></div>, document.body
                                 )}
                             </div>
                         </div>
@@ -743,18 +903,18 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
                     {isAuditPanelVisible && auditStats && (
                         <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-200/80 space-y-4 animate-in fade-in slide-in-from-top-2">
-                            <h3 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2"><Activity className="w-4 h-4" /> Audit & Reconciliation Panel ({auditStats.productCount} Products)</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-xs">
-                                <div className="space-y-2 bg-white/50 p-3 rounded-lg border border-gray-200">
-                                    <h4 className="font-bold text-indigo-700">Local Window ({selectedWindow}D)</h4>
-                                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-600"><dt># Logs Used:</dt><dd className="font-mono font-medium text-gray-900">{auditStats.local.logs}</dd><dt>Total Distinct Days:</dt><dd className="font-mono font-medium text-gray-900">{auditStats.local.distinctDaysCount}</dd><dt>Avg. Days/Product:</dt><dd className="font-mono font-medium text-gray-900">{auditStats.local.avgDistinctDaysPerProduct.toFixed(1)}</dd><dt className="mt-1 border-t pt-1">Revenue Sum:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">£{auditStats.local.revenue.toFixed(2)}</dd><dt>Qty Sum:</dt><dd className="font-mono font-medium text-gray-900">{auditStats.local.qty}</dd><dt>Profit Sum:</dt><dd className="font-mono font-medium text-gray-900">£{auditStats.local.profit.toFixed(2)}</dd><dt className="mt-1 border-t pt-1">Profit Coverage:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">{auditStats.local.profitLogsWith} / {auditStats.local.logs} ({safeFormat(auditStats.local.profitLogsWith / auditStats.local.logs * 100, 0)}%)</dd><dt>Est. Profit Contrib:</dt><dd className="font-mono font-medium text-gray-900">£{auditStats.local.estimatedProfit.toFixed(2)}</dd></dl>
-                                </div>
-                                <div className="space-y-2 bg-white/50 p-3 rounded-lg border border-gray-200">
-                                    <h4 className="font-bold text-purple-700">Strategy Window ({velocityLookback}D)</h4>
-                                     <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-600"><dt># Logs Used:</dt><dd className="font-mono font-medium text-gray-900">{auditStats.global.logs}</dd><dt>Total Distinct Days:</dt><dd className="font-mono font-medium text-gray-900">{auditStats.global.distinctDaysCount}</dd><dt className="opacity-0">Placeholder</dt><dd className="opacity-0"></dd><dt className="mt-1 border-t pt-1">Revenue Sum:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">£{auditStats.global.revenue.toFixed(2)}</dd><dt>Qty Sum:</dt><dd className="font-mono font-medium text-gray-900">{auditStats.global.qty}</dd><dt>Profit Sum:</dt><dd className="font-mono font-medium text-gray-900">£{auditStats.global.profit.toFixed(2)}</dd><dt className="mt-1 border-t pt-1">Profit Coverage:</dt><dd className="font-mono font-medium text-gray-900 mt-1 border-t pt-1">{auditStats.global.profitLogsWith} / {auditStats.global.logs} ({safeFormat(auditStats.global.profitLogsWith / auditStats.global.logs * 100, 0)}%)</dd><dt>Est. Profit Contrib:</dt><dd className="font-mono font-medium text-gray-900">£{auditStats.global.estimatedProfit.toFixed(2)}</dd></dl>
-                                </div>
-                            </div>
-                            <div className="text-[10px] text-gray-400 mt-2 px-2 space-y-0.5"><p>* Profit uses exact value when available; otherwise estimated via revenue * margin%</p><p>* Date filtering excludes today</p></div>
+                            <AuditPanel
+                                title={`Audit & Reconciliation Panel (${auditStats.productCount} Products)`}
+                                startKey={getCalculationWindow(selectedWindow, customStart, customEnd).startKey}
+                                endKey={getCalculationWindow(selectedWindow, customStart, customEnd).endKey}
+                                rows={filteredAndSortedData}
+                                getDateKey={(row: any) => null} // We are feeding pre-filtered data, so row-level date check is redundant
+                                getRevenue={(row: any) => row.recentTotalSales / VAT_MULTIPLIER}
+                                getQty={(row: any) => row.recentTotalQty}
+                                getProfit={(row: any) => row.totalProfit}
+                                getAdSpend={(row: any) => 0} // This audit doesn't have ad-spend context, needs to be built
+                                distinctDaysCount={auditStats.local.distinctDaysCount}
+                            />
                         </div>
                     )}
 
@@ -763,6 +923,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                             <div className="border-b border-custom-glass bg-gray-50/50 p-4 flex justify-between items-center"><h3 className="font-bold text-gray-800 flex items-center gap-2"><Settings className="w-4 h-4 text-gray-500" />Configuration Parameters</h3><button onClick={() => onSaveConfig(config)} className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-gray-800"><Save className="w-3 h-3" /> Save Defaults</button></div>
                             <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-8">
                                 <div className="space-y-4">
+                                    {/* ... Increase Logic ... */}
                                     <div className="flex items-center gap-2 text-green-700 font-bold border-b border-green-100 pb-2 mb-2"><TrendingUp className="w-4 h-4" /> Increase Logic</div>
                                     <div className="grid grid-cols-2 gap-4"><div><label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Runway (Weeks)</label><div className="flex items-center gap-2"><span className="text-sm text-gray-400">&lt;</span><input type="number" value={config.increase.minRunwayWeeks} onChange={e => setConfig({ ...config, increase: { ...config.increase, minRunwayWeeks: parseFloat(e.target.value) } })} className="w-full border rounded p-1.5 text-sm bg-white/50" /></div></div><div><label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Min Stock</label><div className="flex items-center gap-2"><span className="text-sm text-gray-400">&gt;</span><input type="number" value={config.increase.minStock} onChange={e => setConfig({ ...config, increase: { ...config.increase, minStock: parseFloat(e.target.value) } })} className="w-full border rounded p-1.5 text-sm bg-white/50" /></div></div></div>
                                     <div><label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Past 7-Days QTY (Exclusion)</label><div className="flex items-center gap-2"><span className="text-sm text-gray-400">&le;</span><input type="number" value={config.increase.minVelocity7Days} onChange={e => setConfig({ ...config, increase: { ...config.increase, minVelocity7Days: parseFloat(e.target.value) } })} className="w-20 border rounded p-1.5 text-sm bg-white/50" /><span className="text-xs text-gray-400">units</span></div></div>
@@ -771,8 +932,59 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 <div className="space-y-4 border-l border-r border-gray-200/50 px-6">
                                     <div className="flex items-center gap-2 text-red-700 font-bold border-b border-red-100 pb-2 mb-2"><TrendingDown className="w-4 h-4" /> Decrease Logic</div>
                                     <div className="bg-gray-50/50 p-2 rounded text-xs text-gray-600 mb-2 flex items-center justify-between"><div className="flex items-center gap-2"><Info className="w-3 h-3" /><span>Include "New Products"?</span></div><button onClick={() => setConfig({ ...config, decrease: { ...config.decrease, includeNewProducts: !config.decrease.includeNewProducts } })} className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors focus:outline-none ${config.decrease.includeNewProducts ? 'bg-red-500' : 'bg-gray-300'}`}><span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${config.decrease.includeNewProducts ? 'translate-x-4' : 'translate-x-1'}`} /></button></div>
-                                    <div><label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Condition A: High Stock</label><div className="flex items-center gap-2"><span className="text-sm text-gray-600">Runway &gt;</span><input type="number" value={config.decrease.highStockWeeks} onChange={e => setConfig({ ...config, decrease: { ...config.decrease, highStockWeeks: parseFloat(e.target.value) } })} className="w-16 border rounded p-1.5 text-sm bg-white/50" /><span className="text-sm text-gray-600">weeks</span></div></div>
-                                    <div><label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Condition B: Med Stock + High Margin</label><div className="flex flex-col gap-2"><div className="flex items-center gap-2"><span className="text-sm text-gray-600 w-16">Runway &gt;</span><input type="number" value={config.decrease.medStockWeeks} onChange={e => setConfig({ ...config, decrease: { ...config.decrease, medStockWeeks: parseFloat(e.target.value) } })} className="w-16 border rounded p-1.5 text-sm bg-white/50" /><span className="text-sm text-gray-600">weeks</span></div><div className="flex items-center gap-2"><span className="text-sm text-gray-600 w-16">Margin &gt;</span><input type="number" value={config.decrease.minMarginPercent} onChange={e => setConfig({ ...config, decrease: { ...config.decrease, minMarginPercent: parseFloat(e.target.value) } })} className="w-16 border rounded p-1.5 text-sm bg-white/50" /><span className="text-sm text-gray-600">%</span></div></div></div>
+                                    
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Condition A: High Stock</label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm text-gray-600">Runway &gt;</span>
+                                            <input type="number" value={config.decrease.highStockWeeks} onChange={e => setConfig({ ...config, decrease: { ...config.decrease, highStockWeeks: parseFloat(e.target.value) } })} className="w-16 border rounded p-1.5 text-sm bg-white/50" />
+                                            <span className="text-sm text-gray-600">wks</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Condition B: Med Stock + High Margin</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-gray-600">Runway &gt;</span>
+                                                <input type="number" value={config.decrease.medStockWeeks} onChange={e => setConfig({ ...config, decrease: { ...config.decrease, medStockWeeks: parseFloat(e.target.value) } })} className="w-16 border rounded p-1.5 text-sm bg-white/50" />
+                                                <span className="text-sm text-gray-600">wks</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-gray-600">Margin &gt;</span>
+                                                <input type="number" value={config.decrease.minMarginPercent} onChange={e => setConfig({ ...config, decrease: { ...config.decrease, minMarginPercent: parseFloat(e.target.value) } })} className="w-16 border rounded p-1.5 text-sm bg-white/50" />
+                                                <span className="text-sm text-gray-600">%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-gray-100">
+                                         <label className="text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1">
+                                            Fresh Stock Guard
+                                            <div className="group relative">
+                                                <Info className="w-3 h-3 text-gray-400 cursor-help" />
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-gray-800 text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none text-center">
+                                                    Prevents price drops on items recently restocked. <br/><br/>
+                                                    <strong>Strategic Restock:</strong> Increase &ge; 5% &amp; matches a Shipment in transit (+/- 7 days).
+                                                </div>
+                                            </div>
+                                         </label>
+                                         <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-gray-600">Exclude if restocked in last</span>
+                                                <input 
+                                                    type="number" 
+                                                    min="0"
+                                                    value={config.decrease.freshStockGuardDays ?? 0}
+                                                    onChange={e => setConfig({ ...config, decrease: { ...config.decrease, freshStockGuardDays: parseFloat(e.target.value) } })}
+                                                    className="w-16 border rounded p-1.5 text-sm bg-white/50" 
+                                                />
+                                                <span className="text-sm text-gray-600">days</span>
+                                            </div>
+                                            <span className="text-[10px] text-gray-400 italic">(Set 0 to disable)</span>
+                                         </div>
+                                    </div>
+
                                     <div className="bg-red-50/50 p-3 rounded border border-red-100"><label className="text-xs font-bold text-red-800 uppercase block mb-2">Adjustment Action</label><div className="flex gap-2"><div className="flex-1"><span className="text-[10px] text-gray-500">Percent (%)</span><input type="number" value={config.decrease.adjustmentPercent} onChange={e => setConfig({ ...config, decrease: { ...config.decrease, adjustmentPercent: parseFloat(e.target.value) } })} className="w-full border rounded p-1 text-sm text-red-700 font-bold bg-white/80" /></div><div className="flex-1"><span className="text-[10px] text-gray-500">Fixed (£)</span><input type="number" value={config.decrease.adjustmentFixed} onChange={e => setConfig({ ...config, decrease: { ...config.decrease, adjustmentFixed: parseFloat(e.target.value) } })} className="w-full border rounded p-1 text-sm text-red-700 font-bold bg-white/80" /></div></div><p className="text-[10px] text-red-600 mt-1 italic">*Applies whichever is higher</p></div>
                                 </div>
                                 <div className="space-y-4">
@@ -785,6 +997,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                     )}
 
                     <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+                        {/* ... (Table content remains same) ... */}
                         <div className="p-4 border-b border-custom-glass flex items-center justify-between bg-gray-50/50">
                             <div className="flex items-center gap-4">
                                 <TagSearchInput 
@@ -839,12 +1052,13 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                             <td className="p-4 text-right font-bold text-purple-600 font-mono">{row.caPrice ? `£${safeFormat(row.caPrice, 2)}` : '-'}</td>
                                             <td className="p-4 text-right font-mono font-bold">{row.action !== 'MAINTAIN' ? (<span style={{ color: themeColor }}>£{safeFormat(row.adjustedPrice, 2)}</span>) : '-'}{row.safetyViolation && <AlertCircle className="w-4 h-4 text-red-500 inline ml-1" />}</td>
                                             <td className="p-4 text-center">{row.action === 'INCREASE' && <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-bold">INCREASE</span>}{row.action === 'DECREASE' && <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-bold">DECREASE</span>}{row.action === 'MAINTAIN' && <span className="text-gray-400 text-xs shadow-sm border px-2 py-1 rounded">MAINTAIN</span>}</td>
-                                            <td className="p-4 text-xs text-gray-500 max-w-[200px] truncate" title={row.reasoning}>{row.reasoning}</td>
+                                            <td className="p-4 text-xs text-gray-500 max-w-[200px] truncate" title={row.reasoning}>{row.inPromotion && <span className="text-indigo-600 font-bold mr-1">[PROMO]</span>}{row.reasoning}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
+                        {/* ... (Footer pagination remains same) ... */}
                         {filteredAndSortedData.length > 0 && (<div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6"><div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between"><div className="flex items-center gap-4"><p className="text-sm text-gray-700">Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredAndSortedData.length)}</span> of <span className="font-medium">{filteredAndSortedData.length}</span> results</p><select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></div><div>{totalPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setCurrentPage(prev => prev - 1)} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {currentPage} of {totalPages}</span><button onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"><ChevronRight className="h-5 w-5" /></button></nav>)}</div></div></div>)}
                     </div>
                 </div>
@@ -852,6 +1066,7 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
 
             {activeTab === 'HISTORY' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                    {/* ... (History content remains same) ... */}
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start gap-4">
                         <div className="p-2 bg-blue-50 text-blue-700 rounded-lg"><Info className="w-5 h-5" /></div>
                         <div>
@@ -903,13 +1118,44 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 {paginatedHistoryData.length === 0 && (<tr><td colSpan={8} className="p-12 text-center text-gray-400">No price changes found.</td></tr>)}
                             </tbody>
                         </table>
-                        {historyTableData.length > 0 && (<div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6"><div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between"><div className="flex items-center gap-4"><p className="text-sm text-gray-700">Showing <span className="font-medium">{(historyCurrentPage - 1) * historyItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(historyCurrentPage * historyItemsPerPage, historyTableData.length)}</span> of <span className="font-medium">{historyTableData.length}</span> results</p><select value={historyItemsPerPage} onChange={(e) => { setHistoryItemsPerPage(Number(e.target.value)); setHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></div><div>{totalHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setHistoryCurrentPage(prev => Math.max(prev - 1, 1))} disabled={historyCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {historyCurrentPage} of {totalHistoryPages}</span><button onClick={() => setHistoryCurrentPage(prev => Math.min(prev + 1, totalHistoryPages))} disabled={historyCurrentPage === totalHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"><ChevronRight className="h-5 w-5" /></button></nav>)}</div></div></div>)}
+                        {/* Fixed pagination footer for Price Change Log */}
+                        {historyTableData.length > 0 && (
+                          <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                              <div className="flex items-center gap-4">
+                                <p className="text-sm text-gray-700">Showing <span className="font-medium">{(historyCurrentPage - 1) * historyItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(historyCurrentPage * historyItemsPerPage, historyTableData.length)}</span> of <span className="font-medium">{historyTableData.length}</span> results</p>
+                                <select value={historyItemsPerPage} onChange={(e) => { setHistoryItemsPerPage(Number(e.target.value)); setHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500">
+                                  <option value={10}>10</option>
+                                  <option value={25}>25</option>
+                                  <option value={50}>50</option>
+                                  <option value={100}>100</option>
+                                </select>
+                              </div>
+                              <div>
+                                {totalHistoryPages > 1 && (
+                                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                    <button onClick={() => setHistoryCurrentPage(prev => Math.max(prev - 1, 1))} disabled={historyCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                                      <ChevronLeft className="h-5 w-5" />
+                                    </button>
+                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                      Page {historyCurrentPage} of {totalHistoryPages}
+                                    </span>
+                                    <button onClick={() => setHistoryCurrentPage(prev => Math.min(totalHistoryPages, prev + 1))} disabled={historyCurrentPage === totalHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                                      <ChevronRight className="h-5 w-5" />
+                                    </button>
+                                  </nav>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                     </div>
                 </div>
             )}
 
             {activeTab === 'COST_HISTORY' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                    {/* ... (Cost History content remains same) ... */}
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start gap-4">
                         <div className="p-2 bg-green-50 text-green-700 rounded-lg"><Info className="w-5 h-5" /></div>
                         <div>
@@ -960,7 +1206,135 @@ const StrategyPage: React.FC<StrategyPageProps> = ({ products, pricingRules, cur
                                 {paginatedCostHistoryData.length === 0 && (<tr><td colSpan={7} className="p-12 text-center text-gray-400">No cost changes found.</td></tr>)}
                             </tbody>
                         </table>
-                        {costHistoryTableData.length > 0 && (<div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6"><div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between"><div className="flex items-center gap-4"><p className="text-sm text-gray-700">Showing <span className="font-medium">{(costHistoryCurrentPage - 1) * costHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(costHistoryCurrentPage * costHistoryItemsPerPage, costHistoryTableData.length)}</span> of <span className="font-medium">{costHistoryTableData.length}</span> results</p><select value={costHistoryItemsPerPage} onChange={(e) => { setCostHistoryItemsPerPage(Number(e.target.value)); setCostHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></div><div>{totalCostHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setCostHistoryCurrentPage(p => Math.max(1, p - 1))} disabled={costHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {costHistoryCurrentPage} of {totalCostHistoryPages}</span><button onClick={() => setCostHistoryCurrentPage(p => Math.min(totalCostHistoryPages, p + 1))} disabled={costHistoryCurrentPage === totalCostHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div></div></div>)}
+                        {/* Fixed pagination footer for Cost Change Log */}
+                        {costHistoryTableData.length > 0 && (
+                          <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                              <div className="flex items-center gap-4">
+                                <p className="text-sm text-gray-700">Showing <span className="font-medium">{(costHistoryCurrentPage - 1) * costHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(costHistoryCurrentPage * costHistoryItemsPerPage, costHistoryTableData.length)}</span> of <span className="font-medium">{costHistoryTableData.length}</span> results</p>
+                                <select value={costHistoryItemsPerPage} onChange={(e) => { setCostHistoryItemsPerPage(Number(e.target.value)); setCostHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500">
+                                  <option value={10}>10</option>
+                                  <option value={25}>25</option>
+                                  <option value={50}>50</option>
+                                  <option value={100}>100</option>
+                                </select>
+                              </div>
+                              <div>
+                                {totalCostHistoryPages > 1 && (
+                                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                    <button onClick={() => setCostHistoryCurrentPage(prev => Math.max(1, prev - 1))} disabled={costHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                                      <ChevronLeft className="h-5 w-5" />
+                                    </button>
+                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                      Page {costHistoryCurrentPage} of {totalCostHistoryPages}
+                                    </span>
+                                    <button onClick={() => setCostHistoryCurrentPage(prev => Math.min(totalCostHistoryPages, prev + 1))} disabled={costHistoryCurrentPage === totalCostHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                                      <ChevronRight className="h-5 w-5" />
+                                    </button>
+                                  </nav>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'INVENTORY_HISTORY' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                    {/* ... (Inventory History content) */}
+                    <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start gap-4">
+                        <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg"><Database className="w-5 h-5" /></div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900">Inventory Change Log</h3>
+                            <p className="text-xs text-gray-500 mt-1">This log tracks when your in-stock levels increase (e.g. from an ERP upload or new product creation). It only records positive stock deltas.</p>
+                        </div>
+                    </div>
+                    <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+                        <div className="p-4 border-b border-custom-glass bg-gray-50/50">
+                             <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                                <div className="w-full max-w-lg">
+                                    <TagSearchInput tags={searchTags} onTagsChange={(tags) => { setSearchTags(tags); setInventoryHistoryCurrentPage(1); }} onInputChange={(val) => { setSearchQuery(val); setInventoryHistoryCurrentPage(1); }} placeholder="Search Inventory History (SKU or Name)..." themeColor={themeColor} />
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="text-xs text-gray-500">Showing <strong>{inventoryHistoryTableData.length}</strong> records</div>
+                                    <button onClick={handleInventoryHistoryExport} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm transition-colors"><Download className="w-3.5 h-3.5" /> Export Log</button>
+                                </div>
+                            </div>
+                        </div>
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
+                                <tr>
+                                    <th className="p-4">Date</th>
+                                    <th className="p-4">SKU</th>
+                                    <th className="p-4 text-center">Stock Before</th>
+                                    <th className="p-4 text-center">Stock After</th>
+                                    <th className="p-4 text-center">+Delta</th>
+                                    <th className="p-4 text-center">Strategic?</th>
+                                    <th className="p-4">Source / Reason</th>
+                                    <th className="p-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100/50">
+                                {paginatedInventoryHistoryData.map((row: InventoryChangeRecord) => {
+                                    const isEditing = editingInventoryHistoryId === row.id;
+                                    return (
+                                        <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
+                                            <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingInventoryDate} onChange={(e) => setEditingInventoryDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus/> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                            <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
+                                            <td className="p-4 text-center text-gray-400">{row.prevStock}</td>
+                                            <td className="p-4 text-center font-bold text-gray-900">{row.newStock}</td>
+                                            <td className="p-4 text-center"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">+{row.deltaStock}</span></td>
+                                            <td className="p-4 text-center">
+                                                {row.isStrategic ? (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">YES</span>
+                                                ) : (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">NO</span>
+                                                )}
+                                            </td>
+                                            <td className="p-4 text-xs text-gray-500">
+                                                <div className="font-medium text-gray-700">{row.source}</div>
+                                                {row.reason && <div className="text-gray-400 mt-0.5 italic">{row.reason}</div>}
+                                            </td>
+                                            <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => {if (onUpdateInventoryChangeRecord && editingInventoryDate) { onUpdateInventoryChangeRecord({ ...row, date: editingInventoryDate }); setRecentlySavedInventoryId(row.id); setTimeout(() => setRecentlySavedInventoryId(null), 2500); } setEditingInventoryHistoryId(null);}} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingInventoryHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedInventoryId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingInventoryHistoryId(row.id); setEditingInventoryDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
+                                        </tr>
+                                    );
+                                })}
+                                {paginatedInventoryHistoryData.length === 0 && (<tr><td colSpan={8} className="p-12 text-center text-gray-400">No inventory increases found for the selected range.</td></tr>)}
+                            </tbody>
+                        </table>
+                        {/* Fixed pagination footer for Inventory Change Log */}
+                        {inventoryHistoryTableData.length > 0 && (
+                          <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                              <div className="flex items-center gap-4">
+                                <p className="text-sm text-gray-700">Showing <span className="font-medium">{(inventoryHistoryCurrentPage - 1) * inventoryHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(inventoryHistoryCurrentPage * inventoryHistoryItemsPerPage, inventoryHistoryTableData.length)}</span> of <span className="font-medium">{inventoryHistoryTableData.length}</span> results</p>
+                                <select value={inventoryHistoryItemsPerPage} onChange={(e) => { setInventoryHistoryItemsPerPage(Number(e.target.value)); setInventoryHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500">
+                                  <option value={10}>10</option>
+                                  <option value={25}>25</option>
+                                  <option value={50}>50</option>
+                                  <option value={100}>100</option>
+                                </select>
+                              </div>
+                              <div>
+                                {totalInventoryHistoryPages > 1 && (
+                                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                    <button onClick={() => setInventoryHistoryCurrentPage(prev => Math.max(1, prev - 1))} disabled={inventoryHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                                      <ChevronLeft className="h-5 w-5" />
+                                    </button>
+                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                      Page {inventoryHistoryCurrentPage} of {totalInventoryHistoryPages}
+                                    </span>
+                                    <button onClick={() => setInventoryHistoryCurrentPage(prev => Math.min(totalInventoryHistoryPages, prev + 1))} disabled={inventoryHistoryCurrentPage === totalInventoryHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                                      <ChevronRight className="h-5 w-5" />
+                                    </button>
+                                  </nav>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                     </div>
                 </div>
             )}

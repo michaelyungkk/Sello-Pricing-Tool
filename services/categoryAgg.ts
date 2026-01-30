@@ -1,8 +1,7 @@
-
-
 import { Product, PriceLog } from '../types';
 import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from './metrics';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey } from './dateUtils';
+import { scaleMoneyInclTax, assertNotAlreadyScaled } from './taxPolicy';
 
 export interface CategoryMetric {
   revenue: number;
@@ -19,6 +18,8 @@ export interface CategoryMetric {
   prevAdSpend: number;
   prevMargin: number;
   prevTacos: number;
+  // Guardrail: Explicit flag
+  moneyIsTaxInclusive?: boolean;
 }
 
 export interface SubCategoryData {
@@ -62,6 +63,22 @@ const updateMetric = (current: CategoryMetric, log: PriceLog, product: Product, 
 };
 
 const finalizeMetric = (m: CategoryMetric) => {
+    // Assert raw values are unscaled before applying VAT
+    assertNotAlreadyScaled('finalizeMetric:revenue', m.revenue);
+
+    // Apply VAT scaling to monetary values
+    m.revenue = scaleMoneyInclTax(m.revenue);
+    m.profit = scaleMoneyInclTax(m.profit);
+    m.adSpend = scaleMoneyInclTax(m.adSpend);
+    
+    m.prevRevenue = scaleMoneyInclTax(m.prevRevenue);
+    m.prevProfit = scaleMoneyInclTax(m.prevProfit);
+    m.prevAdSpend = scaleMoneyInclTax(m.prevAdSpend);
+
+    // Mark as tax inclusive to prevent double scaling downstream
+    m.moneyIsTaxInclusive = true;
+
+    // Recompute ratios based on scaled values (ratio remains mathematically invariant)
     m.margin = calcMarginPct(m.revenue, m.profit);
     m.tacos = calcTACoSPct(m.adSpend, m.revenue);
     m.prevMargin = calcMarginPct(m.prevRevenue, m.prevProfit);
