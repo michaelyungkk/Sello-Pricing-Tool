@@ -35,6 +35,7 @@ export interface RefundLog {
   type?: string; // 'After-sales Type'
   status?: string; // 'After-sales status'
   remarks?: string; // 'Remarks'
+  comments?: string; // 'Comments' - Added to distinguish from remarks
 }
 
 export interface PriceChangeRecord {

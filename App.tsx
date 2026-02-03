@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES, DEFAULT_SEARCH_CONFIG, VAT_MULTIPLIER } from './constants';
 import { Product, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback, RefundLog, ShipmentDetail, HistoryPayload, PriceChangeRecord, AnalysisResult, SearchChip, SearchConfig, SkuCostDetail, InventoryTemplate, SearchSession, CostChangeRecord, InventoryChangeRecord } from './types';
@@ -23,7 +21,7 @@ import SearchResultsPage from './components/SearchResultsPage';
 import CostManagementPage from './components/CostManagementPage';
 import PromotionPage from './components/PromotionPage';
 import ToolboxPage from './components/ToolboxPage';
-import DefinitionsPage from './components/DefinitionsPage';
+import DefinitionsPage from './components/Definitions';
 import SettingsPage from './components/SettingsPage';
 import BatchUploadModal from './components/BatchUploadModal';
 import SalesImportModal from './components/SalesImportModal';
@@ -215,6 +213,7 @@ const App: React.FC = () => {
     });
 
     const [showBackToTop, setShowBackToTop] = useState(false);
+    const mainContentRef = useRef<HTMLDivElement>(null); // Ref for scrollable content area
 
     useEffect(() => {
         const loadDatabase = async () => {
@@ -222,11 +221,21 @@ const App: React.FC = () => {
         };
         loadDatabase();
 
+        // Attach scroll listener to the main content div, not window
         const handleScroll = () => {
-            setShowBackToTop(window.scrollY > 400);
+            if (mainContentRef.current) {
+                setShowBackToTop(mainContentRef.current.scrollTop > 400);
+            }
         };
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
+        
+        const scrollContainer = mainContentRef.current;
+        if (scrollContainer) {
+            scrollContainer.addEventListener('scroll', handleScroll);
+        }
+        
+        return () => {
+             if (scrollContainer) scrollContainer.removeEventListener('scroll', handleScroll);
+        };
     }, []);
 
     const [selectedElasticityProduct, setSelectedElasticityProduct] = useState<Product | null>(null);
@@ -698,8 +707,8 @@ const App: React.FC = () => {
 
     return (
         <>
-            <style>{` html, body { height: auto; margin: 0; padding: 0; min-height: 100vh; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity??90)/100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity??90)/100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur??10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity??90)/100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity??90)/100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur??10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity??15)/100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur??10) + 4)}px); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } `}</style>
-            <div className="min-h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent">
+            <style>{` html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity??90)/100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity??90)/100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur??10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity??90)/100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity??90)/100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur??10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity??15)/100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur??10) + 4)}px); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } `}</style>
+            <div className="h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent overflow-hidden">
                 {userProfile.ambientGlass && <div className="fixed inset-0 z-[1] pointer-events-none transition-all duration-500 bg-custom-ambient backdrop-blur-custom-ambient" />}
                 <aside className={`w-64 border-r border-custom-glass hidden md:flex flex-col fixed h-full z-40 shadow-sm transition-all duration-300 bg-custom-glass`}>
                     <div className="p-6 flex items-center gap-3">
@@ -727,13 +736,13 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 </aside>
-                <main className="flex-1 md:ml-64 min-0 relative z-10">
+                <main className="flex-1 md:ml-64 min-0 relative z-10 flex flex-col h-full overflow-hidden">
                     <header className="sticky top-0 z-50 flex justify-between items-center gap-8 px-8 py-4 bg-custom-glass border-b border-custom-glass/50 shadow-sm transition-all duration-300">
-                        <div> <h1 className="text-2xl font-bold transition-colors" style={headerStyle}> {currentView === 'search' ? t('header_search') : currentView === 'products' ? t('header_products') : currentView === 'platforms' ? t('header_platforms') : currentView === 'dashboard' ? t('header_dashboard') : currentView === 'strategy' ? t('header_strategy') : currentView === 'costs' ? t('header_costs') : currentView === 'definitions' ? t('header_definitions') : currentView === 'promotions' ? t('header_promotions') : currentView === 'tools' ? t('header_toolbox') : t('header_settings')} </h1> <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}> {currentView === 'search' ? t('desc_search') : currentView === 'dashboard' ? t('desc_dashboard') : currentView === 'strategy' ? t('desc_strategy') : currentView === 'products' ? t('desc_products') : currentView === 'platforms' ? t('desc_platforms') : currentView === 'costs' ? t('desc_costs') : currentView === 'definitions' ? t('desc_definitions') : currentView === 'promotions' ? t('desc_promotions') : currentView === 'tools' ? t('desc_toolbox') : t('desc_settings')} </p> </div>
+                        <div> <h1 className="text-2xl font-bold transition-colors" style={headerStyle}> {currentView === 'search' ? t('header_search') : currentView === 'products' ? t('header_products') : currentView === 'platforms' ? t('header_platforms') : currentView === 'dashboard' ? t('header_dashboard') : currentView === 'strategy' ? t('header_strategy') : currentView === 'costs' ? t('header_costs') : currentView === 'definitions' ? t('header_definitions') : currentView === 'promotions' ? t('header_promotions') : currentView === 'tools' ? t('header_toolbox') : t('desc_settings')} </h1> <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}> {currentView === 'search' ? t('desc_search') : currentView === 'dashboard' ? t('desc_dashboard') : currentView === 'strategy' ? t('desc_strategy') : currentView === 'products' ? t('desc_products') : currentView === 'platforms' ? t('desc_platforms') : currentView === 'costs' ? t('desc_costs') : currentView === 'definitions' ? t('desc_definitions') : currentView === 'promotions' ? t('desc_promotions') : currentView === 'tools' ? t('desc_toolbox') : t('desc_settings')} </p> </div>
                         <div className="flex-1 max-w-2xl"> <GlobalSearch onSearch={handleSearch} isLoading={isSearchLoading} platforms={Object.keys(pricingRules)} products={products} /> </div>
                         <div className="flex items-center gap-4"> <span className="text-xs" style={{...headerStyle, opacity: 0.6}}>{TAX_NOTE_SHORT}</span> <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div> {userProfile.name && <span className="text-sm font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>} {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />} <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button> <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div> <UserProfile profile={userProfile} onUpdate={setUserProfile} /> </div>
                     </header>
-                    <div className="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-8">
+                    <div ref={mainContentRef} className="flex-1 overflow-y-auto relative p-4 md:p-8">
                         <div style={{ display: currentView === 'search' ? 'block' : 'none' }}>
                             {activeSearch ? ( <SearchResultsPage data={{ results: activeSearch.results || [], query: activeSearch.query, params: activeSearch.params, id: activeSearch.id }} products={products} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} timeLabel={activeSearch.timeLabel} onRefine={handleRefineSearch} searchConfig={searchConfig} priceChangeHistory={priceChangeHistory} thresholds={thresholds} /> ) : ( <div className="flex flex-col items-center justify-center h-full text-gray-400"> <Search className="w-12 h-12 mb-4 opacity-50" /> <p className="text-lg font-medium">{t('search_empty_state')}</p> </div> )}
                         </div>
@@ -744,7 +753,7 @@ const App: React.FC = () => {
                             <PlatformManagementPage products={products} priceHistoryMap={priceHistoryMap} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
                         </div>
                         <div style={{ display: currentView === 'strategy' ? 'block' : 'none' }}>
-                            <StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); setCurrentView('products'); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} promotions={promotions || []} priceChangeHistory={priceChangeHistory || []} costChangeHistory={costChangeHistory || []} inventoryChangeHistory={inventoryChangeHistory || []} onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord} onUpdateCostChangeRecord={handleUpdateCostChangeRecord} onUpdateInventoryChangeRecord={handleUpdateInventoryChangeRecord} onManualPriceChange={handleManualPriceChange} onManualCostChange={handleManualCostChange} velocityLookback={velocityLookback} thresholds={thresholds} />
+                            <StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} promotions={promotions || []} priceChangeHistory={priceChangeHistory || []} costChangeHistory={costChangeHistory || []} inventoryChangeHistory={inventoryChangeHistory || []} onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord} onUpdateCostChangeRecord={handleUpdateCostChangeRecord} onUpdateInventoryChangeRecord={handleUpdateInventoryChangeRecord} onManualPriceChange={handleManualPriceChange} onManualCostChange={handleManualCostChange} velocityLookback={velocityLookback} thresholds={thresholds} />
                         </div>
                         <div style={{ display: currentView === 'costs' ? 'block' : 'none' }}>
                             <CostManagementPage products={products} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
@@ -775,7 +784,12 @@ const App: React.FC = () => {
                 
                 {/* Back to Top Button */}
                 <button
-                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                    onClick={() => {
+                        // Use ref to scroll the container instead of window
+                        if (mainContentRef.current) {
+                            mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                    }}
                     className={`fixed bottom-8 right-8 p-2.5 rounded-full bg-custom-glass border border-custom-glass shadow-lg hover:shadow-xl transition-all duration-300 z-[60] flex items-center justify-center ${showBackToTop ? 'opacity-70 hover:opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}
                     style={{ borderColor: `${userProfile.themeColor}40`, color: userProfile.themeColor }}
                     aria-label="Back to top"
