@@ -1,9 +1,7 @@
-
-
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows, Bookmark, History, FileText } from 'lucide-react';
+import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows, Bookmark, History, FileText, MessageSquare, Smile, Frown, Meh, Brain, Sparkles, CloudOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ExternalLink, Hash } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
-import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea, ComposedChart, Bar } from 'recharts';
+import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea, ComposedChart, Bar, BarChart, Cell, PieChart, Pie } from 'recharts';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 import { GradeBadge } from './GradeBadge';
 import { calcProfit, calcRevenue, calcUnits, calcAdSpend, marginPct, calcTACoSPct } from '../services/metrics';
@@ -14,6 +12,11 @@ import { formatMoney, formatPct, formatNumber } from '../utils/format';
 import { VAT_MULTIPLIER } from '../constants';
 import { PriceChangeHistoryPanel } from './strategy/PriceChangeHistoryPanel';
 import { createPortal } from 'react-dom';
+import { buildRefundOverview } from '../services/refundAgg';
+import ReturnsReasonTimelineChart from './skuDeepDive/returns/ReturnsReasonTimelineChart';
+import { parseReturnsReason } from '../services/returnsReasonCodes';
+import { SortableHeader } from './common/SortableHeader';
+import { sortRows, SortState } from '../utils/tableSort';
 
 interface SkuDeepDivePageProps {
     data: {
@@ -31,6 +34,87 @@ interface SkuDeepDivePageProps {
     focus?: string;
     thresholds: ThresholdConfig;
 }
+
+// --- KEYWORD CLOUD COMPONENT ---
+const KeywordCloud = ({ items }: { items: { text: string; value: number }[] }) => {
+    const [highlightedWord, setHighlightedWord] = useState<string | null>(null);
+    const [showAll, setshowAll] = useState(false);
+
+    const displayedItems = useMemo(() => {
+        return showAll ? items.slice(0, 40) : items.slice(0, 20);
+    }, [items, showAll]);
+
+    const { minVal, maxVal } = useMemo(() => {
+        if (items.length === 0) return { minVal: 0, maxVal: 0 };
+        const values = items.map(i => i.value);
+        return { minVal: Math.min(...values), maxVal: Math.max(...values) };
+    }, [items]);
+
+    if (items.length === 0) {
+        return <div className="py-8 text-center text-xs text-gray-400 italic">No significant keywords found for this selection.</div>;
+    }
+
+    const getStyles = (val: number, text: string) => {
+        const range = maxVal - minVal || 1;
+        const normalized = (val - minVal) / range;
+        
+        const fontSize = 11 + normalized * 17; // Slightly smaller base for better density (11px to 28px)
+        const opacity = 0.5 + normalized * 0.5; 
+        const isHighlighted = highlightedWord === text;
+        const hasSelection = highlightedWord !== null;
+
+        const color = normalized > 0.7 ? '#4f46e5' : normalized > 0.4 ? '#6366f1' : '#64748b';
+
+        return {
+            fontSize: `${fontSize}px`,
+            opacity: hasSelection ? (isHighlighted ? 1 : 0.2) : opacity,
+            fontWeight: fontSize >= 18 ? 700 : 500,
+            color: isHighlighted ? '#1e1b4b' : color,
+            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            transform: isHighlighted ? 'scale(1.1)' : 'scale(1)',
+            zIndex: isHighlighted ? 10 : 1,
+            lineHeight: '1.2',
+            margin: '1px 3px'
+        };
+    };
+
+    return (
+        <div className="flex flex-col">
+            <div 
+                className="flex flex-wrap gap-x-1 gap-y-1 justify-center items-center overflow-hidden transition-all duration-500 relative min-h-[100px] px-2"
+                style={{ maxHeight: showAll ? 'none' : '200px' }}
+            >
+                {displayedItems.map((w, i) => (
+                    <span 
+                        key={i} 
+                        className="cursor-pointer select-none py-0.5 px-1 hover:text-indigo-900 inline-block text-center"
+                        style={getStyles(w.value, w.text)}
+                        title={`${w.value} occurrences`}
+                        onClick={() => setHighlightedWord(highlightedWord === w.text ? null : w.text)}
+                    >
+                        {w.text}
+                    </span>
+                ))}
+            </div>
+            
+            {items.length > 20 && (
+                <button 
+                    onClick={() => setshowAll(!showAll)}
+                    className="mt-5 flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 self-center uppercase tracking-widest bg-indigo-50/50 hover:bg-indigo-100 px-3 py-1.5 rounded-full border border-indigo-100/50 transition-all shadow-sm"
+                >
+                    {showAll ? <><ChevronUp className="w-3 h-3"/> Show Less</> : <><ChevronDown className="w-3 h-3"/> Show All Keywords ({items.length})</>}
+                </button>
+            )}
+        </div>
+    );
+};
+
+// Helper to read URL params
+const getActiveSectionFromUrl = () => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('section');
+};
 
 const calculateQuantiles = (data: number[]) => {
     if (data.length === 0) return null;
@@ -85,7 +169,7 @@ const BoxPlotTooltip = ({ content, x, y, format }: any) => {
 };
 
 
-const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOnly7, layout = 'horizontal', showAdOnlyFooter = false, setTooltip, tooltip }: any) => {
+const BoxPlot = ({ title, stats7, stats30, stats90, format, color = '#6366f1', adOnly7, layout = 'horizontal', showAdOnlyFooter = false, setTooltip, tooltip }: any) => {
     
     const CustomRechartsTooltip = ({ active, payload, label, formatFn }: any) => {
         if (active && payload && payload.length) {
@@ -126,8 +210,10 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
 
         const scale = (value: number) => {
             if (iqrRange <= 0) return y + iqrHeight / 2;
-            return y + ((q3 - value) / iqrRange) * iqrHeight;
+            return y + ((getValInRange(q3, 0.0001) - value) / (getValInRange(iqrRange, 0.0001))) * iqrHeight;
         };
+
+        const getValInRange = (val: number, min: number) => val === 0 ? min : val;
         
         const medianY = scale(median);
         const minY = scale(min);
@@ -163,9 +249,9 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
                 </text>
             )}
             {dataPoint && dataPoint.n < 10 && (
-                 <text x={0} y={42} dy={0} textAnchor="middle" fill="#92400e" fontSize={9} fontWeight="bold" style={{ userSelect: 'none' }}>
+                <text x={0} y={42} dy={0} textAnchor="middle" fill="#92400e" fontSize={9} fontWeight="bold" style={{ userSelect: 'none' }}>
                     (Low Data)
-                 </text>
+                </text>
             )}
           </g>
         );
@@ -173,9 +259,9 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
 
     if (layout === 'vertical') {
         const chartData = [
-            { name: '7 Days', ...(data7 || {}) },
-            { name: '30 Days', ...(data30 || {}) },
-            { name: '90 Days', ...(data90 || {}) },
+            { name: '7 Days', ...(stats7 || {}) },
+            { name: '30 Days', ...(stats30 || {}) },
+            { name: '90 Days', ...(stats90 || {}) },
         ].filter(d => d.min !== undefined && d.min !== null);
 
         if (chartData.length === 0) {
@@ -204,7 +290,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
                 <div className="flex-1 min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                             <XAxis dataKey="name" tick={<CustomizedAxisTick data={chartData} />} height={55} tickLine={false} axisLine={false} />
                             <YAxis 
                                 domain={yDomain} 
@@ -272,7 +358,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
             >
                 <div className="flex justify-between items-center mb-1">
                     <div className="flex items-center">
-                        <span className="text-[10px] font-bold text-gray-500">{label} (n={stats.n})</span>
+                        <span className="text-[10px] font-medium text-gray-500">{label} (n={stats.n})</span>
                         {deltaInfo}
                     </div>
                     {stats.n < 10 && <span className="text-[9px] text-amber-600 flex items-center gap-1 bg-amber-50 px-1 rounded"><AlertTriangle className="w-2.5 h-2.5"/> Low Data</span>}
@@ -297,7 +383,7 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
                 </div>
                 <div className="flex justify-between text-[9px] text-gray-400 mt-0.5 font-mono">
                     <span>{format(stats.min)}</span>
-                    <span className="text-gray-700 font-bold bg-white px-1 rounded shadow-sm border border-gray-100">{format(stats.median)}</span>
+                    <span className="text-gray-700 font-medium bg-white px-1 rounded shadow-sm border border-gray-100">{format(stats.median)}</span>
                     <span>{format(stats.max)}</span>
                 </div>
             </div>
@@ -310,9 +396,9 @@ const BoxPlot = ({ title, data7, data30, data90, format, color = '#6366f1', adOn
                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
                     <Activity className="w-3 h-3" /> {title}
                 </h4>
-                {renderBar(data7, '7 Days', data90?.median)}
-                {renderBar(data30, '30 Days', data90?.median)}
-                {renderBar(data90, '90 Days')}
+                {renderBar(stats7, '7 Days', stats90?.median)}
+                {renderBar(stats30, '30 Days', stats90?.median)}
+                {renderBar(stats90, '90 Days')}
             </div>
             {showAdOnlyFooter && adOnly7 !== undefined && (
                 <div className="mt-auto pt-2 border-t border-gray-100 bg-orange-50/50 -m-4 mt-2 px-4 py-2 rounded-b-xl">
@@ -346,7 +432,20 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number, source?: string } | null>(null);
     const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
     
+    // AI Toggle
+    const [showAiInsights, setShowAiInsights] = useState(false);
+
+    // Keyword Cloud State (Task C)
+    const [kwMode, setKwMode] = useState<'All' | 'Reason'>('All');
+    const [kwReason, setKwReason] = useState<string | null>(null);
+
+    // Refund Table Sorting & Pagination
+    const [refundSort, setRefundSort] = useState<SortState<string>>({ key: 'date', dir: 'desc' });
+    const [refundPage, setRefundPage] = useState(1);
+    const refundItemsPerPage = 10;
+
     const activeSignalRef = useRef<HTMLDivElement>(null);
+    const refundsRef = useRef<HTMLDivElement>(null);
 
     // Refs for quick access scrolling
     const overviewRef = useRef<HTMLDivElement>(null);
@@ -379,7 +478,113 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 activeSignalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
         }
+        
+        // Deep linking for refunds
+        const section = getActiveSectionFromUrl();
+        if (section === 'refunds' && refundsRef.current) {
+            setTimeout(() => {
+                refundsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 300);
+        }
     }, [focus]);
+
+    // Available Reason Codes for Filtering (Task C)
+    const availableReasonCodes = useMemo(() => {
+        const codes = new Set<string>();
+        refunds.forEach(r => {
+            const { short } = parseReturnsReason(r.platformReason || r.reason);
+            if (short && short !== 'UNK') codes.add(short);
+        });
+        return Array.from(codes).sort();
+    }, [refunds]);
+
+    // Refund Detail Table Data - MODIFIED: Removed date filtering to align with timeline chart
+    const filteredRefundsForTable = useMemo(() => {
+        const getValue = (row: RefundLog, key: string) => {
+            if (key === 'date') return new Date(row.date).getTime();
+            if (key === 'reason') return parseReturnsReason(row.platformReason || row.reason).short;
+            return (row as any)[key];
+        };
+
+        return sortRows(refunds || [], refundSort, getValue);
+    }, [refunds, refundSort]);
+
+    const paginatedRefunds = useMemo(() => {
+        return filteredRefundsForTable.slice((refundPage - 1) * refundItemsPerPage, refundPage * refundItemsPerPage);
+    }, [filteredRefundsForTable, refundPage]);
+
+    const totalRefundPages = Math.ceil(filteredRefundsForTable.length / refundItemsPerPage);
+
+    // Refunds Analysis (Task A + Task C + Garbage Filtering)
+    const refundAnalysis = useMemo(() => {
+        if (!refunds || refunds.length === 0) return null;
+        
+        // Use central aggregation service for consistent logic
+        const overview = buildRefundOverview(refunds);
+        
+        // Filter refunds based on selection (Task C)
+        const filteredRefundsForKeywords = kwMode === 'Reason' && kwReason 
+            ? refunds.filter(r => parseReturnsReason(r.platformReason || r.reason).short === kwReason)
+            : refunds;
+
+        // --- KEYWORD EXTRACTION CONSTANTS ---
+        const TOP_N = 60;
+        const STOPWORDS = new Set([
+            "the","and","for","with","from","this","that","have","has","was","were","are","but","not","you","your","they","them",
+            "item","order","return","refund","customer","issue","problem","received","delivery","courier","seller","platform",
+            "like","wrong","asked","sent","transit","lost","address","described","broken","quality","change","mind",
+            "because", "did", "had", "can", "into", "been", "will", "would", "about", "there", "what", "which", "their", "when",
+            "one", "two", "also", "some", "other", "than", "then", "just", "could", "should", "very", "more", "most", "only",
+            "any", "been", "being", "here", "it", "its", "me", "my", "our", "she", "so", "than", "these", "up", "very", "we", "who"
+        ]);
+        const NOISE_WORDS = new Set(["http", "https", "www", "com", "dropbox", "jpg", "jpeg", "png", "webp", "pdf", "httpswww", "html", "php", "scl", "rlkey"]);
+        const NOISE_PATTERN = /\d/; // Block words containing digits (SKUs, IDs, Dates)
+
+        // Word frequency computation (Local only)
+        const wordMap = new Map<string, number>();
+        
+        // Local Sentiment Tracking
+        const sentimentStats = { negative: 0, neutral: 0, positive: 0 };
+        const negatives = ['broken', 'damage', 'defect', 'poor', 'bad', 'terrible', 'worst', 'awful', 'useless', 'dirty', 'rubbish', 'faulty', 'fake', 'counterfeit'];
+        const positives = ['great', 'good', 'love', 'excellent', 'perfect', 'nice'];
+
+        filteredRefundsForKeywords.forEach(r => {
+             const rawText = `${r.reason || ''} ${r.customerReason || ''} ${r.remarks || ''} ${r.comments || ''}`.toLowerCase();
+             
+             // --- Word Cloud Calc with Normalization Pipeline ---
+             const words = rawText.split(/[^a-z0-9]+/);
+             words.forEach(w => {
+                 // 1. Garbage Filter: Numeric check & IDs
+                 if (NOISE_PATTERN.test(w)) return;
+                 // 2. Length Filter: Regular words usually > 3 chars
+                 if (w.length < 4 || w.length >= 18) return;
+                 // 3. Stopword & Noise Filter
+                 if (STOPWORDS.has(w) || NOISE_WORDS.has(w)) return;
+                 
+                 wordMap.set(w, (wordMap.get(w) || 0) + 1);
+             });
+
+             // Sentiment Calc
+             let score = 0;
+             negatives.forEach(w => { if (rawText.includes(w)) score--; });
+             positives.forEach(w => { if (rawText.includes(w)) score++; });
+
+             if (score < 0) sentimentStats.negative++;
+             else if (score > 0) sentimentStats.positive++;
+             else sentimentStats.neutral++;
+        });
+        
+        const topWords = Array.from(wordMap.entries())
+             .sort((a, b) => b[1] - a[1])
+             .slice(0, TOP_N)
+             .map(([text, value]) => ({ text, value }));
+             
+        return {
+            overview,
+            topWords,
+            sentimentStats
+        };
+    }, [refunds, kwMode, kwReason]);
 
     const sortedTransactions = useMemo(() => {
         const safeTx = Array.isArray(transactions) ? transactions : [];
@@ -630,9 +835,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 return dKey && isDateKeyBetween(dKey, startKey, endKey);
             });
             
-            let totalAdSpend = 0;
-            let totalRevenue = 0;
-            let adOnlySpend = 0;
+            let totalAdSpend = 0; let totalRevenue = 0; let adOnlySpend = 0;
             
             periodTx.forEach(t => {
                 const currentAdSpend = calcAdSpend(t);
@@ -879,7 +1082,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
                     {sortedTransactions.length > 0 && (
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase mr-1 hidden sm:block select-none">Quick Access:</span>
+                            <span className="text-[10px] font-medium text-gray-400 uppercase mr-1 hidden sm:block select-none">Quick Access:</span>
                             <button onClick={() => scrollTo(analysisRef)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
                                 <BarChart2 className="w-3.5 h-3.5" /> Distribution
                             </button>
@@ -888,6 +1091,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             </button>
                              <button onClick={() => scrollTo(ledgerRef)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
                                 <FileText className="w-3.5 h-3.5" /> Ledger
+                            </button>
+                            <button onClick={() => scrollTo(refundsRef)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
+                                <RotateCcw className="w-3.5 h-3.5" /> Refunds
                             </button>
                         </div>
                     )}
@@ -936,7 +1142,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             
                             <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                <span className="text-[10px] font-medium text-gray-400 uppercase flex items-center gap-1">
                                     <Activity className="w-3 h-3"/> Velocity
                                 </span>
                                 <div className="text-xl font-bold text-gray-900">
@@ -945,7 +1151,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             </div>
 
                             <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                <span className="text-[10px] font-medium text-gray-400 uppercase flex items-center gap-1">
                                     <Warehouse className="w-3 h-3"/> On Hand
                                 </span>
                                 <div className="text-xl font-bold text-gray-900">
@@ -955,7 +1161,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
                             {/* INBOUND TOOLTIP */}
                             <div className="space-y-1 group relative cursor-help">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                <span className="text-[10px] font-medium text-gray-400 uppercase flex items-center gap-1">
                                     <Ship className="w-3 h-3"/> Inbound
                                 </span>
                                 <div className="text-xl font-bold text-gray-900">
@@ -978,7 +1184,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             </div>
 
                             <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                <span className="text-[10px] font-medium text-gray-400 uppercase flex items-center gap-1">
                                     <Box className="w-3 h-3"/> Lifetime Qty
                                 </span>
                                 <div className="text-xl font-bold text-gray-900">
@@ -988,21 +1194,21 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
                             {/* UPDATED: Summary Cards Row to Include Return Stats */}
                             <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">All-Time Sales</span>
+                                <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1">All-Time Sales</span>
                                 <div className="text-lg font-bold text-gray-900">
                                     {formatMoney(allTimeSales, 0)}
                                 </div>
                             </div>
 
                             <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Lifetime Net Margin</span>
+                                <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1">Lifetime Net Margin</span>
                                 <div className={`text-lg font-bold ${allTimeMarginPct >= 15 ? 'text-green-600' : allTimeMarginPct > 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {formatPct(allTimeMarginPct, 1)}
                                 </div>
                             </div>
 
                             <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">All-Time Return & Refund Rate</span>
+                                <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1">All-Time Return & Refund Rate</span>
                                 <div className="flex items-center gap-4">
                                     <div>
                                         <div className="text-xs text-gray-500 font-medium">Return (Qty)</div>
@@ -1039,14 +1245,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             <div 
                                 key={idx} 
                                 ref={signal.id === focus ? activeSignalRef : null}
-                                className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${signal.color} shadow-sm group relative cursor-help transition-all duration-500 hover:scale-105 ${signal.id === focus ? 'ring-2 ring-offset-2 ring-indigo-500 scale-105 bg-opacity-100' : ''}`}
+                                className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${signal.color} shadow-sm group relative cursor-help transition-all duration-500 hover:scale-105 ${signal.id === focus ? 'ring-2 ring-offset-2 ring-indigo-50? scale-105 bg-opacity-100' : ''}`}
                             >
                                 <div className="p-1.5 bg-white/50 rounded-md">
                                     <signal.icon className="w-4 h-4" />
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold uppercase opacity-70 tracking-wide">{signal.severity} Priority</span>
-                                    <span className="text-sm font-bold leading-tight">{signal.label}</span>
+                                    <span className="text-[10px] font-medium uppercase opacity-70 tracking-wide">{signal.severity} Priority</span>
+                                    <span className="text-sm font-medium leading-tight">{signal.label}</span>
                                 </div>
                                 
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-50 text-center transform translate-y-2 group-hover:translate-y-0">
@@ -1062,6 +1268,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
             {sortedTransactions.length > 0 && (
                 <div ref={analysisRef} className="space-y-4">
+                     {/* ... Distribution Analysis charts ... */}
                     <div className="flex justify-between items-center">
                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                             <BarChart2 className="w-5 h-5 text-indigo-600" />
@@ -1087,9 +1294,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
                             <BoxPlot 
                                 title="Revenue per Order" 
-                                data7={analytics.revenue.d7} 
-                                data30={analytics.revenue.d30} 
-                                data90={analytics.revenue.d90}
+                                stats7={analytics.revenue.d7} 
+                                stats30={analytics.revenue.d30} 
+                                stats90={analytics.revenue.d90}
                                 format={(v: number) => `£${v.toFixed(0)}`}
                                 color="#3b82f6"
                                 layout={chartLayout}
@@ -1100,9 +1307,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
                             <BoxPlot 
                                 title="Net Profit Margin" 
-                                data7={analytics.margin.d7} 
-                                data30={analytics.margin.d30} 
-                                data90={analytics.margin.d90}
+                                stats7={analytics.margin.d7} 
+                                stats30={analytics.margin.d30} 
+                                stats90={analytics.margin.d90}
                                 format={(v: number) => `${v.toFixed(1)}%`}
                                 color="#10b981"
                                 layout={chartLayout}
@@ -1113,9 +1320,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
                             <BoxPlot 
                                 title="Daily Units Sold" 
-                                data7={analytics.qty.d7} 
-                                data30={analytics.qty.d30} 
-                                data90={analytics.qty.d90}
+                                stats7={analytics.qty.d7} 
+                                stats30={analytics.qty.d30} 
+                                stats90={analytics.qty.d90}
                                 format={(v: number) => v.toFixed(0)}
                                 color="#8b5cf6"
                                 layout={chartLayout}
@@ -1126,9 +1333,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
                            <BoxPlot
                                 title="Ad Spend / TACoS"
-                                data7={analytics.tacos.d7}
-                                data30={analytics.tacos.d30}
-                                data90={analytics.tacos.d90}
+                                stats7={analytics.tacos.d7}
+                                stats30={analytics.tacos.d30}
+                                stats90={analytics.tacos.d90}
                                 format={(v: number) => `${v.toFixed(1)}%`}
                                 color="#f97316"
                                 layout={chartLayout}
@@ -1241,7 +1448,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             <div className="mt-2 h-10 bg-gray-50 rounded-lg border border-gray-100 flex items-center px-4 text-xs">
                                 {hoveredBubble ? (
                                     <div className="flex flex-wrap items-center gap-4 w-full animate-in fade-in duration-200">
-                                        <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded shadow-sm border border-gray-200">{hoveredBubble.period}</span>
+                                        <span className="font-medium text-gray-900 bg-white px-2 py-0.5 rounded shadow-sm border border-gray-200">{hoveredBubble.period}</span>
                                         <div className="h-4 w-px bg-gray-300 hidden sm:block"></div>
                                         <span className="text-gray-600">Band: <strong>{hoveredBubble.delta > 0 ? '+' : ''}£{hoveredBubble.delta.toFixed(2)}</strong></span>
                                         <span className="text-gray-600">Avg Selling Price: <strong>£{hoveredBubble.tooltipPrice}</strong></span>
@@ -1254,6 +1461,15 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 )}
                             </div>
                         </div>
+
+                        {/* Price Change History moved here */}
+                        <PriceChangeHistoryPanel 
+                            history={priceChangeHistory} 
+                            sku={product.sku}
+                            windowStart={startKey}
+                            windowEnd={endKey}
+                            themeColor={themeColor}
+                        />
                     </div>
 
                     <div className="space-y-4">
@@ -1279,12 +1495,12 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                                     <div className="flex items-center gap-2">
                                                         £{pt.price.toFixed(2)}
                                                         {isLowest && (
-                                                            <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 font-bold uppercase tracking-wide flex items-center gap-1">
+                                                            <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 font-medium uppercase tracking-wide flex items-center gap-1">
                                                                 <TrendingDown className="w-2.5 h-2.5" /> Lowest
                                                             </span>
                                                         )}
                                                         {isHighest && (
-                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold uppercase tracking-wide flex items-center gap-1">
+                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-medium uppercase tracking-wide flex items-center gap-1">
                                                                 <TrendingUp className="w-2.5 h-2.5" /> Highest
                                                             </span>
                                                         )}
@@ -1315,7 +1531,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </h3>
                                 <button
                                     onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
-                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                                     title="Show Data Audit"
                                 >
                                     <Activity className="w-3 h-3" />
@@ -1377,26 +1593,17 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         )}
                     </div>
                     
-                    {/* Price History Panel Component */}
-                    <PriceChangeHistoryPanel 
-                        history={priceChangeHistory} 
-                        sku={product.sku}
-                        windowStart={startKey} // Passed for potential future filtering
-                        windowEnd={endKey}     // Passed for potential future filtering
-                        themeColor={themeColor}
-                    />
-
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm text-sm">
                         <div className="flex flex-col">
-                            <span className="text-xs text-gray-500 uppercase font-bold">Sales Rows</span>
+                            <span className="text-xs text-gray-500 uppercase font-medium">Sales Rows</span>
                             <div className="text-xl font-bold text-gray-800">{ledgerStats.salesRows}</div>
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-xs text-gray-500 uppercase font-bold">Total Units</span>
+                            <span className="text-xs text-gray-500 uppercase font-medium">Total Units</span>
                             <div className="text-xl font-bold text-green-700">{ledgerStats.totalUnits}</div>
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-xs text-gray-500 uppercase font-bold flex items-center gap-1">
+                            <span className="text-xs text-gray-500 uppercase font-medium flex items-center gap-1">
                                 Ad-Only Spend 
                                 <span title="Includes daily PPC costs not attributed to specific orders. Pooled into total TACoS.">
                                     <Info className="w-3 h-3 text-gray-400" />
@@ -1405,7 +1612,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             <div className="text-xl font-bold text-orange-700">{formatMoney(ledgerStats.adOnlySpend)}</div>
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-xs text-gray-500 uppercase font-bold">Refunds (Detected)</span>
+                            <span className="text-xs text-gray-500 uppercase font-medium">Refunds (Detected)</span>
                             <div className="text-xl font-bold text-red-700 flex items-center gap-1">
                                 {ledgerStats.refundCount}
                                 {ledgerStats.refundValue > 0 && <span className="text-sm font-medium opacity-70">(-{formatMoney(ledgerStats.refundValue, 0)})</span>}
@@ -1456,72 +1663,74 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             ))}
                             {platformSubtotals.length === 0 && (
-                                <div className="p-4 text-center text-gray-400 text-xs italic">No sales data for this period.</div>
+                                <div className="p-4 text-center text-gray-400 text-xs italic">No breakdown available.</div>
                             )}
                         </div>
                     </div>
 
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                        <table className="w-full text-sm text-left whitespace-nowrap">
-                            <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100">
-                                <tr>
-                                    <th className="p-3">Date</th>
-                                    <th className="p-3">Platform</th>
-                                    <th className="p-3 text-right">Price</th>
-                                    <th className="p-3 text-right">Qty</th>
-                                    <th className="p-3 text-right">Revenue</th>
-                                    <th className="p-3 text-right">Ads</th>
-                                    <th className="p-3 text-right">Margin</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {paginatedTransactions.map((tx: any, idx: number) => {
-                                    const isRefund = tx._type === 'REFUND_LOG' || tx.velocity < 0;
-                                    const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
-                                    const isZeroRev = Math.abs(tx.price * tx.velocity) < 0.01 && !isAdRow && !isRefund;
-                                    const margin = marginPct(calcProfit(tx), calcRevenue(tx));
+                        <div className="overflow-x-auto border rounded-lg">
+                            <table className="w-full text-sm text-left whitespace-nowrap">
+                                <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100">
+                                    <tr>
+                                        <th className="p-3">Date</th>
+                                        <th className="p-3">Platform</th>
+                                        <th className="p-3 text-right">Price</th>
+                                        <th className="p-3 text-right">Qty</th>
+                                        <th className="p-3 text-right">Revenue</th>
+                                        <th className="p-3 text-right">Ads</th>
+                                        <th className="p-3 text-right">Margin</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {paginatedTransactions.map((tx: any, idx: number) => {
+                                        const isRefund = tx._type === 'REFUND_LOG' || tx.velocity < 0;
+                                        const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
+                                        const isZeroRev = Math.abs(tx.price * tx.velocity) < 0.01 && !isAdRow && !isRefund;
+                                        const margin = marginPct(calcProfit(tx), calcRevenue(tx));
 
-                                    return (
-                                        <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${
-                                            isAdRow ? 'bg-orange-50/40 text-orange-900' : 
-                                            isRefund ? 'bg-red-50/40 text-red-900' : 
-                                            isZeroRev ? 'opacity-60 bg-gray-50/30' : ''
-                                        }`}>
-                                            <td className="p-3 font-mono text-xs opacity-80">{new Date(tx.date).toLocaleDateString('en-GB')}</td>
-                                            <td className="p-3">
-                                                <div className="flex flex-col">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border w-fit ${isAdRow ? 'bg-orange-100 border-orange-200 text-orange-800' : isRefund ? 'bg-red-100 border-red-200 text-red-800' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                                                        {tx.platform}
-                                                    </span>
-                                                    {isRefund && tx.reason && (
-                                                        <span className="text-[9px] text-red-500 mt-0.5 max-w-[120px] truncate">{tx.reason}</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="p-3 text-right font-medium">
-                                                {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : formatMoney(tx.price)}
-                                            </td>
-                                            <td className="p-3 text-right font-bold opacity-90">{formatNumber(tx.velocity)}</td>
-                                            <td className={`p-3 text-right ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
-                                                {formatMoney(tx.price * tx.velocity)}
-                                            </td>
-                                            <td className="p-3 text-right text-orange-600 font-medium">
-                                                {(tx.adsSpend || 0) > 0 ? formatMoney(tx.adsSpend) : '-'}
-                                            </td>
-                                            <td className={`p-3 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-600' : 'text-green-600'}`}>
-                                                {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '—' : '-'}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                {paginatedTransactions.length === 0 && (
-                                    <tr><td colSpan={7} className="p-8 text-center text-gray-400">No transactions match filters</td></tr>
-                                )}
-                            </tbody>
-                        </table>
+                                        return (
+                                            <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${
+                                                isAdRow ? 'bg-orange-50/40 text-orange-900' : 
+                                                isRefund ? 'bg-red-50/40 text-red-900' : 
+                                                isZeroRev ? 'opacity-60 bg-gray-50/30' : ''
+                                            }`}>
+                                                <td className="p-3 font-mono text-xs opacity-80">{new Date(tx.date).toLocaleDateString('en-GB')}</td>
+                                                <td className="p-3">
+                                                    <div className="flex flex-col">
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border w-fit ${isAdRow ? 'bg-orange-100 border-orange-200 text-orange-800' : isRefund ? 'bg-red-100 border-red-200 text-red-800' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                            {tx.platform}
+                                                        </span>
+                                                        {isRefund && tx.reason && (
+                                                            <span className="text-[9px] text-red-500 mt-0.5 max-w-[120px] truncate">{tx.reason}</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 text-right font-medium">
+                                                    {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : formatMoney(tx.price)}
+                                                </td>
+                                                <td className="p-3 text-right font-bold opacity-90">{formatNumber(tx.velocity)}</td>
+                                                <td className={`p-3 text-right ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
+                                                    {formatMoney(tx.price * tx.velocity)}
+                                                </td>
+                                                <td className="p-3 text-right text-orange-600 font-medium">
+                                                    {(tx.adsSpend || 0) > 0 ? formatMoney(tx.adsSpend) : '-'}
+                                                </td>
+                                                <td className={`p-3 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-600' : 'text-green-600'}`}>
+                                                    {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '—' : '-'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {paginatedTransactions.length === 0 && (
+                                        <tr><td colSpan={7} className="p-8 text-center text-gray-400">No transactions match filters</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                         {filteredTransactions.length >= txLimit && (
                             <div className="p-3 text-center border-t border-gray-100">
-                                <button onClick={() => setTxLimit(prev => prev + 50)} className="text-xs text-indigo-600 font-bold hover:underline">
+                                <button onClick={() => setTxLimit(prev => prev + 50)} className="text-xs text-indigo-600 font-medium hover:underline">
                                     Load More ({filteredTransactions.length - txLimit} remaining)
                                 </button>
                             </div>
@@ -1529,6 +1738,255 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                     </div>
                 </div>
             )}
+            
+            <div ref={refundsRef} className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-red-50 text-red-600 rounded-lg"><RotateCcw className="w-5 h-5" /></div>
+                        <h3 className="text-lg font-bold text-gray-900">Returns Analysis</h3>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs font-medium text-gray-500 uppercase flex items-center gap-1 cursor-pointer">
+                            <Brain className={`w-4 h-4 ${showAiInsights ? 'text-purple-600' : 'text-gray-400'}`} />
+                            AI Insights
+                            <div className="relative inline-block w-10 h-5 align-middle select-none transition duration-200 ease-in ml-2">
+                                <input 
+                                    type="checkbox" 
+                                    name="toggle" 
+                                    id="ai-toggle" 
+                                    className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                                    checked={showAiInsights}
+                                    onChange={() => setShowAiInsights(!showAiInsights)}
+                                    style={{ right: showAiInsights ? 0 : 'auto', left: showAiInsights ? 'auto' : 0, borderColor: showAiInsights ? '#8b5cf6' : '#d1d5db' }}
+                                />
+                                <label 
+                                    htmlFor="ai-toggle" 
+                                    className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${showAiInsights ? 'bg-purple-600' : 'bg-gray-300'}`}
+                                ></label>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                {refundAnalysis ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Timeline & Detail Table */}
+                        <div className="lg:col-span-2 space-y-6">
+                             <ReturnsReasonTimelineChart 
+                                data={refunds}
+                                getDate={(r) => r.date}
+                                getReason={(r) => r.platformReason || r.reason}
+                                title="Refund Timeline (by Reason Code)"
+                             />
+
+                             {/* Refund Detail Table - MODIFIED: Shows full SKU history without date filters to align with chart */}
+                             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in">
+                                <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                                    <h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-2">
+                                        <Hash className="w-4 h-4 text-red-500" />
+                                        Refund Return Records (Full History)
+                                    </h4>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase italic">* Aligned with chart history</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0 z-10 whitespace-nowrap">
+                                            <tr>
+                                                <SortableHeader label="Date" sortKey="date" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
+                                                <SortableHeader label="Order ID" sortKey="orderId" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
+                                                <SortableHeader label="Platform" sortKey="platform" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
+                                                <SortableHeader label="Qty" sortKey="quantity" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} align="right" />
+                                                <SortableHeader label="Amount" sortKey="amount" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} align="right" />
+                                                <SortableHeader label="Reason" sortKey="reason" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
+                                                <th className="p-3">Customer Note</th>
+                                                <th className="p-3 text-right">Comments</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {paginatedRefunds.length > 0 ? (
+                                                paginatedRefunds.map((r, i) => {
+                                                    const reasonMeta = parseReturnsReason(r.platformReason || r.reason);
+                                                    return (
+                                                        <tr key={r.id || i} className="hover:bg-gray-50/80 transition-colors">
+                                                            <td className="p-3 font-mono opacity-80 whitespace-nowrap">{new Date(r.date).toLocaleDateString('en-GB')}</td>
+                                                            <td className="p-3 font-mono font-medium text-indigo-600 whitespace-nowrap">
+                                                                {r.orderId ? (
+                                                                    <span className="flex items-center gap-1">
+                                                                        {r.orderId}
+                                                                        <ExternalLink className="w-2.5 h-2.5 opacity-30" />
+                                                                    </span>
+                                                                ) : '—'}
+                                                            </td>
+                                                            <td className="p-3 whitespace-nowrap">
+                                                                <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded border border-gray-200 text-[10px] font-bold">
+                                                                    {r.platform || 'Unknown'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3 text-right font-bold text-gray-900 whitespace-nowrap">{r.quantity}</td>
+                                                            <td className="p-3 text-right font-bold text-red-600 whitespace-nowrap">{formatMoney(r.amount)}</td>
+                                                            <td className="p-3 whitespace-normal min-w-[150px]">
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-bold text-gray-700">{reasonMeta.short}</span>
+                                                                    <span className="text-[10px] text-gray-400">{reasonMeta.full}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-3 whitespace-normal min-w-[200px]">
+                                                                {r.remarks ? (
+                                                                    <span className="text-gray-700 italic break-words" title={r.remarks}>{r.remarks}</span>
+                                                                ) : '—'}
+                                                            </td>
+                                                            <td className="p-3 text-right text-gray-400 italic whitespace-normal min-w-[200px] break-words" title={r.comments || r.customerReason}>
+                                                                {r.comments || r.customerReason || '—'}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan={8} className="p-10 text-center text-gray-400 italic">No refund records found for this product.</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {totalRefundPages > 1 && (
+                                    <div className="bg-gray-50/50 px-4 py-2.5 border-t border-gray-100 flex items-center justify-between">
+                                        <span className="text-[10px] text-gray-400 font-bold uppercase">
+                                            Page {refundPage} of {totalRefundPages} ({filteredRefundsForTable.length} items)
+                                        </span>
+                                        <div className="flex gap-1">
+                                            <button 
+                                                onClick={() => setRefundPage(p => Math.max(1, p - 1))} 
+                                                disabled={refundPage === 1}
+                                                className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-30"
+                                            >
+                                                <ChevronLeft className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                                onClick={() => setRefundPage(p => Math.min(totalRefundPages, p + 1))} 
+                                                disabled={refundPage === totalRefundPages}
+                                                className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-30"
+                                            >
+                                                <ChevronRight className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                             </div>
+                        </div>
+
+                        <div className="space-y-6">
+                             {/* Top Reasons */}
+                             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col h-[250px]">
+                                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2"><AlertTriangle className="w-3 h-3 text-amber-500" /> Top Reasons</h4>
+                                 <div className="flex-1 overflow-auto pr-1">
+                                     <div className="space-y-2">
+                                         {refundAnalysis.overview.reasonRows.slice(0, 5).map((r, i) => (
+                                             <div key={i} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border border-gray-100">
+                                                 <span className="font-medium text-gray-700 truncate max-w-[150px]" title={r.reason}>{r.reason}</span>
+                                                 <div className="text-right">
+                                                     <div className="font-bold text-red-600">{r.count}</div>
+                                                     <div className="text-[10px] text-gray-400">{formatMoney(r.value, 0)}</div>
+                                                 </div>
+                                             </div>
+                                         ))}
+                                     </div>
+                                 </div>
+                             </div>
+                             
+                             {/* AI Insights / Sentiment Panel */}
+                             {showAiInsights ? (
+                                <div className="bg-purple-50 p-5 rounded-xl border border-purple-200 shadow-sm animate-in fade-in zoom-in duration-300">
+                                    <div className="flex items-center gap-2 mb-3 border-b border-purple-200 pb-2">
+                                        <span className="p-1 bg-white rounded-lg">
+                                            <Sparkles className="w-4 h-4 text-purple-600" />
+                                        </span>
+                                        <h4 className="text-xs font-bold text-purple-800 uppercase">AI Sentiment Summary</h4>
+                                    </div>
+                                    <div className="flex flex-col items-center justify-center py-6 text-center text-purple-700 gap-2">
+                                        <CloudOff className="w-8 h-8 opacity-50" />
+                                        <p className="text-xs font-medium">Cloud AI analysis disabled.</p>
+                                        <p className="text-[10px] opacity-70">Enable API key to unlock deep sentiment analysis.</p>
+                                    </div>
+                                </div>
+                             ) : (
+                                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm animate-in fade-in">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2"><Smile className="w-3 h-3 text-purple-500" /> Sentiment (Local)</h4>
+                                    
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2 text-xs">
+                                            <span className="w-16 text-gray-500">Negative</span>
+                                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-red-400" style={{ width: `${(refundAnalysis.sentimentStats.negative / (refunds.length || 1)) * 100}%` }}></div>
+                                            </div>
+                                            <span className="text-red-600 font-bold">{refundAnalysis.sentimentStats.negative}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs">
+                                            <span className="w-16 text-gray-500">Neutral</span>
+                                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-gray-400" style={{ width: `${(refundAnalysis.sentimentStats.neutral / (refunds.length || 1)) * 100}%` }}></div>
+                                            </div>
+                                            <span className="text-gray-600 font-bold">{refundAnalysis.sentimentStats.neutral}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs">
+                                            <span className="w-16 text-gray-500">Positive</span>
+                                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-green-400" style={{ width: `${(refundAnalysis.sentimentStats.positive / (refunds.length || 1)) * 100}%` }}></div>
+                                            </div>
+                                            <span className="text-green-600 font-bold">{refundAnalysis.sentimentStats.positive}</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-[9px] text-gray-400 mt-4 italic text-center">Based on keyword matching.</p>
+                                </div>
+                             )}
+
+                             {/* Word Cloud */}
+                             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                                 <div className="flex justify-between items-center mb-4">
+                                     <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                                         <MessageSquare className="w-3 h-3 text-blue-500" /> Keyword Cloud
+                                     </h4>
+                                     <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                         <button 
+                                             onClick={() => setKwMode('All')} 
+                                             className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'All' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
+                                         >
+                                             All
+                                         </button>
+                                         <button 
+                                             onClick={() => setKwMode('Reason')} 
+                                             className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'Reason' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
+                                         >
+                                             By Reason
+                                         </button>
+                                     </div>
+                                 </div>
+                                 {kwMode === 'Reason' && availableReasonCodes.length > 0 && (
+                                     <div className="mb-5 flex flex-wrap gap-1 border-b border-gray-100 pb-3 animate-in fade-in slide-in-from-top-1">
+                                         {availableReasonCodes.map(code => (
+                                             <button 
+                                                 key={code} 
+                                                 onClick={() => setKwReason(kwReason === code ? null : code)}
+                                                 className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-all ${kwReason === code ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}
+                                             >
+                                                 {code}
+                                             </button>
+                                         ))}
+                                     </div>
+                                 )}
+                                 <div className="mt-2">
+                                    <KeywordCloud items={refundAnalysis.topWords} />
+                                 </div>
+                             </div>
+                        </div>
+                    </div>
+                ) : (
+                     <div className="p-10 text-center text-gray-400 bg-gray-50 rounded-xl border border-gray-100">
+                        No refund data available for this SKU.
+                     </div>
+                )}
+            </div>
         </div>
     );
 };

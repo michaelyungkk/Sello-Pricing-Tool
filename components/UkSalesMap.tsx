@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
@@ -274,13 +275,13 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                     <div className="flex bg-gray-200 p-1 rounded-lg">
                         <button 
                             onClick={() => setMode('ABSOLUTE')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'ABSOLUTE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${mode === 'ABSOLUTE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
                         >
                             <BarChart2 className="w-3 h-3" /> Absolute
                         </button>
                         <button 
                             onClick={() => setMode('CHANGE')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${mode === 'CHANGE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${mode === 'CHANGE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
                         >
                             <TrendingUp className="w-3 h-3" /> Change (PoP)
                         </button>
@@ -290,13 +291,13 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                     <div className="flex bg-gray-200 p-1 rounded-lg">
                         <button 
                             onClick={() => setMetric('REVENUE')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${metric === 'REVENUE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${metric === 'REVENUE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
                         >
                             <DollarSign className="w-3 h-3" /> Revenue
                         </button>
                         <button 
                             onClick={() => setMetric('VOLUME')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${metric === 'VOLUME' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${metric === 'VOLUME' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
                         >
                             <Package className="w-3 h-3" /> Volume
                         </button>
@@ -305,13 +306,13 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                     <div className="h-6 w-px bg-gray-300"></div>
                     
                     {/* Color Metric Toggle */}
-                    <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                    <div className="flex items-center gap-1 text-[10px] font-medium text-gray-500">
                         COLOR:
                         <div className="flex bg-gray-200 p-1 rounded-lg">
-                            <button onClick={() => setColorMetric('REVENUE')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'REVENUE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Revenue</button>
-                            <button onClick={() => setColorMetric('PROFIT')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'PROFIT' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Profit</button>
-                            <button onClick={() => setColorMetric('MARGIN')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'MARGIN' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Margin %</button>
-                            <button onClick={() => setColorMetric('TACOS')} className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${colorMetric === 'TACOS' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>TACoS %</button>
+                            <button onClick={() => setColorMetric('REVENUE')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'REVENUE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Revenue</button>
+                            <button onClick={() => setColorMetric('PROFIT')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'PROFIT' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Profit</button>
+                            <button onClick={() => setColorMetric('MARGIN')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'MARGIN' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Margin %</button>
+                            <button onClick={() => setColorMetric('TACOS')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'TACOS' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>TACoS %</button>
                         </div>
                     </div>
 
@@ -454,7 +455,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                     <div className="absolute top-4 right-4 bg-white/95 backdrop-blur shadow-lg rounded-lg p-3 border border-gray-100 w-60 animate-in fade-in zoom-in duration-200 pointer-events-none z-10">
                         <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-100">
                             <span className="font-bold text-gray-900 text-lg">{getAreaDisplayName(areaToShow.code)}</span>
-                            <span className="text-xs font-bold text-gray-500">#{areaToShow.rank}</span>
+                            <span className="text-xs font-medium text-gray-500">#{areaToShow.rank}</span>
                         </div>
                         <div className="space-y-1.5 text-sm">
                             {mode === 'ABSOLUTE' ? (
@@ -490,7 +491,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                     {areaToShow.platformBreakdown.length > 0 &&
                                       <div className="flex justify-between text-xs pt-1 border-t border-gray-100 mt-1">
                                           <span className="text-gray-500">Top Platform</span>
-                                          <span className="font-bold text-gray-800">
+                                          <span className="font-medium text-gray-800">
                                               {areaToShow.platformBreakdown[0].platform} ({((areaToShow.platformBreakdown[0].revenue / areaToShow.revenue) * 100).toFixed(0)}%)
                                           </span>
                                       </div>
@@ -523,13 +524,13 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         {areaToShow.margin < LOW_MARGIN_PCT && (
                                             <div className="flex justify-between text-xs items-center text-amber-600">
                                                 <span>Low Margin (&lt;10%)</span>
-                                                <span className="font-bold">{areaToShow.margin.toFixed(1)}%</span>
+                                                <span className="font-medium">{areaToShow.margin.toFixed(1)}%</span>
                                             </div>
                                         )}
                                         {areaToShow.tacos > HIGH_TACOS_PCT && (
                                             <div className="flex justify-between text-xs items-center text-purple-600">
                                                 <span>High TACoS (&gt;15%)</span>
-                                                <span className="font-bold">{areaToShow.tacos.toFixed(1)}%</span>
+                                                <span className="font-medium">{areaToShow.tacos.toFixed(1)}%</span>
                                             </div>
                                         )}
                                     </div>
@@ -537,7 +538,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             )}
                             <div className="border-t border-gray-100 my-1 pt-1 mt-2">
                                 <span className="text-[10px] text-gray-400 uppercase font-bold">Top Seller (by Profit)</span>
-                                <div className="text-xs text-gray-700 truncate">{areaToShow.topSkus?.[0]?.name || 'N/A'}</div>
+                                <div className="text-xs text-gray-700 truncate font-medium">{areaToShow.topSkus?.[0]?.name || 'N/A'}</div>
                             </div>
                         </div>
                     </div>
@@ -604,27 +605,27 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         {/* High Level Stats */}
                         <div className="grid grid-cols-2 gap-3 text-center mb-4">
                             <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-2">
-                                <div className="text-xs text-indigo-700 font-bold uppercase">Revenue</div>
+                                <div className="text-xs text-indigo-700 font-medium uppercase">Revenue</div>
                                 <div className="text-lg font-bold text-indigo-900">£{pinnedArea.revenue.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                             </div>
                              <div className="bg-green-50 border border-green-100 rounded-lg p-2">
-                                <div className="text-xs text-green-700 font-bold uppercase">Profit</div>
+                                <div className="text-xs text-green-700 font-medium uppercase">Profit</div>
                                 <div className="text-lg font-bold text-green-900">£{pinnedArea.profit.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                             </div>
                              <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                                <div className="text-xs text-gray-600 font-bold uppercase">Units / Orders</div>
+                                <div className="text-xs text-gray-600 font-medium uppercase">Units / Orders</div>
                                 <div className="text-lg font-bold text-gray-800">{pinnedArea.volume.toLocaleString()} / {pinnedArea.orders.toLocaleString()}</div>
                             </div>
                             <div className="bg-amber-50 border border-amber-100 rounded-lg p-2">
-                                <div className="text-xs text-amber-700 font-bold uppercase">Margin</div>
+                                <div className="text-xs text-amber-700 font-medium uppercase">Margin</div>
                                 <div className="text-lg font-bold text-amber-900">{pinnedArea.margin.toFixed(1)}%</div>
                             </div>
                              <div className="bg-orange-50/70 border border-orange-100 rounded-lg p-2">
-                                <div className="text-xs text-orange-700 font-bold uppercase">Ad Spend</div>
+                                <div className="text-xs text-orange-700 font-medium uppercase">Ad Spend</div>
                                 <div className="text-lg font-bold text-orange-900">£{pinnedArea.adSpend.toFixed(0)}</div>
                             </div>
                             <div className="bg-purple-50/70 border border-purple-100 rounded-lg p-2">
-                                <div className="text-xs text-purple-700 font-bold uppercase">TACoS</div>
+                                <div className="text-xs text-purple-700 font-medium uppercase">TACoS</div>
                                 <div className={`text-lg font-bold text-purple-900`}>{pinnedArea.tacos.toFixed(1)}%</div>
                             </div>
                         </div>
@@ -634,14 +635,14 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <h5 className="font-bold text-gray-600 text-xs uppercase mb-2 flex items-center gap-2"><PieChart className="w-3 h-3"/> Platform Mix</h5>
                             {pinnedArea.platformBreakdown.length > 0 && (
                                 <div className="text-xs text-gray-500 mb-2">
-                                    Top: <span className="font-bold text-gray-800">{pinnedArea.platformBreakdown[0].platform} ({((pinnedArea.platformBreakdown[0].revenue / pinnedArea.revenue) * 100).toFixed(0)}%)</span>
+                                    Top: <span className="font-medium text-gray-800">{pinnedArea.platformBreakdown[0].platform} ({((pinnedArea.platformBreakdown[0].revenue / pinnedArea.revenue) * 100).toFixed(0)}%)</span>
                                 </div>
                             )}
                             <div className="space-y-2">
                                 {pinnedArea.platformBreakdown.slice(0, 4).map((plat: any, i: number) => (
                                     <div key={i} className="flex justify-between items-center text-xs">
                                         <div className="flex items-center gap-2">
-                                            <span className="font-bold text-gray-700">{plat.platform}</span>
+                                            <span className="font-medium text-gray-700">{plat.platform}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="font-mono text-gray-500">£{plat.revenue.toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
@@ -660,9 +661,9 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <div className="space-y-2">
                                 {pinnedArea.topSkus.map((sku: any, i: number) => (
                                     <div key={i} className="text-xs p-2 rounded bg-gray-50/50 border border-gray-100">
-                                        <div className="font-bold text-gray-800 truncate">{sku.name}</div>
+                                        <div className="font-medium text-gray-800 truncate">{sku.name}</div>
                                         <div className="flex justify-between items-center mt-1">
-                                            <span className="text-green-600 font-bold">Profit: £{sku.profit.toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                                            <span className="text-green-600 font-medium">Profit: £{sku.profit.toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
                                             <span className="text-gray-500">{sku.volume} units</span>
                                         </div>
                                     </div>
@@ -688,7 +689,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                                 {i + 1}
                                             </div>
                                             <div>
-                                                <div className="font-bold text-gray-900 text-sm">{getAreaDisplayName(area.code)}</div>
+                                                <div className="font-medium text-gray-900 text-sm">{getAreaDisplayName(area.code)}</div>
                                                 <div className="text-[10px] text-gray-500">{metric === 'REVENUE' ? `${area.volume} units` : `£${area.revenue.toLocaleString()}`}</div>
                                             </div>
                                         </div>
@@ -795,7 +796,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                                 <td className="px-3 py-1.5">
                                                     <div className="flex items-center gap-2 pl-4">
                                                         <CornerDownRight className="w-3 h-3 text-gray-400" />
-                                                        <span className="font-mono font-semibold">{district.code}</span>
+                                                        <span className="font-mono font-medium">{district.code}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-mono">-</td>

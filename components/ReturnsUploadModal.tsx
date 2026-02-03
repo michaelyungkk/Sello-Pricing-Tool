@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef } from 'react';
 import { Upload, X, Check, AlertCircle, Loader2, RotateCcw, Info, Link as LinkIcon, FileQuestion, Filter, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -168,9 +166,11 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         
         // --- FIX: Terms must be what the header becomes AFTER normalization ---
         const platReasonIdx = findColPriority(['platformaftersalesreason', 'platformreason']);
-        const custReasonIdx = findColPriority(['reasonforrefund', 'reasonforreturn', 'buyerreason', 'returnreason']);
+        const custReasonIdx = findColPriority(['reasonforrefund', 'reasonforreturn', 'buyerreason', 'returnreason', 'buyerfeedback']);
 
-        const remarksIdx = findColPriority(['remarks', 'memo', 'comments']);
+        // --- SEPARATE REMARKS AND COMMENTS AS PER USER MAPPING REQUEST ---
+        const remarksIdx = findColPriority(['remarks', 'memo', 'remark']);
+        const commentsIdx = findColPriority(['comments', 'comment', 'buyercomment', 'customercomment', 'notes']);
         
         // --- STRICT ORDER ID MAPPING ---
         let orderIdIdx = findColPriority([
@@ -239,6 +239,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
             const customerReason = custReasonIdx !== -1 ? String(row[custReasonIdx]).trim() : undefined;
             const platformReason = platReasonIdx !== -1 ? String(row[platReasonIdx]).trim() : undefined;
             const remarks = remarksIdx !== -1 ? String(row[remarksIdx]).trim() : undefined;
+            const comments = commentsIdx !== -1 ? String(row[commentsIdx]).trim() : undefined;
 
             // NEW: Decode the platform reason
             const decodedReason = decodeRefundReason(platformReason);
@@ -286,7 +287,8 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                 status,
                 customerReason,
                 platformReason, // Keep original platform reason
-                remarks
+                remarks,
+                comments // Added field
             });
 
             totalValue += amount;
@@ -430,7 +432,6 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                         </div>
                     </div>
 
-                    {/* Order ID Validation Results */}
                     {existingOrders && existingOrders.size > 0 ? (
                         <div className={`p-4 rounded-xl border flex flex-col gap-3 text-left ${stats.orphans > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
                             <div className="flex items-center gap-3">
@@ -544,7 +545,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                         title="Delete all refund history"
                         className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-all shadow-sm bg-white"
                     >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-4 h-4" />
                         Reset Data
                     </button>
                 )}

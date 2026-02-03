@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Upload, X, FileText, Check, AlertCircle, Loader2, RefreshCw, Calendar, TrendingUp, AlertTriangle, Hash } from 'lucide-react';
+import { Upload, X, FileText, Check, AlertCircle, Loader2, RefreshCw, Calendar, TrendingUp, AlertTriangle, Hash, ArrowRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
 
@@ -177,6 +176,42 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
 
     }, [parsedItems, products]);
 
+    // NEW: Computed property for displaying ONLY changed items in the table
+    const displayedChanges = useMemo(() => {
+        if (!parsedItems) return [];
+        
+        // Lookup map for current product prices
+        const priceMap = new Map<string, number>();
+        products.forEach(p => {
+            priceMap.set(p.sku.toUpperCase().trim(), p.caPrice || 0);
+        });
+
+        return parsedItems.filter(item => {
+            if (item.status !== 'valid') return false;
+            
+            const skuUpper = item.sku.toUpperCase().trim();
+            let oldPrice = priceMap.get(skuUpper);
+            
+            // Mirror suffix fallback logic
+            if (oldPrice === undefined) {
+                const stripped = skuUpper.replace(/[-_]UK$/i, '');
+                oldPrice = priceMap.get(stripped);
+            }
+
+            // Only include in preview if it's an actual change from a known price
+            if (oldPrice === undefined || oldPrice === 0) return false;
+            return Math.abs(item.caPrice - oldPrice) > 0.02;
+        }).map(item => {
+             const skuUpper = item.sku.toUpperCase().trim();
+             let oldPrice = priceMap.get(skuUpper);
+             if (oldPrice === undefined) {
+                 const stripped = skuUpper.replace(/[-_]UK$/i, '');
+                 oldPrice = priceMap.get(stripped);
+             }
+             return { ...item, oldPrice };
+        });
+    }, [parsedItems, products]);
+
     const validItems = parsedItems?.filter(i => i.status === 'valid') || [];
 
     return (
@@ -259,36 +294,56 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
 
                             <div className="flex justify-between items-center px-1">
                                 <div className="flex flex-col gap-1">
+                                    <h3 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
+                                        <TrendingUp className="w-3 h-3" /> Price Changes Detected
+                                    </h3>
                                     {stats.skipped > 0 && (
-                                        <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 flex items-center gap-1 w-fit">
-                                            <AlertTriangle className="w-3 h-3" /> {stats.skipped} Parent SKUs Skipped
+                                        <span className="text-[9px] text-amber-600 font-medium">
+                                            ({stats.skipped} parents ignored)
                                         </span>
                                     )}
                                 </div>
-                                <button onClick={() => setParsedItems(null)} className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-800"><RefreshCw className="w-3 h-3" /> Reset</button>
+                                <button onClick={() => setParsedItems(null)} className="text-[10px] text-gray-400 flex items-center gap-1 hover:text-gray-600 transition-colors uppercase font-bold"><RefreshCw className="w-2.5 h-2.5" /> Reset</button>
                             </div>
 
-                            <div className="max-h-40 overflow-y-auto border rounded-lg">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 sticky top-0">
+                            <div className="max-h-40 overflow-y-auto border rounded-lg shadow-inner bg-gray-50/30">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-gray-100/80 sticky top-0 backdrop-blur-sm">
                                         <tr>
-                                            <th className="p-2 text-xs uppercase font-bold text-gray-500">SKU</th>
-                                            <th className="p-2 text-right text-xs uppercase font-bold text-gray-500">CA Price</th>
-                                            <th className="p-2 text-center text-xs uppercase font-bold text-gray-500">Status</th>
+                                            <th className="p-2 uppercase font-bold text-gray-500">SKU</th>
+                                            <th className="p-2 text-right uppercase font-bold text-gray-500">Old</th>
+                                            <th className="p-2 text-center"></th>
+                                            <th className="p-2 text-right uppercase font-bold text-indigo-600">New</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {parsedItems.slice(0, 50).map((item, idx) => (
-                                            <tr key={idx} className={`border-t ${item.status === 'skipped' ? 'bg-amber-50' : ''}`}>
-                                                <td className="p-2 font-mono text-xs">{item.sku}</td>
-                                                <td className="p-2 text-right font-medium">{item.status === 'valid' ? `£${item.caPrice.toFixed(2)}` : '-'}</td>
-                                                <td className="p-2 text-center">
-                                                    {item.status === 'valid' && <Check className="w-4 h-4 text-green-600 inline" />}
-                                                    {item.status === 'skipped' && <span className="text-[10px] text-amber-600 font-bold uppercase">Parent</span>}
-                                                    {item.status === 'error' && <AlertCircle className="w-4 h-4 text-red-600 inline" />}
+                                        {displayedChanges.length > 0 ? (
+                                            displayedChanges.slice(0, 50).map((item, idx) => (
+                                                <tr key={idx} className="border-t bg-white group hover:bg-indigo-50/30 transition-colors">
+                                                    <td className="p-2 font-mono text-gray-700 font-medium">{item.sku}</td>
+                                                    <td className="p-2 text-right text-gray-400 font-mono">£{item.oldPrice?.toFixed(2)}</td>
+                                                    <td className="p-2 text-center text-gray-300">
+                                                        <ArrowRight className="w-3 h-3 mx-auto" />
+                                                    </td>
+                                                    <td className="p-2 text-right font-bold text-indigo-700 font-mono">£{item.caPrice.toFixed(2)}</td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={4} className="p-8 text-center text-gray-400 italic">
+                                                    {validItems.length > 0 
+                                                        ? "Prices in file match current database values." 
+                                                        : "No valid SKU data parsed from file."}
                                                 </td>
                                             </tr>
-                                        ))}
+                                        )}
+                                        {displayedChanges.length > 50 && (
+                                            <tr className="bg-gray-50">
+                                                <td colSpan={4} className="p-2 text-center text-[10px] text-gray-400 font-medium italic">
+                                                    ...and {displayedChanges.length - 50} more changes
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
