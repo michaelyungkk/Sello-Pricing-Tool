@@ -7,6 +7,7 @@ import SkuDeepDivePage from '../../SkuDeepDivePage';
 import { ThresholdConfig } from '../../../services/thresholdsConfig';
 import { SearchHeader } from './parts/SearchHeader';
 import { SearchResultPanels } from './parts/SearchResultPanels';
+import { RotateCcw } from 'lucide-react';
 
 interface SearchResultsPageContainerProps {
   data: { results: any[], query: string, params: SearchIntent, id?: string };
@@ -29,6 +30,13 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
     const [groupBy, setGroupBy] = useState<GroupBy>('platform');
     const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
     const [expandedSubGroup, setExpandedSubGroup] = useState<string | null>(null);
+    const [deductRefunds, setDeductRefunds] = useState<boolean>(() => {
+        return localStorage.getItem('sello_search_deduct_refunds') === 'true';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('sello_search_deduct_refunds', deductRefunds.toString());
+    }, [deductRefunds]);
 
     const isDeepDive = data.params.primaryMetric === 'DEEP_DIVE' && data.results.length > 0;
 
@@ -106,7 +114,6 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
 
     // Hierarchical Data Calculation moved here
     const hierarchicalData = useMemo(() => {
-        // ... (Same complex logic from original SearchResultsPage)
         if (!data.results || isDeepDive) return [];
         
         const groups: Record<string, any> = {};
@@ -169,6 +176,9 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
             } else {
                 topGroup.totalRefundAmount += Math.abs(item.refundAmount || 0);
                 topGroup.totalRefundQty += Math.abs(item.velocity || 0);
+                if (deductRefunds) {
+                    topGroup.totalProfit += (item.profit || 0); // Refunds have negative profit
+                }
             }
 
             if ((isInventoryContext || isAgedContext) && item.type === 'INVENTORY' && groupBy === 'sku') {
@@ -273,6 +283,9 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                 } else {
                     subGroup.totalRefundAmount += Math.abs(item.refundAmount || 0);
                     subGroup.totalRefundQty += Math.abs(item.velocity || 0);
+                    if (deductRefunds) {
+                        subGroup.totalProfit += (item.profit || 0);
+                    }
                 }
                 subGroup.items.push(item);
 
@@ -402,7 +415,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
             return b.totalRevenue - a.totalRevenue;
         });
 
-    }, [data.results, groupBy, isVolumeContext, isAdContext, isMarginContext, isInventoryContext, isReturnContext, isOrganicContext, isAgedContext, isTrendContext, isPostcodeContext, data.params, isDeepDive, liveProductMap]);
+    }, [data.results, groupBy, deductRefunds, isVolumeContext, isAdContext, isMarginContext, isInventoryContext, isReturnContext, isOrganicContext, isAgedContext, isTrendContext, isPostcodeContext, data.params, isDeepDive, liveProductMap]);
 
     const volumeContextStats = useMemo(() => {
         const quantities = hierarchicalData.map((g: any) => g.totalQty).sort((a: number, b: number) => a - b);
@@ -461,6 +474,21 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 space-y-4">
+            <div className="flex justify-end pr-2">
+                <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                    <input 
+                        type="checkbox" 
+                        checked={deductRefunds} 
+                        onChange={e => setDeductRefunds(e.target.checked)} 
+                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                    />
+                    <div className="flex items-center gap-1.5">
+                        <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
+                        <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds</span>
+                    </div>
+                </label>
+            </div>
+
             <SearchHeader 
                 data={data}
                 themeColor={themeColor}

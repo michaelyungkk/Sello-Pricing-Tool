@@ -1,10 +1,11 @@
 
 import React, { useMemo } from 'react';
 import {
-  BarChart,
-  Bar,
+  ScatterChart,
+  Scatter,
   XAxis,
   YAxis,
+  ZAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
@@ -34,16 +35,23 @@ const COLORS = [
   '#64748b'  // Slate (Fallback)
 ];
 
+interface RefundPoint {
+    date: string;
+    count: number;
+    reasonCode: string;
+    reasonDesc: string;
+}
+
 const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
   data,
   getDate,
   getReason,
   title = "Refund Reason Timeline"
 }) => {
-  // 1. Process Data
-  const { chartData, reasonMetaMap, reasonKeys } = useMemo(() => {
-    const groupedData = new Map<string, Record<string, number>>();
-    const metaMap = new Map<string, string>(); // short -> full
+  // 1. Process Data into Scatter Points
+  const { chartPoints, reasonMetaMap, reasonKeys } = useMemo(() => {
+    const pointMap = new Map<string, number>(); // Key: "date|reasonCode"
+    const metaMap = new Map<string, string>(); // short -> description
     const keysSet = new Set<string>();
 
     data.forEach((row) => {
@@ -51,39 +59,35 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
       if (!dateStr) return;
 
       const rawReason = getReason(row);
-      const { short, full } = parseReturnsReason(rawReason);
+      const { short, description } = parseReturnsReason(rawReason);
       
-      // Store metadata
       if (!metaMap.has(short)) {
-        metaMap.set(short, full);
+        metaMap.set(short, description);
         keysSet.add(short);
       }
 
-      // Aggregate
-      if (!groupedData.has(dateStr)) {
-        groupedData.set(dateStr, {});
-      }
-      const dayEntry = groupedData.get(dateStr)!;
-      dayEntry[short] = (dayEntry[short] || 0) + 1; // Count records
+      const key = `${dateStr}|${short}`;
+      pointMap.set(key, (pointMap.get(key) || 0) + 1);
     });
 
-    // Convert to Array and Sort by Date
-    const result = Array.from(groupedData.entries())
-      .map(([date, counts]) => ({
-        date,
-        ...counts,
-        _total: Object.values(counts).reduce((a, b) => a + b, 0)
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const points: RefundPoint[] = Array.from(pointMap.entries()).map(([key, count]) => {
+        const [date, reasonCode] = key.split('|');
+        return {
+            date,
+            count,
+            reasonCode,
+            reasonDesc: metaMap.get(reasonCode) || reasonCode
+        };
+    }).sort((a, b) => a.date.localeCompare(b.date));
 
     return {
-      chartData: result,
+      chartPoints: points,
       reasonMetaMap: metaMap,
       reasonKeys: Array.from(keysSet).sort()
     };
   }, [data, getDate, getReason]);
 
-  if (!chartData || chartData.length === 0) {
+  if (!chartPoints || chartPoints.length === 0) {
     return (
       <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center h-[380px] text-gray-400">
         <Activity className="w-8 h-8 mb-2 opacity-50" />
@@ -92,70 +96,33 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
     );
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
-      // Sort payload by value descending
-      const sortedPayload = [...payload].sort((a: any, b: any) => b.value - a.value);
-
+      const data = payload[0].payload;
       return (
-        <div className="bg-white p-3 border border-gray-200 shadow-xl rounded-lg text-xs z-50 max-w-[280px]">
-          <div className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">
-            {new Date(label).toLocaleDateString('en-GB', {
+        <div className="bg-white p-3 border border-gray-200 shadow-xl rounded-lg text-xs z-50">
+          <div className="font-bold text-gray-900 mb-1 border-b border-gray-100 pb-1">
+            {new Date(data.date).toLocaleDateString('en-GB', {
               weekday: 'short',
               day: 'numeric',
-              month: 'short'
+              month: 'short',
+              year: 'numeric'
             })}
           </div>
-          <div className="space-y-1.5">
-            {sortedPayload.map((entry: any, idx: number) => {
-              const shortCode = entry.dataKey;
-              const fullReason = reasonMetaMap.get(shortCode) || shortCode;
-              return (
-                <div key={idx} className="flex flex-col">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: entry.color }}
-                      />
-                      <span className="font-bold text-gray-700">{shortCode}</span>
-                    </div>
-                    <span className="font-mono font-bold text-gray-900">
-                      {Math.round(Number(entry.value))}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-gray-500 pl-3.5 leading-tight">
-                    {fullReason}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="space-y-1 mt-1">
+             <div className="flex items-center gap-2">
+                <span className="font-bold text-indigo-600">{data.reasonCode}</span>
+                <span className="text-gray-500">{data.reasonDesc}</span>
+             </div>
+             <div className="flex justify-between font-bold text-gray-900">
+                <span>Refund Count:</span>
+                <span>{data.count}</span>
+             </div>
           </div>
         </div>
       );
     }
     return null;
-  };
-
-  const renderCustomLabel = (props: any, key: string) => {
-    const { x, y, width, height, value } = props;
-    // Only show label if count >= 3 AND bar is tall enough to fit text
-    if (value < 3 || height < 14) return null;
-
-    return (
-      <text
-        x={x + width / 2}
-        y={y + height / 2}
-        fill="#fff"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fontSize={10} // Increased from 9
-        fontWeight="700"
-        style={{ pointerEvents: 'none', textShadow: '0px 1px 2px rgba(0,0,0,0.6)' }}
-      >
-        {key}
-      </text>
-    );
   };
 
   return (
@@ -169,48 +136,56 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
 
       <div className="h-[320px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={chartData}
-            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+          <ScatterChart
+            margin={{ top: 20, right: 20, bottom: 0, left: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
             <XAxis
               dataKey="date"
+              type="category"
+              name="Date"
               tickFormatter={(val) =>
                 new Date(val).toLocaleDateString('en-GB', {
                   day: 'numeric',
                   month: 'short'
                 })
               }
-              // Increased font size and contrast
               tick={{ fontSize: 11, fill: '#4b5563' }}
               axisLine={false}
               tickLine={false}
               minTickGap={30}
             />
             <YAxis
-              // Increased font size and contrast
+              dataKey="count"
+              name="Refunds"
               tick={{ fontSize: 11, fill: '#4b5563' }}
               axisLine={false}
               tickLine={false}
               allowDecimals={false}
+              label={{
+                value: 'Refund count',
+                angle: -90,
+                position: 'insideLeft',
+                style: { fontSize: 10, fill: '#9ca3af', fontWeight: 'bold' }
+              }}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f9fafb' }} />
+            <ZAxis range={[60, 400]} />
+            <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
+            
             {reasonKeys.map((key, index) => (
-              <Bar
+              <Scatter
                 key={key}
-                dataKey={key}
-                stackId="a"
+                name={key}
+                data={chartPoints.filter(p => p.reasonCode === key)}
                 fill={COLORS[index % COLORS.length]}
-                maxBarSize={40}
-                label={(props) => renderCustomLabel(props, key)}
+                shape="circle"
               />
             ))}
-          </BarChart>
+          </ScatterChart>
         </ResponsiveContainer>
       </div>
 
-      {/* External Legend */}
+      {/* Reason Code Key */}
       <div className="mt-4 pt-4 border-t border-gray-100">
         <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
           <Info className="w-3.5 h-3.5" /> Reason Code Key

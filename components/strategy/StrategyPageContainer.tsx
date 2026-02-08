@@ -1,13 +1,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord } from '../../types';
+import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../../constants';
 import { Activity, History, Coins, Database, Ship, Settings, Download, X, ArrowRight, Calendar, RotateCcw, TrendingUp, TrendingDown, Save, Edit2, CheckCircle, Info, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../../services/dateUtils';
 import { formatMoney, formatNumber, formatPct } from '../../utils/format';
 import { SortState, sortRows } from '../../utils/tableSort';
+import { resolveEffectiveVelocity } from '../../services/metrics';
 
 // Panels
 import { ConfigParametersPanel } from './panels/ConfigParametersPanel';
@@ -27,6 +28,9 @@ interface StrategyPageContainerProps {
     themeColor: string;
     headerStyle: React.CSSProperties;
     priceHistoryMap: Map<string, PriceLog[]>;
+    refundHistory?: RefundLog[];
+    deductRefunds: boolean;
+    setDeductRefunds: (v: boolean) => void;
     promotions: PromotionEvent[];
     priceChangeHistory: PriceChangeRecord[];
     costChangeHistory: CostChangeRecord[];
@@ -42,7 +46,7 @@ interface StrategyPageContainerProps {
 
 export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({ 
     products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, 
-    priceHistoryMap, promotions, priceChangeHistory = [], costChangeHistory = [], 
+    priceHistoryMap, refundHistory = [], deductRefunds, setDeductRefunds, promotions, priceChangeHistory = [], costChangeHistory = [], 
     inventoryChangeHistory = [], onUpdatePriceChangeRecord, onUpdateCostChangeRecord, 
     onUpdateInventoryChangeRecord, onManualPriceChange, onManualCostChange, 
     velocityLookback, thresholds 
@@ -197,6 +201,21 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             }
         });
 
+        // Deduct Refunds if requested
+        if (deductRefunds) {
+            const skuRefunds = refundHistory.filter(r => {
+                if (r.sku !== product.sku) return false;
+                if (r.platform && pricingRules[r.platform]?.isExcluded) return false;
+                const dKey = asDateKey(r.date);
+                return dKey && isDateKeyBetween(dKey, startKey, endKey);
+            });
+            skuRefunds.forEach(r => {
+                const refundAmount = Number(r.amount) || 0;
+                const freightAmount = Number(r.freightAmount || 0);
+                totalProfit -= (refundAmount + freightAmount);
+            });
+        }
+
         const rawAvgPrice = totalQty > 0 ? weightedPriceSum / totalQty : safeNum(product.currentPrice);
         const netPmPercent = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
         const dailyVelocity = totalQty / effectiveDays;
@@ -340,10 +359,11 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             .map(p => {
                 const local = calculateMetrics(p, selectedWindow, true);
                 const global = calculateMetrics(p, velocityLookback, false);
-                const strategyVelocity = (p.dailyAverageSales && p.dailyAverageSales > 0) 
-                    ? p.dailyAverageSales 
-                    : global.dailyVelocity;
-                const rec = getRecommendation(p, strategyVelocity, global.netPmPercent, thresholds);
+                
+                // CONSISTENCY FIX: Prioritize ERP velocity, otherwise use fallback weighted formula
+                const effectiveDailySales = resolveEffectiveVelocity(p, priceHistoryMap.get(p.sku));
+                
+                const rec = getRecommendation(p, effectiveDailySales, global.netPmPercent, thresholds);
                 
                 return { 
                     ...p, 
@@ -352,7 +372,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                     averagePrice: local.averagePrice,
                     netPmPercent: local.netPmPercent,
                     totalProfit: local.totalProfit,
-                    dailyVelocity: strategyVelocity,
+                    dailyVelocity: effectiveDailySales,
                     ...rec 
                 };
             })
@@ -363,7 +383,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                 if (isOOS && !showOOS) return false;
                 return true;
             });
-    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, includeIncoming, pricingRules, showOOS, thresholds, promotions]);
+    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, refundHistory, deductRefunds, includeIncoming, pricingRules, showOOS, thresholds, promotions, inventoryChangeHistory]);
 
     const filteredAndSortedData = useMemo(() => {
         let data = tableData.filter(row => filterTab === 'All' || row.action === filterTab);
@@ -629,20 +649,28 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
-             <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Strategy Engine</h2>
-                    <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
-                        Automated pricing recommendations and change tracking.
-                    </p>
+            <div className="flex flex-wrap gap-4 items-center justify-between">
+                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
+                    <button onClick={() => setActiveTab('ENGINE')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ENGINE' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Strategy Simulator</button>
+                    <button onClick={() => setActiveTab('HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><History className="w-4 h-4" />Price Change Log</button>
+                    <button onClick={() => setActiveTab('COST_HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Cost Change Log</button>
+                    <button onClick={() => setActiveTab('INVENTORY_HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'INVENTORY_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Database className="w-4 h-4" />Inventory Change Log</button>
                 </div>
-            </div>
 
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
-                <button onClick={() => setActiveTab('ENGINE')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ENGINE' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Strategy Simulator</button>
-                <button onClick={() => setActiveTab('HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><History className="w-4 h-4" />Price Change Log</button>
-                <button onClick={() => setActiveTab('COST_HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Cost Change Log</button>
-                <button onClick={() => setActiveTab('INVENTORY_HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'INVENTORY_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Database className="w-4 h-4" />Inventory Change Log</button>
+                <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                        <input 
+                            type="checkbox" 
+                            checked={deductRefunds} 
+                            onChange={e => setDeductRefunds(e.target.checked)} 
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                        />
+                        <div className="flex items-center gap-1.5">
+                            <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
+                            <span className={`text-xs font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds/Resends</span>
+                        </div>
+                    </label>
+                </div>
             </div>
 
             {activeTab === 'ENGINE' && (
