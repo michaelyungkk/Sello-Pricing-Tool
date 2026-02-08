@@ -1,17 +1,19 @@
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, RefundLog, SearchChip } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
-import { LayoutDashboard, List, Ship, RotateCcw, DollarSign } from 'lucide-react';
+import { List, Ship, RotateCcw, DollarSign, Activity, Calendar, ChevronDown } from 'lucide-react';
 
-import { DecisionEngineTab } from './tabs/DecisionEngineTab';
 import { MasterCatalogueTab } from './tabs/MasterCatalogueTab';
 import { ShipmentsTab } from './tabs/ShipmentsTab';
 import { ReturnsAndRefundsTab } from './tabs/ReturnsAndRefundsTab';
 import { PriceMatrixTab } from './tabs/PriceMatrixTab';
+import { ProductPerformanceTrendTab } from './tabs/ProductPerformanceTrendTab';
 
 import { AliasDrawer } from './parts/AliasDrawer';
 import { TagsDrawer } from './parts/TagsDrawer';
+import { buildWindow } from '../../services/dateWindow';
+import { getTodayKeyMelbourne } from '../../services/dateUtils';
+import { createPortal } from 'react-dom';
 
 interface ProductManagementPageContainerProps {
     products: Product[];
@@ -30,9 +32,11 @@ interface ProductManagementPageContainerProps {
     themeColor: string;
     headerStyle: React.CSSProperties;
     thresholds?: ThresholdConfig;
+    deductRefunds: boolean;
+    setDeductRefunds: (v: boolean) => void;
 }
 
-type Tab = 'dashboard' | 'catalog' | 'pricing' | 'shipments' | 'returns';
+type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns';
 
 export const ProductManagementPageContainer: React.FC<ProductManagementPageContainerProps> = ({
     products,
@@ -50,35 +54,61 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
     onSearch,
     themeColor,
     headerStyle,
-    thresholds
+    thresholds,
+    deductRefunds,
+    setDeductRefunds
 }) => {
-    const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+    const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
     const [productForTags, setProductForTags] = useState<Product | null>(null);
     const [shipmentSearchTags, setShipmentSearchTags] = useState<string[]>([]);
+
+    // Time Window State (Mirroring Platform Management)
+    const [timeWindow, setTimeWindow] = useState<'7D' | '14D' | '30D' | '60D' | 'ALL' | 'CUSTOM'>('30D');
+    const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
+    const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
+    const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
 
     const handleViewShipments = (sku: string) => {
         setShipmentSearchTags([sku]);
         setActiveTab('shipments');
     };
 
+    const dateWindow = useMemo(() => {
+        let mode: 'days' | 'custom' | 'all' = 'days';
+        let days = 30;
+        if (timeWindow === 'ALL') mode = 'all';
+        else if (timeWindow === 'CUSTOM') mode = 'custom';
+        else days = parseInt(timeWindow.replace('D', ''));
+
+        return buildWindow({
+            mode,
+            days,
+            startKey: customStart,
+            endKey: customEnd,
+            excludeToday: true 
+        });
+    }, [timeWindow, customStart, customEnd]);
+
+    const periodLabel = useMemo(() => {
+        const start = new Date(dateWindow.startKey);
+        const end = new Date(dateWindow.endKey);
+        const format = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined, timeZone: 'UTC' });
+        const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
+        return `${format(start, !sameYear)} – ${format(end, true)}`;
+    }, [dateWindow]);
+
     return (
         <div className="max-w-full mx-auto space-y-6 pb-10 h-full flex flex-col">
-            <div>
-                <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Product Management</h2>
-                <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
-                    Manage Master SKUs, aliases, and pricing consistency.
-                </p>
-            </div>
-
-            <div className="flex justify-between items-end gap-4">
+            {/* Top Bar matching Marketplace View */}
+            <div className="flex flex-wrap gap-4 items-center justify-between">
                 <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
                     <button
-                        onClick={() => setActiveTab('dashboard')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                        onClick={() => setActiveTab('performance')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'performance' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        <LayoutDashboard className="w-4 h-4" />
-                        Decision Engine
+                        <Activity className="w-4 h-4" />
+                        Performance Trend
                     </button>
 
                     <button
@@ -113,21 +143,51 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         Price Matrix
                     </button>
                 </div>
+
+                <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                        <input 
+                            type="checkbox" 
+                            checked={deductRefunds} 
+                            onChange={e => setDeductRefunds(e.target.checked)} 
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                        />
+                        <div className="flex items-center gap-1.5">
+                            <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
+                            <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds/Resends</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            {/* Global Context Control (Time Window) - Reused from Platform Management */}
+            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 animate-in fade-in">
+                <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Time Window</span>
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                        {(['7D', '14D', '30D', '60D'] as const).map(w => (
+                            <button key={w} onClick={() => setTimeWindow(w)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === w ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>{w}</button>
+                        ))}
+                        <button onClick={() => setTimeWindow('ALL')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === 'ALL' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>All Time</button>
+                        <button onClick={() => setIsCustomDateModalOpen(true)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeWindow === 'CUSTOM' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}><Calendar className="w-3 h-3" /> Custom</button>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
+                    <span className="text-xs text-gray-400 font-medium">Analyzing Period:</span>
+                    <span className="text-sm font-bold text-indigo-600">{periodLabel}</span>
+                </div>
             </div>
 
             <div className="flex-1 min-h-0 relative">
-                {activeTab === 'dashboard' && (
-                    <DecisionEngineTab
+                {activeTab === 'performance' && (
+                    <ProductPerformanceTrendTab 
                         products={products}
                         priceHistoryMap={priceHistoryMap}
                         refundHistory={refundHistory}
-                        pricingRules={pricingRules}
-                        priceChangeHistory={priceChangeHistory}
+                        dateWindow={{ startKey: dateWindow.startKey, endKey: dateWindow.endKey }}
+                        deductRefunds={deductRefunds}
                         themeColor={themeColor}
-                        onAnalyze={onAnalyze}
                         onDeepDive={onDeepDive}
-                        onSearch={onSearch}
-                        thresholds={thresholds}
                     />
                 )}
 
@@ -152,6 +212,9 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         themeColor={themeColor}
                         pricingRules={pricingRules}
                         onDeepDive={onDeepDive}
+                        priceHistoryMap={priceHistoryMap}
+                        startDate={dateWindow.startKey}
+                        endDate={dateWindow.endKey}
                     />
                 )}
 
@@ -200,6 +263,29 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                     }}
                     themeColor={themeColor}
                 />
+            )}
+
+            {/* Custom Date Modal */}
+            {isCustomDateModalOpen && createPortal(
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsCustomDateModalOpen(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-gray-200 p-6" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">Select Custom Range</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Start Date</label>
+                                <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">End Date</label>
+                                <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                            </div>
+                        </div>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button onClick={() => setIsCustomDateModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
+                            <button onClick={() => { setTimeWindow('CUSTOM'); setIsCustomDateModalOpen(false); }} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700">Apply Range</button>
+                        </div>
+                    </div>
+                </div>, document.body
             )}
         </div>
     );

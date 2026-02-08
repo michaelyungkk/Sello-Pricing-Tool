@@ -71,8 +71,8 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
 
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
                     <div className="space-y-0.5">
-                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Orders</span>
-                        <div className="text-sm font-bold text-gray-700 leading-none">{formatNumber(summary.orders)}</div>
+                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Ad Spend</span>
+                        <div className="text-sm font-bold text-orange-600 leading-none">{formatMoney(summary.adSpend, 0)}</div>
                     </div>
                     <div className="space-y-0.5 text-right">
                         <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Units</span>

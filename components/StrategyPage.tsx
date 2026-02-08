@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { StrategyPageContainer } from './strategy/StrategyPageContainer';
-import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord } from '../types';
+import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog } from '../types';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 
 interface StrategyPageProps {
@@ -12,6 +12,9 @@ interface StrategyPageProps {
     themeColor: string;
     headerStyle: React.CSSProperties;
     priceHistoryMap: Map<string, PriceLog[]>;
+    refundHistory?: RefundLog[];
+    deductRefunds: boolean;
+    setDeductRefunds: (v: boolean) => void;
     promotions: PromotionEvent[];
     priceChangeHistory: PriceChangeRecord[];
     costChangeHistory: CostChangeRecord[];

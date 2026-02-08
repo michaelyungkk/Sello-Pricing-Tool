@@ -3,6 +3,7 @@ import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, FileText, Database, 
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
 import { useTranslation } from 'react-i18next';
+import { getCanonicalSku } from '../services/skuNormalization';
 
 export interface BatchUpdateItem {
   sku: string;
@@ -131,9 +132,9 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
         // Status Column detection (Inventory Status/库存状态)
         const statusIdx = findCol(['inventorystatus', 'status', '库存状态']);
 
-        // New columns
+        // New columns - Improved Matching for Daily Average Sales
         const gradeLevelIdx = findCol(['gradelevel', '等级']);
-        const dailyAverageSalesIdx = findCol(['dailyaveragesales', '日均销量']);
+        const dailyAverageSalesIdx = findCol(['dailyaveragesales', '日均销量', 'avgdailysales', 'averagesales', 'erpvelocity']);
 
         // Dimensions
         const lenIdx = findCol(['length', 'depth']);
@@ -155,8 +156,10 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
             const row = rows[i];
             if (!row || row.length <= skuIdx) continue;
             
-            const sku = String(row[skuIdx]).trim();
-            if (!sku) continue;
+            const rawSku = String(row[skuIdx]).trim();
+            if (!rawSku) continue;
+
+            const canonicalSku = getCanonicalSku(rawSku);
 
             const parseNum = (idx: number) => {
                 if (idx === -1) return undefined;
@@ -182,7 +185,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
             };
 
             const item: BatchUpdateItem = {
-                sku,
+                sku: canonicalSku,
                 name: nameIdx !== -1 ? String(row[nameIdx]).trim() : undefined,
                 brand: brandIdx !== -1 ? String(row[brandIdx]).trim() : undefined,
                 category: catIdx !== -1 ? String(row[catIdx]).trim() : undefined,
@@ -212,15 +215,22 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
             }
 
             // Deduplication logic: Merge properties, overwriting with defined values from later rows
-            if (resultsMap.has(sku)) {
-                const existing = resultsMap.get(sku)!;
+            if (resultsMap.has(canonicalSku)) {
+                const existing = resultsMap.get(canonicalSku)!;
                 Object.entries(item).forEach(([k, v]) => {
                     if (v !== undefined) {
-                        (existing as any)[k] = v;
+                        if (k === 'stock') {
+                            // Accumulate stock for canonical SKU if variants provided
+                            existing[k] = (Number(existing[k]) || 0) + Number(v);
+                        } else if (k === 'agedStock') {
+                            existing[k] = (Number(existing[k]) || 0) + Number(v);
+                        } else {
+                            (existing as any)[k] = v;
+                        }
                     }
                 });
             } else {
-                resultsMap.set(sku, item);
+                resultsMap.set(canonicalSku, item);
             }
         }
 

@@ -101,7 +101,7 @@ export const FeeBreakdownTable: React.FC<FeeBreakdownTableProps> = ({
                                     </td>
                                     <td className="px-3 py-2 text-right">
                                         {product.caPrice ? (
-                                            <span className="font-bold text-purple-600 font-mono">£{(includeVat ? product.caPrice * VAT_RATE : product.caPrice).toFixed(2)}</span>
+                                            <span className="font-bold text-purple-600 font-mono">£{(includeVat ? product.caPrice : product.caPrice / VAT_RATE).toFixed(2)}</span>
                                         ) : '-'}
                                     </td>
                                     <td className="px-3 py-2 text-right">

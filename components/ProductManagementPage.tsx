@@ -21,6 +21,8 @@ interface ProductManagementPageProps {
     themeColor: string;
     headerStyle: React.CSSProperties;
     thresholds?: ThresholdConfig;
+    deductRefunds: boolean;
+    setDeductRefunds: (v: boolean) => void;
 }
 
 const ProductManagementPage: React.FC<ProductManagementPageProps> = (props) => {

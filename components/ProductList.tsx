@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules } from '../types';
@@ -204,8 +205,8 @@ const ProductRow = React.memo(({
                         {runwayBin.label}
                     </span>
                     <div className="flex items-center gap-1">
-                        {product._trendData?.velocityChange && product._trendData.velocityChange < -0.2 && <TrendingDown className="w-3 h-3 text-red-400" />}
-                        {product._trendData?.velocityChange && product._trendData.velocityChange > 0.2 && <TrendingUp className="w-3 h-3 text-green-400" />}
+                        {!!product._trendData?.velocityChange && product._trendData.velocityChange < -0.2 && <TrendingDown className="w-3 h-3 text-red-400" />}
+                        {!!product._trendData?.velocityChange && product._trendData.velocityChange > 0.2 && <TrendingUp className="w-3 h-3 text-green-400" />}
                         <span className="text-xs font-semibold text-gray-700">
                             {(product.averageDailySales || 0).toFixed(1)} / day
                         </span>
@@ -471,7 +472,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
             return true;
         });
 
-        const aggregatedData = filtered.map(p => {
+        let aggregatedData = filtered.map(p => {
             const currentPlatformFilters = platformFilters || [];
             const isPlatformFiltered = currentPlatformFilters.length > 0;
             const matchingChannels = (p.channels || []).filter(c => {
@@ -539,6 +540,21 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
             };
         }).filter(p => p._isVisible);
 
+        // Apply Velocity Filter
+        const minVel = parseFloat(velocityFilter.min);
+        const maxVel = parseFloat(velocityFilter.max);
+        if (!isNaN(minVel)) {
+            aggregatedData = aggregatedData.filter(p => p.averageDailySales >= minVel);
+        }
+        if (!isNaN(maxVel)) {
+            aggregatedData = aggregatedData.filter(p => p.averageDailySales <= maxVel);
+        }
+
+        // Apply Status Filter (Context Aware)
+        if (statusFilter !== 'All') {
+            aggregatedData = aggregatedData.filter(p => p.status === statusFilter);
+        }
+
         const getValue = (row: any, key: string) => {
             if (key === 'status') {
                 const priority = { 'Critical': 4, 'Overstock': 3, 'Warning': 2, 'Healthy': 1 };
@@ -549,11 +565,11 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
 
         return sortRows(aggregatedData, sortConfig, getValue);
 
-    }, [products, debouncedSearch, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, showInactive, showOOS]);
+    }, [products, debouncedSearch, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, showInactive, showOOS, velocityFilter]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, showInactive, showOOS]);
+    }, [searchQuery, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, showInactive, showOOS, velocityFilter]);
 
     useEffect(() => {
         setSubCatFilter('All');
@@ -970,7 +986,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
                                         <button
                                             onClick={() => handlePageChange(currentPage + 1)}
                                             disabled={currentPage === totalPages}
-                                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-700"
                                         >
                                             <ChevronRight className="h-5 w-5" />
                                         </button>

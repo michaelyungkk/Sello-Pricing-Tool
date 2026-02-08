@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
@@ -239,6 +238,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         <th 
             className={`px-3 py-2 cursor-pointer hover:bg-gray-100 transition-colors text-${align}`}
             onClick={() => setTableSort(prev => ({ key: sortKey, direction: prev.key === sortKey && prev.direction === 'desc' ? 'asc' : 'desc' }))}
+            style={isActive ? { backgroundColor: `${themeColor}12` } : {}}
         >
             <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
                 <span>{label}</span>
@@ -253,7 +253,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4">
+    <div className="flex flex-col h-auto animate-in fade-in slide-in-from-right-4 pb-10">
         {/* Controls Header */}
         <div className="flex flex-row justify-between items-center mb-4 gap-4 p-4 bg-white/50 rounded-xl border border-gray-200">
             <div className="flex items-center gap-4">
@@ -739,7 +739,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             <div className="p-3 bg-gray-50 border-b border-gray-100">
                 <h4 className="text-xs font-bold text-gray-600 uppercase">Regional Detail Table</h4>
             </div>
-            <div className="overflow-auto">
+            <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs whitespace-nowrap">
                     <thead className="bg-gray-100 text-gray-500 font-semibold sticky top-0">
                         <tr>

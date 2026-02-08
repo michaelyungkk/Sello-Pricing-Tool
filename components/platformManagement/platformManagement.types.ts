@@ -1,10 +1,13 @@
 
 import React from 'react';
-import { Product, PricingRules, PriceLog } from '../../types';
+import { Product, PricingRules, PriceLog, RefundLog } from '../../types';
 
 export interface PlatformManagementPageProps {
   products: Product[];
   priceHistoryMap: Map<string, PriceLog[]>;
+  refundHistory: RefundLog[];
+  deductRefunds: boolean;
+  setDeductRefunds: (v: boolean) => void;
   pricingRules: PricingRules;
   themeColor: string;
   headerStyle: React.CSSProperties;

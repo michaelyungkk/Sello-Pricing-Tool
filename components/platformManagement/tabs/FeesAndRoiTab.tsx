@@ -16,101 +16,6 @@ interface FeesAndRoiTabProps {
     setSort: (sort: SortState<PlatformSortKey>) => void;
 }
 
-interface PlatformRoiCardProps {
-    roi: PlatformFeesRoi;
-    rule?: PlatformConfig;
-    themeColor: string;
-}
-
-const PlatformRoiCard: React.FC<PlatformRoiCardProps> = ({ roi, rule, themeColor }) => {
-    const hasAdData = roi.dataQuality.hasAdData;
-    const isEstimated = roi.dataQuality.profitIsEstimated;
-
-    return (
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col hover:border-indigo-300 transition-all group">
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2.5">
-                    <div 
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white shadow-sm"
-                        style={{ backgroundColor: rule?.color || themeColor }}
-                    >
-                        {roi.platform[0]}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                        <h4 className="font-bold text-gray-900 text-sm truncate leading-tight" title={roi.platform}>{roi.platform}</h4>
-                        <span className="text-[9px] text-gray-400 uppercase font-medium tracking-tight truncate leading-tight">{rule?.manager || 'Unassigned'}</span>
-                    </div>
-                </div>
-                {(!hasAdData || isEstimated) && (
-                    <div className="flex items-center gap-1">
-                        <span className="text-[8px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border border-slate-200">
-                           <Database className="w-2.5 h-2.5" />
-                           {!hasAdData ? "No ads data" : "Data gap"}
-                        </span>
-                    </div>
-                )}
-            </div>
-
-            <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-0.5">
-                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Revenue</span>
-                        <div className="text-sm font-bold text-gray-900">{formatMoney(roi.revenue, 0)}</div>
-                    </div>
-                    <div className="space-y-0.5 text-right">
-                        <div className="flex items-center justify-end gap-1" title="Profit excluding ad spend.">
-                          <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Profit (Gross)</span>
-                          <HelpCircle className="w-2.5 h-2.5 opacity-30" />
-                        </div>
-                        <div className={`text-sm font-bold ${roi.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {formatMoney(roi.profit, 0)}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
-                    <div className="space-y-0.5">
-                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Margin %</span>
-                        <div className={`text-sm font-bold ${roi.marginPct && roi.marginPct >= 10 ? 'text-green-600' : 'text-amber-600'}`}>
-                            {formatPct(roi.marginPct)}
-                        </div>
-                    </div>
-                    <div className="space-y-0.5 text-right">
-                        <div className="flex items-center justify-end gap-1" title="Total advertising costs (Aggregated).">
-                          <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Ad Spend</span>
-                          <HelpCircle className="w-2.5 h-2.5 opacity-30" />
-                        </div>
-                        <div className="text-sm font-bold text-orange-600">
-                            {hasAdData ? formatMoney(roi.adSpend, 0) : '—'}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
-                    <div className="space-y-0.5">
-                        <div className="flex items-center gap-1" title="Ad Spend / Revenue.">
-                          <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">TACoS %</span>
-                          <HelpCircle className="w-2.5 h-2.5 opacity-30" />
-                        </div>
-                        <div className="text-sm font-bold text-gray-700">
-                            {hasAdData ? formatPct(roi.tacosPct) : '—'}
-                        </div>
-                    </div>
-                    <div className="space-y-0.5 text-right bg-indigo-50/50 -m-1 p-1 rounded">
-                        <div className="flex items-center justify-end gap-1" title="Final profit after all deductions including ads.">
-                          <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tight">Net Profit</span>
-                          <HelpCircle className="w-2.5 h-2.5 opacity-30 text-indigo-300" />
-                        </div>
-                        <div className={`text-sm font-black ${roi.netAfterAds && roi.netAfterAds >= 0 ? 'text-indigo-700' : 'text-red-600'}`}>
-                            {roi.netAfterAds !== undefined ? formatMoney(roi.netAfterAds, 0) : '—'}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRules, themeColor, sort, setSort }) => {
     const totalAdSpend = roiData.reduce((sum: number, d: any) => sum + d.adSpend, 0);
     const totalRevenueForAds = roiData.reduce((sum: number, d: any) => (d.dataQuality.hasAdData && d.revenue > 0) ? sum + d.revenue : sum, 0);
@@ -121,8 +26,20 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
 
     return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">{roiData.map((roi: any) => (<PlatformRoiCard key={roi.platform} roi={roi} rule={pricingRules[roi.platform]} themeColor={themeColor} />))}</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4"><div className="p-3 bg-orange-50 text-orange-600 rounded-lg"><Megaphone className="w-6 h-6" /></div><div><span className="text-xs font-medium text-gray-400 uppercase">Total Ad Spend</span><div className="text-2xl font-black text-gray-900">{formatMoney(totalAdSpend, 0)}</div></div></div><div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4"><div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg"><PieChart className="w-6 h-6" /></div><div><span className="text-xs font-medium text-gray-400 uppercase">Average TACoS</span><div className={`text-2xl font-black ${avgTacos > 15 ? 'text-red-600' : 'text-gray-900'}`}>{formatPct(avgTacos)}</div></div></div><div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4"><div className="p-3 bg-green-50 text-green-600 rounded-lg"><Zap className="w-6 h-6" /></div><div><span className="text-xs font-medium text-gray-400 uppercase">Global Ad ROI</span><div className={`text-2xl font-black ${avgRoi < 0 ? 'text-red-600' : 'text-green-700'}`}>{avgRoi.toFixed(2)}x</div></div></div></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-orange-50 text-orange-600 rounded-lg"><Megaphone className="w-6 h-6" /></div>
+                <div><span className="text-xs font-medium text-gray-400 uppercase">Total Ad Spend</span><div className="text-2xl font-black text-gray-900">{formatMoney(totalAdSpend, 0)}</div></div>
+            </div>
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg"><PieChart className="w-6 h-6" /></div>
+                <div><span className="text-xs font-medium text-gray-400 uppercase">Average TACoS</span><div className={`text-2xl font-black ${avgTacos > 15 ? 'text-red-600' : 'text-gray-900'}`}>{formatPct(avgTacos)}</div></div>
+            </div>
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-green-50 text-green-600 rounded-lg"><Zap className="w-6 h-6" /></div>
+                <div><span className="text-xs font-medium text-gray-400 uppercase">Global Ad ROI</span><div className={`text-2xl font-black ${avgRoi < 0 ? 'text-red-600' : 'text-green-700'}`}>{avgRoi.toFixed(2)}x</div></div>
+            </div>
+        </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm p-6">
@@ -181,11 +98,9 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                                 }}
                             />
 
-                            {/* Visual Guidelines */}
                             <ReferenceLine x={15} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Min Margin (15%)', position: 'insideTopRight', fill: '#10b981', fontSize: 10, angle: 90 }} />
                             <ReferenceLine y={15} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Max TACoS (15%)', position: 'insideTopRight', fill: '#ef4444', fontSize: 10 }} />
 
-                            {/* Quadrant Labels (Approximate areas for visual cues) */}
                             <ReferenceArea x1={15} y2={15} fill="green" fillOpacity={0.05} label={{ value: 'Efficient', position: 'center', fill: '#15803d', fontSize: 12, fontWeight: 'bold', opacity: 0.3 }} />
                             <ReferenceArea x2={15} y1={15} fill="red" fillOpacity={0.05} label={{ value: 'Bleeding', position: 'center', fill: '#b91c1c', fontSize: 12, fontWeight: 'bold', opacity: 0.3 }} />
                             <ReferenceArea x1={15} y1={15} fill="orange" fillOpacity={0.05} label={{ value: 'High TACoS', position: 'center', fill: '#c2410c', fontSize: 12, fontWeight: 'bold', opacity: 0.3 }} />

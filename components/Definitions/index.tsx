@@ -15,13 +15,6 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
 
     return (
         <div className="max-w-5xl mx-auto space-y-6 pb-10 h-full flex flex-col">
-            <div className="flex flex-col gap-2">
-                <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>System Definitions & Logic</h2>
-                <p className="transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
-                    Reference guide for calculation logic, status thresholds, and system behaviors.
-                </p>
-            </div>
-            
             {/* Tabs */}
             <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
                 <button

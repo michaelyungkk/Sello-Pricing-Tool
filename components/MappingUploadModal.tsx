@@ -3,6 +3,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { Product } from '../types';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, Link as LinkIcon, ArrowRight, Search, ChevronDown, ChevronRight, Edit2, GitMerge, Eraser } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { getCanonicalSku } from '../services/skuNormalization';
 
 interface MappingUploadModalProps {
     products: Product[];
@@ -161,7 +162,10 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
             if (!row || row.length <= skuIdx) continue;
 
             const rawSku = String(row[skuIdx]).trim();
-            const fileSku = rawSku.replace(/^"|"$/g, '');
+            
+            // --- SKU NORMALIZATION ---
+            const canonicalRawSku = getCanonicalSku(rawSku);
+            const fileSku = canonicalRawSku.replace(/^"|"$/g, '');
 
             if (!fileSku || processedSkus.has(fileSku)) continue;
             processedSkus.add(fileSku);

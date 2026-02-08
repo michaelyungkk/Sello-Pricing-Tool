@@ -170,7 +170,6 @@ const BoxPlotTooltip = ({ content, x, y, format }: any) => {
 
 
 const BoxPlot = ({ title, stats7, stats30, stats90, format, color = '#6366f1', adOnly7, layout = 'horizontal', showAdOnlyFooter = false, setTooltip, tooltip }: any) => {
-    
     const CustomRechartsTooltip = ({ active, payload, label, formatFn }: any) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
@@ -519,9 +518,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const refundAnalysis = useMemo(() => {
         if (!refunds || refunds.length === 0) return null;
         
-        // Use central aggregation service for consistent logic
+        // Use central aggregation service for consistent logic (which now includes freight scaling)
         const overview = buildRefundOverview(refunds);
         
+        // Separate totals for display
+        const totalFreight = refunds.reduce((sum, r) => sum + (Number(r.freightAmount || 0) * VAT_MULTIPLIER), 0);
+        const resendCount = refunds.filter(r => r.orderType === 'resend').length;
+        const refundCount = refunds.filter(r => r.orderType === 'refund' || !r.orderType).length;
+
         // Filter refunds based on selection (Task C)
         const filteredRefundsForKeywords = kwMode === 'Reason' && kwReason 
             ? refunds.filter(r => parseReturnsReason(r.platformReason || r.reason).short === kwReason)
@@ -582,7 +586,10 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         return {
             overview,
             topWords,
-            sentimentStats
+            sentimentStats,
+            totalFreight,
+            resendCount,
+            refundCount
         };
     }, [refunds, kwMode, kwReason]);
 
@@ -604,7 +611,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             price: r.amount > 0 ? (r.quantity > 0 ? r.amount/r.quantity : r.amount) : 0,
             platform: r.platform,
             margin: 0,
-            profit: -r.amount,
+            profit: -(r.amount * VAT_MULTIPLIER), // Ensure VAT scaled for profit calculation in grid
             adsSpend: 0,
             _type: 'REFUND_LOG',
             reason: r.reason
@@ -650,11 +657,12 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             totalProfit += calcProfit(t);
         });
         
+        // Subtract refunds (value stored Ex-VAT, must scale to Inc-VAT to match sales/profit context)
         if (refunds) {
-            refunds.forEach(r => totalProfit -= r.amount);
+            refunds.forEach(r => totalProfit -= (r.amount * VAT_MULTIPLIER));
         }
     
-        const totalRefundValue = refunds ? refunds.reduce((sum, r) => sum + r.amount, 0) : 0;
+        const totalRefundValue = refunds ? refunds.reduce((sum, r) => sum + (r.amount * VAT_MULTIPLIER), 0) : 0;
         const netSales = allTimeSales - totalRefundValue;
     
         return marginPct(totalProfit, netSales) || 0;
@@ -664,7 +672,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const allTimeReturnStats = useMemo(() => {
         if (allTimeQty === 0) return { returnRate: 0, refundRate: 0 };
         const totalRefundQty = refunds.reduce((sum, r) => sum + r.quantity, 0);
-        const totalRefundVal = refunds.reduce((sum, r) => sum + r.amount, 0);
+        // Scale to Inc-VAT for ratio against Sales Revenue
+        const totalRefundVal = refunds.reduce((sum, r) => sum + (r.amount * VAT_MULTIPLIER), 0);
         
         return {
             returnRate: (totalRefundQty / allTimeQty) * 100,
@@ -1043,7 +1052,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 adOnlySpend += (t.adsSpend || 0);
             } else if (t.velocity < 0 || t.price < 0) {
                 refundCount++;
-                refundValue += Math.abs(rev);
+                refundValue += Math.abs(rev); // Already includes VAT scaling via filteredTransactions logic if applicable, but double check below
             }
         });
 
@@ -1192,7 +1201,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            {/* UPDATED: Summary Cards Row to Include Return Stats */}
+                            {/* Row 2 - Summary Statistics */}
+                            <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200">
+                                <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1">CA Reference Price</span>
+                                <div className="text-lg font-bold text-purple-600 font-mono">
+                                    {formatMoney(product.caPrice)}
+                                </div>
+                            </div>
+
                             <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200">
                                 <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1">All-Time Sales</span>
                                 <div className="text-lg font-bold text-gray-900">
@@ -1207,21 +1223,21 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            <div className="col-span-2 sm:col-span-2 p-3 bg-white/60 rounded-xl border border-gray-200">
-                                <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1">All-Time Return & Refund Rate</span>
-                                <div className="flex items-center gap-4">
-                                    <div>
-                                        <div className="text-xs text-gray-500 font-medium">Return (Qty)</div>
-                                        <div className={`text-lg font-bold ${allTimeReturnStats.returnRate > thresholds.returnRatePct ? 'text-red-600' : 'text-gray-900'}`}>
+                            {/* Return & Refund Stats - Stacked for column economy */}
+                            <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200 flex flex-col justify-between">
+                                <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1">Return & Refund Rate</span>
+                                <div className="flex flex-col gap-1">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[9px] text-gray-500 font-medium">Return (Qty)</span>
+                                        <span className={`text-sm font-bold ${allTimeReturnStats.returnRate > thresholds.returnRatePct ? 'text-red-600' : 'text-gray-900'}`}>
                                             {formatPct(allTimeReturnStats.returnRate)}
-                                        </div>
+                                        </span>
                                     </div>
-                                    <div className="w-px h-8 bg-gray-200"></div>
-                                    <div>
-                                        <div className="text-xs text-gray-500 font-medium">Refund (Value)</div>
-                                        <div className="text-lg font-bold text-gray-900">
+                                    <div className="flex justify-between items-center border-t border-gray-100 pt-1">
+                                        <span className="text-[9px] text-gray-500 font-medium">Refund (Val)</span>
+                                        <span className="text-sm font-bold text-gray-900">
                                             {formatPct(allTimeReturnStats.refundRate)}
-                                        </div>
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -1268,7 +1284,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
             {sortedTransactions.length > 0 && (
                 <div ref={analysisRef} className="space-y-4">
-                     {/* ... Distribution Analysis charts ... */}
                     <div className="flex justify-between items-center">
                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                             <BarChart2 className="w-5 h-5 text-indigo-600" />
@@ -1462,7 +1477,6 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                             </div>
                         </div>
 
-                        {/* Price Change History moved here */}
                         <PriceChangeHistoryPanel 
                             history={priceChangeHistory} 
                             sku={product.sku}
@@ -1500,7 +1514,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                                             </span>
                                                         )}
                                                         {isHighest && (
-                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-medium uppercase tracking-wide flex items-center gap-1">
+                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 font-medium uppercase tracking-wide flex items-center gap-1">
                                                                 <TrendingUp className="w-2.5 h-2.5" /> Highest
                                                             </span>
                                                         )}
@@ -1770,216 +1784,237 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
 
                 {refundAnalysis ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Timeline & Detail Table */}
-                        <div className="lg:col-span-2 space-y-6">
-                             <ReturnsReasonTimelineChart 
-                                data={refunds}
-                                getDate={(r) => r.date}
-                                getReason={(r) => r.platformReason || r.reason}
-                                title="Refund Timeline (by Reason Code)"
-                             />
-
-                             {/* Refund Detail Table - MODIFIED: Shows full SKU history without date filters to align with chart */}
-                             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in">
-                                <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                                    <h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-2">
-                                        <Hash className="w-4 h-4 text-red-500" />
-                                        Refund Return Records (Full History)
-                                    </h4>
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase italic">* Aligned with chart history</span>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
-                                        <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0 z-10 whitespace-nowrap">
-                                            <tr>
-                                                <SortableHeader label="Date" sortKey="date" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
-                                                <SortableHeader label="Order ID" sortKey="orderId" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
-                                                <SortableHeader label="Platform" sortKey="platform" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
-                                                <SortableHeader label="Qty" sortKey="quantity" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Amount" sortKey="amount" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Reason" sortKey="reason" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
-                                                <th className="p-3">Customer Note</th>
-                                                <th className="p-3 text-right">Comments</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {paginatedRefunds.length > 0 ? (
-                                                paginatedRefunds.map((r, i) => {
-                                                    const reasonMeta = parseReturnsReason(r.platformReason || r.reason);
-                                                    return (
-                                                        <tr key={r.id || i} className="hover:bg-gray-50/80 transition-colors">
-                                                            <td className="p-3 font-mono opacity-80 whitespace-nowrap">{new Date(r.date).toLocaleDateString('en-GB')}</td>
-                                                            <td className="p-3 font-mono font-medium text-indigo-600 whitespace-nowrap">
-                                                                {r.orderId ? (
-                                                                    <span className="flex items-center gap-1">
-                                                                        {r.orderId}
-                                                                        <ExternalLink className="w-2.5 h-2.5 opacity-30" />
-                                                                    </span>
-                                                                ) : '—'}
-                                                            </td>
-                                                            <td className="p-3 whitespace-nowrap">
-                                                                <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded border border-gray-200 text-[10px] font-bold">
-                                                                    {r.platform || 'Unknown'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-3 text-right font-bold text-gray-900 whitespace-nowrap">{r.quantity}</td>
-                                                            <td className="p-3 text-right font-bold text-red-600 whitespace-nowrap">{formatMoney(r.amount)}</td>
-                                                            <td className="p-3 whitespace-normal min-w-[150px]">
-                                                                <div className="flex flex-col">
-                                                                    <span className="font-bold text-gray-700">{reasonMeta.short}</span>
-                                                                    <span className="text-[10px] text-gray-400">{reasonMeta.full}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="p-3 whitespace-normal min-w-[200px]">
-                                                                {r.remarks ? (
-                                                                    <span className="text-gray-700 italic break-words" title={r.remarks}>{r.remarks}</span>
-                                                                ) : '—'}
-                                                            </td>
-                                                            <td className="p-3 text-right text-gray-400 italic whitespace-normal min-w-[200px] break-words" title={r.comments || r.customerReason}>
-                                                                {r.comments || r.customerReason || '—'}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })
-                                            ) : (
-                                                <tr>
-                                                    <td colSpan={8} className="p-10 text-center text-gray-400 italic">No refund records found for this product.</td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {totalRefundPages > 1 && (
-                                    <div className="bg-gray-50/50 px-4 py-2.5 border-t border-gray-100 flex items-center justify-between">
-                                        <span className="text-[10px] text-gray-400 font-bold uppercase">
-                                            Page {refundPage} of {totalRefundPages} ({filteredRefundsForTable.length} items)
-                                        </span>
-                                        <div className="flex gap-1">
-                                            <button 
-                                                onClick={() => setRefundPage(p => Math.max(1, p - 1))} 
-                                                disabled={refundPage === 1}
-                                                className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-30"
-                                            >
-                                                <ChevronLeft className="w-4 h-4" />
-                                            </button>
-                                            <button 
-                                                onClick={() => setRefundPage(p => Math.min(totalRefundPages, p + 1))} 
-                                                disabled={refundPage === totalRefundPages}
-                                                className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-30"
-                                            >
-                                                <ChevronRight className="w-4 h-4" />
-                                            </button>
-                                        </div>
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Timeline & Summary Cards */}
+                            <div className="lg:col-span-2 space-y-6">
+                                 {/* High-Level Breakdown (VAT Inclusive) */}
+                                 <div className="grid grid-cols-4 gap-4">
+                                    <div className="p-4 bg-red-50 rounded-xl border border-red-100">
+                                        <span className="text-[10px] font-bold text-red-600 uppercase block mb-1">Total Refunds</span>
+                                        <div className="text-xl font-bold text-red-800">{refundAnalysis.refundCount} cases</div>
                                     </div>
-                                )}
-                             </div>
-                        </div>
+                                    <div className="p-4 bg-orange-50 rounded-xl border border-orange-100">
+                                        <span className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Resends</span>
+                                        <div className="text-xl font-bold text-orange-800">{refundAnalysis.resendCount} cases</div>
+                                    </div>
+                                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 col-span-2">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase">Total Freight Refunded (Inc VAT)</span>
+                                        </div>
+                                        <div className="text-xl font-bold text-gray-700">{formatMoney(refundAnalysis.totalFreight)}</div>
+                                    </div>
+                                 </div>
 
-                        <div className="space-y-6">
-                             {/* Top Reasons */}
-                             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col h-[250px]">
-                                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2"><AlertTriangle className="w-3 h-3 text-amber-500" /> Top Reasons</h4>
-                                 <div className="flex-1 overflow-auto pr-1">
-                                     <div className="space-y-2">
-                                         {refundAnalysis.overview.reasonRows.slice(0, 5).map((r, i) => (
-                                             <div key={i} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border border-gray-100">
-                                                 <span className="font-medium text-gray-700 truncate max-w-[150px]" title={r.reason}>{r.reason}</span>
-                                                 <div className="text-right">
-                                                     <div className="font-bold text-red-600">{r.count}</div>
-                                                     <div className="text-[10px] text-gray-400">{formatMoney(r.value, 0)}</div>
+                                 <ReturnsReasonTimelineChart 
+                                    data={refunds}
+                                    getDate={(r) => r.date}
+                                    getReason={(r) => r.platformReason || r.reason}
+                                    title="Refund Timeline (by Reason Code)"
+                                 />
+                            </div>
+
+                            <div className="space-y-6">
+                                 {/* Top Reasons */}
+                                 <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col h-[250px]">
+                                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2"><AlertTriangle className="w-3 h-3 text-amber-500" /> Top Reasons</h4>
+                                     <div className="flex-1 overflow-auto pr-1">
+                                         <div className="space-y-2">
+                                             {refundAnalysis.overview.reasonRows.slice(0, 5).map((r, i) => (
+                                                 <div key={i} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded border border-gray-100">
+                                                     <span className="font-medium text-gray-700 truncate max-w-[150px]" title={r.reason}>{r.reason}</span>
+                                                     <div className="text-right">
+                                                         <div className="font-bold text-red-600">{r.count}</div>
+                                                         <div className="text-[10px] text-gray-400">{formatMoney(r.value, 0)}</div>
+                                                     </div>
                                                  </div>
-                                             </div>
-                                         ))}
+                                             ))}
+                                         </div>
                                      </div>
                                  </div>
-                             </div>
-                             
-                             {/* AI Insights / Sentiment Panel */}
-                             {showAiInsights ? (
-                                <div className="bg-purple-50 p-5 rounded-xl border border-purple-200 shadow-sm animate-in fade-in zoom-in duration-300">
-                                    <div className="flex items-center gap-2 mb-3 border-b border-purple-200 pb-2">
-                                        <span className="p-1 bg-white rounded-lg">
-                                            <Sparkles className="w-4 h-4 text-purple-600" />
-                                        </span>
-                                        <h4 className="text-xs font-bold text-purple-800 uppercase">AI Sentiment Summary</h4>
-                                    </div>
-                                    <div className="flex flex-col items-center justify-center py-6 text-center text-purple-700 gap-2">
-                                        <CloudOff className="w-8 h-8 opacity-50" />
-                                        <p className="text-xs font-medium">Cloud AI analysis disabled.</p>
-                                        <p className="text-[10px] opacity-70">Enable API key to unlock deep sentiment analysis.</p>
-                                    </div>
-                                </div>
-                             ) : (
-                                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm animate-in fade-in">
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2"><Smile className="w-3 h-3 text-purple-500" /> Sentiment (Local)</h4>
-                                    
-                                    <div className="space-y-3">
-                                        <div className="flex items-center gap-2 text-xs">
-                                            <span className="w-16 text-gray-500">Negative</span>
-                                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-red-400" style={{ width: `${(refundAnalysis.sentimentStats.negative / (refunds.length || 1)) * 100}%` }}></div>
-                                            </div>
-                                            <span className="text-red-600 font-bold">{refundAnalysis.sentimentStats.negative}</span>
+                                 
+                                 {/* AI Insights / Sentiment Panel */}
+                                 {showAiInsights ? (
+                                    <div className="bg-purple-50 p-5 rounded-xl border border-purple-200 shadow-sm animate-in fade-in zoom-in duration-300">
+                                        <div className="flex items-center gap-2 mb-3 border-b border-purple-200 pb-2">
+                                            <span className="p-1 bg-white rounded-lg">
+                                                <Sparkles className="w-4 h-4 text-purple-600" />
+                                            </span>
+                                            <h4 className="text-xs font-bold text-purple-800 uppercase">AI Sentiment Summary</h4>
                                         </div>
-                                        <div className="flex items-center gap-2 text-xs">
-                                            <span className="w-16 text-gray-500">Neutral</span>
-                                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-gray-400" style={{ width: `${(refundAnalysis.sentimentStats.neutral / (refunds.length || 1)) * 100}%` }}></div>
-                                            </div>
-                                            <span className="text-gray-600 font-bold">{refundAnalysis.sentimentStats.neutral}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs">
-                                            <span className="w-16 text-gray-500">Positive</span>
-                                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-green-400" style={{ width: `${(refundAnalysis.sentimentStats.positive / (refunds.length || 1)) * 100}%` }}></div>
-                                            </div>
-                                            <span className="text-green-600 font-bold">{refundAnalysis.sentimentStats.positive}</span>
+                                        <div className="flex flex-col items-center justify-center py-6 text-center text-purple-700 gap-2">
+                                            <CloudOff className="w-8 h-8 opacity-50" />
+                                            <p className="text-xs font-medium">Cloud AI analysis disabled.</p>
+                                            <p className="text-[10px] opacity-70">Enable API key to unlock deep sentiment analysis.</p>
                                         </div>
                                     </div>
-                                    <p className="text-[9px] text-gray-400 mt-4 italic text-center">Based on keyword matching.</p>
-                                </div>
-                             )}
-
-                             {/* Word Cloud */}
-                             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                                 <div className="flex justify-between items-center mb-4">
-                                     <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
-                                         <MessageSquare className="w-3 h-3 text-blue-500" /> Keyword Cloud
-                                     </h4>
-                                     <div className="flex bg-gray-100 p-0.5 rounded-lg">
-                                         <button 
-                                             onClick={() => setKwMode('All')} 
-                                             className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'All' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
-                                         >
-                                             All
-                                         </button>
-                                         <button 
-                                             onClick={() => setKwMode('Reason')} 
-                                             className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'Reason' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
-                                         >
-                                             By Reason
-                                         </button>
-                                     </div>
-                                 </div>
-                                 {kwMode === 'Reason' && availableReasonCodes.length > 0 && (
-                                     <div className="mb-5 flex flex-wrap gap-1 border-b border-gray-100 pb-3 animate-in fade-in slide-in-from-top-1">
-                                         {availableReasonCodes.map(code => (
-                                             <button 
-                                                 key={code} 
-                                                 onClick={() => setKwReason(kwReason === code ? null : code)}
-                                                 className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-all ${kwReason === code ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}
-                                             >
-                                                 {code}
-                                             </button>
-                                         ))}
-                                     </div>
+                                 ) : (
+                                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm animate-in fade-in">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2"><Smile className="w-3 h-3 text-purple-500" /> Sentiment (Local)</h4>
+                                        
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span className="w-16 text-gray-500">Negative</span>
+                                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-red-400" style={{ width: `${(refundAnalysis.sentimentStats.negative / (refunds.length || 1)) * 100}%` }}></div>
+                                                </div>
+                                                <span className="text-red-600 font-bold">{refundAnalysis.sentimentStats.negative}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span className="w-16 text-gray-500">Neutral</span>
+                                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-gray-400" style={{ width: `${(refundAnalysis.sentimentStats.neutral / (refunds.length || 1)) * 100}%` }}></div>
+                                                </div>
+                                                <span className="text-gray-600 font-bold">{refundAnalysis.sentimentStats.neutral}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span className="w-16 text-gray-500">Positive</span>
+                                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-green-400" style={{ width: `${(refundAnalysis.sentimentStats.positive / (refunds.length || 1)) * 100}%` }}></div>
+                                                </div>
+                                                <span className="text-green-600 font-bold">{refundAnalysis.sentimentStats.positive}</span>
+                                            </div>
+                                        </div>
+                                        <p className="text-[9px] text-gray-400 mt-4 italic text-center">Based on keyword matching.</p>
+                                    </div>
                                  )}
-                                 <div className="mt-2">
-                                    <KeywordCloud items={refundAnalysis.topWords} />
+
+                                 {/* Word Cloud */}
+                                 <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                                     <div className="flex justify-between items-center mb-4">
+                                         <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                                             <MessageSquare className="w-3 h-3 text-blue-500" /> Keyword Cloud
+                                         </h4>
+                                         <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                             <button 
+                                                 onClick={() => setKwMode('All')} 
+                                                 className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'All' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
+                                             >
+                                                 All
+                                             </button>
+                                             <button 
+                                                 onClick={() => setKwMode('Reason')} 
+                                                 className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'Reason' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
+                                             >
+                                                 By Reason
+                                             </button>
+                                         </div>
+                                     </div>
+                                     {kwMode === 'Reason' && availableReasonCodes.length > 0 && (
+                                         <div className="mb-5 flex flex-wrap gap-1 border-b border-gray-100 pb-3 animate-in fade-in slide-in-from-top-1">
+                                             {availableReasonCodes.map(code => (
+                                                 <button 
+                                                     key={code} 
+                                                     onClick={() => setKwReason(kwReason === code ? null : code)}
+                                                     className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-all ${kwReason === code ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}
+                                                 >
+                                                     {code}
+                                                 </button>
+                                             ))}
+                                         </div>
+                                     )}
+                                     <div className="mt-2">
+                                        <KeywordCloud items={refundAnalysis.topWords} />
+                                     </div>
                                  </div>
-                             </div>
+                            </div>
                         </div>
+
+                        {/* Refund Detail Table - Extended full width */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in">
+                            <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                                <h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-2">
+                                    <Hash className="w-4 h-4 text-red-500" />
+                                    Refund Return Records (Full History)
+                                </h4>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase italic">* Aligned with chart history</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0 z-10 whitespace-nowrap">
+                                        <tr>
+                                            <SortableHeader label="Date" sortKey="date" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
+                                            <SortableHeader label="Order ID" sortKey="orderId" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
+                                            <SortableHeader label="Platform" sortKey="platform" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
+                                            <SortableHeader label="Qty" sortKey="quantity" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} align="right" />
+                                            <SortableHeader label="Amount" sortKey="amount" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} align="right" />
+                                            <SortableHeader label="Reason" sortKey="reason" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
+                                            <th className="p-3 text-right">Comments</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {paginatedRefunds.length > 0 ? (
+                                            paginatedRefunds.map((r, i) => {
+                                                const reasonMeta = parseReturnsReason(r.platformReason || r.reason);
+                                                // Value stored is Ex-VAT, display Inc-VAT. Include freight here for total transaction value.
+                                                const displayAmount = (Number(r.amount) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER;
+                                                
+                                                return (
+                                                    <tr key={r.id || i} className="hover:bg-gray-50/80 transition-colors">
+                                                        <td className="p-3 font-mono opacity-80 whitespace-nowrap">{new Date(r.date).toLocaleDateString('en-GB')}</td>
+                                                        <td className="p-3 font-mono font-medium text-indigo-600 whitespace-nowrap">
+                                                            {r.orderId ? (
+                                                                <span className="flex items-center gap-1">
+                                                                    {r.orderId}
+                                                                    <ExternalLink className="w-2.5 h-2.5 opacity-30" />
+                                                                </span>
+                                                            ) : '—'}
+                                                        </td>
+                                                        <td className="p-3 whitespace-nowrap">
+                                                            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded border border-gray-200 text-[10px] font-bold">
+                                                                {r.platform || 'Unknown'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3 text-right font-bold text-gray-900 whitespace-nowrap">{r.quantity}</td>
+                                                        <td className="p-3 text-right font-bold text-red-600 whitespace-nowrap">{formatMoney(displayAmount)}</td>
+                                                        <td className="p-3 whitespace-normal min-w-[150px]">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold text-gray-700">{reasonMeta.short}</span>
+                                                                <span className="text-[10px] text-gray-400">{reasonMeta.full}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3 text-right text-gray-400 italic whitespace-normal min-w-[200px] break-words" title={r.commentEn || r.comments || r.customerReason}>
+                                                            {r.commentEn || r.comments || r.customerReason || '—'}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={7} className="p-10 text-center text-gray-400 italic">No refund records found for this product.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {totalRefundPages > 1 && (
+                                <div className="bg-gray-50/50 px-4 py-2.5 border-t border-gray-100 flex items-center justify-between">
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase">
+                                        Page {refundPage} of {totalRefundPages} ({filteredRefundsForTable.length} items)
+                                    </span>
+                                    <div className="flex gap-1">
+                                        <button 
+                                            onClick={() => setRefundPage(p => Math.max(1, p - 1))} 
+                                            disabled={refundPage === 1}
+                                            className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-30"
+                                        >
+                                            <ChevronLeft className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            onClick={() => setRefundPage(p => Math.min(totalRefundPages, p + 1))} 
+                                            disabled={refundPage === totalRefundPages}
+                                            className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-30"
+                                        >
+                                            <ChevronRight className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                         </div>
+                         
+                         <div className="text-right text-[10px] text-gray-400 italic mt-2">
+                            Refund amounts displayed VAT-inclusive. Source file stores EX-VAT.
+                         </div>
                     </div>
                 ) : (
                      <div className="p-10 text-center text-gray-400 bg-gray-50 rounded-xl border border-gray-100">

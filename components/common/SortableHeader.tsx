@@ -37,6 +37,7 @@ export function SortableHeader<K extends string>({
       onClick={handleClick}
       role="columnheader"
       aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      style={isActive ? { backgroundColor: `${themeColor}12` } : {}}
     >
       <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
         <span>{label}</span>

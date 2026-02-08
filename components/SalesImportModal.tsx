@@ -1,10 +1,10 @@
 
-
-
 import React, { useState, useRef, useMemo } from 'react';
 import { Product, PricingRules, HistoryPayload, ShipmentLog } from '../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search, Hash } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { asDateKeyNaive } from '../services/dateUtils';
+import { getCanonicalSku } from '../services/skuNormalization';
 
 export type { HistoryPayload };
 
@@ -303,7 +303,10 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 if (rev <= 0.001 && adsCost <= 0.001) return;
 
                 const rawSku = String(row[skuIdx]).trim();
-                const rawSkuUpper = rawSku.toUpperCase();
+                
+                // --- SKU NORMALIZATION ---
+                const canonicalRawSku = getCanonicalSku(rawSku);
+                const rawSkuUpper = canonicalRawSku.toUpperCase();
 
                 // Robust Alias Matching: Try exact, then alias, then handle potential suffixes
                 let masterSku = aliasMap[rawSkuUpper];
@@ -445,20 +448,21 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 item.platformStats[platformName].qty += qty;
                 item.platformStats[platformName].revenue += rev;
 
-                const d = (dateIdx !== -1 && row[dateIdx]) ? new Date(row[dateIdx]) : new Date();
-                if (dateIdx !== -1 && row[dateIdx] && !isNaN(d.getTime())) {
+                // --- NAIVE DATE PARSING ---
+                const rawDateVal = (dateIdx !== -1) ? row[dateIdx] : undefined;
+                const dateKey = asDateKeyNaive(rawDateVal);
+
+                if (process.env.NODE_ENV !== 'production' && matchCount <= 3 && rawDateVal) {
+                    console.log('[Sales Import Audit] Raw:', rawDateVal, '-> Key:', dateKey);
+                }
+
+                if (dateKey) {
                     hasDates = true;
+                    const d = new Date(dateKey); // Used only for min/max tracking roughly
                     if (d < minDate) minDate = d;
                     if (d > maxDate) maxDate = d;
 
-                    const formatDateYmd = (date: Date) => {
-                        const y = date.getFullYear();
-                        const m = String(date.getMonth() + 1).padStart(2, '0');
-                        const day = String(date.getDate()).padStart(2, '0');
-                        return `${y}-${m}-${day}`;
-                    };
-
-                    const dateStr = formatDateYmd(d);
+                    const dateStr = dateKey;
 
                     // --- Daily Aggregation for History (INCLUSIVE: show all platforms) ---
                     // If Order ID exists, include it in key to prevent aggregation (keep transaction level)

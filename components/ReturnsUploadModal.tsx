@@ -1,7 +1,10 @@
+
 import React, { useState, useRef } from 'react';
-import { Upload, X, Check, AlertCircle, Loader2, RotateCcw, Info, Link as LinkIcon, FileQuestion, Filter, Trash2 } from 'lucide-react';
+import { Upload, X, Check, AlertCircle, Loader2, RotateCcw, Info, Link as LinkIcon, FileQuestion, Filter, Trash2, FileText, MessageSquare } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { RefundLog } from '../types';
+import { VAT_MULTIPLIER } from '../constants';
+import { asDateKeyNaive } from '../services/dateUtils';
 
 interface ReturnsUploadModalProps {
   onClose: () => void;
@@ -10,58 +13,27 @@ interface ReturnsUploadModalProps {
   existingOrders?: Map<string, string>; // OrderID -> Platform
 }
 
-/**
- * Decodes the raw platform reason string into a more readable format.
- * e.g., "QI - Quality Issue/Q1 - Unfunctional product" -> "Quality Issue: Unfunctional product"
- */
-const decodeRefundReason = (rawReason: string | undefined): string | undefined => {
-    if (!rawReason || typeof rawReason !== 'string' || !rawReason.includes('/')) {
-        return rawReason;
-    }
-
-    try {
-        const parts = rawReason.split('/');
-        if (parts.length < 2) {
-            return rawReason;
-        }
-
-        const mainReasonPart = parts[0];
-        const subReasonPart = parts.slice(1).join('/');
-
-        // Extract text after " - " if it exists
-        const mainReason = mainReasonPart.includes(' - ') ? mainReasonPart.split(' - ').slice(1).join(' - ').trim() : mainReasonPart.trim();
-        const subReason = subReasonPart.includes(' - ') ? subReasonPart.split(' - ').slice(1).join(' - ').trim() : subReasonPart.trim();
-
-        if (mainReason && subReason) {
-            // Capitalize first letter of sub-reason, make rest lowercase. Handles 'DELIVERED BUT NOT RECEIVE'
-            const formattedSubReason = subReason.charAt(0).toUpperCase() + subReason.slice(1).toLowerCase();
-            
-            // Correcting typos found in user's list and cleaning up
-            const cleanedMainReason = mainReason.replace('PLatform', 'Platform');
-            const cleanedSubReason = formattedSubReason.replace('Parcially', 'Partially');
-
-            return `${cleanedMainReason}: ${cleanedSubReason}`;
-        }
-    } catch (e) {
-        console.error("Failed to decode refund reason:", rawReason, e);
-    }
-
-    return rawReason; // Fallback to original string on any error
-};
-
 const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConfirm, onReset, existingOrders }) => {
+  const [uploadMode, setUploadMode] = useState<'legacy' | 'v2'>('v2');
   const [dragActive, setDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // File states
+  const [legacyFile, setLegacyFile] = useState<File | null>(null);
+  const [detailsFile, setDetailsFile] = useState<File | null>(null);
+  const [commentsFile, setCommentsFile] = useState<File | null>(null);
+
   const [parsedRefunds, setParsedRefunds] = useState<RefundLog[] | null>(null);
   const [stats, setStats] = useState({ count: 0, totalValue: 0, matchedOrders: 0, orphans: 0 });
   const [debugInfo, setDebugInfo] = useState<{ unmatchedSamples: string[], dbSamples: string[], mappedColumn: string }>({ unmatchedSamples: [], dbSamples: [], mappedColumn: '' });
   
-  // New State for Handling Strategy
   const [importStrategy, setImportStrategy] = useState<'ALL' | 'MATCHED_ONLY'>('ALL');
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const legacyInputRef = useRef<HTMLInputElement>(null);
+  const detailsInputRef = useRef<HTMLInputElement>(null);
+  const commentsInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -78,50 +50,58 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
+        if (uploadMode === 'legacy') {
+            setLegacyFile(e.dataTransfer.files[0]);
+        } else {
+            // For V2 drop, we don't know which file it is, so just alert or default to details if empty
+            if (!detailsFile) setDetailsFile(e.dataTransfer.files[0]);
+            else if (!commentsFile) setCommentsFile(e.dataTransfer.files[0]);
+        }
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
-    }
-    if (fileInputRef.current) fileInputRef.current.value = '';
+  const readExcel = (file: File): Promise<any[]> => {
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+              try {
+                  const data = e.target?.result;
+                  if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                      resolve(XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[]);
+                  } else {
+                      const text = data as string;
+                      resolve(text.split('\n').map(l => l.split(',')));
+                  }
+              } catch (err) {
+                  reject(err);
+              }
+          };
+          if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file);
+          else reader.readAsText(file);
+      });
   };
 
-  const processFile = (file: File) => {
+  const processFiles = async () => {
     setIsProcessing(true);
     setError(null);
 
-    setTimeout(() => {
-        const reader = new FileReader();
-        const handleContent = (content: any) => {
-             let rows: any[][] = [];
-             if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-                 const workbook = XLSX.read(content, { type: 'array', cellDates: true });
-                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                 rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-             } else {
-                 const text = content as string;
-                 rows = text.split('\n').map(l => l.split(',')); 
-             }
-             analyzeRows(rows);
-        };
-
-        if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-            reader.onload = (e) => {
-                try { handleContent(e.target?.result); } 
-                catch (err) { setError("Failed to parse Excel file."); setIsProcessing(false); } 
-            };
-            reader.readAsArrayBuffer(file);
+    try {
+        if (uploadMode === 'legacy') {
+            if (!legacyFile) throw new Error("No file selected");
+            const rows = await readExcel(legacyFile);
+            analyzeLegacyRows(rows);
         } else {
-            reader.onload = (e) => {
-                try { handleContent(e.target?.result); } 
-                catch (err) { setError("Failed to parse CSV file."); setIsProcessing(false); } 
-            };
-            reader.readAsText(file);
+            if (!detailsFile || !commentsFile) throw new Error("Both files required for V2 import");
+            const detailsRows = await readExcel(detailsFile);
+            const commentsRows = await readExcel(commentsFile);
+            analyzeV2Rows(detailsRows, commentsRows);
         }
-    }, 100);
+    } catch (err: any) {
+        setError(err.message || "Failed to process files");
+        setIsProcessing(false);
+    }
   };
 
   // Helper to generate a deterministic ID based on row content
@@ -138,184 +118,283 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
       return `ref-${Math.abs(hash).toString(36)}`;
   };
 
-  const analyzeRows = (rows: any[][]) => {
-      try {
-        if (rows.length < 2) throw new Error("File empty.");
-
-        const originalHeaders = rows[0].map(h => String(h).trim());
-        const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
-        
-        const findColPriority = (terms: string[]) => {
-            for (const term of terms) {
-                const idx = headers.findIndex(h => h === term || h.includes(term));
-                if (idx !== -1) return idx;
-            }
-            return -1;
-        };
-
-        // --- CORE FIELDS ---
-        const skuIdx = findColPriority(['productsku', 'sku']);
-        const amountIdx = findColPriority(['refundamount', 'refundvalue', 'amount']);
-        const qtyIdx = findColPriority(['refundqty', 'quantity', 'returnqty']);
-        const dateIdx = findColPriority(['creationtime', 'date', 'applicationtime']);
-        const platformIdx = findColPriority(['channel', 'platform']); // Fallback platform column
-        
-        // --- DETAILED FIELDS FOR DEEP DIVE ---
-        const typeIdx = findColPriority(['after-salestype', 'servicetype', 'type']);
-        const statusIdx = findColPriority(['after-salesstatus', 'status']);
-        
-        // --- FIX: Terms must be what the header becomes AFTER normalization ---
-        const platReasonIdx = findColPriority(['platformaftersalesreason', 'platformreason']);
-        const custReasonIdx = findColPriority(['reasonforrefund', 'reasonforreturn', 'buyerreason', 'returnreason', 'buyerfeedback']);
-
-        // --- SEPARATE REMARKS AND COMMENTS AS PER USER MAPPING REQUEST ---
-        const remarksIdx = findColPriority(['remarks', 'memo', 'remark']);
-        const commentsIdx = findColPriority(['comments', 'comment', 'buyercomment', 'customercomment', 'notes']);
-        
-        // --- STRICT ORDER ID MAPPING ---
-        let orderIdIdx = findColPriority([
-            'thirdpartyordernumber', 
-            'thirdpartyorderno', 
-            '3rdpartyordernumber',
-            'externalordernumber'
-        ]);
-
-        if (orderIdIdx === -1) {
-            orderIdIdx = findColPriority(['ordernumber', 'orderid', 'order_id']);
-        }
-
-        if (skuIdx === -1) throw new Error("Could not detect 'Product SKU' column.");
-        if (amountIdx === -1) throw new Error("Could not detect 'Refund Amount' column.");
-        if (dateIdx === -1) throw new Error("Could not detect 'Creation Time' column.");
-
-        const detectedOrderColumn = orderIdIdx !== -1 ? originalHeaders[orderIdIdx] : 'Not Found';
-
-        const refunds: RefundLog[] = [];
-        let totalValue = 0;
-        let matchedOrders = 0;
-        let orphans = 0;
-        const unmatchedSamples: string[] = [];
-
-        for (let i = 1; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row || row.length <= skuIdx) continue;
-            
-            const sku = String(row[skuIdx]).trim();
-            if (!sku) continue;
-
-            const parseDate = (val: any) => {
-                if (!val) return new Date().toISOString();
-                if (val instanceof Date) return val.toISOString();
-                
-                const dateStr = String(val).trim();
-                const ukRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/;
-                const match = dateStr.match(ukRegex);
-                
-                if (match) {
-                    const day = match[1];
-                    const month = match[2];
-                    const year = match[3];
-                    const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                    if (dateStr.includes(':')) {
-                        const timePart = dateStr.split(/\s+/).slice(1).join(' ');
-                        const d = new Date(`${isoDate}T${timePart}`);
-                        if (!isNaN(d.getTime())) return d.toISOString();
-                    }
-                    const d = new Date(isoDate);
-                    d.setHours(12,0,0,0);
-                    if (!isNaN(d.getTime())) return d.toISOString();
-                }
-                const d = new Date(dateStr);
-                return !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
-            };
-
-            const parsedDate = parseDate(row[dateIdx]);
-            const amount = parseFloat(String(row[amountIdx])) || 0;
-            const quantity = qtyIdx !== -1 ? (parseFloat(String(row[qtyIdx])) || 1) : 1;
-            
-            // Extract Detailed Info
-            const type = typeIdx !== -1 ? String(row[typeIdx]).trim() : undefined;
-            const status = statusIdx !== -1 ? String(row[statusIdx]).trim() : undefined;
-            const customerReason = custReasonIdx !== -1 ? String(row[custReasonIdx]).trim() : undefined;
-            const platformReason = platReasonIdx !== -1 ? String(row[platReasonIdx]).trim() : undefined;
-            const remarks = remarksIdx !== -1 ? String(row[remarksIdx]).trim() : undefined;
-            const comments = commentsIdx !== -1 ? String(row[commentsIdx]).trim() : undefined;
-
-            // NEW: Decode the platform reason
-            const decodedReason = decodeRefundReason(platformReason);
-
-            // Updated Priority: Decoded platform reason first, as requested
-            const displayReason = decodedReason || customerReason || 'Unknown Reason';
-
-            // Order Match Logic
-            const orderId = orderIdIdx !== -1 ? String(row[orderIdIdx]).trim() : undefined;
-            
-            // Platform Logic: Transaction Record Priority -> File Fallback -> Unknown
-            let finalPlatform = platformIdx !== -1 ? String(row[platformIdx]) : undefined;
-
-            // FIX: 'Mirakl' is an operating system, not a consumer marketplace.
-            // If the file explicitly lists it (often in Channel column), ignore it.
-            if (finalPlatform && finalPlatform.toLowerCase() === 'mirakl') {
-                finalPlatform = undefined;
-            }
-
-            if (existingOrders && existingOrders.size > 0 && orderId) {
-                if (existingOrders.has(orderId)) {
-                    matchedOrders++;
-                    // Override with trusted platform from transaction history
-                    finalPlatform = existingOrders.get(orderId);
-                } else {
-                    orphans++;
-                    if (unmatchedSamples.length < 3) unmatchedSamples.push(orderId);
-                }
-            }
-
-            const uniqueId = generateRefundId(sku, parsedDate, amount, quantity, displayReason);
-
-            refunds.push({
-                id: uniqueId,
-                sku,
-                date: parsedDate,
-                amount,
-                quantity,
-                platform: finalPlatform,
-                reason: displayReason, // Use decoded reason for display
-                orderId: orderId,
-                
-                // Captured detailed fields
-                type,
-                status,
-                customerReason,
-                platformReason, // Keep original platform reason
-                remarks,
-                comments // Added field
-            });
-
-            totalValue += amount;
-        }
-        
-        setParsedRefunds(refunds);
-        setStats({ count: refunds.length, totalValue, matchedOrders, orphans });
-        
-        const dbSamples = existingOrders ? Array.from(existingOrders.keys()).slice(0, 3) : [];
-        setDebugInfo({ unmatchedSamples, dbSamples, mappedColumn: detectedOrderColumn });
-
-      } catch (err: any) {
-          setError(err.message || "Failed to analyze file.");
-      } finally {
-          setIsProcessing(false);
+  const findColPriority = (headers: string[], terms: string[]) => {
+      for (const term of terms) {
+          const idx = headers.findIndex(h => h === term || h.includes(term));
+          if (idx !== -1) return idx;
       }
+      return -1;
+  };
+
+  const analyzeLegacyRows = (rows: any[][]) => {
+      if (rows.length < 2) throw new Error("File empty.");
+
+      const originalHeaders = rows[0].map(h => String(h).trim());
+      const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
+      
+      // --- CORE FIELDS ---
+      const skuIdx = findColPriority(headers, ['productsku', 'sku']);
+      const amountIdx = findColPriority(headers, ['refundamount', 'refundvalue', 'amount']);
+      const qtyIdx = findColPriority(headers, ['refundqty', 'quantity', 'returnqty']);
+      const dateIdx = findColPriority(headers, ['creationtime', 'date', 'applicationtime']);
+      const platformIdx = findColPriority(headers, ['channel', 'platform']);
+      
+      // --- DETAILED FIELDS ---
+      const typeIdx = findColPriority(headers, ['after-salestype', 'servicetype', 'type']);
+      const statusIdx = findColPriority(headers, ['after-salesstatus', 'status']);
+      const platReasonIdx = findColPriority(headers, ['platformaftersalesreason', 'platformreason']);
+      const custReasonIdx = findColPriority(headers, ['reasonforrefund', 'reasonforreturn', 'buyerreason']);
+      const remarksIdx = findColPriority(headers, ['remarks', 'memo', 'remark']);
+      const commentsIdx = findColPriority(headers, ['comments', 'comment', 'buyercomment']);
+      
+      let orderIdIdx = findColPriority(headers, ['thirdpartyordernumber', 'externalordernumber', 'ordernumber', 'orderid']);
+
+      if (skuIdx === -1 || amountIdx === -1 || dateIdx === -1) throw new Error("Missing required columns (SKU, Amount, Date)");
+
+      const refunds: RefundLog[] = [];
+      let totalValue = 0;
+      let matchedOrders = 0;
+      let orphans = 0;
+      const unmatchedSamples: string[] = [];
+
+      for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length <= skuIdx) continue;
+          
+          const sku = String(row[skuIdx]).trim();
+          if (!sku) continue;
+
+          // Legacy Amount is Inc-VAT. Convert to Ex-VAT for storage.
+          const rawAmount = parseFloat(String(row[amountIdx])) || 0;
+          const amountExVat = rawAmount / VAT_MULTIPLIER;
+
+          const quantity = qtyIdx !== -1 ? (parseFloat(String(row[qtyIdx])) || 1) : 1;
+          
+          const rawDate = row[dateIdx];
+          const dateKey = asDateKeyNaive(rawDate);
+          
+          let parsedDate = new Date().toISOString();
+          
+          if (process.env.NODE_ENV !== 'production' && i <= 3) {
+             console.log('[Returns Legacy Audit] Raw:', rawDate, '-> Key:', dateKey);
+          }
+
+          if (dateKey) {
+             parsedDate = new Date(dateKey).toISOString();
+          }
+
+          // Details
+          const type = typeIdx !== -1 ? String(row[typeIdx]).trim() : undefined;
+          const status = statusIdx !== -1 ? String(row[statusIdx]).trim() : undefined;
+          const customerReason = custReasonIdx !== -1 ? String(row[custReasonIdx]).trim() : undefined;
+          const platformReason = platReasonIdx !== -1 ? String(row[platReasonIdx]).trim() : undefined;
+          
+          // Use the most specific reason available without decoding, to preserve full data
+          const displayReason = platformReason || customerReason || 'Unknown Reason';
+          
+          const orderId = orderIdIdx !== -1 ? String(row[orderIdIdx]).trim() : undefined;
+
+          // Platform Logic
+          let finalPlatform = platformIdx !== -1 ? String(row[platformIdx]) : undefined;
+          if (finalPlatform && finalPlatform.toLowerCase() === 'mirakl') finalPlatform = undefined;
+
+          if (existingOrders && existingOrders.size > 0 && orderId) {
+              if (existingOrders.has(orderId)) {
+                  matchedOrders++;
+                  finalPlatform = existingOrders.get(orderId);
+              } else {
+                  orphans++;
+                  if (unmatchedSamples.length < 10) unmatchedSamples.push(`${orderId} (SKU: ${sku})`);
+              }
+          }
+
+          const uniqueId = generateRefundId(sku, parsedDate, amountExVat, quantity, displayReason);
+
+          refunds.push({
+              id: uniqueId,
+              sku,
+              date: parsedDate,
+              amount: amountExVat, // Stored as Ex-VAT
+              quantity,
+              platform: finalPlatform,
+              reason: displayReason,
+              orderId,
+              type,
+              status,
+              customerReason,
+              platformReason,
+              remarks: remarksIdx !== -1 ? String(row[remarksIdx]) : undefined,
+              comments: commentsIdx !== -1 ? String(row[commentsIdx]) : undefined,
+              orderType: 'refund' // Legacy assumption
+          });
+
+          totalValue += (amountExVat * VAT_MULTIPLIER); // Display total as Inc-VAT
+      }
+      
+      setParsedRefunds(refunds);
+      setStats({ count: refunds.length, totalValue, matchedOrders, orphans });
+      setDebugInfo({ unmatchedSamples, dbSamples: existingOrders ? Array.from(existingOrders.keys()).slice(0, 3) : [], mappedColumn: originalHeaders[orderIdIdx] || 'Unknown' });
+      setIsProcessing(false);
+  };
+
+  const analyzeV2Rows = (detailsRows: any[][], commentsRows: any[][]) => {
+      // 1. Map Comments by Order ID
+      const commentMap = new Map<string, { cn: string, en: string }>();
+      if (commentsRows.length > 1) {
+          const cHeaders = commentsRows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
+          const cOrderIdx = findColPriority(cHeaders, ['outerorderid', 'orderid']);
+          const cnIdx = findColPriority(cHeaders, ['commentcn', 'chinesememo']);
+          const enIdx = findColPriority(cHeaders, ['commenten', 'englishmemo']);
+          
+          if (cOrderIdx !== -1) {
+              for (let i = 1; i < commentsRows.length; i++) {
+                  const row = commentsRows[i];
+                  const oid = String(row[cOrderIdx] || '').trim();
+                  if (oid) {
+                      commentMap.set(oid, {
+                          cn: cnIdx !== -1 ? String(row[cnIdx] || '') : '',
+                          en: enIdx !== -1 ? String(row[enIdx] || '') : ''
+                      });
+                  }
+              }
+          }
+      }
+
+      // 2. Parse Details
+      if (detailsRows.length < 2) throw new Error("Details file empty");
+      const dHeaders = detailsRows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
+      
+      const skuIdx = findColPriority(dHeaders, ['skucode', 'sku']);
+      const orderIdx = findColPriority(dHeaders, ['outerorderid', 'orderid']);
+      const amtIdx = findColPriority(dHeaders, ['returnamt', 'amount']);
+      const qtyIdx = findColPriority(dHeaders, ['returnqty', 'qty']);
+      const typeIdx = findColPriority(dHeaders, ['ordertype', 'type']);
+      
+      // Look for reason detail first, then fallback to general reason
+      let reasonIdx = findColPriority(dHeaders, ['returnreasondetail', 'return_reason_detail']);
+      if (reasonIdx === -1) reasonIdx = findColPriority(dHeaders, ['returnreason', 'reason']);
+      
+      const dateIdx = findColPriority(dHeaders, ['ordertime', 'time']);
+      const platformIdx = findColPriority(dHeaders, ['platformname', 'platform']);
+
+      const missingCols: string[] = [];
+      if (skuIdx === -1) missingCols.push("SKU (sku_code)");
+      if (orderIdx === -1) missingCols.push("Order ID (outer_order_id)");
+      if (amtIdx === -1) missingCols.push("Refund Amount (return_amt)");
+
+      if (missingCols.length > 0) {
+         throw new Error(`Missing required columns in Details file: ${missingCols.join(', ')}`);
+      }
+
+      // Group by Order ID to handle Freight aggregation
+      const orderGroups = new Map<string, { freight: number, items: any[] }>();
+
+      for (let i = 1; i < detailsRows.length; i++) {
+          const row = detailsRows[i];
+          const oid = String(row[orderIdx] || '').trim();
+          if (!oid) continue;
+
+          if (!orderGroups.has(oid)) orderGroups.set(oid, { freight: 0, items: [] });
+          const group = orderGroups.get(oid)!;
+
+          const rawSku = String(row[skuIdx] || '').trim();
+          const amt = parseFloat(String(row[amtIdx])) || 0; // V2 is Ex-VAT already
+          
+          if (rawSku.toLowerCase() === 'freight') {
+              group.freight += amt;
+          } else {
+              group.items.push({ row, sku: rawSku, amt });
+          }
+      }
+
+      const refunds: RefundLog[] = [];
+      let totalValue = 0;
+      let matchedOrders = 0;
+      let orphans = 0;
+      const unmatchedSamples: string[] = [];
+
+      orderGroups.forEach((group, oid) => {
+          const totalItemVal = group.items.reduce((sum, it) => sum + it.amt, 0);
+          
+          group.items.forEach(it => {
+              const { row, sku, amt } = it;
+              
+              // Allocate freight proportionally by value
+              const allocatedFreight = totalItemVal > 0 
+                  ? (amt / totalItemVal) * group.freight 
+                  : (group.freight / group.items.length);
+
+              const qty = qtyIdx !== -1 ? (parseFloat(String(row[qtyIdx])) || 0) : 1;
+              const oType = typeIdx !== -1 ? String(row[typeIdx]).toLowerCase() : 'refund';
+              const reason = reasonIdx !== -1 ? String(row[reasonIdx]) : undefined;
+              
+              // Date
+              let dateStr = new Date().toISOString();
+              const rawDate = (dateIdx !== -1) ? row[dateIdx] : undefined;
+              if (rawDate) {
+                 const dKey = asDateKeyNaive(rawDate);
+                 
+                 // Audit Log (Dev only)
+                 // Since this is inside a loop inside a map, we need a simple counter or just check array length
+                 if (process.env.NODE_ENV !== 'production' && refunds.length < 3) {
+                     console.log('[Returns V2 Audit] Raw:', rawDate, '-> Key:', dKey);
+                 }
+
+                 if (dKey) dateStr = new Date(dKey).toISOString();
+              }
+
+              // Platform Match
+              let finalPlatform = platformIdx !== -1 ? String(row[platformIdx]) : undefined;
+              if (existingOrders && existingOrders.size > 0) {
+                  if (existingOrders.has(oid)) {
+                      matchedOrders++;
+                      finalPlatform = existingOrders.get(oid);
+                  } else {
+                      orphans++;
+                      if (unmatchedSamples.length < 10) unmatchedSamples.push(`${oid} (SKU: ${sku})`);
+                  }
+              }
+
+              const comments = commentMap.get(oid);
+              const uniqueId = generateRefundId(sku, dateStr, amt, qty, reason);
+
+              let resendBase = undefined;
+              if (oType.includes('resend') || oid.includes('-resend')) {
+                  resendBase = oid.replace(/-resend$/i, '');
+              }
+
+              refunds.push({
+                  id: uniqueId,
+                  sku,
+                  date: dateStr,
+                  amount: amt, // Ex-VAT
+                  freightAmount: allocatedFreight, // Ex-VAT
+                  quantity: qty,
+                  platform: finalPlatform,
+                  reason: reason, // Keeping RAW reason
+                  orderId: oid,
+                  orderType: oType as any,
+                  resendBaseOrderId: resendBase,
+                  commentCn: comments?.cn,
+                  commentEn: comments?.en
+              });
+
+              totalValue += ((amt + allocatedFreight) * VAT_MULTIPLIER); // Display Total Inc-VAT
+          });
+      });
+
+      setParsedRefunds(refunds);
+      setStats({ count: refunds.length, totalValue, matchedOrders, orphans });
+      setDebugInfo({ unmatchedSamples, dbSamples: [], mappedColumn: 'outer_order_id' });
+      setIsProcessing(false);
   };
 
   const handleConfirm = () => {
       if (!parsedRefunds) return;
-      
       let finalData = parsedRefunds;
-      
       if (importStrategy === 'MATCHED_ONLY' && existingOrders) {
           finalData = parsedRefunds.filter(r => r.orderId && existingOrders.has(r.orderId));
       }
-      
       onConfirm(finalData);
   };
 
@@ -323,7 +402,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col relative overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col relative overflow-hidden max-h-[90vh]">
         
         {/* RESET CONFIRMATION OVERLAY */}
         {isResetConfirmOpen && (
@@ -333,91 +412,83 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">Clear Refund History?</h3>
                 <p className="text-gray-500 text-center max-w-md mb-8">
-                    This will <strong>permanently delete</strong> all existing refund records. This is recommended if your current data contains errors (e.g. incorrect 'Mirakl' platforms).
+                    This will <strong>permanently delete</strong> all existing refund records. This is recommended if your current data contains errors.
                 </p>
                 <div className="flex gap-4">
-                    <button
-                        onClick={() => setIsResetConfirmOpen(false)}
-                        className="px-6 py-3 text-gray-700 font-bold hover:bg-gray-100 rounded-xl transition-colors"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={() => {
-                            if (onReset) onReset();
-                            setIsResetConfirmOpen(false);
-                        }}
-                        className="px-6 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg hover:shadow-red-500/30 transition-all flex items-center gap-2"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                        Yes, Wipe Everything
-                    </button>
+                    <button onClick={() => setIsResetConfirmOpen(false)} className="px-6 py-3 text-gray-700 font-bold hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
+                    <button onClick={() => { if (onReset) onReset(); setIsResetConfirmOpen(false); }} className="px-6 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg hover:shadow-red-500/30 transition-all flex items-center gap-2"><Trash2 className="w-4 h-4" />Yes, Wipe Everything</button>
                 </div>
             </div>
         )}
 
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
           <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-100 rounded-lg text-red-600">
-                  <RotateCcw className="w-5 h-5" />
-              </div>
-              <div>
-                  <h2 className="text-xl font-bold text-gray-900">Import Refunds & Returns</h2>
-                  <p className="text-xs text-gray-500">Analyze return rates and calculate net sales</p>
-              </div>
+              <div className="p-2 bg-red-100 rounded-lg text-red-600"><RotateCcw className="w-5 h-5" /></div>
+              <div><h2 className="text-xl font-bold text-gray-900">Import Refunds & Returns</h2><p className="text-xs text-gray-500">Supports new multi-file format and legacy single file.</p></div>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
         </div>
         
-        <div className="p-6 max-h-[60vh] overflow-y-auto">
+        <div className="p-6 overflow-y-auto">
             {!parsedRefunds ? (
-                 <div 
-                    className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all ${
-                    dragActive ? 'border-indigo-500 bg-indigo-50 scale-[1.02]' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-                    }`}
-                    onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
-                >
-                    <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept=".csv, .xlsx, .xls" />
-                    {isProcessing ? (
-                        <div className="flex flex-col items-center py-4">
-                            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
-                            <p className="text-indigo-600 font-medium">Processing Report...</p>
+                <div className="space-y-6">
+                    {/* Format Switcher */}
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button onClick={() => { setUploadMode('v2'); setError(null); }} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${uploadMode === 'v2' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>New Format (2 Files)</button>
+                        <button onClick={() => { setUploadMode('legacy'); setError(null); }} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${uploadMode === 'legacy' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Legacy (1 File)</button>
+                    </div>
+
+                    {uploadMode === 'v2' ? (
+                        <div 
+                            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50/50'}`}
+                            onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                        >
+                            <div className="space-y-4 w-full max-w-sm">
+                                <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300" onClick={() => detailsInputRef.current?.click()}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-blue-50 text-blue-600 rounded"><FileText className="w-4 h-4" /></div>
+                                        <div className="text-left"><span className="text-xs font-bold text-gray-700 block">Return Details.xlsx</span><span className="text-[10px] text-gray-400">{detailsFile ? detailsFile.name : 'Required'}</span></div>
+                                    </div>
+                                    {detailsFile ? <Check className="w-4 h-4 text-green-500" /> : <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Select</span>}
+                                </div>
+                                <input ref={detailsInputRef} type="file" className="hidden" onChange={(e) => e.target.files && setDetailsFile(e.target.files[0])} accept=".xlsx,.xls" />
+
+                                <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300" onClick={() => commentsInputRef.current?.click()}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-amber-50 text-amber-600 rounded"><MessageSquare className="w-4 h-4" /></div>
+                                        <div className="text-left"><span className="text-xs font-bold text-gray-700 block">Return Order Comment.xlsx</span><span className="text-[10px] text-gray-400">{commentsFile ? commentsFile.name : 'Required'}</span></div>
+                                    </div>
+                                    {commentsFile ? <Check className="w-4 h-4 text-green-500" /> : <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Select</span>}
+                                </div>
+                                <input ref={commentsInputRef} type="file" className="hidden" onChange={(e) => e.target.files && setCommentsFile(e.target.files[0])} accept=".xlsx,.xls" />
+                            </div>
+                            
+                            <p className="text-xs text-gray-400 mt-4">Drag & drop files here or click boxes to browse.</p>
                         </div>
                     ) : (
-                        <>
-                            <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4">
-                                <RotateCcw className="w-7 h-7" />
-                            </div>
-                            <p className="text-gray-900 font-medium text-lg">Upload Refund/Return Report</p>
-                            <p className="text-sm text-gray-500 mt-1">Supports your standard After-sales export (XLSX)</p>
-                            
-                            <button 
-                                onClick={() => fileInputRef.current?.click()}
-                                className="mt-6 px-6 py-2 bg-white border border-gray-200 shadow-sm text-gray-700 font-bold rounded-lg hover:bg-gray-50"
-                            >
-                                Select File
-                            </button>
-                        </>
+                        <div 
+                            className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}`}
+                            onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                            onClick={() => legacyInputRef.current?.click()}
+                        >
+                            <input ref={legacyInputRef} type="file" className="hidden" onChange={(e) => e.target.files && setLegacyFile(e.target.files[0])} accept=".xlsx,.xls,.csv" />
+                            {legacyFile ? (
+                                <div className="flex items-center gap-2 text-green-700 font-medium"><Check className="w-5 h-5"/> {legacyFile.name}</div>
+                            ) : (
+                                <><Upload className="w-8 h-8 text-gray-400 mb-2"/><p className="text-sm font-medium text-gray-900">Upload Single Legacy File</p></>
+                            )}
+                        </div>
                     )}
-                    
-                    {error && (
-                       <div className="mt-6 flex items-center gap-2 text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100">
-                           <AlertCircle className="w-4 h-4" />
-                           <span className="text-sm">{error}</span>
-                       </div>
-                   )}
 
-                   {/* Date Format Warning */}
-                   <div className="mt-4 bg-amber-50 p-3 rounded-lg border border-amber-200 text-xs text-amber-800 text-left flex items-start gap-2">
-                       <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                       <div>
-                           <strong>Requirements:</strong>
-                           <ul className="list-disc pl-4 mt-1 space-y-0.5">
-                               <li>Date Column: <strong>Creation Time</strong> (Format: <code>DD/MM/YYYY</code>)</li>
-                               <li>Validation Column: <strong>Third-Party Order Number</strong> (Exact match preferred).</li>
-                           </ul>
-                       </div>
-                   </div>
+                    {error && <div className="p-3 bg-red-50 text-red-700 border border-red-100 rounded-lg text-xs flex items-center gap-2"><AlertCircle className="w-4 h-4"/>{error}</div>}
+                    
+                    <button 
+                        onClick={processFiles} 
+                        disabled={isProcessing || (uploadMode === 'v2' && (!detailsFile || !commentsFile)) || (uploadMode === 'legacy' && !legacyFile)}
+                        className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                        {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Process Files'}
+                    </button>
                 </div>
             ) : (
                 <div className="space-y-6 text-center">
@@ -428,111 +499,65 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                         </div>
                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                             <div className="text-2xl font-bold text-gray-700">£{stats.totalValue.toFixed(2)}</div>
-                            <div className="text-xs text-gray-600 font-bold uppercase">Total Value</div>
+                            <div className="text-xs text-gray-600 font-bold uppercase">Total Value (Inc VAT)</div>
                         </div>
                     </div>
 
                     {existingOrders && existingOrders.size > 0 ? (
                         <div className={`p-4 rounded-xl border flex flex-col gap-3 text-left ${stats.orphans > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
                             <div className="flex items-center gap-3">
-                                {stats.orphans > 0 ? (
-                                    <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0" />
-                                ) : (
-                                    <LinkIcon className="w-6 h-6 text-green-600 flex-shrink-0" />
-                                )}
+                                {stats.orphans > 0 ? <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0" /> : <LinkIcon className="w-6 h-6 text-green-600 flex-shrink-0" />}
                                 <div>
-                                    <h4 className={`text-sm font-bold ${stats.orphans > 0 ? 'text-amber-800' : 'text-green-800'}`}>
-                                        {stats.orphans > 0 ? 'Order Linking Issues Found' : 'All Refunds Linked Successfully'}
-                                    </h4>
-                                    <p className="text-xs text-gray-600 mt-1">
-                                        Matched {stats.matchedOrders} orders. 
-                                        {stats.orphans > 0 && <span className="font-bold"> {stats.orphans} refunds could not be linked to a known order ID.</span>}
-                                    </p>
+                                    <h4 className={`text-sm font-bold ${stats.orphans > 0 ? 'text-amber-800' : 'text-green-800'}`}>{stats.orphans > 0 ? 'Order Linking Issues' : 'Linked Successfully'}</h4>
+                                    <p className="text-xs text-gray-600 mt-1">Matched {stats.matchedOrders} orders. {stats.orphans > 0 && <span className="font-bold">{stats.orphans} unmatched.</span>}</p>
                                 </div>
                             </div>
 
-                            {/* Handling Strategy for Orphans */}
                             {stats.orphans > 0 && (
-                                <div className="mt-2 pt-2 border-t border-amber-200">
-                                    <div className="flex flex-col gap-2">
-                                        <p className="text-xs font-bold text-amber-900">How to handle these {stats.orphans} unmatched refunds?</p>
-                                        <div className="flex gap-3">
-                                            <button 
-                                                onClick={() => setImportStrategy('ALL')}
-                                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-all ${
-                                                    importStrategy === 'ALL' 
-                                                    ? 'bg-amber-600 text-white border-amber-700 shadow-sm' 
-                                                    : 'bg-white text-amber-800 border-amber-200 hover:bg-amber-50'
-                                                }`}
-                                            >
-                                                <div className={`w-3 h-3 rounded-full border border-current ${importStrategy === 'ALL' ? 'bg-white' : 'bg-transparent'}`}></div>
-                                                Keep All
-                                            </button>
-                                            <button 
-                                                onClick={() => setImportStrategy('MATCHED_ONLY')}
-                                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-all ${
-                                                    importStrategy === 'MATCHED_ONLY' 
-                                                    ? 'bg-green-600 text-white border-green-700 shadow-sm' 
-                                                    : 'bg-white text-green-800 border-green-200 hover:bg-green-50'
-                                                }`}
-                                            >
-                                                <Filter className="w-3 h-3" />
-                                                Exclude Unmatched
-                                            </button>
+                                <div className="mt-2 pt-2 border-t border-amber-200 space-y-3">
+                                    
+                                    {/* NEW SAMPLE LIST */}
+                                    <div className="bg-white/60 p-2 rounded border border-amber-200/60">
+                                        <div className="flex items-start gap-2">
+                                            <div className="mt-0.5"><FileQuestion className="w-3.5 h-3.5 text-amber-600" /></div>
+                                            <div className="flex-1">
+                                                <p className="text-xs font-bold text-amber-800 mb-1">Mismatch Analysis (Top 10):</p>
+                                                <ul className="text-[10px] text-amber-900 font-mono space-y-1 mb-2">
+                                                    {debugInfo.unmatchedSamples.map((s, i) => (
+                                                        <li key={i} className="flex items-center gap-1.5">
+                                                            <span className="w-1 h-1 rounded-full bg-amber-400 flex-shrink-0"></span>
+                                                            <span className="opacity-90">{s}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                                <p className="text-[10px] text-amber-700 italic leading-relaxed">
+                                                    <strong>Likely Cause:</strong> Order IDs not found in Sales History. <br/>
+                                                    Ensure sales data covers the dates for these returns.
+                                                </p>
+                                            </div>
                                         </div>
-                                        <p className="text-[10px] text-amber-700 mt-1 italic">
-                                            * Recommended: "Exclude Unmatched" to ignore pre-fulfillment cancellations that don't have a corresponding sales record.
-                                        </p>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2">
+                                        <p className="text-xs font-bold text-amber-900">Unmatched Strategy:</p>
+                                        <div className="flex gap-3">
+                                            <button onClick={() => setImportStrategy('ALL')} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-all ${importStrategy === 'ALL' ? 'bg-amber-600 text-white border-amber-700' : 'bg-white text-amber-800 border-amber-200'}`}>Keep All</button>
+                                            <button onClick={() => setImportStrategy('MATCHED_ONLY')} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-all ${importStrategy === 'MATCHED_ONLY' ? 'bg-green-600 text-white border-green-700' : 'bg-white text-green-800 border-green-200'}`}><Filter className="w-3 h-3" /> Exclude Unmatched</button>
+                                        </div>
                                     </div>
                                 </div>
                             )}
-
-                            {/* Debugging Info for Mismatches */}
-                            <div className="mt-2 p-3 bg-white rounded border border-amber-100 text-xs">
-                                <div className="flex items-center gap-2 mb-2 text-amber-700 font-bold border-b border-amber-50 pb-1">
-                                    <FileQuestion className="w-3 h-3" /> Data Mismatch Diagnostics
-                                </div>
-                                <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200 flex items-center gap-2">
-                                    <span className="text-gray-500 uppercase text-[10px] font-bold">Mapped Order ID Column:</span>
-                                    <span className={`font-mono font-bold ${debugInfo.mappedColumn.toLowerCase().includes('third') ? 'text-green-600' : 'text-amber-600'}`}>
-                                        {debugInfo.mappedColumn || 'None Detected'}
-                                    </span>
-                                    {!debugInfo.mappedColumn.toLowerCase().includes('third') && (
-                                        <span className="text-[10px] text-red-500 ml-auto flex items-center gap-1">
-                                            <AlertCircle className="w-3 h-3" /> Warning: Not Third-Party
-                                        </span>
-                                    )}
-                                </div>
-                                
-                                {stats.orphans > 0 && (
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <span className="block text-gray-500 uppercase text-[10px] mb-1">IDs in Refund File (Example)</span>
-                                            <ul className="list-disc pl-4 space-y-0.5 text-gray-700 font-mono">
-                                                {debugInfo.unmatchedSamples.map(id => <li key={id}>{id}</li>)}
-                                                {debugInfo.unmatchedSamples.length === 0 && <li className="italic text-gray-400">None detected</li>}
-                                            </ul>
-                                        </div>
-                                        <div>
-                                            <span className="block text-gray-500 uppercase text-[10px] mb-1">IDs in Sales Database (Example)</span>
-                                            <ul className="list-disc pl-4 space-y-0.5 text-gray-700 font-mono">
-                                                {debugInfo.dbSamples.map(id => <li key={id}>{id}</li>)}
-                                                {debugInfo.dbSamples.length === 0 && <li className="italic text-gray-400">Database is empty</li>}
-                                            </ul>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         </div>
                     ) : (
                         <div className="p-4 rounded-xl border bg-gray-50 border-gray-200 text-left text-xs text-gray-500">
-                            <p><strong>Note:</strong> No sales history loaded (or no Order IDs mapped in Sales). Validation skipped.</p>
+                            <p><strong>Note:</strong> No sales history loaded. Validation skipped.</p>
                         </div>
                     )}
                     
-                    <p className="text-sm text-gray-500">
-                        These refunds will be aggregated by SKU and date. Any records that already exist in the database (based on exact match of data) will be skipped automatically.
-                    </p>
+                    <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800 text-left">
+                        <Info className="w-4 h-4 inline mr-1 mb-0.5" />
+                        <strong>VAT Handling:</strong> Values are stored Ex-VAT to align with ERP data. Displayed values are VAT-Inclusive. Freight costs have been allocated to items.
+                    </div>
                 </div>
             )}
         </div>
@@ -540,26 +565,13 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         <div className="p-6 border-t bg-gray-50 flex justify-between items-center rounded-b-2xl">
             <div>
                 {onReset && (
-                    <button
-                        onClick={() => setIsResetConfirmOpen(true)}
-                        title="Delete all refund history"
-                        className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-all shadow-sm bg-white"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                        Reset Data
-                    </button>
+                    <button onClick={() => setIsResetConfirmOpen(true)} className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 bg-white"><Trash2 className="w-4 h-4" /> Reset Data</button>
                 )}
             </div>
             <div className="flex gap-3">
                 <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel</button>
                 {parsedRefunds && parsedRefunds.length > 0 && (
-                    <button 
-                        onClick={handleConfirm}
-                        className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
-                    >
-                        <Check className="w-4 h-4" />
-                        Import {recordsToImport} Refunds
-                    </button>
+                    <button onClick={handleConfirm} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"><Check className="w-4 h-4" /> Import {recordsToImport} Refunds</button>
                 )}
             </div>
         </div>

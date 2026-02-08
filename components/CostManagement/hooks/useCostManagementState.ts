@@ -41,7 +41,8 @@ export const useCostManagementState = (products: Product[]) => {
             if (key === 'sku') return p.sku;
             if (key === 'caPrice') {
                 const price = p.caPrice || 0;
-                return includeVat ? price * VAT_RATE : price;
+                // CA Price is already Gross (includes VAT).
+                return includeVat ? price : price / VAT_RATE;
             }
             
             const detail = p.costDetail;

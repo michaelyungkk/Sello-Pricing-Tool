@@ -38,13 +38,6 @@ export const PromotionManagerPageContainer: React.FC<PromotionManagerPageContain
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
-            <div>
-                <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Promotion Manager</h2>
-                <p className="mt-1 transition-colors opacity-80" style={headerStyle}>
-                    Plan, nominate SKUs, and manage cross-platform discount rules.
-                </p>
-            </div>
-
             <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
                 <button
                     onClick={() => setActiveTab('dashboard')}

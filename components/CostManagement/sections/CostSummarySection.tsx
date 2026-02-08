@@ -34,12 +34,7 @@ export const CostSummarySection: React.FC<CostSummarySectionProps> = ({
 
     return (
         <div className="w-full space-y-4">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-2 gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>{t('cost_management_title')}</h2>
-                    <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>{t('cost_management_desc')}</p>
-                </div>
-                
+            <div className="flex flex-col md:flex-row justify-end items-center mb-2 gap-4">
                 <div className="flex items-center gap-3">
                     <button 
                         onClick={() => setIncludeVat(!includeVat)}
