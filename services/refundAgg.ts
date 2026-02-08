@@ -1,9 +1,11 @@
 
 import { RefundLog } from '../types';
 import { asDateKey } from './dateUtils';
+import { VAT_MULTIPLIER } from '../constants';
 
 export interface RefundAggregationOptions {
   salesMap?: Map<string, number>; // SKU -> Unit Sales Count
+  revenueMap?: Map<string, number>; // SKU -> Revenue Amount
   productMap?: Map<string, { name: string }>; // SKU -> Product Info
 }
 
@@ -13,7 +15,9 @@ export interface RefundSkuRow {
   platform: string;
   refundCount: number;
   refundQty: number; // Sum of physical units
-  refundValue: number;
+  refundValue: number; // Total Value (Item + Freight) Inc VAT
+  itemValue: number; // Item Only Value Inc VAT
+  freightValue: number; // Freight Only Value Inc VAT
   logisticsFeeValue: number;
   topReasons: { reason: string; count: number }[];
   refundRate: number | null; // %
@@ -35,9 +39,11 @@ export interface RefundTimelineBucket {
 export interface RefundOverview {
   kpis: {
     totalRefundCount: number;
+    totalRefundQty: number;
     totalRefundValue: number;
     totalLogisticsFees: number;
-    refundRate: number | null;
+    refundRateQty: number | null;
+    refundRateValue: number | null;
   };
   skuRows: RefundSkuRow[];
   reasonRows: RefundReasonRow[];
@@ -53,15 +59,19 @@ export const buildRefundOverview = (
 ): RefundOverview => {
   const kpis = {
     totalRefundCount: 0,
+    totalRefundQty: 0,
     totalRefundValue: 0,
     totalLogisticsFees: 0,
-    refundRate: null as number | null,
+    refundRateQty: null as number | null,
+    refundRateValue: null as number | null,
   };
 
   const skuMap = new Map<string, {
     count: number;
     qty: number;
     value: number;
+    itemVal: number;
+    freight: number;
     logistics: number;
     reasons: Map<string, number>;
     platform: string;
@@ -77,9 +87,19 @@ export const buildRefundOverview = (
   for (const row of refundRows) {
     // --- Global KPI Aggregation ---
     kpis.totalRefundCount += 1;
-    // Safe guard: ensure amount is number
-    const amount = Number(row.amount) || 0;
-    kpis.totalRefundValue += amount;
+    
+    // Amounts stored Ex-VAT. Scale to Inc-VAT for display.
+    const amountExVat = Number(row.amount) || 0;
+    const freightExVat = Number(row.freightAmount) || 0;
+    
+    const itemIncVat = amountExVat * VAT_MULTIPLIER;
+    const freightIncVat = freightExVat * VAT_MULTIPLIER;
+    const totalIncVat = itemIncVat + freightIncVat;
+
+    const quantity = Number(row.quantity) || 1;
+    
+    kpis.totalRefundValue += totalIncVat;
+    kpis.totalRefundQty += quantity;
     
     // Metadata tracking
     if (row.platform) columnsSeen.add('platform');
@@ -95,6 +115,8 @@ export const buildRefundOverview = (
         count: 0,
         qty: 0,
         value: 0,
+        itemVal: 0,
+        freight: 0,
         logistics: 0,
         reasons: new Map(),
         platform: row.platform || 'Unknown',
@@ -103,8 +125,10 @@ export const buildRefundOverview = (
     }
     const entry = skuMap.get(sku)!;
     entry.count += 1;
-    entry.qty += (Number(row.quantity) || 1);
-    entry.value += amount;
+    entry.qty += quantity;
+    entry.value += totalIncVat;
+    entry.itemVal += itemIncVat;
+    entry.freight += freightIncVat;
 
     // --- Timeline Aggregation ---
     const dateKey = asDateKey(row.date);
@@ -118,7 +142,7 @@ export const buildRefundOverview = (
         }
         const tBucket = timelineMap.get(dateKey)!;
         tBucket.count += 1;
-        tBucket.value += amount;
+        tBucket.value += totalIncVat;
       }
     }
 
@@ -133,7 +157,7 @@ export const buildRefundOverview = (
     }
     const rBucket = reasonMap.get(reason)!;
     rBucket.count += 1;
-    rBucket.value += amount;
+    rBucket.value += totalIncVat;
   }
 
   // --- Finalize SKU Rows ---
@@ -173,7 +197,7 @@ export const buildRefundOverview = (
     if (opts.salesMap && opts.salesMap.has(sku)) {
       const sales = opts.salesMap.get(sku) || 0;
       if (sales > 0) {
-        refundRate = (data.count / sales) * 100;
+        refundRate = (data.qty / sales) * 100;
         if (refundRate > 10) flags.push("High Rate");
       }
     }
@@ -191,6 +215,8 @@ export const buildRefundOverview = (
       refundCount: data.count,
       refundQty: data.qty,
       refundValue: data.value,
+      itemValue: data.itemVal,
+      freightValue: data.freight,
       logisticsFeeValue: data.logistics,
       topReasons,
       refundRate,
@@ -200,10 +226,18 @@ export const buildRefundOverview = (
 
   // --- Finalize Global KPIs ---
   if (opts.salesMap) {
-    let totalSales = 0;
-    for (const val of opts.salesMap.values()) totalSales += val;
-    if (totalSales > 0) {
-      kpis.refundRate = (kpis.totalRefundCount / totalSales) * 100;
+    let totalUnitsSold = 0;
+    for (const val of opts.salesMap.values()) totalUnitsSold += val;
+    if (totalUnitsSold > 0) {
+      kpis.refundRateQty = (kpis.totalRefundQty / totalUnitsSold) * 100;
+    }
+  }
+
+  if (opts.revenueMap) {
+    let totalRevenueSold = 0;
+    for (const val of opts.revenueMap.values()) totalRevenueSold += val;
+    if (totalRevenueSold > 0) {
+      kpis.refundRateValue = (kpis.totalRefundValue / totalRevenueSold) * 100;
     }
   }
 

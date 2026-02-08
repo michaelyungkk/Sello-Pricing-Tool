@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES, DEFAULT_SEARCH_CONFIG, VAT_MULTIPLIER } from './constants';
 import { Product, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback, RefundLog, ShipmentDetail, HistoryPayload, PriceChangeRecord, AnalysisResult, SearchChip, SearchConfig, SkuCostDetail, InventoryTemplate, SearchSession, CostChangeRecord, InventoryChangeRecord } from './types';
 
 // Components
-import ProductList from './components/ProductList';
+import { OverviewPageContainer } from './components/overview/OverviewPageContainer';
 import ProductManagementPage from './components/ProductManagementPage';
 import StrategyPage from './components/StrategyPage';
 import PlatformManagementPage from './components/PlatformManagementPage';
@@ -12,7 +13,7 @@ import {
   LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X, 
   Download, Upload, WifiOff, Database, CheckCircle, FileBarChart, Bell, History, 
   UploadCloud, ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Globe,
-  ArrowUp
+  ArrowUp, Package
 } from 'lucide-react';
 
 import GlobalSearch from './components/GlobalSearch';
@@ -42,6 +43,8 @@ import { TAX_NOTE_SHORT } from './services/taxPolicy';
 import { migrateRestoredDatabase, auditRestoredDatabase } from './services/migrationService';
 import { normalizeRestoredState } from './services/restoreSanitizer';
 import { hexToRgb, extractFirstHex } from './utils/color';
+import { getCanonicalSku } from './services/skuNormalization';
+import { resolveEffectiveVelocity, calculateWeightedVelocity, toNumber } from './services/metrics';
 
 // Helper functions
 const formatDate = (date: Date) => {
@@ -63,8 +66,8 @@ const getFridayThursdayRanges = () => {
     const lastStart = new Date(currentStart);
     lastStart.setDate(currentStart.getDate() - 7);
     
-    const lastEnd = new Date(lastStart);
-    lastEnd.setDate(lastStart.getDate() + 6);
+    const lastEnd = new Date(currentStart);
+    lastEnd.setDate(currentStart.getDate() + 6);
     
     return {
         current: { start: currentStart, end: currentEnd },
@@ -96,7 +99,7 @@ const recalculateProductMetrics = (
         historyMap.get(h.sku)!.push(h);
     });
 
-    // 2. Determine Time Window
+    // 2. Determine Time Window for Comparison (PoP Trend Analysis)
     let days = 30;
     if (lookback === 'ALL') {
         if (history && history.length > 0) {
@@ -130,36 +133,33 @@ const recalculateProductMetrics = (
             const d = new Date(l.date);
             if (isNaN(d.getTime())) return;
             if (d >= cutoffDate) {
-                currentQty += (l.velocity || 0);
+                currentQty += toNumber(l.velocity);
             } else if (d >= prevCutoffDate) {
-                prevQty += (l.velocity || 0);
+                prevQty += toNumber(l.velocity);
             }
         });
 
-        // Calculated actuals from history
-        const calculatedDailySales = currentQty / days;
-        const calculatedPrevDailySales = prevQty / days;
-        
-        // PRIORITIZE ERP VELOCITY for Inventory Logic
-        const effectiveDailySales = (p.dailyAverageSales && p.dailyAverageSales > 0) 
-            ? p.dailyAverageSales 
-            : calculatedDailySales;
+        // 4. Resolve Effective Velocity (Priority: ERP > Weighted Fallback)
+        const effectiveDailySales = resolveEffectiveVelocity(p, logs);
 
-        const daysRemaining = effectiveDailySales > 0 ? (p.stockLevel || 0) / effectiveDailySales : 999;
+        const calculatedPrevDailySales = prevQty / days;
+        const daysRemaining = effectiveDailySales > 0 ? toNumber(p.stockLevel) / effectiveDailySales : 999;
         
         let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
-        if ((p.stockLevel || 0) <= 0) status = 'Critical';
-        else if (daysRemaining < (p.leadTimeDays || 30) * (thresholds.stockoutRunwayMultiplier || 1)) status = 'Critical';
-        else if (daysRemaining > (thresholds.overstockDays || 120)) status = 'Overstock';
-        else if (daysRemaining < (p.leadTimeDays || 30) * ((thresholds.stockoutRunwayMultiplier || 1) + 0.5)) status = 'Warning';
+        if (toNumber(p.stockLevel) <= 0) status = 'Critical';
+        else if (daysRemaining < toNumber(p.leadTimeDays, 30) * toNumber(thresholds.stockoutRunwayMultiplier, 1)) status = 'Critical';
+        else if (daysRemaining > toNumber(thresholds.overstockDays, 120)) status = 'Overstock';
+        else if (daysRemaining < toNumber(p.leadTimeDays, 30) * (toNumber(thresholds.stockoutRunwayMultiplier, 1) + 0.5)) status = 'Warning';
 
+        // Trend is purely based on historical comparison (PoP)
+        const currentCalculatedVelocity = currentQty / days;
         const velocityChange = calculatedPrevDailySales > 0 
-            ? ((calculatedDailySales - calculatedPrevDailySales) / calculatedPrevDailySales) * 100 
+            ? ((currentCalculatedVelocity - calculatedPrevDailySales) / calculatedPrevDailySales) * 100 
             : 0;
 
         return {
             ...p,
-            averageDailySales: effectiveDailySales,
+            averageDailySales: effectiveDailySales, // Use resolved value (ERP prioritized)
             previousDailySales: calculatedPrevDailySales,
             daysRemaining,
             status,
@@ -173,7 +173,7 @@ const App: React.FC = () => {
     
     const [isDataLoaded, setIsDataLoaded] = useState(false);
     const [products, setProducts] = useState<Product[]>([]);
-    const [priceHistory, setPriceHistory] = useState<PriceLog[]>([]);
+    const [priceHistoryHistory, setPriceHistory] = useState<PriceLog[]>([]);
     const [refundHistory, setRefundHistory] = useState<RefundLog[]>([]);
     const [shipmentHistory, setShipmentHistory] = useState<ShipmentLog[]>([]);
     const [priceChangeHistory, setPriceChangeHistory] = useState<PriceChangeRecord[]>([]);
@@ -187,6 +187,16 @@ const App: React.FC = () => {
     const [strategyRules, setStrategyRules] = useState<StrategyConfig>(DEFAULT_STRATEGY_RULES);
     const [searchConfig, setSearchConfig] = useState<SearchConfig>(DEFAULT_SEARCH_CONFIG);
     
+    // Globalsetting for deducting refunds in calculation - UPDATED: Default to true
+    const [deductRefunds, setDeductRefunds] = useState<boolean>(() => {
+        const saved = localStorage.getItem('sello_global_deduct_refunds');
+        return saved === null ? true : saved === 'true';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('sello_global_deduct_refunds', deductRefunds.toString());
+    }, [deductRefunds]);
+
     const [uploadTimestamps, setUploadTimestamps] = useState<Record<string, string>>(() => {
         try {
             return JSON.parse(localStorage.getItem('sello_upload_timestamps') || '{}') || {};
@@ -253,28 +263,28 @@ const App: React.FC = () => {
     const [isSearchLoading, setIsSearchLoading] = useState(false);
     const [searchSessions, setSearchSessions] = useState<SearchSession[]>([]);
     const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
-    const [currentView, setCurrentView] = useState<'dashboard' | 'strategy' | 'products' | 'platforms' | 'settings' | 'costs' | 'definitions' | 'promotions' | 'tools' | 'search'>('products');
+    const [currentView, setCurrentView] = useState<'overview' | 'strategy' | 'products' | 'platforms' | 'settings' | 'costs' | 'definitions' | 'promotions' | 'tools' | 'search'>('overview');
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [isFreshnessExpanded, setIsFreshnessExpanded] = useState(false);
     const fileRestoreRef = useRef<HTMLInputElement>(null);
 
     const priceHistoryMap = useMemo(() => {
         const map = new Map<string, PriceLog[]>();
-        (priceHistory || []).forEach(h => {
+        (priceHistoryHistory || []).forEach(h => {
             if (!h || !h.sku) return;
             if (!map.has(h.sku)) map.set(h.sku, []);
             map.get(h.sku)!.push(h);
         });
         return map;
-    }, [priceHistory]);
+    }, [priceHistoryHistory]);
 
     const existingOrders = useMemo(() => {
         const map = new Map<string, string>();
-        (priceHistory || []).forEach(p => {
+        (priceHistoryHistory || []).forEach(p => {
             if (p && p.orderId) map.set(p.orderId, p.platform || 'Unknown');
         });
         return map;
-    }, [priceHistory]);
+    }, [priceHistoryHistory]);
 
     const dynamicDateLabels = useMemo(() => {
         const ranges = getFridayThursdayRanges();
@@ -302,7 +312,7 @@ const App: React.FC = () => {
     }, [userProfile.backgroundImage, userProfile.backgroundColor, userProfile.themeColor, userProfile.glassMode]);
 
     const handleRefreshProductStatuses = (config: ThresholdConfig) => {
-        const recalculated = recalculateProductMetrics(products, priceHistory, velocityLookback, config);
+        const recalculated = recalculateProductMetrics(products, priceHistoryHistory, velocityLookback, config);
         setProducts(recalculated);
     };
 
@@ -342,7 +352,7 @@ const App: React.FC = () => {
                    limit: 1,
                    explanation: `Deep Dive: ${directMatch.sku}`
                };
-               const { results, timeLabel } = processDataForSearch(deepDiveIntent, products, priceHistory, pricingRules, refundHistory);
+               const { results, timeLabel } = processDataForSearch(deepDiveIntent, products, priceHistoryHistory, pricingRules, refundHistory);
                const newSession: SearchSession = { id: `search-${Date.now()}`, query: `SKU: ${directMatch.sku}`, results: results || [], params: deepDiveIntent, explanation: deepDiveIntent.explanation, timeLabel: timeLabel, timestamp: Date.now() };
                setSearchSessions(prev => [newSession, ...(prev || [])]); setActiveSearchId(newSession.id); setCurrentView('search'); setIsSearchLoading(false);
            }, 150);
@@ -352,7 +362,7 @@ const App: React.FC = () => {
        setIsSearchLoading(true);
        try {
          const intent = await parseSearchQuery(rawText);
-         const { results, timeLabel } = processDataForSearch(intent, products, priceHistory, pricingRules, refundHistory);
+         const { results, timeLabel } = processDataForSearch(intent, products, priceHistoryHistory, pricingRules, refundHistory);
          const newSession: SearchSession = { id: `search-${Date.now()}`, query: rawText, results: results || [], params: intent, explanation: intent.explanation, timeLabel: timeLabel, timestamp: Date.now() };
          setSearchSessions(prev => [newSession, ...(prev || [])]); setActiveSearchId(newSession.id); setCurrentView('search');
        } catch(e) { console.error("Search failed", e); } finally { setIsSearchLoading(false); }
@@ -376,14 +386,14 @@ const App: React.FC = () => {
         setCostChangeHistory(prev => [...(prev || []), newRecord].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     };
 
-    const handleRefineSearch = (sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, priceHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel }; } return s; })); setIsSearchLoading(false); }, 150); };
-    const deleteSearchSession = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('products'); } };
+    const handleRefineSearch = (sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, priceHistoryHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel }; } return s; })); setIsSearchLoading(false); }, 150); };
+    const deleteSearchSession = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } };
     const handleViewElasticity = (product: Product) => { setSelectedElasticityProduct(product); };
     const handleAnalyze = async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } };
     const handleApplyPrice = (productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = (prev || []).find(p => p.id === productId); if (!productToUpdate) return prev; const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...(prevHistory || []), change]); return prev.map(p => { if (p.id !== productId) return p; return { ...p, caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }; }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); };
     
     const handleBackup = () => { 
-        const data = { products, priceHistory, refundHistory, shipmentHistory, priceChangeHistory, costChangeHistory, inventoryChangeHistory, promotions, learnedAliases, pricingRules, logisticsRules, strategyRules, searchConfig, velocityLookback, userProfile, inventoryTemplates, thresholds, uploadTimestamps, exportDate: new Date().toISOString() }; 
+        const data = { products, priceHistory: priceHistoryHistory, refundHistory, shipmentHistory, priceChangeHistory, costChangeHistory, inventoryChangeHistory, promotions, learnedAliases, pricingRules, logisticsRules, strategyRules, searchConfig, velocityLookback, userProfile, inventoryTemplates, thresholds, uploadTimestamps, exportDate: new Date().toISOString() }; 
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); 
         const url = URL.createObjectURL(blob); 
         const link = document.createElement('a'); 
@@ -398,14 +408,8 @@ const App: React.FC = () => {
         reader.onload = (event) => {
             try {
                 const rawJson = JSON.parse(event.target?.result as string);
-                
-                // --- RESTORE PIPELINE ---
-                // 1. Initial normalization to fix structural gaps
                 const safeJson = normalizeRestoredState(rawJson);
-                // 2. Migration
                 const migrated = migrateRestoredDatabase(safeJson);
-                
-                // --- AUDIT STEP ---
                 const report = auditRestoredDatabase(migrated);
                 if (report.hasFatal) {
                     console.error('[RESTORE AUDIT FAIL]', report);
@@ -413,9 +417,6 @@ const App: React.FC = () => {
                     if (fileRestoreRef.current) fileRestoreRef.current.value = '';
                     return;
                 }
-
-                // 3. Construct deterministic restored object
-                // Check rawJson for optional settings to preserve user preference if missing in backup
                 const hasThresholds = rawJson && typeof rawJson === 'object' && 'thresholds' in rawJson;
                 const hasVelocity = rawJson && typeof rawJson === 'object' && 'velocityLookback' in rawJson;
 
@@ -436,13 +437,9 @@ const App: React.FC = () => {
                     userProfile: migrated.userProfile && typeof migrated.userProfile === 'object' ? migrated.userProfile : {},
                     inventoryTemplates: Array.isArray(migrated.inventoryTemplates) ? migrated.inventoryTemplates : [],
                     uploadTimestamps: migrated.uploadTimestamps && typeof migrated.uploadTimestamps === 'object' ? migrated.uploadTimestamps : {},
-                    
-                    // Conditionally loaded settings (use migrated value if present in raw, else null)
                     thresholds: hasThresholds ? migrated.thresholds : null,
                     velocityLookback: hasVelocity ? migrated.velocityLookback : null,
                 };
-
-                // 4. Batch update all states unconditionally
                 setPriceHistory(restored.priceHistory);
                 setRefundHistory(restored.refundHistory);
                 setShipmentHistory(restored.shipmentHistory);
@@ -458,35 +455,21 @@ const App: React.FC = () => {
                 setInventoryTemplates(restored.inventoryTemplates);
                 setUploadTimestamps(restored.uploadTimestamps);
                 localStorage.setItem('sello_upload_timestamps', JSON.stringify(restored.uploadTimestamps));
-
-                // Merge Profile (preserve local if missing in backup)
                 setUserProfile(prev => ({ ...prev, ...restored.userProfile }));
-                
-                // Thresholds Logic
                 let currentThresholds = thresholds;
                 if (restored.thresholds) {
                     setThresholds(restored.thresholds);
                     saveThresholdConfig(restored.thresholds);
                     currentThresholds = restored.thresholds;
                 }
-
-                // Velocity Logic
                 let currentVelocity = velocityLookback;
                 if (restored.velocityLookback) {
                     setVelocityLookback(restored.velocityLookback);
                     localStorage.setItem('sello_velocity_setting', restored.velocityLookback);
                     currentVelocity = restored.velocityLookback;
                 }
-
-                // 5. Trigger derived calculations
-                const recalculatedProducts = recalculateProductMetrics(
-                    restored.products, 
-                    restored.priceHistory, 
-                    currentVelocity, 
-                    currentThresholds
-                );
+                const recalculatedProducts = recalculateProductMetrics(restored.products, restored.priceHistory, currentVelocity, currentThresholds);
                 setProducts(recalculatedProducts);
-                
                 alert(t('alert_db_restore_success'));
             } catch (err) {
                 console.error("Restore failed", err);
@@ -521,11 +504,11 @@ const App: React.FC = () => {
 
     const handleSalesImportConfirm = (updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: ShipmentLog[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>) => { 
         if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
-        let updatedPriceHistory = [...(priceHistory || [])];
+        let updatedPriceHistory = [...(priceHistoryHistory || [])];
         if (historyPayload && historyPayload.length > 0) { 
             const newLogs: PriceLog[] = historyPayload.map(h => ({ id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, sku: h.sku, date: h.date, price: h.price, velocity: h.velocity, margin: h.margin || 0, profit: h.profit, adsSpend: h.adsSpend, platform: h.platform, orderId: h.orderId, postcode: h.postcode })); 
             const transactionKeys = new Set<string>(); const dailyActivityKeys = new Set<string>(); newLogs.forEach(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { transactionKeys.add(`${l.sku}|${l.orderId}`); } dailyActivityKeys.add(`${l.sku}|${d}|${p}`); }); 
-            const keptHistory = (priceHistory || []).filter(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { const txKey = `${l.sku}|${l.orderId}`; if (transactionKeys.has(txKey)) return false; return true; } const dailyKey = `${l.sku}|${d}|${p}`; if (dailyActivityKeys.has(dailyKey)) return false; return true; }); 
+            const keptHistory = (priceHistoryHistory || []).filter(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { const txKey = `${l.sku}|${l.orderId}`; if (transactionKeys.has(txKey)) return false; return true; } const dailyKey = `${l.sku}|${d}|${p}`; if (dailyActivityKeys.has(dailyKey)) return false; return true; }); 
             updatedPriceHistory = [...newLogs, ...keptHistory]; setPriceHistory(updatedPriceHistory);
         }
         let mergedProducts = (products || []).map(p => { const update = (updatedProductsFromImport || []).find(u => u.id === p.id); return update ? update : p; });
@@ -543,12 +526,25 @@ const App: React.FC = () => {
         const timestamp = Date.now();
         const uploadBatchId = `batch-${timestamp}`;
         const aggregatedDataMap = new Map<string, any>();
-        data.forEach(item => { const sku = String(item.sku || '').trim(); if (!sku) return; const existing = aggregatedDataMap.get(sku) || {}; Object.entries(item).forEach(([k, v]) => { if (v !== undefined) existing[k] = v; }); aggregatedDataMap.set(sku, existing); });
+        data.forEach(item => { 
+            const rawSku = String(item.sku || '').trim();
+            if (!rawSku) return;
+            const canonicalSku = getCanonicalSku(rawSku);
+            const existing = aggregatedDataMap.get(canonicalSku) || {}; 
+            Object.entries(item).forEach(([k, v]) => { 
+                if (v !== undefined) {
+                    if (k === 'stock') existing[k] = (Number(existing[k]) || 0) + Number(v);
+                    else if (k === 'sku') existing[k] = canonicalSku;
+                    else existing[k] = v;
+                }
+            }); 
+            aggregatedDataMap.set(canonicalSku, existing); 
+        });
         const finalData = Array.from(aggregatedDataMap.values());
         setProducts(prev => {
+            const currentThresholds = getThresholdConfig();
             const newProducts = [...(prev || [])];
             finalData.forEach(item => {
-                const parseTags = (tags?: string): string[] => { if (!tags) return []; return tags.split(',').map(t => t.trim()).filter(Boolean); };
                 const existingIndex = newProducts.findIndex(p => p.sku === item.sku);
                 const existingProduct = existingIndex !== -1 ? newProducts[existingIndex] : null;
                 if (existingProduct) {
@@ -568,31 +564,20 @@ const App: React.FC = () => {
                         if (oldCost > 0 && Math.abs(oldCost - newCost) > 0.02) { costChanges.push({ id: `cost-chg-${Date.now()}-${item.sku}`, sku: item.sku, productName: existing.name, date: reportDate, oldCost, newCost, changeType: newCost > oldCost ? 'INCREASE' : 'DECREASE', percentChange: ((newCost - oldCost) / oldCost) * 100 }); }
                         existing.costPrice = newCost;
                     }
+                    // Capture ERP Daily Sales directly
+                    if (item.dailyAverageSales !== undefined) {
+                        existing.dailyAverageSales = toNumber(item.dailyAverageSales);
+                    }
                     if (item.name) existing.name = item.name;
                     if (item.category) existing.category = item.category;
                     existing.lastUpdated = reportDate;
                     newProducts[existingIndex] = existing;
                 } else {
-                    newProducts.push({ 
-                        id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, 
-                        sku: item.sku, 
-                        name: item.name || item.sku, 
-                        stockLevel: item.stock || 0, 
-                        costPrice: item.cost || 0, 
-                        currentPrice: 0, // Initialized to 0 as per requirements
-                        averageDailySales: 0, 
-                        leadTimeDays: 30, 
-                        status: 'Healthy', 
-                        recommendation: 'New Product', 
-                        daysRemaining: 999, 
-                        channels: [], 
-                        lastUpdated: reportDate, 
-                        category: item.category || 'Uncategorized', 
-                        dailyAverageSales: item.dailyAverageSales || 0 
-                    });
+                    newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: toNumber(item.dailyAverageSales), leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, category: item.category || 'Uncategorized', dailyAverageSales: toNumber(item.dailyAverageSales) });
                 }
             });
-            return newProducts;
+            // CRITICAL: Always trigger a full recalculation to ensure averageDailySales maps correctly to ERP vs Fallback
+            return recalculateProductMetrics(newProducts, priceHistoryHistory, velocityLookback, currentThresholds);
         });
         if (costChanges.length > 0) setCostChangeHistory(prev => [...costChanges, ...(prev || [])]);
         if (inventoryLogs.length > 0) setInventoryChangeHistory(prev => [...inventoryLogs, ...(prev || [])]);
@@ -621,25 +606,15 @@ const App: React.FC = () => {
         setProducts(prev => (prev || []).map(p => {
             const platformMappings = mappings.filter(m => m.masterSku === p.sku && m.platform === platform);
             if (platformMappings.length === 0 && mode === 'merge') return p;
-            
             const updatedChannels = [...p.channels];
             const channelIdx = updatedChannels.findIndex(c => c.platform === platform);
             const newAliases = platformMappings.map(m => m.alias).join(', ');
-
             if (channelIdx >= 0) {
                 const existingAliases = updatedChannels[channelIdx].skuAlias?.split(',').map(s => s.trim()).filter(Boolean) || [];
                 const importedAliases = newAliases.split(',').map(s => s.trim()).filter(Boolean);
-                updatedChannels[channelIdx] = {
-                    ...updatedChannels[channelIdx],
-                    skuAlias: mode === 'replace' ? newAliases : [...new Set([...existingAliases, ...importedAliases])].join(', ')
-                };
+                updatedChannels[channelIdx] = { ...updatedChannels[channelIdx], skuAlias: mode === 'replace' ? newAliases : [...new Set([...existingAliases, ...importedAliases])].join(', ') };
             } else if (newAliases) {
-                updatedChannels.push({
-                    platform,
-                    manager: pricingRules[platform]?.manager || 'Unassigned',
-                    velocity: 0,
-                    skuAlias: newAliases
-                });
+                updatedChannels.push({ platform, manager: pricingRules[platform]?.manager || 'Unassigned', velocity: 0, skuAlias: newAliases });
             }
             return { ...p, channels: updatedChannels };
         }));
@@ -652,15 +627,12 @@ const App: React.FC = () => {
             const uniqueNew = newRefunds.filter(r => !existingIds.has(r.id));
             return [...prev, ...uniqueNew];
         });
-        
         setProducts(prev => (prev || []).map(p => {
             const productRefunds = [...refundHistory, ...newRefunds].filter(r => r.sku === p.sku);
             const totalRefundQty = productRefunds.reduce((sum, r) => sum + r.quantity, 0);
-            // Rough estimate for display in catalog, proper rate is calculated in Decision Engine
             const returnRate = p.averageDailySales > 0 ? (totalRefundQty / (p.averageDailySales * 30)) * 100 : 0; 
             return { ...p, returnRate };
         }));
-        
         updateTimestamp('Refunds');
         setIsReturnsModalOpen(false);
     };
@@ -672,16 +644,7 @@ const App: React.FC = () => {
             if (update) {
                 const oldPrice = p.caPrice || (p.currentPrice * VAT_MULTIPLIER);
                 if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
-                    changes.push({
-                        id: `ca-chg-${Date.now()}-${p.sku}`,
-                        sku: p.sku,
-                        productName: p.name,
-                        date: reportDate,
-                        oldPrice,
-                        newPrice: update.caPrice,
-                        changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE',
-                        percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100
-                    });
+                    changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
                 }
                 return { ...p, caPrice: update.caPrice, lastUpdated: reportDate };
             }
@@ -717,7 +680,8 @@ const App: React.FC = () => {
                     </div>
                     <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
                         {[ 
-                          { id: 'products', icon: LayoutDashboard, label: t('nav_overview') }, 
+                          { id: 'overview', icon: LayoutDashboard, label: t('nav_overview') }, 
+                          { id: 'products', icon: Package, label: t('nav_products') }, 
                           { id: 'platforms', icon: Globe, label: t('nav_platforms') },
                           { id: 'strategy', icon: Calculator, label: t('nav_strategy') }, 
                           { id: 'costs', icon: DollarSign, label: t('nav_costs') }, 
@@ -738,7 +702,7 @@ const App: React.FC = () => {
                 </aside>
                 <main className="flex-1 md:ml-64 min-0 relative z-10 flex flex-col h-full overflow-hidden">
                     <header className="sticky top-0 z-50 flex justify-between items-center gap-8 px-8 py-4 bg-custom-glass border-b border-custom-glass/50 shadow-sm transition-all duration-300">
-                        <div> <h1 className="text-2xl font-bold transition-colors" style={headerStyle}> {currentView === 'search' ? t('header_search') : currentView === 'products' ? t('header_products') : currentView === 'platforms' ? t('header_platforms') : currentView === 'dashboard' ? t('header_dashboard') : currentView === 'strategy' ? t('header_strategy') : currentView === 'costs' ? t('header_costs') : currentView === 'definitions' ? t('header_definitions') : currentView === 'promotions' ? t('header_promotions') : currentView === 'tools' ? t('header_toolbox') : t('desc_settings')} </h1> <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}> {currentView === 'search' ? t('desc_search') : currentView === 'dashboard' ? t('desc_dashboard') : currentView === 'strategy' ? t('desc_strategy') : currentView === 'products' ? t('desc_products') : currentView === 'platforms' ? t('desc_platforms') : currentView === 'costs' ? t('desc_costs') : currentView === 'definitions' ? t('desc_definitions') : currentView === 'promotions' ? t('desc_promotions') : currentView === 'tools' ? t('desc_toolbox') : t('desc_settings')} </p> </div>
+                        <div> <h1 className="text-2xl font-bold transition-colors" style={headerStyle}> {currentView === 'search' ? t('header_search') : currentView === 'products' ? t('header_products') : currentView === 'platforms' ? t('header_platforms') : currentView === 'overview' ? t('header_dashboard') : currentView === 'strategy' ? t('header_strategy') : currentView === 'costs' ? t('header_costs') : currentView === 'definitions' ? t('header_definitions') : currentView === 'promotions' ? t('header_promotions') : currentView === 'tools' ? t('header_toolbox') : t('desc_settings')} </h1> <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}> {currentView === 'search' ? t('desc_search') : currentView === 'overview' ? t('desc_dashboard') : currentView === 'strategy' ? t('desc_strategy') : currentView === 'products' ? t('desc_products') : currentView === 'platforms' ? t('desc_platforms') : currentView === 'costs' ? t('desc_costs') : currentView === 'definitions' ? t('desc_definitions') : currentView === 'promotions' ? t('desc_promotions') : currentView === 'tools' ? t('desc_toolbox') : t('desc_settings')} </p> </div>
                         <div className="flex-1 max-w-2xl"> <GlobalSearch onSearch={handleSearch} isLoading={isSearchLoading} platforms={Object.keys(pricingRules)} products={products} /> </div>
                         <div className="flex items-center gap-4"> <span className="text-xs" style={{...headerStyle, opacity: 0.6}}>{TAX_NOTE_SHORT}</span> <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div> {userProfile.name && <span className="text-sm font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>} {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />} <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button> <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div> <UserProfile profile={userProfile} onUpdate={setUserProfile} /> </div>
                     </header>
@@ -746,14 +710,17 @@ const App: React.FC = () => {
                         <div style={{ display: currentView === 'search' ? 'block' : 'none' }}>
                             {activeSearch ? ( <SearchResultsPage data={{ results: activeSearch.results || [], query: activeSearch.query, params: activeSearch.params, id: activeSearch.id }} products={products} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} timeLabel={activeSearch.timeLabel} onRefine={handleRefineSearch} searchConfig={searchConfig} priceChangeHistory={priceChangeHistory} thresholds={thresholds} /> ) : ( <div className="flex flex-col items-center justify-center h-full text-gray-400"> <Search className="w-12 h-12 mb-4 opacity-50" /> <p className="text-lg font-medium">{t('search_empty_state')}</p> </div> )}
                         </div>
+                        <div style={{ display: currentView === 'overview' ? 'block' : 'none' }}>
+                            {products.length === 0 ? ( <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full"> <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}><Database className="w-10 h-10" /></div> <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3> <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p> <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative"> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{hasInventory ? t('step_completed') : t('step_1')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4">{hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}</div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p> <button onClick={() => setIsUploadModalOpen(true)} className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300'}`} style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}>{hasInventory ? t('reupload_inventory') : t('upload_inventory')}</button> </div> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{t('step_2')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4"><FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} /></div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p> <button onClick={() => hasInventory && setIsSalesImportModalOpen(true)} disabled={!hasInventory} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}} className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}><Upload className="w-5 h-5" /> {t('upload_sales')}</button> </div> </div> </div> ) : ( <OverviewPageContainer products={products} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} pricingRules={pricingRules} priceChangeHistory={priceChangeHistory} promotions={promotions} themeColor={userProfile.themeColor} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} headerStyle={headerStyle} /> )}
+                        </div>
                         <div style={{ display: currentView === 'products' ? 'block' : 'none' }}>
-                            {products.length === 0 ? ( <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full"> <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}><Database className="w-10 h-10" /></div> <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3> <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p> <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative"> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{hasInventory ? t('step_completed') : t('step_1')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4">{hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}</div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p> <button onClick={() => setIsUploadModalOpen(true)} className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300'}`} style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}>{hasInventory ? t('reupload_inventory') : t('upload_inventory')}</button> </div> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{t('step_2')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4"><FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} /></div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p> <button onClick={() => hasInventory && setIsSalesImportModalOpen(true)} disabled={!hasInventory} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}} className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}><Upload className="w-5 h-5" /> {t('upload_sales')}</button> </div> </div> </div> ) : ( <ProductManagementPage products={products} pricingRules={pricingRules} promotions={promotions || []} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory || []} priceChangeHistory={priceChangeHistory || []} onOpenMappingModal={() => setIsMappingModalOpen(true)} dateLabels={dynamicDateLabels} onUpdateProduct={(p) => setProducts(prev => (prev || []).map(old => old.id === p.id ? p : old))} onViewElasticity={handleViewElasticity} themeColor={userProfile.themeColor} headerStyle={headerStyle} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} /> )}
+                             <ProductManagementPage products={products} pricingRules={pricingRules} promotions={promotions || []} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory || []} priceChangeHistory={priceChangeHistory || []} onOpenMappingModal={() => setIsMappingModalOpen(true)} dateLabels={dynamicDateLabels} onUpdateProduct={(p) => setProducts(prev => (prev || []).map(old => old.id === p.id ? p : old))} onViewElasticity={handleViewElasticity} themeColor={userProfile.themeColor} headerStyle={headerStyle} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} />
                         </div>
                         <div style={{ display: currentView === 'platforms' ? 'block' : 'none' }}>
-                            <PlatformManagementPage products={products} priceHistoryMap={priceHistoryMap} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
+                            <PlatformManagementPage products={products} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
                         </div>
                         <div style={{ display: currentView === 'strategy' ? 'block' : 'none' }}>
-                            <StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} promotions={promotions || []} priceChangeHistory={priceChangeHistory || []} costChangeHistory={costChangeHistory || []} inventoryChangeHistory={inventoryChangeHistory || []} onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord} onUpdateCostChangeRecord={handleUpdateCostChangeRecord} onUpdateInventoryChangeRecord={handleUpdateInventoryChangeRecord} onManualPriceChange={handleManualPriceChange} onManualCostChange={handleManualCostChange} velocityLookback={velocityLookback} thresholds={thresholds} />
+                            <StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} promotions={promotions || []} priceChangeHistory={priceChangeHistory || []} costChangeHistory={costChangeHistory || []} inventoryChangeHistory={inventoryChangeHistory || []} onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord} onUpdateCostChangeRecord={handleUpdateCostChangeRecord} onUpdateInventoryChangeRecord={handleUpdateInventoryChangeRecord} onManualPriceChange={handleManualPriceChange} onManualCostChange={handleManualCostChange} velocityLookback={velocityLookback} thresholds={thresholds} />
                         </div>
                         <div style={{ display: currentView === 'costs' ? 'block' : 'none' }}>
                             <CostManagementPage products={products} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
@@ -768,24 +735,22 @@ const App: React.FC = () => {
                             <DefinitionsPage headerStyle={headerStyle} />
                         </div>
                         <div style={{ display: currentView === 'settings' ? 'block' : 'none' }}>
-                            <SettingsPage currentRules={pricingRules} onSave={(newRules, newVelocity, newSearchConfig) => { setPricingRules(newRules); setVelocityLookback(newVelocity); if (newSearchConfig) setSearchConfig(newSearchConfig); localStorage.setItem('sello_velocity_setting', newVelocity); handleRecalculateVelocity(newVelocity, priceHistory); }} logisticsRules={logisticsRules || []} onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }} products={products} shipmentHistory={shipmentHistory || []} themeColor={userProfile.themeColor} headerStyle={headerStyle} searchConfig={searchConfig} velocityLookback={velocityLookback} extraData={{ priceHistory, promotions: promotions || [] }} onRefreshThresholds={handleRefreshThresholds} />
+                            <SettingsPage currentRules={pricingRules} onSave={(newRules, newVelocity, newSearchConfig) => { setPricingRules(newRules); setVelocityLookback(newVelocity); if (newSearchConfig) setSearchConfig(newSearchConfig); localStorage.setItem('sello_velocity_setting', newVelocity); handleRecalculateVelocity(newVelocity, priceHistoryHistory); }} logisticsRules={logisticsRules || []} onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }} products={products} shipmentHistory={shipmentHistory || []} themeColor={userProfile.themeColor} headerStyle={headerStyle} searchConfig={searchConfig} velocityLookback={velocityLookback} extraData={{ priceHistory: priceHistoryHistory, promotions: promotions || [] }} onRefreshThresholds={handleRefreshThresholds} />
                         </div>
                     </div>
                 </main>
                 {isUploadModalOpen && <BatchUploadModal products={products} onClose={() => setIsUploadModalOpen(false)} onConfirm={handleInventoryImport} />}
                 {isSalesImportModalOpen && <SalesImportModal products={products} pricingRules={pricingRules} learnedAliases={learnedAliases} onClose={() => setIsSalesImportModalOpen(false)} onResetData={handleResetSalesData} onConfirm={handleSalesImportConfirm} />}
-                {isSkuDetailModalOpen && <SkuDetailUploadModal products={products} onClose={() => setIsSkuDetailModalOpen(false)} onConfirm={handleSkuDetailImport} />}
+                {isSkuDetailModalOpen && <SkuDetailUploadModal products={products} onClose={() => setIsUploadModalOpen(false)} onConfirm={handleSkuDetailImport} />}
                 {isMappingModalOpen && <MappingUploadModal products={products} platforms={Object.keys(pricingRules)} learnedAliases={learnedAliases} onClose={() => setIsMappingModalOpen(false)} onConfirm={handleMappingImport} />}
                 {isReturnsModalOpen && <ReturnsUploadModal onClose={() => setIsReturnsModalOpen(false)} onConfirm={handleReturnsImport} onReset={handleResetRefunds} existingOrders={existingOrders} />}
                 {isCAUploadModalOpen && <CAUploadModal products={products} onClose={() => setIsCAUploadModalOpen(false)} onConfirm={handleCAImport} />}
                 {isShipmentModalOpen && <ShipmentUploadModal products={products} onClose={() => setIsShipmentModalOpen(false)} onConfirm={handleShipmentImport} />}
-                {selectedElasticityProduct && ( <PriceElasticityModal product={selectedElasticityProduct} priceHistory={priceHistory} priceChangeHistory={priceChangeHistory || []} onClose={() => setSelectedElasticityProduct(null)} /> )}
+                {selectedElasticityProduct && ( <PriceElasticityModal product={selectedElasticityProduct} priceHistory={priceHistoryHistory} priceChangeHistory={priceChangeHistory || []} onClose={() => setSelectedElasticityProduct(null)} /> )}
                 {selectedAnalysisProduct && ( <AnalysisModal product={selectedAnalysisProduct} analysis={analysisResult} isLoading={isAnalysisLoading} onClose={() => { setSelectedAnalysisProduct(null); setAnalysisResult(null); }} onApplyPrice={handleApplyPrice} themeColor={userProfile.themeColor} /> )}
                 
-                {/* Back to Top Button */}
                 <button
                     onClick={() => {
-                        // Use ref to scroll the container instead of window
                         if (mainContentRef.current) {
                             mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
                         }

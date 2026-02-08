@@ -2,6 +2,7 @@
 export interface ReturnsReasonMeta {
     short: string;
     full: string;
+    description: string;
     family?: string;
     sub?: string;
 }
@@ -32,49 +33,74 @@ const KNOWN_CODES: Record<string, string> = {
 
 export function parseReturnsReason(raw: string | null | undefined): ReturnsReasonMeta {
     if (!raw || !raw.trim()) {
-        return { short: 'UNK', full: 'Unknown / Unmapped' };
+        return { short: 'UNK', full: 'Unknown / Unmapped', description: 'Unknown / Unmapped' };
     }
 
-    // Typical Format: "CM - Change of Mind/C1 - Customer not like or wrong buy"
-    // Goal: Extract "CM" and "C1" to make "CM/C1"
-    
+    // Format: "CM - Change of Mind / C1 - Customer not like or wrong buy"
+    // Goal: 
+    // Short: "CM/C1"
+    // Description: "Change of Mind: Customer not like or wrong buy"
+
     const parts = raw.split('/');
     const familyPart = parts[0] ? parts[0].trim() : '';
     const subPart = parts[1] ? parts[1].trim() : '';
 
-    const extractCode = (segment: string): string => {
-        // Look for "CODE - " pattern at start
-        const match = segment.match(/^([A-Z0-9]+)\s+-\s+/);
+    const parseSegment = (segment: string) => {
+        // Look for "CODE - Description"
+        const match = segment.match(/^([A-Z0-9]+)\s+-\s+(.+)$/);
         if (match) {
-            return match[1];
+            return { code: match[1], desc: match[2].trim() };
         }
-        // Fallback: take first word if it looks like a code (2-3 chars, uppercase/digits)
+        // Look for "CODE - " (empty desc)
+        const matchEmpty = segment.match(/^([A-Z0-9]+)\s+-\s*$/);
+        if (matchEmpty) {
+            return { code: matchEmpty[1], desc: '' };
+        }
+
+        // Fallback: check if first word is code
         const firstWord = segment.split(' ')[0];
         if (firstWord.length <= 4 && /^[A-Z0-9]+$/.test(firstWord)) {
-            return firstWord;
+             const rest = segment.substring(firstWord.length).replace(/^[-\s]+/, '').trim();
+             return { code: firstWord, desc: rest || firstWord }; // If no desc, use code as desc? Or leave empty.
         }
-        return '?';
+
+        return { code: '?', desc: segment };
     };
 
-    const familyCode = extractCode(familyPart);
-    const subCode = subPart ? extractCode(subPart) : '';
+    const family = parseSegment(familyPart);
+    const sub = subPart ? parseSegment(subPart) : { code: '', desc: '' };
 
     let short = 'UNK';
+    let description = raw; // Default to full raw if parsing fails
 
-    if (familyCode !== '?' && subCode !== '?' && subCode) {
-        short = `${familyCode}/${subCode}`;
-    } else if (familyCode !== '?') {
-        short = familyCode;
+    if (family.code !== '?' && sub.code) {
+        short = `${family.code}/${sub.code}`;
+        description = `${family.desc}: ${sub.desc}`;
+    } else if (family.code !== '?') {
+        short = family.code;
+        description = family.desc;
     } else {
-        // Fallback for non-standard strings, create a slug or truncate
-        short = raw.substring(0, 10).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        // Fallback for non-standard strings
+        // If raw is short enough, use it as short? No, keep UNK or truncated
+        // Check if raw looks like "Quality Issue" (no code)
+        if (raw.length < 50) {
+             description = raw;
+             // Try to generate a short code from initials? No, too risky.
+             // Just use UNK or the first few chars
+             short = raw.substring(0, 8).toUpperCase().replace(/[^A-Z]/g, '');
+        }
     }
+    
+    // Clean up description
+    if (description.startsWith(': ')) description = description.substring(2);
+    if (!description) description = raw; // Fallback
 
     return {
         short,
         full: raw,
-        family: familyCode !== '?' ? familyCode : undefined,
-        sub: subCode !== '?' ? subCode : undefined
+        description: description,
+        family: family.code !== '?' ? family.code : undefined,
+        sub: sub.code ? sub.code : undefined
     };
 }
 

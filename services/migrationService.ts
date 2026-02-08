@@ -1,5 +1,6 @@
 
 import { normalizeRestoredState } from './restoreSanitizer';
+import { getCanonicalSku, isMergeVariant } from './skuNormalization';
 
 /**
  * Centralized migration pipeline for restored database objects.
@@ -9,25 +10,20 @@ export const migrateRestoredDatabase = (data: any): any => {
     if (!data) return data;
 
     // --- STEP 1: NORMALIZATION ---
-    // Ensure all mandatory arrays and numeric fields exist to prevent crashes in the migration logic below.
     data = normalizeRestoredState(data);
 
-    // --- STEP 2: MIGRATION: Promotions Schema ---
+    // --- STEP 2: SKU MERGING (Specific Rule for VM1014 variants) ---
+    data = mergeSpecificSkusMigration(data);
+
+    // --- STEP 3: MIGRATION: Promotions Schema ---
     if (data.promotions && Array.isArray(data.promotions)) {
         data.promotions = data.promotions.map((p: any) => {
             const items = p.items?.map((item: any) => {
-                // Capture the legacy ground truth price
                 const legacyPrice = Number(item.promoPrice || item.discountPrice || 0);
-                
-                // Identify if this is a legacy record:
-                // 1. Missing discountType entirely
-                // 2. Uses old 'FIXED' type but has no value (relying on legacy promoPrice)
                 const isLegacy = !item.discountType || 
                                (item.discountType === 'FIXED' && (item.discountValue === 0 || item.discountValue === undefined));
 
                 if (isLegacy && legacyPrice > 0) {
-                    // Map to the new schema:
-                    // Use 'FIXED_PRICE' so the effective price is explicitly the legacy value.
                     return {
                         ...item,
                         discountType: 'FIXED_PRICE',
@@ -37,19 +33,13 @@ export const migrateRestoredDatabase = (data: any): any => {
                     };
                 }
                 
-                // Defensive check: If effective price is 0 but legacy was > 0, 
-                // restore the legacy value to prevent silent data loss.
                 if (legacyPrice > 0 && (item.promoPrice === 0 || item.promoPrice === undefined)) {
-                    return {
-                        ...item,
-                        promoPrice: legacyPrice
-                    };
+                    return { ...item, promoPrice: legacyPrice };
                 }
 
                 return item;
             }) || [];
 
-            // Upgrade event metadata
             return {
                 ...p,
                 schemaVersion: p.schemaVersion || 2,
@@ -62,6 +52,90 @@ export const migrateRestoredDatabase = (data: any): any => {
 
     return data;
 };
+
+/**
+ * Internal helper to merge specific variant SKUs into their canonical form in a restored database.
+ */
+function mergeSpecificSkusMigration(data: any): any {
+    const products = Array.isArray(data.products) ? [...data.products] : [];
+    
+    // 1. Identify and consolidate product entries
+    const mergedProductsMap = new Map<string, any>();
+    const variantsToRemove = new Set<string>();
+
+    products.forEach(p => {
+        const canonical = getCanonicalSku(p.sku);
+        if (canonical !== p.sku) {
+            variantsToRemove.add(p.sku);
+        }
+
+        if (!mergedProductsMap.has(canonical)) {
+            mergedProductsMap.set(canonical, { ...p, sku: canonical });
+        } else {
+            // MERGE LOGIC
+            const existing = mergedProductsMap.get(canonical);
+            
+            // Sum stock and incoming
+            existing.stockLevel = (Number(existing.stockLevel) || 0) + (Number(p.stockLevel) || 0);
+            existing.incomingStock = (Number(existing.incomingStock) || 0) + (Number(p.incomingStock) || 0);
+            
+            // Combine shipments
+            if (p.shipments) {
+                existing.shipments = [...(existing.shipments || []), ...p.shipments];
+            }
+
+            // Combine channels (aliases)
+            if (p.channels) {
+                const existingChannels = existing.channels || [];
+                p.channels.forEach((newChan: any) => {
+                    const match = existingChannels.find((ec: any) => ec.platform === newChan.platform);
+                    if (match) {
+                        const aliases = new Set([
+                            ...(match.skuAlias || '').split(',').map((s: string) => s.trim()),
+                            ...(newChan.skuAlias || '').split(',').map((s: string) => s.trim()),
+                            p.sku // Add the variant SKU itself as an alias
+                        ].filter(Boolean));
+                        match.skuAlias = Array.from(aliases).join(', ');
+                    } else {
+                        existingChannels.push({ ...newChan });
+                    }
+                });
+                existing.channels = existingChannels;
+            }
+        }
+    });
+
+    data.products = Array.from(mergedProductsMap.values());
+
+    // 2. Normalize all history references
+    const normalizeList = (list: any[]) => {
+        if (!Array.isArray(list)) return list;
+        return list.map(item => {
+            if (item && item.sku) {
+                return { ...item, sku: getCanonicalSku(item.sku) };
+            }
+            return item;
+        });
+    };
+
+    data.priceHistory = normalizeList(data.priceHistory);
+    data.refundHistory = normalizeList(data.refundHistory);
+    data.priceChangeHistory = normalizeList(data.priceChangeHistory);
+    data.costChangeHistory = normalizeList(data.costChangeHistory);
+    data.inventoryChangeHistory = normalizeList(data.inventoryChangeHistory);
+
+    if (data.promotions) {
+        data.promotions = data.promotions.map((promo: any) => ({
+            ...promo,
+            items: Array.isArray(promo.items) ? promo.items.map((it: any) => ({
+                ...it,
+                sku: getCanonicalSku(it.sku)
+            })) : []
+        }));
+    }
+
+    return data;
+}
 
 export const auditRestoredDatabase = (data: any): { hasFatal: boolean; issues: any[] } => {
     const issues: Array<{ path: string; expected: string; actual: string; sample?: any }> = [];

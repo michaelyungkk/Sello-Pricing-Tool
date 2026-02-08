@@ -1,3 +1,4 @@
+
 export const APP_TIMEZONE = 'Australia/Melbourne' as const;
 
 /**
@@ -40,6 +41,32 @@ export function asDateKey(input: Date | string | null | undefined): string | nul
     }
   }
   return null;
+}
+
+/**
+ * Use for parsing uploaded spreadsheets. Spreadsheet datetimes are treated as ‘as-is’ and must not be timezone-shifted.
+ * Extracts YYYY-MM-DD using local time methods.
+ */
+export function asDateKeyNaive(input: unknown): string | null {
+  if (input === null || input === undefined || input === '') {
+    return null;
+  }
+
+  let d: Date;
+  if (input instanceof Date) {
+    d = input;
+  } else if (typeof input === 'string' || typeof input === 'number') {
+    d = new Date(input);
+  } else {
+    return null;
+  }
+
+  if (isNaN(d.getTime())) return null;
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 /**

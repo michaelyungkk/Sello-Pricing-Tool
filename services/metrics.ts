@@ -1,4 +1,5 @@
-import { PriceLog } from '../types';
+import { PriceLog, Product } from '../types';
+import { asDateKey, isDateKeyBetween, addDaysToDateKey, getYesterdayKeyMelbourne } from './dateUtils';
 
 /**
  * Safely converts a value to a number.
@@ -168,3 +169,57 @@ export const coverageCount = (rows: any[], fieldName: string): { present: number
     
     return { present, missing, pct };
 }
+
+// --- VELOCITY CALCULATIONS ---
+
+/**
+ * Calculates a weighted average daily sales (velocity) based on multiple lookback periods.
+ * Formula: (3-day × 10%) + (7-day × 10%) + (15-day × 15%) + (30-day × 25%) + (60-day × 20%) + (90-day × 20%)
+ */
+export const calculateWeightedVelocity = (skuLogs: PriceLog[]): number => {
+    if (!skuLogs || skuLogs.length === 0) return 0;
+
+    const yesterdayKey = getYesterdayKeyMelbourne();
+    
+    const calculatePeriodVelocity = (days: number): number => {
+        const startKey = addDaysToDateKey(yesterdayKey, -(days - 1));
+        const periodLogs = skuLogs.filter(l => {
+            const dKey = asDateKey(l.date);
+            return dKey && isDateKeyBetween(dKey, startKey, yesterdayKey);
+        });
+        const totalQty = periodLogs.reduce((sum, l) => sum + toNumber(l.velocity), 0);
+        return totalQty / days;
+    };
+
+    const v3 = calculatePeriodVelocity(3);
+    const v7 = calculatePeriodVelocity(7);
+    const v15 = calculatePeriodVelocity(15);
+    const v30 = calculatePeriodVelocity(30);
+    const v60 = calculatePeriodVelocity(60);
+    const v90 = calculatePeriodVelocity(90);
+
+    return (v3 * 0.10) + (v7 * 0.10) + (v15 * 0.15) + (v30 * 0.25) + (v60 * 0.20) + (v90 * 0.20);
+};
+
+/**
+ * Resolves the final "Average Daily Sales" for a product.
+ * PRIORITIZATION RULE: Use ERP Daily Average Sales if it exists and is > 0.
+ * Fallback to weighted history otherwise.
+ */
+export const resolveEffectiveVelocity = (product: Product, skuLogs?: PriceLog[]): number => {
+    // 1. Mandatory Primary: ERP Daily Average Sales
+    // Check both potential field mappings from the inventory report
+    const erpVal = toNumber(product.dailyAverageSales || (product as any).Daily_Average_Sales);
+    
+    if (erpVal > 0) {
+        return erpVal;
+    }
+
+    // 2. Fallback: Weighted Calculation from imported transaction history
+    if (skuLogs && skuLogs.length > 0) {
+        return calculateWeightedVelocity(skuLogs);
+    }
+
+    // 3. Last Resort: Existing value or 0
+    return toNumber(product.averageDailySales);
+};

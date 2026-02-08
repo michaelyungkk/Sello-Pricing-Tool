@@ -1,3 +1,4 @@
+
 export interface ChannelData {
   platform: string;
   manager: string;
@@ -24,7 +25,7 @@ export interface RefundLog {
   sku: string;
   date: string;
   quantity: number;
-  amount: number;
+  amount: number; // Ex-VAT value
   platform?: string;
   reason?: string; // Primary display reason (fallback/combined)
   orderId?: string;
@@ -36,6 +37,13 @@ export interface RefundLog {
   status?: string; // 'After-sales status'
   remarks?: string; // 'Remarks'
   comments?: string; // 'Comments' - Added to distinguish from remarks
+  
+  // New Import Fields (v2)
+  freightAmount?: number; // Ex-VAT
+  orderType?: 'refund' | 'resend';
+  resendBaseOrderId?: string;
+  commentCn?: string;
+  commentEn?: string;
 }
 
 export interface PriceChangeRecord {

@@ -1,3 +1,4 @@
+
 export default {
   // User Profile
   personalize: "Personalize",
@@ -24,6 +25,7 @@ export default {
 
   // Sidebar & Navigation
   nav_overview: "Overview",
+  nav_products: "Products",
   nav_platforms: "Marketplaces",
   nav_strategy: "Strategy Engine",
   nav_costs: "Cost Management",
@@ -47,8 +49,8 @@ export default {
   desc_products: "Manage Master SKUs and platform aliases.",
   header_platforms: "Marketplace Management",
   desc_platforms: "Monitor performance and health across all active platforms.",
-  header_dashboard: "Decision Engine",
-  desc_dashboard: "High-level alerts and performance dashboards.",
+  header_dashboard: "Priority Actions",
+  desc_dashboard: "Execution workbench for SKU health and profitability.",
   header_strategy: "Pricing Strategy Engine",
   desc_strategy: "Define and apply rule-based pricing logic.",
   header_costs: "Cost Management",
