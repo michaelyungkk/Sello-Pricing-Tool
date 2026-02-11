@@ -23,7 +23,7 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
             {isTop && (
                 <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 px-2 py-0.5 rounded-bl-lg flex items-center gap-1 shadow-sm animate-in fade-in slide-in-from-top-1 z-10">
                     <Trophy className="w-3 h-3" />
-                    <span className="text-[9px] font-black uppercase tracking-widest">Top</span>
+                    <span className="text-[9px] font-bold uppercase tracking-widest">Top</span>
                 </div>
             )}
             
@@ -43,11 +43,11 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
             <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-0.5">
-                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Revenue</span>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Revenue</span>
                         <div className="text-sm font-bold text-gray-900 leading-none">{formatMoney(summary.revenue, 0)}</div>
                     </div>
                     <div className="space-y-0.5 text-right bg-indigo-50/50 -m-1 p-1 rounded">
-                        <span className="text-[9px] font-medium text-indigo-500 uppercase tracking-tight">Net Profit</span>
+                        <span className="text-[10px] font-medium text-indigo-500 uppercase tracking-wide">Net Profit</span>
                         <div className={`text-sm font-bold leading-none ${summary.netProfit >= 0 ? 'text-indigo-700' : 'text-red-600'}`}>
                             {formatMoney(summary.netProfit, 0)}
                         </div>
@@ -56,13 +56,13 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
 
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
                     <div className="space-y-0.5">
-                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Margin %</span>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Margin %</span>
                         <div className={`text-sm font-bold ${summary.marginPct >= 15 ? 'text-green-600' : summary.marginPct >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
                             {formatPct(summary.marginPct)}
                         </div>
                     </div>
                     <div className="space-y-0.5 text-right">
-                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">TACoS %</span>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">TACoS %</span>
                         <div className={`text-sm font-bold ${summary.tacosPct !== null ? (summary.tacosPct > 15 ? 'text-red-600' : 'text-gray-800') : 'text-gray-400'}`}>
                             {formatPct(summary.tacosPct)}
                         </div>
@@ -71,11 +71,11 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
 
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
                     <div className="space-y-0.5">
-                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Ad Spend</span>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Ad Spend</span>
                         <div className="text-sm font-bold text-orange-600 leading-none">{formatMoney(summary.adSpend, 0)}</div>
                     </div>
                     <div className="space-y-0.5 text-right">
-                        <span className="text-[9px] font-medium text-gray-400 uppercase tracking-tight">Units</span>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Units</span>
                         <div className="text-sm font-bold text-gray-700 leading-none">{formatNumber(summary.units)}</div>
                     </div>
                 </div>

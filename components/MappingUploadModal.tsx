@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo } from 'react';
 import { Product } from '../types';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, Link as LinkIcon, ArrowRight, Search, ChevronDown, ChevronRight, Edit2, GitMerge, Eraser } from 'lucide-react';

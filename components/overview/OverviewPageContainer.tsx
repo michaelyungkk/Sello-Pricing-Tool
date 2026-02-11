@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, PricingRules, PriceLog, RefundLog, PriceChangeRecord, SearchChip, PromotionEvent } from '../../types';
 import { ThresholdConfig, getThresholdConfig } from '../../services/thresholdsConfig';
@@ -33,6 +34,10 @@ interface OverviewPageContainerProps {
     headerStyle?: React.CSSProperties;
     deductRefunds: boolean;
     setDeductRefunds: (v: boolean) => void;
+    mapJumpState?: {
+        carrier: string;
+        metric: 'RETURN_RATE' | 'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS';
+    } | null;
 }
 
 type DateRange = 'yesterday' | '7d' | '14d' | '30d' | '90d' | 'custom';
@@ -62,7 +67,8 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     thresholds: propThresholds,
     headerStyle,
     deductRefunds,
-    setDeductRefunds
+    setDeductRefunds,
+    mapJumpState
 }) => {
     const [activeTab, setActiveTab] = useState<OverviewTab>('actions');
     const [range, setRange] = useState<DateRange>('30d');
@@ -78,6 +84,13 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
     const thresholds = useMemo(() => propThresholds || getThresholdConfig(), [propThresholds]);
+
+    // Handle map jump state
+    useEffect(() => {
+        if (mapJumpState) {
+            setActiveTab('map');
+        }
+    }, [mapJumpState]);
 
     // Initialize Sort State based on the selected decision mode
     useEffect(() => {
@@ -126,9 +139,14 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
 
         const data = products.map(p => {
             const logs = priceHistoryMap.get(p.sku) || [];
-            const scopeLogs = platformScope === 'All' 
-                ? logs 
-                : logs.filter(l => l.platform === platformScope || (platformScope !== 'All' && l.platform?.includes(platformScope)));
+            
+            // Scope Filter: Respect platform selection only. 
+            // Exclusion shield ONLY affects strategy, not dashboard metrics.
+            const scopeLogs = logs.filter(l => {
+                const platform = l.platform || 'Unknown';
+                const matchesScope = platformScope === 'All' || platform === platformScope || platform.includes(platformScope);
+                return matchesScope;
+            });
 
             let curUnits = 0; let curRev = 0; let curProfit = 0; let curAdSpend = 0;
             let prevUnits = 0;
@@ -155,7 +173,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             const lastSaleDate = saleLogs.length > 0 ? new Date(saleLogs[0].date).getTime() : 0;
             const daysSinceLastSale = lastSaleDate > 0 ? Math.floor((todayTs - lastSaleDate) / (1000 * 60 * 60 * 24)) : 999;
 
-            // Calculate Historical Medians for Decision Bucket 2
+            // Calculate Historical Medians
             const allSkuLogs = logs.filter(l => {
                 if (platformScope !== 'All' && l.platform !== platformScope && !l.platform?.includes(platformScope)) return false;
                 return true;
@@ -402,7 +420,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             return { day: displayDate, revenue: dayRev * VAT_MULTIPLIER, ads: dayAds * VAT_MULTIPLIER, profit: dayProfit * VAT_MULTIPLIER };
         });
         return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
-    }, [processedData, dateRange, priceHistoryMap, refundHistory, deductRefunds, products]);
+    }, [processedData, dateRange, priceHistoryMap, refundHistory, deductRefunds, products, pricingRules, platformScope]);
 
     return (
         <div className="space-y-6 pb-20 animate-in fade-in duration-500 max-w-[1600px] mx-auto min-h-full flex flex-col">
@@ -870,7 +888,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                         </div>
                     </div>
                 )}
-                {activeTab === 'map' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope} themeColor={themeColor} onSearch={onSearch} timePeriodLabel={periodLabel} /></div>)}
+                {activeTab === 'map' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope} themeColor={themeColor} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
                 {activeTab === 'categories' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto pb-24"><CategoryPerformanceSlide products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} themeColor={themeColor} refundHistory={refundHistory} deductRefunds={deductRefunds} /></div>)}
             </div>
             

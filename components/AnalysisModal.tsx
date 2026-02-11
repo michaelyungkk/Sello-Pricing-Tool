@@ -29,7 +29,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
         <div className="p-6 border-b border-gray-100/50 flex justify-between items-start bg-gray-50/50">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-2 py-0.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded uppercase tracking-wide">
+              <span className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-700 rounded uppercase tracking-wide">
                 {product.platform || (product.channels?.[0]?.platform) || 'Multi-Channel'}
               </span>
               <div className="flex items-center">

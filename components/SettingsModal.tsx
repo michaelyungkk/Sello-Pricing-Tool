@@ -59,7 +59,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ currentRules, onClose, on
           </div>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-12 gap-4 px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <div className="grid grid-cols-12 gap-4 px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
                <div className="col-span-4">Platform</div>
                <div className="col-span-4 text-center">Commission Fee (%)</div>
                <div className="col-span-4 text-center">Strategy Markup (%)</div>

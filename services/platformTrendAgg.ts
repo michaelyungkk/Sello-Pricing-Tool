@@ -1,6 +1,6 @@
 
-import { PriceLog, RefundLog } from '../types';
-import { calcRevenue, calcProfit, calcUnits, calcAdSpend } from './metrics';
+import { PriceLog, RefundLog, ReturnDateBasis } from '../types';
+import { calcRevenue, calcProfit, calcUnits, calcAdSpend, getReturnDateKey } from './metrics';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey } from './dateUtils';
 import { scaleMoneyInclTax } from './taxPolicy';
 import { VAT_MULTIPLIER } from '../constants';
@@ -65,7 +65,9 @@ export const aggregatePlatformTrends = (
   dateRange: { startKey: string; endKey: string },
   platforms: string[],
   refundHistory: RefundLog[] = [],
-  deductRefunds: boolean = false
+  deductRefunds: boolean = false,
+  dateBasis: ReturnDateBasis = 'refundDate',
+  orderDateMap?: Map<string, string>
 ): PlatformTrendData[] => {
   const { startKey, endKey } = dateRange;
 
@@ -122,7 +124,7 @@ export const aggregatePlatformTrends = (
 
   // 2. Process Refund Deductions
   for (const r of refundHistory) {
-    const refundDateKey = asDateKey(r.date);
+    const refundDateKey = getReturnDateKey(r, dateBasis, orderDateMap);
     if (!refundDateKey) continue;
 
     const isCurrent = isDateKeyBetween(refundDateKey, startKey, endKey);

@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export function GradeBadge({ gradeLevel }: { gradeLevel?: number | string | null }) {
@@ -23,7 +24,7 @@ export function GradeBadge({ gradeLevel }: { gradeLevel?: number | string | null
     colorClasses = 'bg-rose-50 text-rose-700 border-rose-200';
   }
 
-  const baseClasses = "inline-flex items-center rounded-full px-1 py-0 text-[10px] font-medium ml-2";
+  const baseClasses = "inline-flex items-center rounded-full px-1 py-0 text-[10px] font-medium ml-2 border";
 
   return (
     <span className={`${baseClasses} ${colorClasses}`}>

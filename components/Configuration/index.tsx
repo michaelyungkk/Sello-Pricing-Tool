@@ -23,7 +23,7 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
             <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
                 <button
                     onClick={() => setActiveTab('platforms')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'platforms' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'platforms' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     <Globe className="w-4 h-4" />
                     Platform Rules
@@ -31,7 +31,7 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
 
                 <button
                     onClick={() => setActiveTab('logistics')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'logistics' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'logistics' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     <Truck className="w-4 h-4" />
                     Logistics Rates
@@ -39,7 +39,7 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
 
                 <button
                     onClick={() => setActiveTab('thresholds')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'thresholds' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'thresholds' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     <AlertTriangle className="w-4 h-4" />
                     Alerts & Diagnostics
@@ -47,7 +47,7 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
 
                 <button
                     onClick={() => setActiveTab('search')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'search' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'search' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     <Search className="w-4 h-4" />
                     Search Settings

@@ -313,7 +313,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                             
                             <button 
                                 onClick={() => fileInputRef.current?.click()}
-                                className="mt-6 px-6 py-2 bg-white border border-gray-200 shadow-sm text-gray-700 font-bold rounded-lg hover:bg-gray-50"
+                                className="mt-6 px-6 py-2 bg-white border border-gray-200 shadow-sm text-gray-700 font-medium rounded-lg hover:bg-gray-50"
                             >
                                 {t('select_file')}
                             </button>
@@ -332,12 +332,12 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                     <div className="flex items-center justify-between">
                         <div className="flex gap-6 items-center">
                             <div className="flex flex-col">
-                                <span className="text-xs text-gray-500 uppercase font-bold">{t('total_items')}</span>
+                                <span className="text-xs text-gray-500 uppercase font-medium">{t('total_items')}</span>
                                 <span className="text-xl font-bold text-gray-900">{validCount}</span>
                             </div>
                             <div className="w-px h-8 bg-gray-200"></div>
                             <div className="flex flex-col">
-                                <span className="text-xs text-indigo-600 uppercase font-bold">{t('new_skus')}</span>
+                                <span className="text-xs text-indigo-600 uppercase font-medium">{t('new_skus')}</span>
                                 <span className="text-xl font-bold text-indigo-600">{newProductCount}</span>
                             </div>
                         </div>
@@ -362,20 +362,20 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                                         <TrendingUp className="w-4 h-4" />
                                         {costChangeSummary.increases}
                                     </div>
-                                    <div className="text-[10px] text-green-600 uppercase font-bold mt-1">Increases</div>
+                                    <div className="text-[10px] text-green-600 uppercase font-medium mt-1">Increases</div>
                                 </div>
                                 <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
                                     <div className="text-xl font-bold text-red-700 flex items-center justify-center gap-1">
                                         <TrendingDown className="w-4 h-4" />
                                         {costChangeSummary.decreases}
                                     </div>
-                                    <div className="text-[10px] text-red-600 uppercase font-bold mt-1">Decreases</div>
+                                    <div className="text-[10px] text-red-600 uppercase font-medium mt-1">Decreases</div>
                                 </div>
                                 <div className="p-3 bg-gray-50 border border-gray-100 rounded-lg">
                                     <div className="text-xl font-bold text-gray-600">
                                         {costChangeSummary.unchanged}
                                     </div>
-                                    <div className="text-[10px] text-gray-500 uppercase font-bold mt-1">Unchanged</div>
+                                    <div className="text-[10px] text-gray-500 uppercase font-medium mt-1">Unchanged</div>
                                 </div>
                             </div>
                         </div>
@@ -392,7 +392,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                             {parsedItems.slice(0, 50).map((item, idx) => (
                                 <div key={idx} className="px-4 py-3 border-b border-gray-100 flex items-center hover:bg-gray-50 transition-colors last:border-0">
                                     <div className="flex-1 min-w-0 pr-4">
-                                        <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                                        <div className="font-medium text-sm text-gray-900 flex items-center gap-2">
                                             {item.sku}
                                             {!existingSkus.has(item.sku) && (
                                                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 uppercase">{t('new')}</span>
@@ -430,7 +430,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
             {parsedItems && parsedItems.length > 0 && (
                 <button 
                     onClick={() => onConfirm(parsedItems)}
-                    className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                    className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
                 >
                     <Check className="w-4 h-4" />
                     {t('confirm_import')}

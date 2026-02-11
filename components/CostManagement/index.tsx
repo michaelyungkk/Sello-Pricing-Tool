@@ -24,7 +24,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
     } = useCostManagementState(products);
 
     return (
-        <div className="w-full space-y-4">
+        <div className="max-w-[1600px] mx-auto space-y-6 pb-20 flex flex-col">
             <CostSummarySection
                 themeColor={themeColor}
                 headerStyle={headerStyle}

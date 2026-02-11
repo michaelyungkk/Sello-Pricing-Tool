@@ -1,15 +1,15 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, PricingRules, PriceLog, RefundLog } from '../../types';
-import { LayoutDashboard, Coins, Activity, Calendar, RotateCcw } from 'lucide-react';
+import { Product, PricingRules, PriceLog, RefundLog, ReturnDateBasis } from '../../types';
+import { LayoutDashboard, Coins, Activity, Calendar, RotateCcw, Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SortState, sortRows } from '../../utils/tableSort';
 import { calcRevenue, calcProfit, calcUnits, calcAdSpend } from '../../services/metrics';
 import { VAT_MULTIPLIER } from '../../constants';
 import { aggregatePlatformTrends } from '../../services/platformTrendAgg';
 import { buildWindow } from '../../services/dateWindow';
-import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, addDaysToDateKey } from '../../services/dateUtils';
+import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, addDaysToDateKey, getReturnDateKey } from '../../services/dateUtils';
 import { Tab3AlertRules, getTab3AlertRules } from '../../services/platformAlertRules';
 import { PlatformManagementPageProps, Tab, PlatformSortKey, PlatformSummary, PlatformFeesRoi, TimeWindow } from './platformManagement.types';
 import { PlatformOverviewTab } from './tabs/PlatformOverviewTab';
@@ -36,6 +36,9 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
   const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
   const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+
+  // Return Logic State
+  const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
 
   // Performance Trend State
   type PerformanceTrendMetric = 'NET_PROFIT' | 'MARGIN_PCT' | 'AVG_ORDER_VALUE' | 'UNITS_SOLD';
@@ -75,6 +78,20 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
       return `${format(start, !sameYear)} – ${format(end, true)}`;
   }, [dateWindow]);
 
+  // Derive Order Date Map for Order Date Basis logic
+  const orderDateMap = useMemo(() => {
+    const map = new Map<string, string>();
+    priceHistoryMap.forEach((logs) => {
+        logs.forEach(p => {
+            if (p.orderId) {
+                const dKey = asDateKey(p.date);
+                if (dKey) map.set(p.orderId, dKey);
+            }
+        });
+    });
+    return map;
+  }, [priceHistoryMap]);
+
   // Filtered History
   const filteredPriceHistoryMap = useMemo(() => {
       if (timeWindow === 'ALL') return priceHistoryMap;
@@ -97,10 +114,10 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
   const filteredRefunds = useMemo(() => {
     const { startKey, endKey } = dateWindow;
     return refundHistory.filter(r => {
-        const dKey = asDateKey(r.date);
+        const dKey = getReturnDateKey(r, returnDateBasis, orderDateMap);
         return dKey && isDateKeyBetween(dKey, startKey, endKey);
     });
-  }, [refundHistory, dateWindow]);
+  }, [refundHistory, dateWindow, returnDateBasis, orderDateMap]);
 
   // Full history for trends (needs context outside window)
   const allPriceLogs = useMemo(() => Array.from(priceHistoryMap.values()).flat(), [priceHistoryMap]);
@@ -279,8 +296,16 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
 
   // Trend Data for Comparison Cards
   const trendData = useMemo(() => {
-    return aggregatePlatformTrends(allPriceLogs, { startKey: dateWindow.startKey, endKey: dateWindow.endKey }, Object.keys(pricingRules), refundHistory, deductRefunds);
-  }, [allPriceLogs, pricingRules, dateWindow, refundHistory, deductRefunds]);
+    return aggregatePlatformTrends(
+        allPriceLogs, 
+        { startKey: dateWindow.startKey, endKey: dateWindow.endKey }, 
+        Object.keys(pricingRules), 
+        refundHistory, 
+        deductRefunds,
+        returnDateBasis,
+        orderDateMap
+    );
+  }, [allPriceLogs, pricingRules, dateWindow, refundHistory, deductRefunds, returnDateBasis, orderDateMap]);
 
   const performanceSummary = useMemo(() => {
       if (trendData.length === 0) return null;
@@ -325,7 +350,7 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
 
     if (deductRefunds) {
         filteredRefunds.forEach(r => {
-            const dKey = asDateKey(r.date);
+            const dKey = getReturnDateKey(r, returnDateBasis, orderDateMap);
             if (dKey && daysMap.has(dKey)) {
                 const entry = daysMap.get(dKey);
                 const platform = r.platform || 'Unknown';
@@ -353,7 +378,7 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
     }).sort((a, b) => a._sort - b._sort);
 
     return { data: result, platforms: Array.from(activePlatforms).sort() };
-  }, [filteredPriceHistoryMap, dateWindow, deductRefunds, filteredRefunds]);
+  }, [filteredPriceHistoryMap, dateWindow, deductRefunds, filteredRefunds, returnDateBasis, orderDateMap]);
 
   // Custom Groups & Chart Aggregation logic
   const [platformGroups, setPlatformGroups] = useState<Array<{ id: string; name: string; platformKeys: string[] }>>(() => {
@@ -562,12 +587,28 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
     <div className="max-w-[1600px] mx-auto space-y-6 pb-10">
       <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
-            <button onClick={() => setActiveTab('performance')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'performance' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Performance Trend</button>
-            <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'overview' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><LayoutDashboard className="w-4 h-4" />Platform Overview</button>
-            <button onClick={() => setActiveTab('roi')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'roi' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Fees & ROI</button>
+            <button onClick={() => setActiveTab('performance')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'performance' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Performance Trend</button>
+            <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'overview' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><LayoutDashboard className="w-4 h-4" />Platform Overview</button>
+            <button onClick={() => setActiveTab('roi')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'roi' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Fees & ROI</button>
           </div>
 
           <div className="flex items-center gap-3">
+            <div className="flex bg-gray-100 p-1 rounded-lg">
+                <button 
+                    onClick={() => setReturnDateBasis('refundDate')} 
+                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <Clock className="w-3 h-3" />
+                    Refund Date
+                </button>
+                <button 
+                    onClick={() => setReturnDateBasis('orderDate')} 
+                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <Calendar className="w-3 h-3" />
+                    Order Date
+                </button>
+            </div>
             <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
                 <input 
                     type="checkbox" 
@@ -577,7 +618,7 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
                 />
                 <div className="flex items-center gap-1.5">
                     <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
-                    <span className={`text-xs font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds/Resends</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds/Resends</span>
                 </div>
             </label>
           </div>

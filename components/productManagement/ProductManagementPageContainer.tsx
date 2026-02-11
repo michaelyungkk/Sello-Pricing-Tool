@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, RefundLog, SearchChip } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
@@ -34,6 +35,7 @@ interface ProductManagementPageContainerProps {
     thresholds?: ThresholdConfig;
     deductRefunds: boolean;
     setDeductRefunds: (v: boolean) => void;
+    onAnalyzeCarrier: (carrier: string) => void;
 }
 
 type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns';
@@ -56,7 +58,8 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
     headerStyle,
     thresholds,
     deductRefunds,
-    setDeductRefunds
+    setDeductRefunds,
+    onAnalyzeCarrier
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
@@ -132,7 +135,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'returns' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         <RotateCcw className="w-4 h-4" />
-                        Returns & Refunds
+                        Returns Management
                     </button>
                     
                     <button
@@ -163,7 +166,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
             {/* Global Context Control (Time Window) - Reused from Platform Management */}
             <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 animate-in fade-in">
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Time Window</span>
+                    <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Time Window</span>
                     <div className="flex bg-gray-100 p-1 rounded-lg">
                         {(['7D', '14D', '30D', '60D'] as const).map(w => (
                             <button key={w} onClick={() => setTimeWindow(w)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === w ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>{w}</button>
@@ -215,6 +218,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         priceHistoryMap={priceHistoryMap}
                         startDate={dateWindow.startKey}
                         endDate={dateWindow.endKey}
+                        onAnalyzeCarrier={onAnalyzeCarrier}
                     />
                 )}
 

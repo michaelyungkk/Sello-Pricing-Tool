@@ -59,7 +59,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50">
+                            <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200/50 text-[10px] uppercase tracking-wider">
                                 <tr>
                                     <SortableHeader label="Platform" sortKey="name" sort={sort} onChange={setSort as any} themeColor={themeColor} />
                                     {!selectedPlatformKey && <SortableHeader label="Manager" sortKey="manager" sort={sort} onChange={setSort as any} themeColor={themeColor} />}
@@ -76,7 +76,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                     const rule = pricingRules[summary.platform]; 
                                     const isSelected = selectedPlatformKey === summary.platform; 
                                     return (
-                                        <tr key={summary.platform} className={`even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`} onClick={() => setSelectedPlatformKey(isSelected ? null : summary.platform)}>
+                                        <tr key={summary.platform} className={`even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`} onClick={() => setSelectedPlatformKey(isSelected ? null : summary.platform)}>
                                             <td className="p-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm" style={{ backgroundColor: rule?.color || '#6366f1' }}>{summary.platform[0]}</div>

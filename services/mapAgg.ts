@@ -1,3 +1,4 @@
+
 import { Product, PriceLog } from '../types';
 import { POSTCODE_COORDS } from '../components/UkPostcodeMapCoords';
 import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from './metrics';
@@ -22,6 +23,7 @@ export interface AreaData {
     margin: number;
     returnRate: number;
     avgShippingCost: number;
+    totalShippingCost: number;
     adSpend: number;
     tacos: number;
     coordinates: [number, number];
@@ -34,7 +36,6 @@ export interface AreaData {
     revenueDeltaPct: number;
     volumeDeltaPct: number;
     districtBreakdown: DistrictData[];
-    totalShippingCost: number;
     // Guardrail: Explicit flag to indicate monetary values are tax-inclusive
     moneyIsTaxInclusive?: boolean;
 }
@@ -46,6 +47,7 @@ interface MapFilters {
   selectedPlatform: string;
   selectedCategory: string;
   selectedSubcategory: string;
+  selectedCarrier: string;
 }
 
 export const aggregateUkMapData = (
@@ -53,7 +55,7 @@ export const aggregateUkMapData = (
   priceHistoryMap: Map<string, PriceLog[]>,
   filters: MapFilters
 ): AreaData[] => {
-    const { startDate, endDate, selectedPlatform, selectedCategory, selectedSubcategory } = filters;
+    const { startDate, endDate, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier } = filters;
 
     const startKey = asDateKey(startDate);
     const endKey = asDateKey(endDate);
@@ -80,7 +82,7 @@ export const aggregateUkMapData = (
         totalPostage: number,
         totalAdSpend: number,
         platforms: Record<string, { revenue: number, volume: number, profit: number }>,
-        skus: Record<string, { name: string, profit: number, volume: number, revenue: number }>
+        skus: Record<string, { name: string; profit: number; volume: number; revenue: number }>
     }> = {};
     
     const districtStats: Record<string, { revenue: number, volume: number, profit: number, totalPostage: number }> = {};
@@ -106,6 +108,12 @@ export const aggregateUkMapData = (
         logs.forEach(log => {
             // Apply Global Filters
             if (selectedPlatform !== 'All' && log.platform !== selectedPlatform) return;
+            
+            // Apply Carrier Filter
+            if (selectedCarrier !== 'All') {
+                const partner = log.logisticPartner || 'Unknown';
+                if (partner !== selectedCarrier) return;
+            }
             
             const logKey = asDateKey(log.date);
             if (!logKey) return;

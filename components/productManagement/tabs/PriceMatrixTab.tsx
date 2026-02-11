@@ -213,7 +213,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
             </div>
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-auto flex-1">
                 <table className="w-full text-left text-xs whitespace-nowrap">
-                    <thead className="bg-gray-50/50 font-bold border-b border-gray-200 sticky top-0 z-10 text-xs">
+                    <thead className="bg-gray-50/50 font-bold border-b border-gray-200 sticky top-0 z-10 text-[10px] uppercase tracking-wider text-gray-500">
                         <tr>
                             <th className="p-2 bg-white/90 backdrop-blur sticky left-0 z-20 min-w-[150px] border-r border-gray-100">Product Reference</th>
                             <th className="p-2 bg-white/90 backdrop-blur sticky left-[150px] z-20 w-[80px] text-right border-r border-gray-100">CA Price</th>
@@ -222,7 +222,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
                         {paginatedProducts.map(p => (
-                            <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
+                            <tr key={p.id} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors">
                                 <td className="p-2 sticky left-0 bg-white/50 backdrop-blur-sm z-10 border-r border-gray-100">
                                     <div className="font-mono font-bold text-gray-900 truncate max-w-[134px]">{p.sku}</div>
                                     <div className="text-[10px] text-gray-500 truncate max-w-[134px]">{p.name}</div>

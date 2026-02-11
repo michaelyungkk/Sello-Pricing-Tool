@@ -113,65 +113,64 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                         // FILTER 1: Must resolve to a known product
                         if (!product) return; 
 
-                        // FILTER 2: Product must be active/sold on the selected platform
+                        // Resolve Platform Specific Alias
+                        let resolvedPlatformSku = product.sku; // Default to Master
+                        let channel = null;
+                        
                         if (platform !== 'All') {
-                            const channel = product.channels.find(c => 
+                            channel = product.channels.find(c => 
                                 c.platform.toLowerCase() === platform.toLowerCase()
                             );
                             
                             // 2a. Product level check: Is it sold on this platform at all?
                             if (!channel) return;
 
-                            // 2b. Validity Check: Is this specific alias valid for this platform?
-                            const validPlatformSkus = new Set<string>();
-                            validPlatformSkus.add(product.sku.toUpperCase().trim()); // Master SKU is always valid
+                            // Resolve correct Platform SKU
                             if (channel.skuAlias) {
-                                channel.skuAlias.split(',').forEach(a => validPlatformSkus.add(a.trim().toUpperCase()));
-                            }
-                            
-                            const isAliasValid = validPlatformSkus.has(lookupKey);
-                            
-                            // CHECK: Is the Master SKU on promotion?
-                            const promoName = masterSkuPromoMap.get(product.sku);
-
-                            if (promoName) {
-                                // CASE A: On Promotion.
-                                // We report it regardless of alias validity so user knows there's a promo conflict.
-                                processedResults.push({ 
-                                    ...item, 
-                                    status: 'On Promotion', 
-                                    promoName, 
-                                    masterSku: product.sku,
-                                    matchedVia: !isAliasValid ? 'Cross-Platform Alias' : (product.sku !== item.sku ? 'Alias Match' : undefined)
-                                });
-                            } else {
-                                // CASE B: No Promotion. 
-                                // Only mark "Safe" if the alias is actually valid for this platform.
-                                if (isAliasValid) {
-                                    processedResults.push({ 
-                                        ...item, 
-                                        status: 'Safe to Update',
-                                        masterSku: product.sku
-                                    });
+                                const aliases = channel.skuAlias.split(',').map(s => s.trim());
+                                // If the UPLOADED sku matches an alias for this platform, use it (user intent).
+                                // Otherwise, fallback to the first alias listed for this platform.
+                                if (aliases.some(a => a.toUpperCase() === lookupKey)) {
+                                    resolvedPlatformSku = item.sku;
                                 } else {
-                                    // CASE C: Invalid Alias & No Promo.
-                                    // Mark as Skipped. It won't appear in the Safe List export.
-                                    processedResults.push({
-                                        ...item,
-                                        status: 'Skipped',
-                                        masterSku: product.sku,
-                                        matchedVia: 'Invalid Alias for Platform'
-                                    });
+                                    resolvedPlatformSku = aliases[0];
                                 }
                             }
-                        } else {
-                            // "All" Platforms mode - simpler logic
-                            const promoName = masterSkuPromoMap.get(product.sku);
+                        }
+
+                        // FILTER 2: Product must be active/sold on the selected platform (Redundant check if platform != All but good for safety)
+                        if (platform !== 'All' && !channel) return;
+
+                        // 2b. Validity Check: Is the *lookup key* (what they uploaded) valid for this platform?
+                        // If they uploaded "MasterSKU" but platform only accepts "AliasA", we should warn them 
+                        // UNLESS we auto-mapped it to "AliasA" in resolvedPlatformSku above.
+                        
+                        // However, the previous logic marked "Skipped" if alias wasn't valid.
+                        // Let's refine: We accept Master SKU -> Alias conversion as valid.
+                        // We only skip if the product is NOT on the platform.
+                        
+                        const isAliasValid = true; // Since we resolved the platform SKU above, we assume the mapping is valid
+                        
+                        // CHECK: Is the Master SKU on promotion?
+                        const promoName = masterSkuPromoMap.get(product.sku);
+
+                        if (promoName) {
+                            // CASE A: On Promotion.
                             processedResults.push({ 
                                 ...item, 
-                                status: promoName ? 'On Promotion' : 'Safe to Update',
-                                promoName,
-                                masterSku: product.sku
+                                status: 'On Promotion', 
+                                promoName, 
+                                masterSku: product.sku,
+                                matchedVia: product.sku !== item.sku ? 'Alias Match' : undefined,
+                                platformSku: resolvedPlatformSku
+                            });
+                        } else {
+                            // CASE B: No Promotion. 
+                            processedResults.push({ 
+                                ...item, 
+                                status: 'Safe to Update',
+                                masterSku: product.sku,
+                                platformSku: resolvedPlatformSku
                             });
                         }
                     });
@@ -205,6 +204,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
 
         const worksheetData = dataToExport.map(item => {
             const row: any = { 
+                'Platform SKU (Target)': item.platformSku || item.sku,
                 'Uploaded SKU': item.sku, 
                 'New Price': item.price,
                 'Master SKU': item.masterSku
@@ -257,7 +257,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                             {Object.keys(pricingRules).sort().map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
                         <p className="text-[10px] text-gray-400 mt-1">
-                            Logic: SKUs valid for this platform will be checked. Invalid aliases will be marked as Skipped.
+                            Logic: The system will auto-resolve the correct Alias for this platform in the export.
                         </p>
                     </div>
 
@@ -329,7 +329,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                                 {skippedCount > 0 && <span className="flex items-center gap-2 font-medium text-gray-500"><Filter className="w-4 h-4" /> {skippedCount} Skipped (Invalid Alias)</span>}
                             </div>
                             <div className="text-xs text-gray-400 mt-1 italic">
-                                * "Safe to Update" list will automatically exclude aliases not valid for {platform}.
+                                * Export includes the specific Platform SKU (Alias) for {platform}.
                             </div>
                         </div>
                         <div className="flex gap-3">
@@ -341,6 +341,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-100/80 text-gray-500 font-semibold sticky top-0 z-10">
                                 <tr>
+                                    <th className="p-3">Platform SKU (Target)</th>
                                     <th className="p-3">Uploaded SKU</th>
                                     <th className="p-3">Master SKU</th>
                                     <th className="p-3 text-right">New Price</th>
@@ -351,9 +352,12 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                             <tbody className="divide-y divide-gray-100/50">
                                 {results.map((item, idx) => (
                                     <tr key={idx} className={item.status === 'On Promotion' ? 'bg-amber-50/30' : item.status === 'Skipped' ? 'bg-gray-50 text-gray-400' : ''}>
-                                        <td className="p-3 font-mono font-medium">
+                                        <td className="p-3 font-mono font-bold text-indigo-700">
+                                            {item.platformSku || item.sku}
+                                        </td>
+                                        <td className="p-3 font-mono text-xs text-gray-500">
                                             {item.sku}
-                                            {item.matchedVia && item.status !== 'Skipped' && <span className="ml-2 text-[10px] text-gray-400 border rounded px-1">Alias</span>}
+                                            {item.matchedVia && item.status !== 'Skipped' && <span className="ml-2 text-[10px] border rounded px-1">Alias</span>}
                                         </td>
                                         <td className="p-3 font-mono text-xs">{item.masterSku}</td>
                                         <td className="p-3 text-right font-mono">£{item.price.toFixed(2)}</td>

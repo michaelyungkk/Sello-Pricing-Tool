@@ -1,5 +1,6 @@
-import { PriceLog, Product } from '../types';
-import { asDateKey, isDateKeyBetween, addDaysToDateKey, getYesterdayKeyMelbourne } from './dateUtils';
+
+import { PriceLog, Product, RefundLog, ReturnDateBasis } from '../types';
+import { asDateKey, isDateKeyBetween, addDaysToDateKey, getYesterdayKeyMelbourne, getReturnDateKey as _getReturnDateKey } from './dateUtils';
 
 /**
  * Safely converts a value to a number.
@@ -223,3 +224,5 @@ export const resolveEffectiveVelocity = (product: Product, skuLogs?: PriceLog[])
     // 3. Last Resort: Existing value or 0
     return toNumber(product.averageDailySales);
 };
+
+export const getReturnDateKey = _getReturnDateKey;

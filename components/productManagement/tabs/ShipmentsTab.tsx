@@ -110,7 +110,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
-                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Filter Shipments</label>
+                <label className="text-[10px] font-medium text-gray-400 uppercase block mb-2 tracking-wide">Filter Shipments</label>
                 <TagSearchInput 
                     tags={searchTags}
                     onTagsChange={updateTags}
@@ -123,25 +123,25 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
                 <div className="space-y-3">
                     {searchTags.length > 0 && (
                         <div className="flex items-center justify-between px-1">
-                            <div className={`text-sm font-medium px-3 py-1.5 rounded-lg border inline-flex items-center gap-2 shadow-sm ${foundTagsCount === searchTags.length ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                                {foundTagsCount === searchTags.length ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                            <div className={`text-xs font-medium px-3 py-1.5 rounded-lg border inline-flex items-center gap-2 shadow-sm ${foundTagsCount === searchTags.length ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                {foundTagsCount === searchTags.length ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
                                 <span>Found shipments for <strong>{foundTagsCount}</strong> of <strong>{searchTags.length}</strong> searched items</span>
                             </div>
                         </div>
                     )}
                     <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
                         <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase font-medium text-gray-500">
+                            <thead className="bg-gray-50/50 border-b border-gray-200 text-[10px] uppercase font-bold tracking-wider text-gray-500">
                                 <tr><th className="px-4 py-3">SKU</th><th className="px-4 py-3">Container</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">ETA</th><th className="px-4 py-3 text-right">Qty</th></tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100/50">
                                 {paginatedTableData.map(row => (
-                                    <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50">
-                                        <td className="px-4 py-3 font-mono font-bold">{row.sku}</td>
-                                        <td className="px-4 py-3 text-indigo-600">{row.containerId}</td>
+                                    <tr key={row.id} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors">
+                                        <td className="px-4 py-3 font-mono font-bold text-gray-700">{row.sku}</td>
+                                        <td className="px-4 py-3 text-indigo-600 font-medium">{row.containerId}</td>
                                         <td className="px-4 py-3"><span className={`px-2 py-1 rounded border text-[10px] uppercase font-bold ${getStatusStyle(row.status)}`}>{row.status}</span></td>
-                                        <td className="px-4 py-3">{row.eta || <span className="text-gray-400 italic">Pending</span>}</td>
-                                        <td className="px-4 py-3 text-right font-bold">{row.quantity}</td>
+                                        <td className="px-4 py-3 text-gray-600">{row.eta || <span className="text-gray-400 italic">Pending</span>}</td>
+                                        <td className="px-4 py-3 text-right font-bold text-gray-800">{row.quantity}</td>
                                     </tr>
                                 ))}
                                 {filteredTableData.length === 0 && (
@@ -155,11 +155,10 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
                         </table>
                          {filteredTableData.length > 0 && (
                             <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6">
-                                {/* Simplistic pagination for now */}
                                 <div className="flex gap-2">
-                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 bg-white border rounded disabled:opacity-50">Prev</button>
-                                    <span className="text-sm text-gray-600 pt-1">Page {currentPage} of {totalPages}</span>
-                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 bg-white border rounded disabled:opacity-50">Next</button>
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 bg-white border rounded text-xs text-gray-600 font-medium disabled:opacity-50">Prev</button>
+                                    <span className="text-xs text-gray-500 pt-1 font-medium">Page {currentPage} of {totalPages}</span>
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 bg-white border rounded text-xs text-gray-600 font-medium disabled:opacity-50">Next</button>
                                 </div>
                             </div>
                          )}
@@ -171,14 +170,14 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
                         <div key={c.id} className="bg-custom-glass rounded-xl border border-custom-glass shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
                             <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-start">
                                 <div>
-                                    <h3 className="font-bold text-gray-900 flex items-center gap-2"><Ship className="w-4 h-4 text-indigo-600"/>{c.id}</h3>
-                                    <div className="text-xs text-gray-500 mt-1">ETA: {c.eta || 'Pending'}</div>
+                                    <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm"><Ship className="w-4 h-4 text-indigo-600"/>{c.id}</h3>
+                                    <div className="text-[10px] text-gray-500 mt-1 font-medium uppercase tracking-wide">ETA: {c.eta || 'Pending'}</div>
                                 </div>
-                                <span className={`text-[10px] font-bold px-2 py-1 rounded border ${getStatusStyle(c.status)}`}>{c.status}</span>
+                                <span className={`text-[9px] font-bold px-2 py-1 rounded border uppercase ${getStatusStyle(c.status)}`}>{c.status}</span>
                             </div>
                             <div className="p-4 flex-1 space-y-1 max-h-40 overflow-y-auto">
                                 {c.items.map((item:any, idx:number) => (
-                                    <div key={idx} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0"><span className="font-mono text-gray-700">{item.sku}</span><span className="font-medium">{item.qty}</span></div>
+                                    <div key={idx} className="flex justify-between text-xs py-1 border-b border-gray-50 last:border-0"><span className="font-mono text-gray-600 font-medium">{item.sku}</span><span className="font-bold text-gray-800">{item.qty}</span></div>
                                 ))}
                             </div>
                         </div>

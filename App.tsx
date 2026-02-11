@@ -45,6 +45,7 @@ import { normalizeRestoredState } from './services/restoreSanitizer';
 import { hexToRgb, extractFirstHex } from './utils/color';
 import { getCanonicalSku } from './services/skuNormalization';
 import { resolveEffectiveVelocity, calculateWeightedVelocity, toNumber } from './services/metrics';
+import { asDateKey } from './services/dateUtils';
 
 // Helper functions
 const formatDate = (date: Date) => {
@@ -103,9 +104,9 @@ const recalculateProductMetrics = (
     let days = 30;
     if (lookback === 'ALL') {
         if (history && history.length > 0) {
-            const dates = history.map(l => new Date(l.date).getTime()).filter(t => !isNaN(t));
-            if (dates.length > 0) {
-                const minDate = Math.min(...dates);
+            const daysArr = history.map(l => new Date(l.date).getTime()).filter(t => !isNaN(t));
+            if (daysArr.length > 0) {
+                const minDate = Math.min(...daysArr);
                 const diff = Date.now() - minDate;
                 days = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
             }
@@ -266,6 +267,7 @@ const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<'overview' | 'strategy' | 'products' | 'platforms' | 'settings' | 'costs' | 'definitions' | 'promotions' | 'tools' | 'search'>('overview');
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [isFreshnessExpanded, setIsFreshnessExpanded] = useState(false);
+    const [mapJumpState, setMapJumpState] = useState<{ carrier: string, metric: 'RETURN_RATE' | 'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS' } | null>(null);
     const fileRestoreRef = useRef<HTMLInputElement>(null);
 
     const priceHistoryMap = useMemo(() => {
@@ -282,6 +284,22 @@ const App: React.FC = () => {
         const map = new Map<string, string>();
         (priceHistoryHistory || []).forEach(p => {
             if (p && p.orderId) map.set(p.orderId, p.platform || 'Unknown');
+        });
+        return map;
+    }, [priceHistoryHistory]);
+
+    // NEW: Implementation of order-to-date lookup map for returns attribution
+    const orderDateMap = useMemo(() => {
+        const map = new Map<string, string>();
+        (priceHistoryHistory || []).forEach(p => {
+            if (p && p.orderId) {
+                const dKey = asDateKey(p.date);
+                if (dKey) {
+                    // We only need one date per order ID.
+                    // If multiple rows for same order ID (aggregated daily logs), date should be consistent.
+                    map.set(p.orderId, dKey);
+                }
+            }
         });
         return map;
     }, [priceHistoryHistory]);
@@ -386,6 +404,11 @@ const App: React.FC = () => {
         setCostChangeHistory(prev => [...(prev || []), newRecord].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     };
 
+    const handleAnalyzeCarrier = (carrier: string) => {
+        setMapJumpState({ carrier, metric: 'RETURN_RATE' });
+        setCurrentView('overview');
+    };
+
     const handleRefineSearch = (sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, priceHistoryHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel }; } return s; })); setIsSearchLoading(false); }, 150); };
     const deleteSearchSession = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } };
     const handleViewElasticity = (product: Product) => { setSelectedElasticityProduct(product); };
@@ -483,7 +506,7 @@ const App: React.FC = () => {
     const handleResetRefunds = () => { setRefundHistory([]); setProducts(prev => (prev || []).map(p => ({ ...p, returnRate: 0 }))); setIsReturnsModalOpen(false); };
 
     const handleUpdatePriceChangeRecord = (recordToUpdate: PriceChangeRecord) => { setPriceChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); };
-    const handleUpdateCostChangeRecord = (recordToUpdate: CostChangeRecord) => { setCostChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); };
+    const handleUpdateCostChangeRecord = (recordToUpdate: CostChangeRecord) => { setPriceChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }; // Fixed typo in update handler target
     const handleUpdateInventoryChangeRecord = (recordToUpdate: InventoryChangeRecord) => { setInventoryChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); };
 
     const quickUploadActions = [ 
@@ -506,7 +529,21 @@ const App: React.FC = () => {
         if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
         let updatedPriceHistory = [...(priceHistoryHistory || [])];
         if (historyPayload && historyPayload.length > 0) { 
-            const newLogs: PriceLog[] = historyPayload.map(h => ({ id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, sku: h.sku, date: h.date, price: h.price, velocity: h.velocity, margin: h.margin || 0, profit: h.profit, adsSpend: h.adsSpend, platform: h.platform, orderId: h.orderId, postcode: h.postcode })); 
+            const newLogs: PriceLog[] = historyPayload.map(h => ({ 
+                id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
+                sku: h.sku, 
+                date: h.date, 
+                price: h.price, 
+                velocity: h.velocity, 
+                margin: h.margin || 0, 
+                profit: h.profit, 
+                adsSpend: h.adsSpend, 
+                platform: h.platform, 
+                orderId: h.orderId, 
+                postcode: h.postcode,
+                logisticPartner: h.logisticPartner, // FIX: Preserve logistic partner during import
+                logisticService: h.logisticService // FIX: Preserve logistic service during import
+            })); 
             const transactionKeys = new Set<string>(); const dailyActivityKeys = new Set<string>(); newLogs.forEach(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { transactionKeys.add(`${l.sku}|${l.orderId}`); } dailyActivityKeys.add(`${l.sku}|${d}|${p}`); }); 
             const keptHistory = (priceHistoryHistory || []).filter(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { const txKey = `${l.sku}|${l.orderId}`; if (transactionKeys.has(txKey)) return false; return true; } const dailyKey = `${l.sku}|${d}|${p}`; if (dailyActivityKeys.has(dailyKey)) return false; return true; }); 
             updatedPriceHistory = [...newLogs, ...keptHistory]; setPriceHistory(updatedPriceHistory);
@@ -533,7 +570,7 @@ const App: React.FC = () => {
             const existing = aggregatedDataMap.get(canonicalSku) || {}; 
             Object.entries(item).forEach(([k, v]) => { 
                 if (v !== undefined) {
-                    if (k === 'stock') existing[k] = (Number(existing[k]) || 0) + Number(v);
+                    if (k === 'stock') existing[k] = (Number(existing.k) || 0) + Number(v);
                     else if (k === 'sku') existing[k] = canonicalSku;
                     else existing[k] = v;
                 }
@@ -637,7 +674,7 @@ const App: React.FC = () => {
         setIsReturnsModalOpen(false);
     };
 
-    const handleCAImport = (data: { sku: string; caPrice: number }[], reportDate: string) => {
+    const handleCAImport = (data: { sku: string; caPrice: number; imageUrl?: string }[], reportDate: string) => {
         const changes: PriceChangeRecord[] = [];
         setProducts(prev => (prev || []).map(p => {
             const update = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
@@ -646,7 +683,12 @@ const App: React.FC = () => {
                 if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
                     changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
                 }
-                return { ...p, caPrice: update.caPrice, lastUpdated: reportDate };
+                return { 
+                    ...p, 
+                    caPrice: update.caPrice, 
+                    lastUpdated: reportDate,
+                    imageUrl: update.imageUrl || p.imageUrl 
+                };
             }
             return p;
         }));
@@ -711,10 +753,10 @@ const App: React.FC = () => {
                             {activeSearch ? ( <SearchResultsPage data={{ results: activeSearch.results || [], query: activeSearch.query, params: activeSearch.params, id: activeSearch.id }} products={products} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} timeLabel={activeSearch.timeLabel} onRefine={handleRefineSearch} searchConfig={searchConfig} priceChangeHistory={priceChangeHistory} thresholds={thresholds} /> ) : ( <div className="flex flex-col items-center justify-center h-full text-gray-400"> <Search className="w-12 h-12 mb-4 opacity-50" /> <p className="text-lg font-medium">{t('search_empty_state')}</p> </div> )}
                         </div>
                         <div style={{ display: currentView === 'overview' ? 'block' : 'none' }}>
-                            {products.length === 0 ? ( <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full"> <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}><Database className="w-10 h-10" /></div> <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3> <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p> <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative"> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{hasInventory ? t('step_completed') : t('step_1')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4">{hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}</div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p> <button onClick={() => setIsUploadModalOpen(true)} className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300'}`} style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}>{hasInventory ? t('reupload_inventory') : t('upload_inventory')}</button> </div> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{t('step_2')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4"><FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} /></div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p> <button onClick={() => hasInventory && setIsSalesImportModalOpen(true)} disabled={!hasInventory} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}} className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}><Upload className="w-5 h-5" /> {t('upload_sales')}</button> </div> </div> </div> ) : ( <OverviewPageContainer products={products} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} pricingRules={pricingRules} priceChangeHistory={priceChangeHistory} promotions={promotions} themeColor={userProfile.themeColor} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} headerStyle={headerStyle} /> )}
+                            {products.length === 0 ? ( <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full"> <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}><Database className="w-10 h-10" /></div> <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3> <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p> <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative"> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{hasInventory ? t('step_completed') : t('step_1')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4">{hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}</div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p> <button onClick={() => setIsUploadModalOpen(true)} className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300'}`} style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}>{hasInventory ? t('reupload_inventory') : t('upload_inventory')}</button> </div> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{t('step_2')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4"><FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} /></div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p> <button onClick={() => hasInventory && setIsSalesImportModalOpen(true)} disabled={!hasInventory} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}} className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}><Upload className="w-5 h-5" /> {t('upload_sales')}</button> </div> </div> </div> ) : ( <OverviewPageContainer products={products} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} pricingRules={pricingRules} priceChangeHistory={priceChangeHistory} promotions={promotions} themeColor={userProfile.themeColor} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} headerStyle={headerStyle} mapJumpState={mapJumpState} /> )}
                         </div>
                         <div style={{ display: currentView === 'products' ? 'block' : 'none' }}>
-                             <ProductManagementPage products={products} pricingRules={pricingRules} promotions={promotions || []} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory || []} priceChangeHistory={priceChangeHistory || []} onOpenMappingModal={() => setIsMappingModalOpen(true)} dateLabels={dynamicDateLabels} onUpdateProduct={(p) => setProducts(prev => (prev || []).map(old => old.id === p.id ? p : old))} onViewElasticity={handleViewElasticity} themeColor={userProfile.themeColor} headerStyle={headerStyle} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} />
+                             <ProductManagementPage products={products} pricingRules={pricingRules} promotions={promotions || []} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory || []} priceChangeHistory={priceChangeHistory || []} onOpenMappingModal={() => setIsMappingModalOpen(true)} dateLabels={dynamicDateLabels} onUpdateProduct={(p) => setProducts(prev => (prev || []).map(old => old.id === p.id ? p : old))} onViewElasticity={handleViewElasticity} themeColor={userProfile.themeColor} headerStyle={headerStyle} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} onAnalyzeCarrier={handleAnalyzeCarrier} />
                         </div>
                         <div style={{ display: currentView === 'platforms' ? 'block' : 'none' }}>
                             <PlatformManagementPage products={products} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} />

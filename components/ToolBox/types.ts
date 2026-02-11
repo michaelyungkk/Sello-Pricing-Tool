@@ -22,6 +22,7 @@ export interface ProcessedResult extends UploadedItem {
     promoName?: string;
     masterSku?: string; // Debug info
     matchedVia?: string; // Debug info
+    platformSku?: string; // New: The specific alias for the target platform
 }
 
 export interface PromoCheckerToolProps {

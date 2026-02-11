@@ -1,12 +1,13 @@
+
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows, Bookmark, History, FileText, MessageSquare, Smile, Frown, Meh, Brain, Sparkles, CloudOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ExternalLink, Hash } from 'lucide-react';
-import { Product, PriceLog, PriceChangeRecord, RefundLog } from '../types';
+import { Package, Tag, Layers, DollarSign, Box, ArrowLeft, Warehouse, Ship, AlertTriangle, RotateCcw, Megaphone, TrendingDown, TrendingUp, Activity, BarChart2, Calendar, Filter, Search, Info, HelpCircle, CheckCircle, XCircle, LayoutGrid, Rows, Bookmark, History, FileText, MessageSquare, Smile, Frown, Meh, Brain, Sparkles, CloudOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ExternalLink, Hash, Clock } from 'lucide-react';
+import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis } from '../types';
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ScatterChart, Scatter, ZAxis, ReferenceLine, ReferenceArea, ComposedChart, Bar, BarChart, Cell, PieChart, Pie } from 'recharts';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 import { GradeBadge } from './GradeBadge';
 import { calcProfit, calcRevenue, calcUnits, calcAdSpend, marginPct, calcTACoSPct } from '../services/metrics';
 import { buildWindow } from '../services/dateWindow';
-import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne } from '../services/dateUtils';
+import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, getReturnDateKey } from '../services/dateUtils';
 import AuditPanel from './AuditPanel';
 import { formatMoney, formatPct, formatNumber } from '../utils/format';
 import { VAT_MULTIPLIER } from '../constants';
@@ -17,6 +18,7 @@ import ReturnsReasonTimelineChart from './skuDeepDive/returns/ReturnsReasonTimel
 import { parseReturnsReason } from '../services/returnsReasonCodes';
 import { SortableHeader } from './common/SortableHeader';
 import { sortRows, SortState } from '../utils/tableSort';
+import { aggregateRefundKeywords } from '../services/refundTextAgg';
 
 interface SkuDeepDivePageProps {
     data: {
@@ -239,7 +241,7 @@ const BoxPlot = ({ title, stats7, stats30, stats90, format, color = '#6366f1', a
       
         return (
           <g transform={`translate(${x},${y})`}>
-            <text x={0} y={0} dy={16} textAnchor="middle" fill="#666" fontSize={10} fontWeight="bold" style={{ userSelect: 'none' }}>
+            <text x={0} y={0} dy={16} textAnchor="middle" fill="#666" fontSize={10} fontWeight="500" style={{ userSelect: 'none' }}>
               {payload.value}
             </text>
             {dataPoint && (
@@ -442,6 +444,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const [refundSort, setRefundSort] = useState<SortState<string>>({ key: 'date', dir: 'desc' });
     const [refundPage, setRefundPage] = useState(1);
     const refundItemsPerPage = 10;
+    
+    // Return Date Basis Toggle
+    const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
 
     const activeSignalRef = useRef<HTMLDivElement>(null);
     const refundsRef = useRef<HTMLDivElement>(null);
@@ -486,6 +491,18 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             }, 300);
         }
     }, [focus]);
+    
+    // Derive Order Date Map for Order Date Basis logic
+    const orderDateMap = useMemo(() => {
+        const map = new Map<string, string>();
+        (transactions || []).forEach(t => {
+            if (t.orderId) {
+                const dKey = asDateKey(t.date);
+                if (dKey) map.set(t.orderId, dKey);
+            }
+        });
+        return map;
+    }, [transactions]);
 
     // Available Reason Codes for Filtering (Task C)
     const availableReasonCodes = useMemo(() => {
@@ -500,13 +517,16 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     // Refund Detail Table Data - MODIFIED: Removed date filtering to align with timeline chart
     const filteredRefundsForTable = useMemo(() => {
         const getValue = (row: RefundLog, key: string) => {
-            if (key === 'date') return new Date(row.date).getTime();
+            if (key === 'date') {
+                 const d = getReturnDateKey(row, returnDateBasis, orderDateMap);
+                 return d ? new Date(d).getTime() : 0;
+            }
             if (key === 'reason') return parseReturnsReason(row.platformReason || row.reason).short;
             return (row as any)[key];
         };
 
         return sortRows(refunds || [], refundSort, getValue);
-    }, [refunds, refundSort]);
+    }, [refunds, refundSort, returnDateBasis, orderDateMap]);
 
     const paginatedRefunds = useMemo(() => {
         return filteredRefundsForTable.slice((refundPage - 1) * refundItemsPerPage, refundPage * refundItemsPerPage);
@@ -519,10 +539,13 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         if (!refunds || refunds.length === 0) return null;
         
         // Use central aggregation service for consistent logic (which now includes freight scaling)
+        // Note: Summary stats use default refund date aggregation logic internally unless we pass dateBasis options. 
+        // For general stats like counts and keyword clouds, this is fine. 
+        // The Chart uses specific date basis explicitly.
         const overview = buildRefundOverview(refunds);
         
         // Separate totals for display
-        const totalFreight = refunds.reduce((sum, r) => sum + (Number(r.freightAmount || 0) * VAT_MULTIPLIER), 0);
+        const totalFreight = refunds.reduce((sum, r) => sum + (Number(r.freightAmount || 0)), 0);
         const resendCount = refunds.filter(r => r.orderType === 'resend').length;
         const refundCount = refunds.filter(r => r.orderType === 'refund' || !r.orderType).length;
 
@@ -560,7 +583,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
              words.forEach(w => {
                  // 1. Garbage Filter: Numeric check & IDs
                  if (NOISE_PATTERN.test(w)) return;
-                 // 2. Length Filter: Regular words usually > 3 chars
+                 // 2. Length Filter: Regular words title usually > 3 chars
                  if (w.length < 4 || w.length >= 18) return;
                  // 3. Stopword & Noise Filter
                  if (STOPWORDS.has(w) || NOISE_WORDS.has(w)) return;
@@ -611,8 +634,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             price: r.amount > 0 ? (r.quantity > 0 ? r.amount/r.quantity : r.amount) : 0,
             platform: r.platform,
             margin: 0,
-            profit: -(r.amount * VAT_MULTIPLIER), // Ensure VAT scaled for profit calculation in grid
-            adsSpend: 0,
+            // Consistency Fix: profit must be scaled by VAT since transactions.profit from searchExecution is scaled.
+            profit: -((Number(r.amount || 0) + Number(r.freightAmount || 0))), 
             _type: 'REFUND_LOG',
             reason: r.reason
         } as unknown as PriceLog));
@@ -649,35 +672,50 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             .reduce((acc, t) => acc + t.velocity, 0);
     }, [filteredTransactions]);
 
-    const allTimeMarginPct = useMemo(() => {
-        if (!transactions || transactions.length === 0) return 0;
+    const allTimeMarginStats = useMemo(() => {
+        if (!transactions || transactions.length === 0) return { pct: 0, rawProfit: 0, refundVal: 0, netSales: 0, netProfit: 0, grossSales: 0 };
         
-        let totalProfit = 0;
+        let rawProfit = 0;
         transactions.forEach(t => {
-            totalProfit += calcProfit(t);
+            // calcProfit uses t.profit if present. 
+            // Since we reverted scaling in searchExecution for DEEP_DIVE, t.profit is Ex-VAT raw.
+            rawProfit += calcProfit(t); 
         });
         
-        // Subtract refunds (value stored Ex-VAT, must scale to Inc-VAT to match sales/profit context)
-        if (refunds) {
-            refunds.forEach(r => totalProfit -= (r.amount * VAT_MULTIPLIER));
-        }
+        // Scale rawProfit to Inc-VAT once for comparison
+        const rawProfitIncVat = rawProfit * VAT_MULTIPLIER;
+        
+        // refunds[i].amount and freightAmount are raw Ex-VAT (reverted in searchExecution). 
+        // Scale exactly once here.
+        const refundVal = refunds ? refunds.reduce((sum, r) => sum + ((Number(r.amount || 0) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER), 0) : 0;
+        const netProfit = rawProfitIncVat - refundVal;
+        
+        const netSales = allTimeSales; // already scaled in searchExecution summary
     
-        const totalRefundValue = refunds ? refunds.reduce((sum, r) => sum + (r.amount * VAT_MULTIPLIER), 0) : 0;
-        const netSales = allTimeSales - totalRefundValue;
-    
-        return marginPct(totalProfit, netSales) || 0;
+        const pct = marginPct(netProfit, netSales) || 0;
+
+        return { pct, rawProfit: rawProfitIncVat, refundVal, netSales, netProfit, grossSales: allTimeSales };
     }, [transactions, refunds, allTimeSales]);
 
     // NEW: Calculate All-Time Return & Refund Rate
     const allTimeReturnStats = useMemo(() => {
-        if (allTimeQty === 0) return { returnRate: 0, refundRate: 0 };
+        if (allTimeQty === 0) return { returnRate: 0, refundRate: 0, totalRefundQty: 0, totalRefundVal: 0 };
+        
+        // --- FORMULA REFINEMENT ---
+        // 1. Return Rate (Qty): Includes Refunds AND Resends (Total Returns)
         const totalRefundQty = refunds.reduce((sum, r) => sum + r.quantity, 0);
-        // Scale to Inc-VAT for ratio against Sales Revenue
-        const totalRefundVal = refunds.reduce((sum, r) => sum + (r.amount * VAT_MULTIPLIER), 0);
+        
+        // 2. Refund Rate (Val): Includes Refunds AND Resends
+        // Scaling exactly once.
+        const totalRefundVal = refunds.reduce((sum, r) => {
+            return sum + ((Number(r.amount || 0) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER);
+        }, 0);
         
         return {
             returnRate: (totalRefundQty / allTimeQty) * 100,
-            refundRate: allTimeSales > 0 ? (totalRefundVal / allTimeSales) * 100 : 0
+            refundRate: allTimeSales > 0 ? (totalRefundVal / allTimeSales) * 100 : 0,
+            totalRefundQty,
+            totalRefundVal
         };
     }, [refunds, allTimeQty, allTimeSales]);
 
@@ -771,7 +809,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             signals.push({ 
                 id: 'DORMANT_NO_SALES',
                 label: 'Dead Stock', 
-                severity: 'High',
+                severity: 'High', 
                 color: 'text-gray-700 bg-gray-50 border-gray-200', 
                 icon: Package, 
                 desc: `High value dormant stock (£${stockValue.toFixed(0)}) with 0 velocity detected.` 
@@ -816,7 +854,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             revenue: {
                 d7: getStats(7, t => { const r = calcRevenue(t); return r > 0.01 ? r : null; }),
                 d30: getStats(30, t => { const r = calcRevenue(t); return r > 0.01 ? r : null; }),
-                d90: getStats(90, t => { const r = calcRevenue(t); return r > 0.01 ? r : null; })
+                d90: getStats(90, t => { const r = calcRevenue(t); if (r > 0.01) return r; return null; })
             },
             margin: {
                 d7: getStats(7, t => { const rev = calcRevenue(t); if (rev > 0.01) { const profit = calcProfit(t); return marginPct(profit, rev); } return null; }),
@@ -861,7 +899,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             
             const tacosPct = calcTACoSPct(totalAdSpend, totalRevenue);
             
-            return { totalAdSpend, totalRevenue, tacosPct, adOnlySpend };
+            return { totalAdSpend: totalAdSpend * VAT_MULTIPLIER, totalRevenue: totalRevenue * VAT_MULTIPLIER, tacosPct, adOnlySpend: adOnlySpend * VAT_MULTIPLIER };
         };
         
         return {
@@ -920,20 +958,22 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
             bucketTx.forEach(t => {
                 const effectiveRef = getEffectiveCA(t.date);
-                const rawDelta = t.price - effectiveRef;
+                // t.price is raw (Ex-VAT) now. Scale it for deviation check vs Ref Price.
+                const scaledPrice = t.price * VAT_MULTIPLIER;
+                const rawDelta = scaledPrice - effectiveRef;
                 const band = (Math.round(rawDelta / BAND_SIZE) * BAND_SIZE).toFixed(2);
                 
                 if (!groups[band]) groups[band] = { totalQty: 0, totalRev: 0, sumDelta: 0, sumPrice: 0 };
                 groups[band].totalQty += t.velocity;
-                groups[band].totalRev += (t.price * t.velocity);
+                groups[band].totalRev += (scaledPrice * t.velocity);
                 groups[band].sumDelta += (rawDelta * t.velocity);
-                groups[band].sumPrice += (t.price * t.velocity);
+                groups[band].sumPrice += (scaledPrice * t.velocity);
 
                 totalPeriodQty += t.velocity;
                 totalPeriodDelta += (rawDelta * t.velocity);
 
                 if (bucket.days === 90) {
-                    const p = Number(t.price.toFixed(2));
+                    const p = Number(scaledPrice.toFixed(2));
                     aggregatedPrices[p] = (aggregatedPrices[p] || 0) + t.velocity;
                 }
             });
@@ -1015,14 +1055,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             const isAdRow = tx.price === 0 && calcAdSpend(tx) > 0 && !isRefund;
     
             if (!isRefund && !isAdRow) {
-                const txRevenue = calcRevenue(tx);
+                const txRevenue = calcRevenue(tx) * VAT_MULTIPLIER;
                 group.soldQty += calcUnits(tx);
                 group.revenue += txRevenue;
                 totalRevenueAllPlatforms += txRevenue;
             }
     
-            group.adSpend += calcAdSpend(tx);
-            group.profit += calcProfit(tx);
+            group.adSpend += calcAdSpend(tx) * VAT_MULTIPLIER;
+            group.profit += calcProfit(tx) * VAT_MULTIPLIER;
         });
     
         return Object.values(subtotals).map(group => ({
@@ -1044,15 +1084,17 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         let refundValue = 0;
 
         filteredTransactions.forEach(t => {
-            const rev = t.price * t.velocity;
+            const rev = t.price * t.velocity * VAT_MULTIPLIER;
             if (t.velocity > 0) {
                 salesRows++;
                 totalUnits += t.velocity;
             } else if (t.price === 0 && (t.adsSpend || 0) > 0) {
-                adOnlySpend += (t.adsSpend || 0);
+                adOnlySpend += ((t.adsSpend || 0) * VAT_MULTIPLIER);
             } else if (t.velocity < 0 || t.price < 0) {
                 refundCount++;
-                refundValue += Math.abs(rev); // Already includes VAT scaling via filteredTransactions logic if applicable, but double check below
+                // t.profit for refund type items in sortedTransactions is -((amount + freightAmount)).
+                // Scale once here.
+                refundValue += Math.abs(calcProfit(t) * VAT_MULTIPLIER); 
             }
         });
 
@@ -1071,7 +1113,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">SKU Deep Dive</h2>
                         {initialTimeWindow && (
-                            <div className="text-xs text-indigo-600 font-medium flex items-center gap-1 mt-0.5 bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100">
+                            <div className="text-[10px] text-indigo-600 font-medium flex items-center gap-1 mt-0.5 bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100">
                                 <Info className="w-3 h-3" />
                                 Dashboard window: Last {txDays} days
                             </div>
@@ -1109,41 +1151,48 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 </div>
 
                 <div className="flex flex-col xl:flex-row gap-8">
-                    <div className="flex-1 min-w-0">
-                        <div className="mb-2 flex items-center">
-                            <span className="font-mono text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 inline-block">
-                                {product.sku}
-                            </span>
-                            <GradeBadge gradeLevel={product.gradeLevel} />
-                        </div>
-                        
-                        <h1 className="text-3xl font-bold text-gray-900 leading-tight mb-4 break-words">
-                            {product.name}
-                        </h1>
-
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                                <Layers className="w-3.5 h-3.5" />
-                                <span>{product.category || 'Uncategorized'}</span>
+                    <div className="flex-1 min-0 flex gap-6">
+                        {product.imageUrl && (
+                            <div className="w-[120px] h-[120px] flex-shrink-0 rounded-xl overflow-hidden bg-white shadow-sm">
+                                <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
                             </div>
-                            {product.subcategory && (
+                        )}
+                        <div className="flex-1 min-0">
+                            <div className="mb-2 flex items-center">
+                                <span className="font-mono text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 inline-block">
+                                    {product.sku}
+                                </span>
+                                <GradeBadge gradeLevel={product.gradeLevel} />
+                            </div>
+                            
+                            <h1 className="text-3xl font-bold text-gray-900 leading-tight mb-4 break-words">
+                                {product.name}
+                            </h1>
+
+                            <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                                    <Tag className="w-3.5 h-3.5" />
-                                    <span>{product.subcategory}</span>
+                                    <Layers className="w-3.5 h-3.5" />
+                                    <span>{product.category || 'Uncategorized'}</span>
                                 </div>
-                            )}
-                            {product.seasonTags?.slice(0, 2).map(tag => (
-                                <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
-                            ))}
-                            {(product.seasonTags?.length || 0) > 2 && (
-                                <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.seasonTags?.length || 0) - 2 }</span>
-                            )}
-                            {product.festivalTags?.slice(0, 2).map(tag => (
-                                <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
-                            ))}
-                            {(product.festivalTags?.length || 0) > 2 && (
-                                <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.festivalTags?.length || 0) - 2 }</span>
-                            )}
+                                {product.subcategory && (
+                                    <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                        <Tag className="w-3.5 h-3.5" />
+                                        <span>{product.subcategory}</span>
+                                    </div>
+                                )}
+                                {product.seasonTags?.slice(0, 2).map(tag => (
+                                    <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
+                                ))}
+                                {(product.seasonTags?.length || 0) > 2 && (
+                                    <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.seasonTags?.length || 0) - 2 }</span>
+                                )}
+                                {product.festivalTags?.slice(0, 2).map(tag => (
+                                    <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
+                                ))}
+                                {(product.festivalTags?.length || 0) > 2 && (
+                                    <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.festivalTags?.length || 0) - 2 }</span>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -1216,28 +1265,62 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                 </div>
                             </div>
 
-                            <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200">
+                            <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200 group relative cursor-help">
                                 <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1">Lifetime Net Margin</span>
-                                <div className={`text-lg font-bold ${allTimeMarginPct >= 15 ? 'text-green-600' : allTimeMarginPct > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {formatPct(allTimeMarginPct, 1)}
+                                <div className={`text-lg font-bold ${allTimeMarginStats.pct >= 15 ? 'text-green-600' : allTimeMarginStats.pct > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatPct(allTimeMarginStats.pct, 1)}
+                                </div>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                                    <div className="font-bold border-b border-gray-700 pb-1 mb-2">Calculation Detail (Inc VAT)</div>
+                                    <div className="space-y-1 font-mono">
+                                        <div className="flex justify-between"><span>Gross Sales:</span><span>{formatMoney(allTimeMarginStats.grossSales, 0)}</span></div>
+                                        <div className="flex justify-between text-green-400"><span>Tx Profit:</span><span>{formatMoney(allTimeMarginStats.rawProfit, 0)}</span></div>
+                                        <div className="flex justify-between text-red-400"><span>Refunds:</span><span>-{formatMoney(allTimeMarginStats.refundVal, 0)}</span></div>
+                                        <div className="border-t border-gray-700 pt-1 mt-1 flex justify-between font-bold"><span>Net Profit:</span><span>{formatMoney(allTimeMarginStats.netProfit, 0)}</span></div>
+                                        <div className="flex justify-between font-bold"><span>Net Sales:</span><span>{formatMoney(allTimeMarginStats.netSales, 0)}</span></div>
+                                        <div className="border-t border-gray-700 pt-1 mt-1 text-center text-gray-400 italic">
+                                            (Net Profit / Net Sales) * 100
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Return & Refund Stats - Stacked for column economy */}
                             <div className="col-span-2 sm:col-span-1 p-3 bg-white/60 rounded-xl border border-gray-200 flex flex-col justify-between">
-                                <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1">Return & Refund Rate</span>
                                 <div className="flex flex-col gap-1">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[9px] text-gray-500 font-medium">Return (Qty)</span>
+                                    <div className="flex justify-between items-center group relative cursor-help">
+                                        <span className="text-[9px] text-gray-500 font-medium">Return QTY %</span>
                                         <span className={`text-sm font-bold ${allTimeReturnStats.returnRate > thresholds.returnRatePct ? 'text-red-600' : 'text-gray-900'}`}>
                                             {formatPct(allTimeReturnStats.returnRate)}
                                         </span>
+                                        {/* Tooltip for Qty% */}
+                                        <div className="absolute bottom-full right-0 mb-2 w-56 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                                            <div className="font-bold border-b border-gray-700 pb-1 mb-2">Return Qty Math</div>
+                                            <div className="space-y-1 font-mono text-right">
+                                                <div className="flex justify-between"><span>Total Returns:</span><span>{formatNumber(allTimeReturnStats.totalRefundQty)}</span></div>
+                                                <div className="flex justify-between"><span>Lifetime Sold:</span><span>{formatNumber(allTimeQty)}</span></div>
+                                                <div className="border-t border-gray-700 pt-1 mt-1 text-center text-gray-400 italic">
+                                                    (Returns / Sales) * 100
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="flex justify-between items-center border-t border-gray-100 pt-1">
-                                        <span className="text-[9px] text-gray-500 font-medium">Refund (Val)</span>
+                                    <div className="flex justify-between items-center border-t border-gray-100 pt-1 group relative cursor-help">
+                                        <span className="text-[9px] text-gray-500 font-medium">Return AMT %</span>
                                         <span className="text-sm font-bold text-gray-900">
                                             {formatPct(allTimeReturnStats.refundRate)}
                                         </span>
+                                        {/* Tooltip for Amt% */}
+                                        <div className="absolute bottom-full right-0 mb-2 w-56 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                                            <div className="font-bold border-b border-gray-700 pb-1 mb-2">Return Value Math (Inc VAT)</div>
+                                            <div className="space-y-1 font-mono text-right">
+                                                <div className="flex justify-between"><span>Total Returns Val:</span><span>{formatMoney(allTimeReturnStats.totalRefundVal, 0)}</span></div>
+                                                <div className="flex justify-between"><span>Lifetime Gross:</span><span>{formatMoney(allTimeSales, 0)}</span></div>
+                                                <div className="border-t border-gray-700 pt-1 mt-1 text-center text-gray-400 italic">
+                                                    (Returns Val / Gross Sales) * 100
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1288,12 +1371,12 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                             <BarChart2 className="w-5 h-5 text-indigo-600" />
                             Distribution Analysis
-                            <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">Performance Distributions</span>
+                            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">Performance Distributions</span>
                         </h3>
                         <div className="flex bg-gray-100 p-1 rounded-lg">
                             <button 
                                 onClick={() => setChartLayout('horizontal')}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'horizontal' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                                className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'horizontal' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
                             >
                                 <Rows className="w-3 h-3" /> Horizontal
                             </button>
@@ -1349,7 +1432,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                            <BoxPlot
                                 title="Ad Spend / TACoS"
                                 stats7={analytics.tacos.d7}
-                                stats30={analytics.tacos.d30}
+                                stats30={analytics.tacos.d30} 
                                 stats90={analytics.tacos.d90}
                                 format={(v: number) => `${v.toFixed(1)}%`}
                                 color="#f97316"
@@ -1493,7 +1576,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         </h3>
                         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-[400px] overflow-y-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100 sticky top-0">
+                                <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0">
                                     <tr>
                                         <th className="p-3">Price Point</th>
                                         <th className="p-3 text-right">Total Qty</th>
@@ -1685,7 +1768,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                         <div className="overflow-x-auto border rounded-lg">
                             <table className="w-full text-sm text-left whitespace-nowrap">
-                                <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100">
+                                <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100">
                                     <tr>
                                         <th className="p-3">Date</th>
                                         <th className="p-3">Platform</th>
@@ -1721,14 +1804,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                                     </div>
                                                 </td>
                                                 <td className="p-3 text-right font-medium">
-                                                    {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : formatMoney(tx.price)}
+                                                    {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : formatMoney(tx.price * VAT_MULTIPLIER)}
                                                 </td>
                                                 <td className="p-3 text-right font-bold opacity-90">{formatNumber(tx.velocity)}</td>
                                                 <td className={`p-3 text-right ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
-                                                    {formatMoney(tx.price * tx.velocity)}
+                                                    {formatMoney(tx.price * tx.velocity * VAT_MULTIPLIER)}
                                                 </td>
                                                 <td className="p-3 text-right text-orange-600 font-medium">
-                                                    {(tx.adsSpend || 0) > 0 ? formatMoney(tx.adsSpend) : '-'}
+                                                    {(tx.adsSpend || 0) > 0 ? formatMoney(tx.adsSpend * VAT_MULTIPLIER) : '-'}
                                                 </td>
                                                 <td className={`p-3 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-600' : 'text-green-600'}`}>
                                                     {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '—' : '-'}
@@ -1760,7 +1843,25 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         <h3 className="text-lg font-bold text-gray-900">Returns Analysis</h3>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-4">
+                        {/* RETURN DATE BASIS TOGGLE */}
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            <button 
+                                onClick={() => setReturnDateBasis('refundDate')} 
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                <Clock className="w-3 h-3" />
+                                Refund Date
+                            </button>
+                            <button 
+                                onClick={() => setReturnDateBasis('orderDate')} 
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                <Calendar className="w-3 h-3" />
+                                Order Date
+                            </button>
+                        </div>
+
                         <label className="text-xs font-medium text-gray-500 uppercase flex items-center gap-1 cursor-pointer">
                             <Brain className={`w-4 h-4 ${showAiInsights ? 'text-purple-600' : 'text-gray-400'}`} />
                             AI Insights
@@ -1802,15 +1903,15 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                         <div className="flex justify-between items-center mb-1">
                                             <span className="text-[10px] font-bold text-gray-500 uppercase">Total Freight Refunded (Inc VAT)</span>
                                         </div>
-                                        <div className="text-xl font-bold text-gray-700">{formatMoney(refundAnalysis.totalFreight)}</div>
+                                        <div className="text-xl font-bold text-gray-700">{formatMoney(refundAnalysis.totalFreight * VAT_MULTIPLIER)}</div>
                                     </div>
                                  </div>
 
                                  <ReturnsReasonTimelineChart 
                                     data={refunds}
-                                    getDate={(r) => r.date}
+                                    getDate={(r) => getReturnDateKey(r, returnDateBasis, orderDateMap)}
                                     getReason={(r) => r.platformReason || r.reason}
-                                    title="Refund Timeline (by Reason Code)"
+                                    title={`Refund Timeline (${returnDateBasis === 'orderDate' ? 'By Order Date' : 'By Refund Date'})`}
                                  />
                             </div>
 
@@ -1947,11 +2048,18 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                                             paginatedRefunds.map((r, i) => {
                                                 const reasonMeta = parseReturnsReason(r.platformReason || r.reason);
                                                 // Value stored is Ex-VAT, display Inc-VAT. Include freight here for total transaction value.
-                                                const displayAmount = (Number(r.amount) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER;
+                                                const displayAmount = (Number(r.amount || 0) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER;
+                                                
+                                                // Determine Date to show based on basis
+                                                const displayDateKey = getReturnDateKey(r, returnDateBasis, orderDateMap);
+                                                const isFallbackDate = returnDateBasis === 'orderDate' && !displayDateKey && r.date;
                                                 
                                                 return (
                                                     <tr key={r.id || i} className="hover:bg-gray-50/80 transition-colors">
-                                                        <td className="p-3 font-mono opacity-80 whitespace-nowrap">{new Date(r.date).toLocaleDateString('en-GB')}</td>
+                                                        <td className="p-3 font-mono opacity-80 whitespace-nowrap">
+                                                            {displayDateKey ? new Date(displayDateKey).toLocaleDateString('en-GB') : (r.date ? new Date(r.date).toLocaleDateString('en-GB') : '-')}
+                                                            {isFallbackDate && <span className="text-red-400 ml-1 text-[9px] font-bold" title="Order date unavailable, using refund date">*</span>}
+                                                        </td>
                                                         <td className="p-3 font-mono font-medium text-indigo-600 whitespace-nowrap">
                                                             {r.orderId ? (
                                                                 <span className="flex items-center gap-1">

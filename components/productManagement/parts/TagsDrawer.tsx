@@ -73,7 +73,7 @@ export const TagsDrawer: React.FC<TagsDrawerProps> = ({ product, products, onClo
         suggestions: string[]
     ) => (
         <div>
-            <label className="text-xs font-bold text-gray-500 uppercase">{label}</label>
+            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">{label}</label>
             <div className="flex flex-wrap items-center gap-2 p-2 border rounded-lg mt-1 focus-within:ring-2 focus-within:ring-indigo-500 bg-white">
                 {tags.map((tag, index) => (
                     <span key={`${type}-${index}`} className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs font-medium border border-indigo-200 animate-in fade-in zoom-in-95 duration-200">

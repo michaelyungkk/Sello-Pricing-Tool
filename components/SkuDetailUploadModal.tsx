@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Upload, X, Check, AlertCircle, Loader2, Database, Info } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -280,11 +279,11 @@ const SkuDetailUploadModal: React.FC<SkuDetailUploadModalProps> = ({ products, o
                     <div className="grid grid-cols-2 gap-4">
                         <div className="p-4 bg-green-50 rounded-xl border border-green-100">
                             <div className="text-2xl font-bold text-green-700">{stats.matched}</div>
-                            <div className="text-xs text-green-600 font-bold uppercase">Matched SKUs</div>
+                            <div className="text-xs text-green-600 font-medium uppercase">Matched SKUs</div>
                         </div>
                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                             <div className="text-2xl font-bold text-gray-700">{stats.unmatched}</div>
-                            <div className="text-xs text-gray-600 font-bold uppercase">Unmatched (Skipped)</div>
+                            <div className="text-xs text-gray-600 font-medium uppercase">Unmatched (Skipped)</div>
                         </div>
                     </div>
                     

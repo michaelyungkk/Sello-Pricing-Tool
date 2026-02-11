@@ -146,7 +146,7 @@ const CostUploadModal: React.FC<CostUploadModalProps> = ({ onClose, onConfirm })
                    <p className="text-sm font-medium text-gray-900">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-indigo-600 underline">Browse</button></p>
                    
                    <div className="mt-4 text-left text-xs text-gray-500 bg-gray-50 p-3 rounded border border-gray-200 w-full">
-                       <p className="font-semibold text-gray-700 mb-1">Column Requirements:</p>
+                       <p className="font-medium text-gray-700 mb-1">Column Requirements:</p>
                        <ul className="list-disc pl-4 space-y-1">
                            <li><code className="bg-indigo-50 text-indigo-700 px-1 rounded">sku</code> (Required)</li>
                            <li><code className="bg-gray-200 px-1 rounded">cost</code> (Optional - COGS)</li>

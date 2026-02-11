@@ -44,7 +44,10 @@ export interface RefundLog {
   resendBaseOrderId?: string;
   commentCn?: string;
   commentEn?: string;
+  logisticPartner?: string; // New: To track return/complaint attribution to carrier
 }
+
+export type ReturnDateBasis = 'refundDate' | 'orderDate';
 
 export interface PriceChangeRecord {
   id: string;
@@ -117,6 +120,7 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
+  imageUrl?: string; // Product Image URL
 
   // Aggregated Data
   channels: ChannelData[]; // List of where this product is sold and who manages it
@@ -220,6 +224,8 @@ export interface PriceLog {
   platform?: string; // Platform specific tag (optional to support legacy data)
   orderId?: string; // Optional: Unique Order ID for transaction-level tracking
   postcode?: string; // New: Receive Postcode
+  logisticPartner?: string; // New: For carrier performance analysis (label_provider)
+  logisticService?: string; // New: Granular service level (e.g. Yodel 24, Evri Next Day)
 }
 
 export interface HistoryPayload {
@@ -233,6 +239,8 @@ export interface HistoryPayload {
   platform?: string;
   orderId?: string;
   postcode?: string; // New: Receive Postcode
+  logisticPartner?: string; // New: Label Provider
+  logisticService?: string; // New: Service Name
 }
 
 export interface ShipmentLog {

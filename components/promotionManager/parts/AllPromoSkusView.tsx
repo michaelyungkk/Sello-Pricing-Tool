@@ -7,6 +7,7 @@ import { TagSearchInput } from '../../TagSearchInput';
 import { GradeBadge } from '../../GradeBadge';
 import { StatusBadge } from './StatusBadge';
 import { getTodayKeyMelbourne } from '../../../services/dateUtils';
+import { Download } from 'lucide-react';
 
 interface AllPromoSkusViewProps {
     promotions: PromotionEvent[];
@@ -142,6 +143,46 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
         return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
+    const handleExport = () => {
+        const headers = ['Platform SKU (Alias)', 'Master SKU', 'Product Name', 'Event Name', 'Platform', 'Promo Price', 'Start Date', 'End Date', 'Status'];
+        
+        const csvRows = sortedRows.map(row => {
+            const product = productMap.get(row.sku.toUpperCase());
+            const escape = (str: string) => `"${String(str || '').replace(/"/g, '""')}"`;
+            
+            let platformSku = row.sku;
+            if (product) {
+                const channel = product.channels.find(c => c.platform.toLowerCase() === row.platform.toLowerCase());
+                if (channel && channel.skuAlias) {
+                    platformSku = channel.skuAlias;
+                }
+            }
+
+            return [
+                escape(platformSku),
+                escape(row.sku),
+                escape(product?.name || ''),
+                escape(row.eventName),
+                escape(row.platform),
+                row.promoPrice.toFixed(2),
+                row.startDate instanceof Date ? row.startDate.toISOString().split('T')[0] : row.startDate,
+                row.endDate instanceof Date ? row.endDate.toISOString().split('T')[0] : row.endDate,
+                row.status
+            ].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...csvRows].join('\n');
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `master_promo_log_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex gap-4 bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
@@ -166,6 +207,12 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
                         ))}
                     </select>
                 </div>
+                <button
+                    onClick={handleExport}
+                    className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-bold flex items-center gap-2 transition-colors shadow-sm"
+                >
+                    <Download className="w-4 h-4" /> Export CSV
+                </button>
             </div>
 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">

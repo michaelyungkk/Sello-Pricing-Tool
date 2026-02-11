@@ -211,7 +211,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             });
             skuRefunds.forEach(r => {
                 const refundAmount = Number(r.amount) || 0;
-                const freightAmount = Number(r.freightAmount || 0);
+                const freightAmount = Number(r.freightAmount) || 0;
                 totalProfit -= (refundAmount + freightAmount);
             });
         }
@@ -651,10 +651,10 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
             <div className="flex flex-wrap gap-4 items-center justify-between">
                 <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
-                    <button onClick={() => setActiveTab('ENGINE')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ENGINE' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Strategy Simulator</button>
-                    <button onClick={() => setActiveTab('HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><History className="w-4 h-4" />Price Change Log</button>
-                    <button onClick={() => setActiveTab('COST_HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Cost Change Log</button>
-                    <button onClick={() => setActiveTab('INVENTORY_HISTORY')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'INVENTORY_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Database className="w-4 h-4" />Inventory Change Log</button>
+                    <button onClick={() => setActiveTab('ENGINE')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ENGINE' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Strategy Simulator</button>
+                    <button onClick={() => setActiveTab('HISTORY')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><History className="w-4 h-4" />Price Change Log</button>
+                    <button onClick={() => setActiveTab('COST_HISTORY')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Cost Change Log</button>
+                    <button onClick={() => setActiveTab('INVENTORY_HISTORY')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'INVENTORY_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Database className="w-4 h-4" />Inventory Change Log</button>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -667,7 +667,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                         />
                         <div className="flex items-center gap-1.5">
                             <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
-                            <span className={`text-xs font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds/Resends</span>
+                            <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds/Resends</span>
                         </div>
                     </label>
                 </div>

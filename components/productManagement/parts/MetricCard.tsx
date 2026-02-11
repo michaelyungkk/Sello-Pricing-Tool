@@ -12,9 +12,9 @@ export const MetricCard = ({ title, value, icon: Icon, color, desc }: any) => {
     };
 
     return (
-        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-start justify-between">
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between">
             <div>
-                <span className="text-xs font-medium text-gray-500 uppercase">{title}</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">{title}</span>
                 <div className="text-2xl font-bold text-gray-900 mt-1">{value}</div>
                 {desc && <div className="text-[10px] text-gray-400 mt-1">{desc}</div>}
             </div>

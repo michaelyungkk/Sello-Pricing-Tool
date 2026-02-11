@@ -1,12 +1,14 @@
 
-import { RefundLog } from '../types';
-import { asDateKey } from './dateUtils';
+import { RefundLog, ReturnDateBasis } from '../types';
+import { asDateKey, getReturnDateKey } from './dateUtils';
 import { VAT_MULTIPLIER } from '../constants';
 
 export interface RefundAggregationOptions {
   salesMap?: Map<string, number>; // SKU -> Unit Sales Count
   revenueMap?: Map<string, number>; // SKU -> Revenue Amount
   productMap?: Map<string, { name: string }>; // SKU -> Product Info
+  dateBasis?: ReturnDateBasis; // Mode for date attribution
+  orderDateMap?: Map<string, string>; // Lookup for original order dates
 }
 
 export interface RefundSkuRow {
@@ -131,7 +133,8 @@ export const buildRefundOverview = (
     entry.freight += freightIncVat;
 
     // --- Timeline Aggregation ---
-    const dateKey = asDateKey(row.date);
+    const dateBasis = opts.dateBasis || 'refundDate';
+    const dateKey = getReturnDateKey(row, dateBasis, opts.orderDateMap);
     if (dateKey) {
       const ts = new Date(dateKey).getTime();
       if (!isNaN(ts)) {

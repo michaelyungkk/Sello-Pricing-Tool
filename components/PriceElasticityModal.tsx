@@ -1,5 +1,4 @@
 
-
 import React, { useMemo } from 'react';
 import { Product, PriceLog, PriceChangeRecord } from '../types';
 import { X, TrendingUp, TrendingDown, Activity, Calendar, ArrowRight } from 'lucide-react';
@@ -55,7 +54,7 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
         // Calculate Weighted Avg Price. If qty 0, avg is tricky, use simple avg of logs? 
         // Logic: if total qty > 0, price = sum(price*qty)/totalQty. else avg of recorded prices?
         // Simplified: The logs usually come pre-aggregated. Let's assume dailyMap accumulation works for weighted revenue.
-        price: d.qty > 0 ? d.price / d.qty : 0, // This logic assumes `d.price` accumulated revenue. Wait, log.price is unit price.
+        price: d.qty > 0 ? d.price / d.qty : 0, // This logic assumes `d.price` accumulated revenue. Wait, log.price is Unit Price.
         qty: d.qty
     })).map(d => {
         // Fix Price Calculation: 
@@ -126,7 +125,7 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
         <div className="p-6 border-b border-gray-100/50 flex justify-between items-start bg-gray-50/50">
           <div>
             <div className="flex items-center gap-2 mb-1">
-               <span className="px-2 py-0.5 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded uppercase tracking-wide">
+               <span className="px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-700 rounded uppercase tracking-wide">
                   {t('elasticity_analysis')}
                </span>
                <div className="flex items-center">
@@ -144,127 +143,98 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
         {/* Content */}
         <div className="p-6 flex-1 overflow-y-auto space-y-6">
             
-            {/* Impact Summary Card */}
+            {/* Impact Analysis Card */}
             {impactStats ? (
-                <div className="bg-white/60 border border-indigo-100 rounded-xl p-5 shadow-sm flex flex-col md:flex-row gap-6 items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full">
-                            <Activity className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide">{t('latest_price_event')}</h4>
-                            <p className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                {new Date(impactStats.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                <span className={`text-xs px-2 py-0.5 rounded-full border ${impactStats.priceChangePct > 0 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
-                                    {impactStats.priceChangePct > 0 ? 'Increased' : 'Decreased'} {Math.abs(impactStats.priceChangePct).toFixed(1)}%
-                                </span>
-                            </p>
-                            <div className="text-sm text-gray-600 mt-1">
-                                Price: <strong>£{impactStats.oldPrice.toFixed(2)}</strong> <ArrowRight className="inline w-3 h-3 mx-1"/> <strong>£{impactStats.newPrice.toFixed(2)}</strong>
-                            </div>
-                        </div>
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-indigo-600" />
+                            {t('latest_price_event')}
+                        </h3>
+                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            {new Date(impactStats.date).toLocaleDateString()}
+                        </span>
                     </div>
-
-                    <div className="h-10 w-px bg-gray-200 hidden md:block"></div>
-
-                    <div className="flex flex-col items-end">
-                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide text-right">{t('velocity_impact')}</h4>
-                        <div className="flex items-center gap-3 mt-1">
-                            <div className="text-right">
-                                <div className="text-xs text-gray-400">Before</div>
-                                <div className="font-mono font-bold text-gray-700">{impactStats.preQty.toFixed(1)}/day</div>
-                            </div>
-                            <ArrowRight className="w-4 h-4 text-gray-300" />
-                            <div className="text-right">
-                                <div className="text-xs text-gray-400">After</div>
-                                <div className={`font-mono font-bold ${impactStats.qtyChangePct > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {impactStats.postQty.toFixed(1)}/day
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-between">
+                            <div>
+                                <div className="text-xs text-gray-500 uppercase font-bold mb-1">Price Change</div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-gray-400 line-through text-sm">£{impactStats.oldPrice.toFixed(2)}</span>
+                                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                                    <span className="text-xl font-bold text-gray-900">£{impactStats.newPrice.toFixed(2)}</span>
                                 </div>
                             </div>
+                            <div className={`text-sm font-bold ${impactStats.priceChangePct > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {impactStats.priceChangePct > 0 ? '+' : ''}{impactStats.priceChangePct.toFixed(1)}%
+                            </div>
                         </div>
-                        <div className={`text-xs font-bold mt-1 flex items-center gap-1 ${impactStats.qtyChangePct > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            {impactStats.qtyChangePct > 0 ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>}
-                            {Math.abs(impactStats.qtyChangePct).toFixed(1)}% Volume Change
+
+                        <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-between">
+                            <div>
+                                <div className="text-xs text-gray-500 uppercase font-bold mb-1">{t('velocity_impact')}</div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-gray-400 text-sm">{impactStats.preQty.toFixed(1)}/d</span>
+                                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                                    <span className="text-xl font-bold text-gray-900">{impactStats.postQty.toFixed(1)}/d</span>
+                                </div>
+                            </div>
+                            <div className={`text-sm font-bold ${impactStats.qtyChangePct > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {impactStats.qtyChangePct > 0 ? '+' : ''}{impactStats.qtyChangePct.toFixed(1)}%
+                            </div>
                         </div>
                     </div>
                 </div>
             ) : (
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center text-gray-500">
-                    No recent price changes detected for this product.
+                <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 text-center text-gray-500">
+                    No recent price changes detected to analyze elasticity.
                 </div>
             )}
 
-            {/* Chart */}
-            <div className="h-[400px] w-full bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-gray-400" /> 
-                        Sales Velocity vs. Price History
-                    </h3>
-                    <div className="flex gap-4 text-xs">
-                        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-indigo-500 rounded-sm"></div> Price (£)</div>
-                        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-400 rounded-sm"></div> Daily Sales (Qty)</div>
-                    </div>
-                </div>
-                
-                <div className="flex-1 min-h-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                            <XAxis 
-                                dataKey="date" 
-                                tickFormatter={(val) => new Date(val).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                                tick={{fontSize: 10, fill: '#9ca3af', style: { userSelect: 'none' }}}
-                                axisLine={false}
-                                tickLine={false}
+            {/* Elasticity Chart */}
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-[400px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis 
+                            dataKey="date" 
+                            tickFormatter={(val) => new Date(val).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
+                            tick={{ fontSize: 11 }}
+                        />
+                        <YAxis yAxisId="left" label={{ value: 'Units Sold', angle: -90, position: 'insideLeft' }} />
+                        <YAxis yAxisId="right" orientation="right" label={{ value: 'Price (£)', angle: 90, position: 'insideRight' }} domain={['auto', 'auto']} />
+                        <Tooltip 
+                            contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                            labelFormatter={(label) => new Date(label).toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                        />
+                        <Legend />
+                        <Bar yAxisId="left" dataKey="qty" name="Units Sold" fill="#8b5cf6" barSize={20} radius={[4, 4, 0, 0]} />
+                        <Line yAxisId="right" type="stepAfter" dataKey="price" name="Avg Price" stroke="#10b981" strokeWidth={2} dot={false} />
+                        
+                        {relevantChanges.map((change) => (
+                            <ReferenceLine 
+                                key={change.id} 
+                                x={change.date} 
+                                stroke="#ef4444" 
+                                strokeDasharray="3 3" 
+                                yAxisId="left"
+                                label={{ position: 'top', value: 'Price Change', fill: '#ef4444', fontSize: 10 }} 
                             />
-                            <YAxis 
-                                yAxisId="left" 
-                                orientation="left" 
-                                tick={{fontSize: 10, fill: '#6366f1', style: { userSelect: 'none' }}} 
-                                axisLine={false}
-                                tickLine={false}
-                                label={{ value: 'Price (£)', angle: -90, position: 'insideLeft', fill: '#6366f1', fontSize: 10 }}
-                                domain={['auto', 'auto']}
-                            />
-                            <YAxis 
-                                yAxisId="right" 
-                                orientation="right" 
-                                tick={{fontSize: 10, fill: '#10b981', style: { userSelect: 'none' }}} 
-                                axisLine={false}
-                                tickLine={false}
-                                label={{ value: 'Qty Sold', angle: 90, position: 'insideRight', fill: '#10b981', fontSize: 10 }}
-                            />
-                            <Tooltip 
-                                contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
-                                labelFormatter={(label) => new Date(label).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            />
-                            
-                            {/* Render Price Change Vertical Lines */}
-                            {relevantChanges.map((change, idx) => (
-                                <ReferenceLine 
-                                    key={idx} 
-                                    x={change.date.split('T')[0]} 
-                                    yAxisId="left" 
-                                    stroke="#9ca3af" 
-                                    strokeDasharray="3 3"
-                                    label={{ 
-                                        position: 'insideTop', 
-                                        value: 'Price Change', 
-                                        fill: '#6b7280', 
-                                        fontSize: 10,
-                                        angle: 90 
-                                    }} 
-                                />
-                            ))}
-
-                            <Bar yAxisId="right" dataKey="qty" fill="#34d399" barSize={20} radius={[4, 4, 0, 0]} opacity={0.6} name="Quantity Sold" />
-                            <Line yAxisId="left" type="stepAfter" dataKey="price" stroke="#6366f1" strokeWidth={3} dot={false} name="Price (£)" />
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                </div>
+                        ))}
+                    </ComposedChart>
+                </ResponsiveContainer>
             </div>
+        </div>
 
+        <div className="p-6 border-t border-gray-100/50 bg-gray-50/50 rounded-b-2xl flex justify-end">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 rounded-lg transition-colors shadow-sm"
+          >
+            Close Analysis
+          </button>
         </div>
       </div>
     </div>

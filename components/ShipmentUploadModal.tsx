@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo } from 'react';
 import { Upload, X, Check, AlertCircle, Loader2, Ship, Calendar, Box, ArrowRight, Clock, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -362,7 +361,7 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                             
                             <button 
                                 onClick={() => fileInputRef.current?.click()}
-                                className="mt-6 px-6 py-2 bg-white border border-gray-200 shadow-sm text-gray-700 font-bold rounded-lg hover:bg-gray-50"
+                                className="mt-6 px-6 py-2 bg-white border border-gray-200 shadow-sm text-gray-700 font-medium rounded-lg hover:bg-gray-50"
                             >
                                 Select File
                             </button>
@@ -381,19 +380,19 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                     {/* High Level Stats */}
                     <div className="grid grid-cols-4 gap-4">
                         <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
-                            <span className="text-xs text-gray-500 font-bold uppercase">Total Containers</span>
+                            <span className="text-xs text-gray-500 font-medium uppercase">Total Containers</span>
                             <div className="text-xl font-bold text-gray-900 mt-1">{containerSummaries.length}</div>
                         </div>
                         <div className={`p-3 rounded-xl border ${stats.delayed > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-                            <span className={`text-xs font-bold uppercase ${stats.delayed > 0 ? 'text-red-600' : 'text-gray-500'}`}>Delayed</span>
+                            <span className={`text-xs font-medium uppercase ${stats.delayed > 0 ? 'text-red-600' : 'text-gray-500'}`}>Delayed</span>
                             <div className={`text-xl font-bold mt-1 ${stats.delayed > 0 ? 'text-red-700' : 'text-gray-900'}`}>{stats.delayed}</div>
                         </div>
                         <div className={`p-3 rounded-xl border ${stats.early > 0 ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-                            <span className={`text-xs font-bold uppercase ${stats.early > 0 ? 'text-green-600' : 'text-gray-500'}`}>Early</span>
+                            <span className={`text-xs font-medium uppercase ${stats.early > 0 ? 'text-green-600' : 'text-gray-500'}`}>Early</span>
                             <div className={`text-xl font-bold mt-1 ${stats.early > 0 ? 'text-green-700' : 'text-gray-900'}`}>{stats.early}</div>
                         </div>
                         <div className={`p-3 rounded-xl border ${stats.new > 0 ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
-                            <span className={`text-xs font-bold uppercase ${stats.new > 0 ? 'text-blue-600' : 'text-gray-500'}`}>New</span>
+                            <span className={`text-xs font-medium uppercase ${stats.new > 0 ? 'text-blue-600' : 'text-gray-500'}`}>New</span>
                             <div className={`text-xl font-bold mt-1 ${stats.new > 0 ? 'text-blue-700' : 'text-gray-900'}`}>{stats.new}</div>
                         </div>
                     </div>
@@ -465,7 +464,7 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
             {parsedUpdates && parsedUpdates.length > 0 && (
                 <button 
                     onClick={() => onConfirm(parsedUpdates)}
-                    className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                    className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
                 >
                     <Check className="w-4 h-4" />
                     Confirm Update

@@ -46,6 +46,7 @@ interface ColumnMapping {
     profitExclRnPercent?: string; // New: Net PM%
     outerOrderId?: string; // New: Unique Order ID
     receivePostcode?: string; // New: Receive Postcode
+    logisticPartner?: string; // New: Logistic Partner (label_provider)
 }
 
 const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRules, learnedAliases = {}, onClose, onResetData, onConfirm }) => {
@@ -164,7 +165,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     profitExclRn: findMapped(['profit_excl_rn', 'netprofit', 'profitamount'], false),
                     profitExclRnPercent: findMapped(['profit_excl_rn%', 'netpm', 'profit%', 'margin%'], true),
                     outerOrderId: findMapped(['outer_order_id', 'order_id', 'orderid', 'order_no', 'ordernumber', 'transaction_id'], false),
-                    receivePostcode: findMapped(['receive_postcode', 'postcode', 'zip', 'postalcode', 'ship_to_zip'], false)
+                    receivePostcode: findMapped(['receive_postcode', 'postcode', 'zip', 'postalcode', 'ship_to_zip'], false),
+                    logisticPartner: findMapped(['label_provider', 'shipping_partner', 'logistic_partner', 'carrier_partner'], false)
                 };
 
                 setMapping(detectedMapping);
@@ -215,6 +217,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             const netPmIdx = getIdx(map.profitExclRnPercent);
             const orderIdIdx = getIdx(map.outerOrderId); // Index for Order ID
             const postcodeIdx = getIdx(map.receivePostcode); // Index for Postcode
+            const partnerIdx = getIdx(map.logisticPartner); // Index for Logistic Partner
 
             // 1. Overall Aggregation (For Product Updates - Snapshot)
             const aggregated: Record<string, {
@@ -242,6 +245,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 platform: string,
                 orderId?: string; // New: optional orderId
                 postcode?: string; // New: Receive Postcode
+                logisticPartner?: string; // New: Logistic Partner
+                logisticService?: string; // New: Logistic Service
             }> = {};
 
             const discoveredPlatforms = new Set<string>();
@@ -297,10 +302,11 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                 const rev = parseVal(revIdx);
                 const adsCost = parseVal(adsIdx);
+                const qty = parseVal(qtyIdx);
 
-                // --- CRITICAL FIX: IGNORE ZERO REVENUE UNLESS IT'S AN AD-ONLY ROW ---
-                // We allow 0 revenue if there is ad spend attached (so we capture TACoS properly)
-                if (rev <= 0.001 && adsCost <= 0.001) return;
+                // --- CRITICAL FIX: ENSURE ZERO-REVENUE UNITS (RESENDS) ARE COUNTED ---
+                // We skip rows only if there is zero revenue, zero ad spend, AND zero units.
+                if (rev <= 0.001 && adsCost <= 0.001 && qty <= 0) return;
 
                 const rawSku = String(row[skuIdx]).trim();
                 
@@ -334,7 +340,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     const val = row[idx];
                     if (typeof val === 'number') {
                         // If it's in the range (-1, 1] and not 0, it's likely a decimal fraction (e.g. 0.317 -> 31.7%)
-                        // Most retail margins imported from Excel "Percentage" cells arrive as decimals.
                         if (Math.abs(val) > 0 && Math.abs(val) <= 1.0) {
                             return val * 100;
                         }
@@ -345,8 +350,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     return isNaN(v) ? 0 : v;
                 };
 
-                const qty = parseVal(qtyIdx);
-                // rev is already parsed above
                 const profit = parseVal(profitIdx);
                 const netPm = parsePercent(netPmIdx);
 
@@ -376,6 +379,14 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     ? String(row[postcodeIdx]).trim()
                     : undefined;
                 
+                // Capture Logistic Partner
+                const partner = (partnerIdx !== -1 && row[partnerIdx])
+                    ? String(row[partnerIdx]).trim()
+                    : undefined;
+                
+                // Capture Logistics Service Name (e.g. Yodel 24, Evri Next Day)
+                const serviceName = (logNameIdx !== -1 && row[logNameIdx]) ? String(row[logNameIdx]).trim() : undefined;
+
                 if (orderId) orderIdsDetectedCount++;
 
                 discoveredPlatforms.add(platformName);
@@ -404,41 +415,39 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                 const item = aggregated[masterSku];
 
-                // Only add to GLOBAL Totals if NOT excluded
-                if (!isExcluded) {
-                    item.qty += qty;
-                    item.revenue += rev;
-                    item.count++;
+                // Global totals for metrics update.
+                // NOTE: Dashboard now ignores 'isExcluded' for lifetime counters based on user feedback.
+                item.qty += qty;
+                item.revenue += rev;
+                item.count++;
 
-                    const weight = Math.abs(qty) || 1;
-                    item.netPmSum += (netPm * weight);
-                    item.profitSum += profit;
+                const weight = Math.abs(qty) || 1;
+                item.netPmSum += (netPm * weight);
+                item.profitSum += profit;
 
-                    // Aggregating Fees (only for included retail channels)
-                    const postageCost = parseVal(postIdx);
-                    item.fees.selling += parseVal(sellingIdx);
-                    item.fees.ads += adsCost;
-                    item.fees.postage += postageCost;
-                    item.fees.extra += parseVal(extraIdx);
-                    item.fees.other += parseVal(otherIdx);
-                    item.fees.sub += parseVal(subIdx);
-                    item.fees.wms += parseVal(wmsIdx);
-                    item.fees.cogs += parseVal(cogsIdx);
-                    
-                    if (catIdx !== -1 && row[catIdx]) item.category = String(row[catIdx]).trim();
+                // Aggregating Fees
+                const postageCost = parseVal(postIdx);
+                item.fees.selling += parseVal(sellingIdx);
+                item.fees.ads += adsCost;
+                item.fees.postage += postageCost;
+                item.fees.extra += parseVal(extraIdx);
+                item.fees.other += parseVal(otherIdx);
+                item.fees.sub += parseVal(subIdx);
+                item.fees.wms += parseVal(wmsIdx);
+                item.fees.cogs += parseVal(cogsIdx);
+                
+                if (catIdx !== -1 && row[catIdx]) item.category = String(row[catIdx]).trim();
 
-                    // --- LOGISTICS CALIBRATION ---
-                    const serviceName = (logNameIdx !== -1 && row[logNameIdx]) ? String(row[logNameIdx]).trim() : '';
-                    const dLog = (dateIdx !== -1 && row[dateIdx]) ? new Date(row[dateIdx]) : new Date();
-                    if (qty === 1 && serviceName && postageCost > 0) {
-                        shipmentLogs.push({
-                            id: Math.random().toString(36).substr(2, 9),
-                            sku: masterSku,
-                            service: serviceName,
-                            cost: postageCost,
-                            date: dLog.toISOString()
-                        });
-                    }
+                // --- LOGISTICS CALIBRATION ---
+                const dLog = (dateIdx !== -1 && row[dateIdx]) ? new Date(row[dateIdx]) : new Date();
+                if (qty === 1 && serviceName && postageCost > 0) {
+                    shipmentLogs.push({
+                        id: Math.random().toString(36).substr(2, 9),
+                        sku: masterSku,
+                        service: serviceName,
+                        cost: postageCost,
+                        date: dLog.toISOString()
+                    });
                 }
 
                 // ALWAYS Aggregate Platform Stats for Channel update
@@ -452,24 +461,20 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 const rawDateVal = (dateIdx !== -1) ? row[dateIdx] : undefined;
                 const dateKey = asDateKeyNaive(rawDateVal);
 
-                if (process.env.NODE_ENV !== 'production' && matchCount <= 3 && rawDateVal) {
-                    console.log('[Sales Import Audit] Raw:', rawDateVal, '-> Key:', dateKey);
-                }
-
                 if (dateKey) {
                     hasDates = true;
-                    const d = new Date(dateKey); // Used only for min/max tracking roughly
+                    const d = new Date(dateKey); 
                     if (d < minDate) minDate = d;
                     if (d > maxDate) maxDate = d;
 
                     const dateStr = dateKey;
 
-                    // --- Daily Aggregation for History (INCLUSIVE: show all platforms) ---
-                    // If Order ID exists, include it in key to prevent aggregation (keep transaction level)
-                    // If rev=0 and ads>0, it's a daily summary line usually, so no order ID.
+                    // --- Daily Aggregation for History ---
+                    // NOTE: Adding serviceName to key might split rows if multiple services used on same day for same SKU.
+                    // But if orderId is present, key is unique anyway.
                     const dailyKey = orderId
                         ? `${masterSku}|${dateStr}|${platformName}|${orderId}`
-                        : `${masterSku}|${dateStr}|${platformName}`;
+                        : `${masterSku}|${dateStr}|${platformName}`; // Keep it simple if no order ID to avoid fragmentation
 
                     if (!dailyAggregated[dailyKey]) {
                         dailyAggregated[dailyKey] = {
@@ -481,8 +486,10 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                             totalProfit: 0,
                             totalAds: 0,
                             platform: platformName,
-                            orderId: orderId || undefined, // Store orderId if present
-                            postcode: postcode || undefined
+                            orderId: orderId || undefined, 
+                            postcode: postcode || undefined,
+                            logisticPartner: partner || undefined,
+                            logisticService: serviceName || undefined
                         };
                     }
                     dailyAggregated[dailyKey].totalQty += qty;
@@ -492,16 +499,13 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     const dailyWeight = Math.abs(qty) || 0;
                     dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);
 
-                    // Improved Logic: If profit is missing but NetPM exists, derive profit immediately
                     if (profit === 0 && netPm !== 0 && rev !== 0) {
                         dailyAggregated[dailyKey].totalProfit += rev * (netPm / 100);
                     } else {
                         dailyAggregated[dailyKey].totalProfit += profit;
                     }
 
-                    if (!isExcluded) {
-                        item.dates.add(dateStr);
-                    }
+                    item.dates.add(dateStr);
                 }
             });
 
@@ -511,10 +515,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
             if (hasDates && maxDate > minDate) {
                 const diffTime = Math.abs(maxDate.getTime() - minDate.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // inclusive
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
                 calculatedPeriod = diffDays;
                 
-                // Format Date Label to DD Mon YYYY – DD Mon YYYY
                 const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
                 dateLabel = `${formatDate(minDate)} – ${formatDate(maxDate)}`;
             }
@@ -524,21 +527,18 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             const history: HistoryPayload[] = [];
             const todayStr = new Date().toISOString().split('T')[0];
 
-            // Create History Logs (Daily Units)
+            // Create History Logs
             Object.values(dailyAggregated).forEach(bucket => {
                 const weight = bucket.totalQty;
                 const avgPrice = weight > 0 ? bucket.totalRevenue / weight : 0;
 
-                // NEW LOGIC: Calculate Margin based on Total Profit / Total Revenue if available
                 let finalMargin = 0;
                 if (profitIdx !== -1 && bucket.totalRevenue > 0) {
                     finalMargin = (bucket.totalProfit / bucket.totalRevenue) * 100;
                 } else {
-                    // Fallback: Weighted Averages of the % column
                     finalMargin = weight > 0 ? bucket.netPmSum / weight : 0;
                 }
 
-                // Push payload if there was ANY activity (Qty OR Ad Spend)
                 if (bucket.totalQty !== 0 || bucket.totalAds > 0) {
                     const payload: HistoryPayload = {
                         sku: bucket.sku,
@@ -548,7 +548,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         platform: bucket.platform,
                         orderId: bucket.orderId,
                         postcode: bucket.postcode,
-                        // FIX: Explicitly record ad spend even if 0, to prevent fallback to global averages in dashboard
+                        logisticPartner: bucket.logisticPartner,
+                        logisticService: bucket.logisticService,
                         adsSpend: Number(bucket.totalAds.toFixed(4))
                     };
 
@@ -564,13 +565,12 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 }
             });
 
-            // 2. Generate Product Updates (Global Stats)
+            // 2. Generate Product Updates
             Object.entries(aggregated).forEach(([sku, data]) => {
                 const product = products.find(p => p.sku === sku);
                 if (!product) return;
 
                 const validQty = data.qty > 0 ? data.qty : 1;
-                // Note: averageDailySales here is purely RETAIL velocity if exclusion logic applied
                 const newVelocity = data.qty / calculatedPeriod;
                 const currentPrice = product.currentPrice || 0;
                 const rawAvg = data.qty > 0 ? data.revenue / data.qty : currentPrice;
@@ -586,7 +586,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     wms: (Number(data.fees.wms) || 0) / validQty,
                 };
 
-                // Rebuild Channels based on report data (ALL CHANNELS, including Excluded)
                 const updatedChannels = [...product.channels];
                 Object.entries(data.platformStats).forEach(([platform, stats]) => {
                     const channelIdx = updatedChannels.findIndex(c => c.platform === platform);
@@ -600,14 +599,13 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                             price: channelPrice
                         };
                     } else {
-                        // Add new channel if discovered
                         const defaultManager = pricingRules[platform]?.manager || 'Unassigned';
                         updatedChannels.push({
                             platform,
                             manager: defaultManager,
                             velocity: channelVelocity,
                             price: channelPrice,
-                            skuAlias: '' // Will be populated if aliases are imported separately
+                            skuAlias: '' 
                         });
                     }
                 });
@@ -627,12 +625,10 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     subscriptionFee: unitFees.sub || product.subscriptionFee,
                     wmsFee: unitFees.wms || product.wmsFee,
                     category: data.category || product.category,
-                    channels: updatedChannels // Update the channels list!
+                    channels: updatedChannels
                 });
 
-                // Fallback: If no dates were found in file, push a single 'today' history entry
                 if (!hasDates && newVelocity > 0) {
-                    // Find primary platform
                     const primaryPlatform = Object.keys(data.platformStats)[0] || 'General';
                     history.push({
                         sku,
@@ -641,7 +637,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         velocity: newVelocity,
                         margin: 0,
                         platform: primaryPlatform,
-                        // FIX: Explicitly record adsSpend for fallback too
                         adsSpend: data.fees.ads
                     });
                 }
@@ -666,11 +661,10 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     dateLabel,
                     shipmentCount: shipmentLogs.length,
                     discoveredPlatforms: Array.from(discoveredPlatforms),
-                    orderIdsCount: orderIdsDetectedCount // Pass count for UI
+                    orderIdsCount: orderIdsDetectedCount 
                 }
             });
 
-            // --- RESOLUTION STEP TRIGGER ---
             if (Object.keys(currentUnknownSkus).length > 0 && step !== 'resolution') {
                 setUnknownSkus(currentUnknownSkus);
                 setStep('resolution');
@@ -732,7 +726,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto relative">
-                    {/* RESET CONFIRMATION OVERLAY */}
                     {isResetConfirmOpen && (
                         <div className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                             <div className="bg-red-50 p-4 rounded-full mb-6">
@@ -745,7 +738,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                             <div className="flex gap-4">
                                 <button
                                     onClick={() => setIsResetConfirmOpen(false)}
-                                    className="px-6 py-3 text-gray-700 font-bold hover:bg-gray-100 rounded-xl transition-colors"
+                                    className="px-6 py-3 text-gray-700 font-medium hover:bg-gray-100 rounded-xl transition-colors"
                                 >
                                     Cancel
                                 </button>
@@ -754,7 +747,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                         onResetData?.();
                                         setIsResetConfirmOpen(false);
                                     }}
-                                    className="px-6 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg hover:shadow-red-500/30 transition-all flex items-center gap-2"
+                                    className="px-6 py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 shadow-lg hover:shadow-red-500/30 transition-all flex items-center gap-2"
                                 >
                                     <RotateCcw className="w-4 h-4" />
                                     Yes, Wipe Everything
@@ -784,8 +777,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 )}
                                 {error && <p className="text-red-500 mt-4 text-sm flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {error}</p>}
                             </div>
-
-                            {/* Reset button moved to footer for better global visibility */}
                         </div>
                     )}
 
@@ -825,6 +816,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                         <MappingSelect label="Extra Freight (Income)" value={mapping.extraFreight} onChange={(v: string) => mapField('extraFreight', v)} options={rawHeaders} />
                                         <MappingSelect label="Category" value={mapping.category} onChange={(v: string) => mapField('category', v)} options={rawHeaders} />
                                         <MappingSelect label="Net PM% (profit_excl_rn%)" value={mapping.profitExclRnPercent} onChange={(v: string) => mapField('profitExclRnPercent', v)} options={rawHeaders} />
+                                        <MappingSelect label="Logistic Partner (label_provider)" value={mapping.logisticPartner} onChange={(v: string) => mapField('logisticPartner', v)} options={rawHeaders} />
                                     </div>
                                 </div>
                             )}
@@ -867,7 +859,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {/* FIX: Explicitly cast entries of unknownSkus to avoid 'unknown' type access issues */}
                                         {(Object.entries(unknownSkus) as [string, { count: number, revenue: number, masterSku: string | null }][]).map(([fileSku, data]) => (
                                             <tr key={fileSku}>
                                                 <td className="p-3 font-mono text-xs text-gray-700">{fileSku}</td>
@@ -897,7 +888,6 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 </table>
                             </div>
 
-                            {/* Datalist for inventory autocomplete */}
                             <datalist id="masterSkuList">
                                 {products.map(p => <option key={p.id} value={p.sku}>{p.name}</option>)}
                             </datalist>
@@ -908,7 +898,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 </div>
                                 <button
                                     onClick={analyzeWithResolutions}
-                                    className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md transition-all flex items-center gap-2"
+                                    className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 shadow-md transition-all flex items-center gap-2"
                                 >
                                     <Check className="w-4 h-4" />
                                     Continue Analysis
@@ -919,51 +909,43 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                     {step === 'preview' && previewData && (
                         <div className="space-y-6 animate-in zoom-in duration-300">
-                            {/* Stats */}
                             <div className="grid grid-cols-4 gap-4 text-center">
                                 <div className="p-4 bg-green-50 rounded-xl border border-green-100">
                                     <div className="text-2xl font-bold text-green-700">{previewData.stats.matchedSkus}</div>
-                                    <div className="text-xs text-green-600 uppercase font-bold">Products Matched</div>
+                                    <div className="text-xs text-green-600 uppercase font-medium">Products Matched</div>
                                 </div>
                                 <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                                     <div className="text-2xl font-bold text-indigo-700">£{previewData.stats.totalRevenue.toLocaleString()}</div>
-                                    <div className="text-xs text-indigo-600 uppercase font-bold">Total Revenue</div>
+                                    <div className="text-xs text-indigo-600 uppercase font-medium">Total Revenue</div>
                                 </div>
                                 <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
                                     <div className="text-2xl font-bold text-blue-700">{previewData.stats.period} Days</div>
-                                    <div className="text-xs text-blue-600 uppercase font-bold">{previewData.stats.dateLabel}</div>
+                                    <div className="text-xs text-blue-600 uppercase font-medium">{previewData.stats.dateLabel}</div>
                                 </div>
                                 <div className={`p-4 rounded-xl border ${previewData.stats.orderIdsCount > 0 ? 'bg-teal-50 border-teal-100' : 'bg-gray-50 border-gray-100'}`}>
                                     <div className={`text-2xl font-bold ${previewData.stats.orderIdsCount > 0 ? 'text-teal-700' : 'text-gray-400'}`}>{previewData.stats.orderIdsCount}</div>
-                                    <div className={`text-xs uppercase font-bold ${previewData.stats.orderIdsCount > 0 ? 'text-teal-600' : 'text-gray-400'}`}>Transactions with IDs</div>
+                                    <div className={`text-xs uppercase font-medium ${previewData.stats.orderIdsCount > 0 ? 'text-teal-600' : 'text-gray-400'}`}>Transactions with IDs</div>
                                 </div>
                             </div>
 
-                            {/* Detected Features Badges */}
                             <div className="flex flex-wrap gap-2 justify-center">
                                 {previewData.features?.ads && (
-                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-bold border border-purple-200">
+                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-medium border border-purple-200">
                                         <Check className="w-3 h-3" /> Ad Data Detected
                                     </span>
                                 )}
                                 {previewData.features?.logistics && (
-                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold border border-orange-200">
+                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-medium border border-orange-200">
                                         <Check className="w-3 h-3" /> Logistics Costs Detected
                                     </span>
                                 )}
                                 {previewData.stats.shipmentCount > 0 && (
-                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-teal-100 text-teal-700 text-xs font-bold border border-teal-200">
+                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-teal-100 text-teal-700 text-xs font-medium border border-teal-200">
                                         <Truck className="w-3 h-3" /> {previewData.stats.shipmentCount} Shipments Logged
-                                    </span>
-                                )}
-                                {previewData.stats.orderIdsCount === 0 && (
-                                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200">
-                                        <Hash className="w-3 h-3" /> No Order IDs - Refunds Matching Will Fail
                                     </span>
                                 )}
                             </div>
 
-                            {/* Preview Table */}
                             <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-gray-50 text-gray-500 font-bold sticky top-0">
@@ -1001,9 +983,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     <div>
                         {onResetData && (
                             <button
-                                onClick={() => setIsResetConfirmOpen(true)} // Trigger Custom UI
+                                onClick={() => setIsResetConfirmOpen(true)}
                                 title="Delete all sales logs and start fresh"
-                                className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-all shadow-sm bg-white"
+                                className="text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-all shadow-sm bg-white"
                             >
                                 <RotateCcw className="w-3 h-3" />
                                 Reset Data

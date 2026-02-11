@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
 import { Product, PriceLog, SearchChip } from '../types';
 import { POSTCODE_COORDS } from './UkPostcodeMapCoords';
 import { UK_POSTCODE_AREA_NAME } from '../ukPostcodeAreaNames';
-import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Search } from 'lucide-react';
+import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Search, Truck, RotateCcw } from 'lucide-react';
 import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from '../services/metrics';
 import { aggregateUkMapData, AreaData } from '../services/mapAgg';
 
@@ -27,6 +28,10 @@ interface UkSalesMapProps {
   themeColor: string;
   onSearch?: (query: string | SearchChip[]) => void;
   timePeriodLabel?: string;
+  externalConfig?: {
+    carrier: string;
+    metric: 'RETURN_RATE' | 'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS';
+  } | null;
 }
 
 type TableSortState = {
@@ -51,19 +56,33 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   priceHistoryMap, 
   dateRange, 
   selectedPlatform, 
-  themeColor,
+  themeColor, 
   onSearch,
-  timePeriodLabel
+  timePeriodLabel,
+  externalConfig
 }) => {
   const [metric, setMetric] = useState<'REVENUE' | 'VOLUME'>('REVENUE');
   const [mode, setMode] = useState<'ABSOLUTE' | 'CHANGE'>('ABSOLUTE');
-  const [colorMetric, setColorMetric] = useState<'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS'>('REVENUE');
+  const [colorMetric, setColorMetric] = useState<'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS' | 'RETURN_RATE'>('REVENUE');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('All');
+  const [selectedCarrier, setSelectedCarrier] = useState<string>('All');
   const [hoveredArea, setHoveredArea] = useState<MapMarkerData | null>(null);
   const [pinnedArea, setPinnedArea] = useState<MapMarkerData | null>(null);
   const [tableSort, setTableSort] = useState<TableSortState>({ key: 'revenue', direction: 'desc' });
 
+  // Sync with external config (e.g. jumping from Returns tab)
+  useEffect(() => {
+    if (externalConfig) {
+        if (externalConfig.carrier) setSelectedCarrier(externalConfig.carrier);
+        if (externalConfig.metric) {
+            setColorMetric(externalConfig.metric);
+            if (externalConfig.metric === 'RETURN_RATE') {
+                setTableSort({ key: 'returnRate', direction: 'desc' });
+            }
+        }
+    }
+  }, [externalConfig]);
 
   const getAreaDisplayName = (code: string) => {
     const name = UK_POSTCODE_AREA_NAME[code];
@@ -102,14 +121,24 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     return Array.from(subs).sort();
   }, [products, selectedCategory]);
 
+  const carriers = useMemo(() => {
+    const carrierSet = new Set<string>();
+    priceHistoryMap.forEach((logs) => {
+        logs.forEach(log => {
+            if (log.logisticPartner) carrierSet.add(log.logisticPartner);
+        });
+    });
+    return Array.from(carrierSet).sort();
+  }, [priceHistoryMap]);
+
   // 2. Aggregate Data by Postcode Area
   const mapData: AreaData[] = useMemo(() => {
     return aggregateUkMapData(
         products,
         priceHistoryMap,
-        { startDate: dateRange.start, endDate: dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory }
+        { startDate: dateRange.start, endDate: dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier }
     );
-  }, [products, priceHistoryMap, dateRange.start, dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory]);
+  }, [products, priceHistoryMap, dateRange.start, dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier]);
 
   // 3. Rank data and calculate shares
   const rankedMapData: MapMarkerData[] = useMemo(() => {
@@ -199,6 +228,11 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
           return scaleLinear<string>()
             .domain(tacosDomain)
             .range(["#22c55e", "#facc15", "#ef4444"]); // Green -> Yellow -> Red (high TACoS is bad)
+        case 'RETURN_RATE':
+          return scaleLinear<string>()
+            .domain([0, 5, 10])
+            .range(["#22c55e", "#facc15", "#ef4444"])
+            .clamp(true); // Green -> Yellow -> Red
         default:
           return scaleLinear<string>()
             .domain(revenueDomain)
@@ -313,6 +347,9 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <button onClick={() => setColorMetric('PROFIT')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'PROFIT' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Profit</button>
                             <button onClick={() => setColorMetric('MARGIN')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'MARGIN' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Margin %</button>
                             <button onClick={() => setColorMetric('TACOS')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'TACOS' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>TACoS %</button>
+                            <button onClick={() => setColorMetric('RETURN_RATE')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'RETURN_RATE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`} title="Return Rate %">
+                                <RotateCcw className="w-3 h-3 inline" />
+                            </button>
                         </div>
                     </div>
 
@@ -341,6 +378,19 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <option value="All">All Subcategories</option>
                             {subcategories.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
+                    </div>
+
+                    {/* Carrier Filter */}
+                    <div className="relative">
+                        <select 
+                            value={selectedCarrier}
+                            onChange={e => setSelectedCarrier(e.target.value)}
+                            className="pl-8 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="All">All Carriers</option>
+                            {carriers.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <Truck className="absolute left-2.5 top-2 w-3 h-3 text-gray-400 pointer-events-none" />
                     </div>
                 </div>
             </div>
@@ -431,7 +481,8 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                           colorMetric === 'REVENUE' ? d.revenue :
                                           colorMetric === 'PROFIT' ? d.profit :
                                           colorMetric === 'MARGIN' ? d.margin :
-                                          d.tacos
+                                          colorMetric === 'TACOS' ? d.tacos :
+                                          d.returnRate
                                         ) : deltaColor(d.value)}
                                         fillOpacity={0.7}
                                         stroke={isPinned ? themeColor : '#fff'}
@@ -479,6 +530,10 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                     <div className="flex justify-between">
                                         <span className="text-gray-500">Margin</span>
                                         <span className={`font-bold ${areaToShow.margin >= 15 ? 'text-green-600' : areaToShow.margin > 0 ? 'text-amber-600' : 'text-red-600'}`}>{areaToShow.margin.toFixed(1)}%</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500">Return Rate</span>
+                                        <span className={`font-bold ${areaToShow.returnRate > 5 ? 'text-red-600' : 'text-gray-800'}`}>{areaToShow.returnRate.toFixed(1)}%</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-gray-500">Ad Spend</span>
@@ -565,6 +620,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                     colorMetric === 'REVENUE' ? 'Revenue' :
                                     colorMetric === 'PROFIT' ? 'Profit' :
                                     colorMetric === 'MARGIN' ? 'Margin %' :
+                                    colorMetric === 'RETURN_RATE' ? 'Return Rate %' :
                                     'TACoS %'
                                 }</div>
                                 <div className="w-full h-3 rounded mt-1" style={{ background: `linear-gradient(to right, ${colorScale.range()[0]}, ${colorScale.range()[1]}, ${colorScale.range()[2]})` }}></div>
@@ -736,12 +792,27 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         
         {/* Table */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col mt-6">
-            <div className="p-3 bg-gray-50 border-b border-gray-100">
+            <div className="p-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
                 <h4 className="text-xs font-bold text-gray-600 uppercase">Regional Detail Table</h4>
+                <div className="flex gap-2">
+                    {(selectedCategory !== 'All' || selectedSubcategory !== 'All') && (
+                        <div className="flex items-center gap-1 text-[10px] font-medium bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-600">
+                            <Layers className="w-3 h-3 text-indigo-500" />
+                            {selectedCategory}
+                            {selectedSubcategory !== 'All' && <span className="text-gray-400">/ {selectedSubcategory}</span>}
+                        </div>
+                    )}
+                     {selectedCarrier !== 'All' && (
+                        <div className="flex items-center gap-1 text-[10px] font-medium bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-600">
+                            <Truck className="w-3 h-3 text-blue-500" />
+                            {selectedCarrier}
+                        </div>
+                    )}
+                </div>
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs whitespace-nowrap">
-                    <thead className="bg-gray-100 text-gray-500 font-semibold sticky top-0">
+                    <thead className="bg-gray-50 text-gray-500 font-bold text-[10px] uppercase tracking-wider sticky top-0">
                         <tr>
                             <SortableHeader label="Area" sortKey="code" />
                             <SortableHeader label="Orders" sortKey="orders" align="right"/>
@@ -750,7 +821,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <SortableHeader label="Profit" sortKey="profit" align="right"/>
                             <SortableHeader label="Margin %" sortKey="margin" align="right"/>
                             <SortableHeader label="Return %" sortKey="returnRate" align="right"/>
-                            <SortableHeader label="Ad Spend" sortKey="adSpend" align="right"/>
                             <SortableHeader label="TACoS %" sortKey="tacos" align="right"/>
                             <SortableHeader label="Total Ship" sortKey="totalShippingCost" align="right"/>
                             <SortableHeader label="Avg Ship" sortKey="avgShippingCost" align="right"/>
@@ -773,7 +843,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         <td className={`px-3 py-2 text-right font-mono font-bold ${d.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>£{d.profit.toFixed(0)}</td>
                                         <td className={`px-3 py-2 text-right font-mono font-bold ${d.margin > 15 ? 'text-green-600' : d.margin > 0 ? 'text-amber-600' : 'text-red-600'}`}>{d.margin.toFixed(1)}%</td>
                                         <td className={`px-3 py-2 text-right font-mono ${d.returnRate > 5 ? 'text-red-600' : 'text-gray-600'}`}>{d.returnRate.toFixed(1)}%</td>
-                                        <td className="px-3 py-2 text-right font-mono text-orange-600">£{d.adSpend.toFixed(0)}</td>
                                         <td className={`px-3 py-2 text-right font-mono ${d.tacos > 15 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{d.tacos.toFixed(1)}%</td>
                                         <td className="px-3 py-2 text-right font-mono text-gray-600">£{d.totalShippingCost.toFixed(0)}</td>
                                         <td className={`px-3 py-2 text-right font-mono ${d.avgShippingCost > 7 ? 'text-red-600' : d.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-600'}`}>£{d.avgShippingCost.toFixed(2)}</td>
@@ -803,7 +872,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                                 <td className="px-3 py-1.5 text-right font-mono">{district.volume}</td>
                                                 <td className="px-3 py-1.5 text-right font-mono">£{district.revenue.toFixed(0)}</td>
                                                 <td className={`px-3 py-1.5 text-right font-mono ${district.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>£{district.profit.toFixed(0)}</td>
-                                                <td className="px-3 py-1.5 text-center text-gray-300">-</td>
                                                 <td className="px-3 py-1.5 text-center text-gray-300">-</td>
                                                 <td className="px-3 py-1.5 text-center text-gray-300">-</td>
                                                 <td className="px-3 py-1.5 text-center text-gray-300">-</td>

@@ -1,4 +1,6 @@
 
+import { RefundLog, ReturnDateBasis } from '../types';
+
 export const APP_TIMEZONE = 'Australia/Melbourne' as const;
 
 /**
@@ -67,6 +69,25 @@ export function asDateKeyNaive(input: unknown): string | null {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/**
+ * Resolves the date key for a return record. 
+ * Sanity Check: 
+ * - 'refundDate' (default): Attributes returns to the day they were processed. Good for reconciling bank statements.
+ * - 'orderDate': Attributes returns back to the original sale date. Good for identifying "bad batches" or quality issues in specific order periods.
+ */
+export function getReturnDateKey(
+  row: RefundLog,
+  basis: ReturnDateBasis = 'refundDate',
+  orderDateMap?: Map<string, string>
+): string | null {
+  if (basis === 'orderDate' && orderDateMap && row.orderId) {
+    const lookupKey = row.resendBaseOrderId || row.orderId.replace(/-resend$/i, '');
+    const matchedDate = orderDateMap.get(lookupKey);
+    if (matchedDate) return asDateKey(matchedDate);
+  }
+  return asDateKey(row.date);
 }
 
 /**

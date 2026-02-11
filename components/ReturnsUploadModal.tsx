@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import { RefundLog } from '../types';
 import { VAT_MULTIPLIER } from '../constants';
 import { asDateKeyNaive } from '../services/dateUtils';
+import { getCanonicalSku } from '../services/skuNormalization';
 
 interface ReturnsUploadModalProps {
   onClose: () => void;
@@ -14,13 +15,11 @@ interface ReturnsUploadModalProps {
 }
 
 const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConfirm, onReset, existingOrders }) => {
-  const [uploadMode, setUploadMode] = useState<'legacy' | 'v2'>('v2');
   const [dragActive, setDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // File states
-  const [legacyFile, setLegacyFile] = useState<File | null>(null);
   const [detailsFile, setDetailsFile] = useState<File | null>(null);
   const [commentsFile, setCommentsFile] = useState<File | null>(null);
 
@@ -31,7 +30,6 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
   const [importStrategy, setImportStrategy] = useState<'ALL' | 'MATCHED_ONLY'>('ALL');
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   
-  const legacyInputRef = useRef<HTMLInputElement>(null);
   const detailsInputRef = useRef<HTMLInputElement>(null);
   const commentsInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,13 +48,9 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        if (uploadMode === 'legacy') {
-            setLegacyFile(e.dataTransfer.files[0]);
-        } else {
-            // For V2 drop, we don't know which file it is, so just alert or default to details if empty
-            if (!detailsFile) setDetailsFile(e.dataTransfer.files[0]);
-            else if (!commentsFile) setCommentsFile(e.dataTransfer.files[0]);
-        }
+        // For drop, we default to details if empty
+        if (!detailsFile) setDetailsFile(e.dataTransfer.files[0]);
+        else if (!commentsFile) setCommentsFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -88,16 +82,10 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
     setError(null);
 
     try {
-        if (uploadMode === 'legacy') {
-            if (!legacyFile) throw new Error("No file selected");
-            const rows = await readExcel(legacyFile);
-            analyzeLegacyRows(rows);
-        } else {
-            if (!detailsFile || !commentsFile) throw new Error("Both files required for V2 import");
-            const detailsRows = await readExcel(detailsFile);
-            const commentsRows = await readExcel(commentsFile);
-            analyzeV2Rows(detailsRows, commentsRows);
-        }
+        if (!detailsFile || !commentsFile) throw new Error("Both files required for import");
+        const detailsRows = await readExcel(detailsFile);
+        const commentsRows = await readExcel(commentsFile);
+        analyzeV2Rows(detailsRows, commentsRows);
     } catch (err: any) {
         setError(err.message || "Failed to process files");
         setIsProcessing(false);
@@ -124,117 +112,6 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
           if (idx !== -1) return idx;
       }
       return -1;
-  };
-
-  const analyzeLegacyRows = (rows: any[][]) => {
-      if (rows.length < 2) throw new Error("File empty.");
-
-      const originalHeaders = rows[0].map(h => String(h).trim());
-      const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
-      
-      // --- CORE FIELDS ---
-      const skuIdx = findColPriority(headers, ['productsku', 'sku']);
-      const amountIdx = findColPriority(headers, ['refundamount', 'refundvalue', 'amount']);
-      const qtyIdx = findColPriority(headers, ['refundqty', 'quantity', 'returnqty']);
-      const dateIdx = findColPriority(headers, ['creationtime', 'date', 'applicationtime']);
-      const platformIdx = findColPriority(headers, ['channel', 'platform']);
-      
-      // --- DETAILED FIELDS ---
-      const typeIdx = findColPriority(headers, ['after-salestype', 'servicetype', 'type']);
-      const statusIdx = findColPriority(headers, ['after-salesstatus', 'status']);
-      const platReasonIdx = findColPriority(headers, ['platformaftersalesreason', 'platformreason']);
-      const custReasonIdx = findColPriority(headers, ['reasonforrefund', 'reasonforreturn', 'buyerreason']);
-      const remarksIdx = findColPriority(headers, ['remarks', 'memo', 'remark']);
-      const commentsIdx = findColPriority(headers, ['comments', 'comment', 'buyercomment']);
-      
-      let orderIdIdx = findColPriority(headers, ['thirdpartyordernumber', 'externalordernumber', 'ordernumber', 'orderid']);
-
-      if (skuIdx === -1 || amountIdx === -1 || dateIdx === -1) throw new Error("Missing required columns (SKU, Amount, Date)");
-
-      const refunds: RefundLog[] = [];
-      let totalValue = 0;
-      let matchedOrders = 0;
-      let orphans = 0;
-      const unmatchedSamples: string[] = [];
-
-      for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          if (!row || row.length <= skuIdx) continue;
-          
-          const sku = String(row[skuIdx]).trim();
-          if (!sku) continue;
-
-          // Legacy Amount is Inc-VAT. Convert to Ex-VAT for storage.
-          const rawAmount = parseFloat(String(row[amountIdx])) || 0;
-          const amountExVat = rawAmount / VAT_MULTIPLIER;
-
-          const quantity = qtyIdx !== -1 ? (parseFloat(String(row[qtyIdx])) || 1) : 1;
-          
-          const rawDate = row[dateIdx];
-          const dateKey = asDateKeyNaive(rawDate);
-          
-          let parsedDate = new Date().toISOString();
-          
-          if (process.env.NODE_ENV !== 'production' && i <= 3) {
-             console.log('[Returns Legacy Audit] Raw:', rawDate, '-> Key:', dateKey);
-          }
-
-          if (dateKey) {
-             parsedDate = new Date(dateKey).toISOString();
-          }
-
-          // Details
-          const type = typeIdx !== -1 ? String(row[typeIdx]).trim() : undefined;
-          const status = statusIdx !== -1 ? String(row[statusIdx]).trim() : undefined;
-          const customerReason = custReasonIdx !== -1 ? String(row[custReasonIdx]).trim() : undefined;
-          const platformReason = platReasonIdx !== -1 ? String(row[platReasonIdx]).trim() : undefined;
-          
-          // Use the most specific reason available without decoding, to preserve full data
-          const displayReason = platformReason || customerReason || 'Unknown Reason';
-          
-          const orderId = orderIdIdx !== -1 ? String(row[orderIdIdx]).trim() : undefined;
-
-          // Platform Logic
-          let finalPlatform = platformIdx !== -1 ? String(row[platformIdx]) : undefined;
-          if (finalPlatform && finalPlatform.toLowerCase() === 'mirakl') finalPlatform = undefined;
-
-          if (existingOrders && existingOrders.size > 0 && orderId) {
-              if (existingOrders.has(orderId)) {
-                  matchedOrders++;
-                  finalPlatform = existingOrders.get(orderId);
-              } else {
-                  orphans++;
-                  if (unmatchedSamples.length < 10) unmatchedSamples.push(`${orderId} (SKU: ${sku})`);
-              }
-          }
-
-          const uniqueId = generateRefundId(sku, parsedDate, amountExVat, quantity, displayReason);
-
-          refunds.push({
-              id: uniqueId,
-              sku,
-              date: parsedDate,
-              amount: amountExVat, // Stored as Ex-VAT
-              quantity,
-              platform: finalPlatform,
-              reason: displayReason,
-              orderId,
-              type,
-              status,
-              customerReason,
-              platformReason,
-              remarks: remarksIdx !== -1 ? String(row[remarksIdx]) : undefined,
-              comments: commentsIdx !== -1 ? String(row[commentsIdx]) : undefined,
-              orderType: 'refund' // Legacy assumption
-          });
-
-          totalValue += (amountExVat * VAT_MULTIPLIER); // Display total as Inc-VAT
-      }
-      
-      setParsedRefunds(refunds);
-      setStats({ count: refunds.length, totalValue, matchedOrders, orphans });
-      setDebugInfo({ unmatchedSamples, dbSamples: existingOrders ? Array.from(existingOrders.keys()).slice(0, 3) : [], mappedColumn: originalHeaders[orderIdIdx] || 'Unknown' });
-      setIsProcessing(false);
   };
 
   const analyzeV2Rows = (detailsRows: any[][], commentsRows: any[][]) => {
@@ -274,7 +151,8 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
       let reasonIdx = findColPriority(dHeaders, ['returnreasondetail', 'return_reason_detail']);
       if (reasonIdx === -1) reasonIdx = findColPriority(dHeaders, ['returnreason', 'reason']);
       
-      const dateIdx = findColPriority(dHeaders, ['ordertime', 'time']);
+      // Update date columns to include order date and payment date candidates
+      const dateIdx = findColPriority(dHeaders, ['ordertime', 'time', 'orderdate', 'date', 'refundtime', 'refund_time']);
       const platformIdx = findColPriority(dHeaders, ['platformname', 'platform']);
 
       const missingCols: string[] = [];
@@ -303,7 +181,8 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
           if (rawSku.toLowerCase() === 'freight') {
               group.freight += amt;
           } else {
-              group.items.push({ row, sku: rawSku, amt });
+              const sku = getCanonicalSku(rawSku);
+              group.items.push({ row, sku, amt });
           }
       }
 
@@ -324,7 +203,18 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                   ? (amt / totalItemVal) * group.freight 
                   : (group.freight / group.items.length);
 
-              const qty = qtyIdx !== -1 ? (parseFloat(String(row[qtyIdx])) || 0) : 1;
+              let qty = 0;
+              if (qtyIdx !== -1) {
+                  const rawQty = row[qtyIdx];
+                  if (rawQty === undefined || rawQty === null || String(rawQty).trim() === '') {
+                      qty = 1; 
+                  } else {
+                      qty = parseFloat(String(rawQty)) || 0;
+                  }
+              } else {
+                  qty = 1;
+              }
+
               const oType = typeIdx !== -1 ? String(row[typeIdx]).toLowerCase() : 'refund';
               const reason = reasonIdx !== -1 ? String(row[reasonIdx]) : undefined;
               
@@ -333,13 +223,6 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
               const rawDate = (dateIdx !== -1) ? row[dateIdx] : undefined;
               if (rawDate) {
                  const dKey = asDateKeyNaive(rawDate);
-                 
-                 // Audit Log (Dev only)
-                 // Since this is inside a loop inside a map, we need a simple counter or just check array length
-                 if (process.env.NODE_ENV !== 'production' && refunds.length < 3) {
-                     console.log('[Returns V2 Audit] Raw:', rawDate, '-> Key:', dKey);
-                 }
-
                  if (dKey) dateStr = new Date(dKey).toISOString();
               }
 
@@ -371,7 +254,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                   freightAmount: allocatedFreight, // Ex-VAT
                   quantity: qty,
                   platform: finalPlatform,
-                  reason: reason, // Keeping RAW reason
+                  reason: reason, 
                   orderId: oid,
                   orderType: oType as any,
                   resendBaseOrderId: resendBase,
@@ -415,8 +298,8 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                     This will <strong>permanently delete</strong> all existing refund records. This is recommended if your current data contains errors.
                 </p>
                 <div className="flex gap-4">
-                    <button onClick={() => setIsResetConfirmOpen(false)} className="px-6 py-3 text-gray-700 font-bold hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
-                    <button onClick={() => { if (onReset) onReset(); setIsResetConfirmOpen(false); }} className="px-6 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg hover:shadow-red-500/30 transition-all flex items-center gap-2"><Trash2 className="w-4 h-4" />Yes, Wipe Everything</button>
+                    <button onClick={() => setIsResetConfirmOpen(false)} className="px-6 py-3 text-gray-700 font-medium hover:bg-gray-100 rounded-xl transition-colors">Cancel</button>
+                    <button onClick={() => { if (onReset) onReset(); setIsResetConfirmOpen(false); }} className="px-6 py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 shadow-lg hover:shadow-red-500/30 transition-all flex items-center gap-2"><Trash2 className="w-4 h-4" />Yes, Wipe Everything</button>
                 </div>
             </div>
         )}
@@ -424,7 +307,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
           <div className="flex items-center gap-3">
               <div className="p-2 bg-red-100 rounded-lg text-red-600"><RotateCcw className="w-5 h-5" /></div>
-              <div><h2 className="text-xl font-bold text-gray-900">Import Refunds & Returns</h2><p className="text-xs text-gray-500">Supports new multi-file format and legacy single file.</p></div>
+              <div><h2 className="text-xl font-bold text-gray-900">Import Refunds & Returns</h2><p className="text-xs text-gray-500">Upload the "Return Details" and "Comments" files from ERP.</p></div>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
         </div>
@@ -432,60 +315,39 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         <div className="p-6 overflow-y-auto">
             {!parsedRefunds ? (
                 <div className="space-y-6">
-                    {/* Format Switcher */}
-                    <div className="flex bg-gray-100 p-1 rounded-lg">
-                        <button onClick={() => { setUploadMode('v2'); setError(null); }} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${uploadMode === 'v2' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>New Format (2 Files)</button>
-                        <button onClick={() => { setUploadMode('legacy'); setError(null); }} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${uploadMode === 'legacy' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Legacy (1 File)</button>
-                    </div>
-
-                    {uploadMode === 'v2' ? (
-                        <div 
-                            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50/50'}`}
-                            onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
-                        >
-                            <div className="space-y-4 w-full max-w-sm">
-                                <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300" onClick={() => detailsInputRef.current?.click()}>
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-blue-50 text-blue-600 rounded"><FileText className="w-4 h-4" /></div>
-                                        <div className="text-left"><span className="text-xs font-bold text-gray-700 block">Return Details.xlsx</span><span className="text-[10px] text-gray-400">{detailsFile ? detailsFile.name : 'Required'}</span></div>
-                                    </div>
-                                    {detailsFile ? <Check className="w-4 h-4 text-green-500" /> : <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Select</span>}
+                    <div 
+                        className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50/50'}`}
+                        onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                    >
+                        <div className="space-y-4 w-full max-w-sm">
+                            <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300" onClick={() => detailsInputRef.current?.click()}>
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-blue-50 text-blue-600 rounded"><FileText className="w-4 h-4" /></div>
+                                    <div className="text-left"><span className="text-xs font-medium text-gray-700 block">Return Details.xlsx</span><span className="text-[10px] text-gray-400">{detailsFile ? detailsFile.name : 'Required'}</span></div>
                                 </div>
-                                <input ref={detailsInputRef} type="file" className="hidden" onChange={(e) => e.target.files && setDetailsFile(e.target.files[0])} accept=".xlsx,.xls" />
-
-                                <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300" onClick={() => commentsInputRef.current?.click()}>
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-amber-50 text-amber-600 rounded"><MessageSquare className="w-4 h-4" /></div>
-                                        <div className="text-left"><span className="text-xs font-bold text-gray-700 block">Return Order Comment.xlsx</span><span className="text-[10px] text-gray-400">{commentsFile ? commentsFile.name : 'Required'}</span></div>
-                                    </div>
-                                    {commentsFile ? <Check className="w-4 h-4 text-green-500" /> : <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Select</span>}
-                                </div>
-                                <input ref={commentsInputRef} type="file" className="hidden" onChange={(e) => e.target.files && setCommentsFile(e.target.files[0])} accept=".xlsx,.xls" />
+                                {detailsFile ? <Check className="w-4 h-4 text-green-500" /> : <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Select</span>}
                             </div>
-                            
-                            <p className="text-xs text-gray-400 mt-4">Drag & drop files here or click boxes to browse.</p>
+                            <input ref={detailsInputRef} type="file" className="hidden" onChange={(e) => e.target.files && setDetailsFile(e.target.files[0])} accept=".xlsx,.xls" />
+
+                            <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300" onClick={() => commentsInputRef.current?.click()}>
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-amber-50 text-amber-600 rounded"><MessageSquare className="w-4 h-4" /></div>
+                                    <div className="text-left"><span className="text-xs font-medium text-gray-700 block">Return Order Comment.xlsx</span><span className="text-[10px] text-gray-400">{commentsFile ? commentsFile.name : 'Required'}</span></div>
+                                </div>
+                                {commentsFile ? <Check className="w-4 h-4 text-green-500" /> : <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Select</span>}
+                            </div>
+                            <input ref={commentsInputRef} type="file" className="hidden" onChange={(e) => e.target.files && setCommentsFile(e.target.files[0])} accept=".xlsx,.xls" />
                         </div>
-                    ) : (
-                        <div 
-                            className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}`}
-                            onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
-                            onClick={() => legacyInputRef.current?.click()}
-                        >
-                            <input ref={legacyInputRef} type="file" className="hidden" onChange={(e) => e.target.files && setLegacyFile(e.target.files[0])} accept=".xlsx,.xls,.csv" />
-                            {legacyFile ? (
-                                <div className="flex items-center gap-2 text-green-700 font-medium"><Check className="w-5 h-5"/> {legacyFile.name}</div>
-                            ) : (
-                                <><Upload className="w-8 h-8 text-gray-400 mb-2"/><p className="text-sm font-medium text-gray-900">Upload Single Legacy File</p></>
-                            )}
-                        </div>
-                    )}
+                        
+                        <p className="text-xs text-gray-400 mt-4">Drag & drop files here or click boxes to browse.</p>
+                    </div>
 
                     {error && <div className="p-3 bg-red-50 text-red-700 border border-red-100 rounded-lg text-xs flex items-center gap-2"><AlertCircle className="w-4 h-4"/>{error}</div>}
                     
                     <button 
                         onClick={processFiles} 
-                        disabled={isProcessing || (uploadMode === 'v2' && (!detailsFile || !commentsFile)) || (uploadMode === 'legacy' && !legacyFile)}
-                        className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        disabled={isProcessing || !detailsFile || !commentsFile}
+                        className="w-full py-3 bg-indigo-600 text-white font-medium rounded-xl shadow-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Process Files'}
                     </button>
@@ -495,11 +357,11 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                     <div className="grid grid-cols-2 gap-4">
                         <div className="p-4 bg-red-50 rounded-xl border border-red-100">
                             <div className="text-2xl font-bold text-red-700">{stats.count}</div>
-                            <div className="text-xs text-red-600 font-bold uppercase">Refunds Found</div>
+                            <div className="text-xs text-red-600 font-medium uppercase">Refunds Found</div>
                         </div>
                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                             <div className="text-2xl font-bold text-gray-700">£{stats.totalValue.toFixed(2)}</div>
-                            <div className="text-xs text-gray-600 font-bold uppercase">Total Value (Inc VAT)</div>
+                            <div className="text-xs text-gray-600 font-medium uppercase">Total Value (Inc VAT)</div>
                         </div>
                     </div>
 
@@ -515,8 +377,6 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
 
                             {stats.orphans > 0 && (
                                 <div className="mt-2 pt-2 border-t border-amber-200 space-y-3">
-                                    
-                                    {/* NEW SAMPLE LIST */}
                                     <div className="bg-white/60 p-2 rounded border border-amber-200/60">
                                         <div className="flex items-start gap-2">
                                             <div className="mt-0.5"><FileQuestion className="w-3.5 h-3.5 text-amber-600" /></div>
@@ -565,13 +425,13 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         <div className="p-6 border-t bg-gray-50 flex justify-between items-center rounded-b-2xl">
             <div>
                 {onReset && (
-                    <button onClick={() => setIsResetConfirmOpen(true)} className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 bg-white"><Trash2 className="w-4 h-4" /> Reset Data</button>
+                    <button onClick={() => setIsResetConfirmOpen(true)} className="text-xs font-medium text-red-500 hover:text-red-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 bg-white"><Trash2 className="w-4 h-4" /> Reset Data</button>
                 )}
             </div>
             <div className="flex gap-3">
                 <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel</button>
                 {parsedRefunds && parsedRefunds.length > 0 && (
-                    <button onClick={handleConfirm} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"><Check className="w-4 h-4" /> Import {recordsToImport} Refunds</button>
+                    <button onClick={handleConfirm} className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"><Check className="w-4 h-4" /> Import {recordsToImport} Refunds</button>
                 )}
             </div>
         </div>

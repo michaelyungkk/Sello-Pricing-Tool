@@ -54,7 +54,7 @@ export const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDele
     const finalContent = filter.field === 'velocityChange' && filter.value === 0 && filter.operator === 'LT'
         ? <span className="font-mono text-xs font-medium">Negative Trend (Period-over-Period)</span>
         : filter.label 
-            ? <><span className="font-bold">{filter.label}:</span> <span className="opacity-80 ml-1 font-mono text-[10px]">{logicString}</span></>
+            ? <><span className="font-medium">{filter.label}:</span> <span className="opacity-80 ml-1 font-mono text-[10px]">{logicString}</span></>
             : <span className="font-mono text-xs font-medium">{logicString}</span>;
 
     const icon = filter.field === 'postcode' ? <MapPin className="w-3 h-3 text-indigo-500" /> : null;

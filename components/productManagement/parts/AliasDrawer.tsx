@@ -46,7 +46,7 @@ export const AliasDrawer: React.FC<AliasDrawerProps> = ({ product, pricingRules,
                 <div className="p-6 flex-1 overflow-y-auto space-y-6">
                     {platformTags.map(item => (
                         <div key={item.platform}>
-                            <label className="text-xs font-bold text-gray-500 uppercase">{item.platform}</label>
+                            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">{item.platform}</label>
                             <div className="flex flex-wrap gap-2 p-2 border rounded-lg mt-1 focus-within:ring-2 focus-within:ring-indigo-500">
                                 {item.tags.map((tag:string, i:number) => (
                                     <span key={i} className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs flex items-center gap-1">

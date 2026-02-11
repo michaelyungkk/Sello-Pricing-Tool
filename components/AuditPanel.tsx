@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Activity } from 'lucide-react';
 import { marginPct, tacosPct, toNumber } from '../services/metrics';
@@ -78,7 +77,7 @@ const AuditPanel = <T,>({
 
     return (
         <div className="space-y-2 bg-white/50 p-3 rounded-lg border border-gray-200">
-            <h4 className="font-bold text-indigo-700 flex items-center gap-2"><Activity className="w-4 h-4" /> {title}</h4>
+            <h4 className="font-semibold text-indigo-700 flex items-center gap-2"><Activity className="w-4 h-4" /> {title}</h4>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
                 <dt>Date Range:</dt><dd className="font-mono font-medium text-gray-900">{startKey} → {endKey}</dd>
                 <dt>Row Count:</dt><dd className="font-mono font-medium text-gray-900">{stats.rowCount}</dd>

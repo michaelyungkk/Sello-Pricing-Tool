@@ -4,6 +4,7 @@ import { SearchIntent } from './geminiService';
 import { isAdsEnabled } from './platformCapabilities';
 import { scaleMoneyInclTax } from './taxPolicy';
 import { VAT_MULTIPLIER } from '../constants';
+import { getCanonicalSku } from './skuNormalization';
 
 export const safeCalculateMargin = (p: Product | undefined, price: number): number => {
     if (!p || !price || isNaN(price)) return 0;
@@ -39,35 +40,32 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
             let allTimeSales = 0;
             let allTimeQty = 0;
             const transactions: PriceLog[] = [];
+            const targetMasterSku = product.sku.toUpperCase();
             
             safePriceHistory.forEach(l => {
-                if (l.sku === product.sku) {
+                // Use Canonical Mapping to catch variant sales (e.g. -A-UK, -B-UK)
+                if (getCanonicalSku(l.sku).toUpperCase() === targetMasterSku) {
                     allTimeSales += (l.price * l.velocity);
                     allTimeQty += l.velocity;
                     transactions.push(l);
                 }
             });
 
-            const productRefunds = safeRefundHistory.filter(r => r.sku === product.sku);
+            // Use Canonical Mapping to catch variant refunds
+            const productRefunds = safeRefundHistory.filter(r => 
+                getCanonicalSku(r.sku).toUpperCase() === targetMasterSku
+            );
 
             return {
                 results: [{
                     type: 'DEEP_DIVE',
                     product,
-                    allTimeSales: scaleMoneyInclTax(allTimeSales), // Scale Global Total
+                    allTimeSales: scaleMoneyInclTax(allTimeSales), // Scale Global Total for summary
                     allTimeQty,
-                    // Map transactions to tax-inclusive for display in deep dive charts/tables
-                    transactions: transactions.map(t => ({
-                        ...t,
-                        price: scaleMoneyInclTax(t.price),
-                        profit: t.profit !== undefined ? scaleMoneyInclTax(t.profit) : undefined,
-                        adsSpend: t.adsSpend !== undefined ? scaleMoneyInclTax(t.adsSpend) : undefined
-                    })), 
-                    // Map refunds to tax-inclusive for display
-                    refunds: productRefunds.map(r => ({
-                        ...r,
-                        amount: scaleMoneyInclTax(r.amount)
-                    })) 
+                    // Keep transactions and refunds Ex-VAT (raw)
+                    // The SkuDeepDive component applies its own VAT multiplier for analysis
+                    transactions, 
+                    refunds: productRefunds
                 }],
                 timeLabel: 'All Time',
                 resultMeta: { moneyIsTaxInclusive: true, vatMultiplierUsed: VAT_MULTIPLIER }
@@ -82,7 +80,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
     if (intent.targetData === 'refunds') {
         const results: any[] = [];
         safeRefundHistory.forEach(r => {
-            const p = productMap.get(r.sku);
+            const p = productMap.get(getCanonicalSku(r.sku));
             results.push({ 
                 sku: r.sku, 
                 productName: p?.name || 'Unknown', 
@@ -183,16 +181,18 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
     safeRefundHistory.forEach(r => {
         const rTime = new Date(r.date).getTime();
         if (rTime >= startTime && rTime <= endTime) {
-            if (!skuPeriodStats.has(r.sku)) skuPeriodStats.set(r.sku, { revenue: 0, refunds: 0, organicQty: 0, adEnabledQty: 0, qty: 0, prevRevenue: 0, prevQty: 0, prevProfit: 0 });
-            skuPeriodStats.get(r.sku)!.refunds += r.amount;
+            const canonicalSku = getCanonicalSku(r.sku);
+            if (!skuPeriodStats.has(canonicalSku)) skuPeriodStats.set(canonicalSku, { revenue: 0, refunds: 0, organicQty: 0, adEnabledQty: 0, qty: 0, prevRevenue: 0, prevQty: 0, prevProfit: 0 });
+            skuPeriodStats.get(canonicalSku)!.refunds += r.amount;
         }
     });
     safePriceHistory.forEach(l => {
         const lTime = new Date(l.date).getTime();
+        const canonicalSku = getCanonicalSku(l.sku);
         
         // Ensure map entry exists
-        if (!skuPeriodStats.has(l.sku)) skuPeriodStats.set(l.sku, { revenue: 0, refunds: 0, organicQty: 0, adEnabledQty: 0, qty: 0, prevRevenue: 0, prevQty: 0, prevProfit: 0 });
-        const stats = skuPeriodStats.get(l.sku)!;
+        if (!skuPeriodStats.has(canonicalSku)) skuPeriodStats.set(canonicalSku, { revenue: 0, refunds: 0, organicQty: 0, adEnabledQty: 0, qty: 0, prevRevenue: 0, prevQty: 0, prevProfit: 0 });
+        const stats = skuPeriodStats.get(canonicalSku)!;
 
         // Current Period Aggregation
         if (lTime >= startTime && lTime <= endTime) {
@@ -200,7 +200,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
             stats.qty += l.velocity;
             
             // Organic Share Accumulation
-            const p = productMap.get(l.sku);
+            const p = productMap.get(canonicalSku);
             const adsSpend = l.adsSpend !== undefined ? l.adsSpend : (p?.adsFee || 0) * l.velocity;
             
             if (isAdsEnabled(l.platform || '')) {
@@ -234,7 +234,8 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
 
     // Pass 2: Filter and Build Candidates
     safePriceHistory.forEach(log => {
-        const product = productMap.get(log.sku);
+        const canonicalSku = getCanonicalSku(log.sku);
+        const product = productMap.get(canonicalSku);
         if (!product) return;
         const logTime = new Date(log.date).getTime();
         if (logTime < startTime || logTime > endTime) return;
@@ -254,7 +255,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
         const tacos = revenue > 0 ? (adsSpend / revenue) * 100 : 0;
         
         // Stats for current SKU
-        const pStats = skuPeriodStats.get(log.sku) || { revenue: 0, refunds: 0, organicQty: 0, adEnabledQty: 0, qty: 0, prevRevenue: 0, prevQty: 0, prevProfit: 0 };
+        const pStats = skuPeriodStats.get(canonicalSku) || { revenue: 0, refunds: 0, organicQty: 0, adEnabledQty: 0, qty: 0, prevRevenue: 0, prevQty: 0, prevProfit: 0 };
         const periodReturnRate = pStats.revenue > 0 ? (pStats.refunds / pStats.revenue) * 100 : 0;
         const organicShare = pStats.adEnabledQty > 0 ? (pStats.organicQty / pStats.adEnabledQty) * 100 : null;
 
@@ -315,10 +316,6 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
 
             // Explicit Postcode Matching Logic
             if (f.field === 'postcode') {
-                // Criteria: "B"
-                // Value: "B78 1SE"
-                // We want "B" to match "B7..." or "B..." but NOT "BS..."
-                // Regex check: Start with criteria followed by a digit, OR criteria matches whole string (rare)
                 const pcRegex = new RegExp(`^${strCriteria}(\\d|$)`, 'i');
                 return pcRegex.test(valStr);
             }
@@ -348,8 +345,8 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
                 sortVal = marginChange * log.velocity; 
             }
 
-            if (!skuTotals[log.sku]) skuTotals[log.sku] = 0;
-            skuTotals[log.sku] += sortVal;
+            if (!skuTotals[product.sku]) skuTotals[product.sku] = 0;
+            skuTotals[product.sku] += sortVal;
             
             candidates.push({
                 sku: product.sku,
@@ -394,9 +391,10 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
     safeRefundHistory.forEach(r => {
         const logTime = new Date(r.date).getTime();
         if (logTime < startTime || logTime > endTime) return;
-        const product = productMap.get(r.sku);
+        const canonicalSku = getCanonicalSku(r.sku);
+        const product = productMap.get(canonicalSku);
         if (!product) return;
-        const pStats = skuPeriodStats.get(r.sku) || { revenue: 0, refunds: 0, organicQty: 0, adEnabledQty: 0, qty: 0, prevRevenue: 0, prevQty: 0, prevProfit: 0 };
+        const pStats = skuPeriodStats.get(canonicalSku) || { revenue: 0, refunds: 0, organicQty: 0, adEnabledQty: 0, qty: 0, prevRevenue: 0, prevQty: 0, prevProfit: 0 };
         const derivedMetrics: any = {
             revenue: 0, profit: -r.amount, margin: 0, returnRate: product.returnRate || 0,
             periodReturnRate: pStats.revenue > 0 ? (pStats.refunds / pStats.revenue) * 100 : 0,
@@ -410,10 +408,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
             const strCriteria = String(f.value).toLowerCase();
             const valStr = String(val).toLowerCase();
             
-            // Explicit Postcode Matching Logic for Refunds
-            if (f.field === 'postcode') {
-                return false;
-            }
+            if (f.field === 'postcode') return false;
 
             if (f.field === 'name' && f.operator === 'CONTAINS') {
                 const nameMatch = product.name.toLowerCase().includes(strCriteria);

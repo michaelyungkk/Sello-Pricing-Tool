@@ -198,7 +198,7 @@ export const PlatformConfigSection: React.FC<PlatformConfigSectionProps> = ({
                                         <button
                                             onClick={() => toggleExclusion(platform)}
                                             className={`p-1.5 rounded-lg transition-colors ${!isExcluded ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                                            title={isExcluded ? "Included in Global Averages" : "Excluded from Global Averages"}
+                                            title={isExcluded ? "Excluded from Global Averages" : "Included in Global Averages"}
                                         >
                                             {!isExcluded ? <ShieldCheck className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                                         </button>

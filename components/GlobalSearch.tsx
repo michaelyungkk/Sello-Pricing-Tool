@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, Loader2, X, Tag } from 'lucide-react';
 import { SearchChip, Product } from '../types';
@@ -189,7 +190,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platfo
                     return (
                         <div 
                             key={index} 
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border animate-in fade-in zoom-in-90 ${
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border animate-in fade-in zoom-in-90 ${
                                 chip.type === 'METRIC' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' :
                                 chip.type === 'TIME' ? 'bg-blue-100 text-blue-700 border-blue-200' :
                                 chip.type === 'PLATFORM' ? 'bg-purple-100 text-purple-700 border-purple-200' :
@@ -209,7 +210,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platfo
 
                 {/* SKU Mode Visual Indicator */}
                 {searchMode === 'SKU' && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border bg-teal-100 text-teal-800 border-teal-200 animate-in fade-in zoom-in-90 select-none">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-teal-100 text-teal-800 border-teal-200 animate-in fade-in zoom-in-90 select-none">
                         <Tag className="w-3 h-3" />
                         <span>{t('search_sku_mode_label')}</span>
                     </div>

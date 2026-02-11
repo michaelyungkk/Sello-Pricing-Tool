@@ -29,15 +29,15 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
                 <div className="p-3 bg-orange-50 text-orange-600 rounded-lg"><Megaphone className="w-6 h-6" /></div>
-                <div><span className="text-xs font-medium text-gray-400 uppercase">Total Ad Spend</span><div className="text-2xl font-black text-gray-900">{formatMoney(totalAdSpend, 0)}</div></div>
+                <div><span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Total Ad Spend</span><div className="text-2xl font-bold text-gray-900">{formatMoney(totalAdSpend, 0)}</div></div>
             </div>
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
                 <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg"><PieChart className="w-6 h-6" /></div>
-                <div><span className="text-xs font-medium text-gray-400 uppercase">Average TACoS</span><div className={`text-2xl font-black ${avgTacos > 15 ? 'text-red-600' : 'text-gray-900'}`}>{formatPct(avgTacos)}</div></div>
+                <div><span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Average TACoS</span><div className={`text-2xl font-bold ${avgTacos > 15 ? 'text-red-600' : 'text-gray-900'}`}>{formatPct(avgTacos)}</div></div>
             </div>
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
                 <div className="p-3 bg-green-50 text-green-600 rounded-lg"><Zap className="w-6 h-6" /></div>
-                <div><span className="text-xs font-medium text-gray-400 uppercase">Global Ad ROI</span><div className={`text-2xl font-black ${avgRoi < 0 ? 'text-red-600' : 'text-green-700'}`}>{avgRoi.toFixed(2)}x</div></div>
+                <div><span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Global Ad ROI</span><div className={`text-2xl font-bold ${avgRoi < 0 ? 'text-red-600' : 'text-green-700'}`}>{avgRoi.toFixed(2)}x</div></div>
             </div>
         </div>
         
@@ -129,14 +129,48 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                                 <div className="font-bold text-sm">{d.platform}</div>
                                 <div className="text-[10px] text-indigo-300 opacity-80">Ads: {formatMoney(d.adSpend, 0)}</div>
                             </div>
-                            <div className="text-lg font-black">{d.roiAfterAds?.toFixed(2)}x</div>
+                            <div className="text-lg font-bold text-white font-mono">{d.roiAfterAds?.toFixed(2)}x</div>
                         </div>
                     ))}
                 </div>
             </div>
         </div>
 
-        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden"><div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center"><h3 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Coins className="w-4 h-4 text-amber-500" />Fees Table</h3></div><div className="overflow-x-auto"><table className="w-full text-left text-sm whitespace-nowrap"><thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50"><tr><SortableHeader label="Platform" sortKey="name" sort={sort} onChange={setSort as any} themeColor={themeColor} /><SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort as any} themeColor={themeColor} align="right" /><th className="px-4 py-3 text-right">Profit (Gross)</th><SortableHeader label="Margin %" sortKey="margin" sort={sort} onChange={setSort as any} themeColor={themeColor} align="right" /><th className="px-4 py-3 text-right">Ad Spend</th><th className="px-4 py-3 text-right">TACoS %</th><th className="px-4 py-3 text-right bg-green-50/30">Net Profit</th><th className="px-4 py-3 text-right bg-green-50/30">ROI After Ads</th></tr></thead><tbody className="divide-y divide-gray-100/50">{sortRows(roiData, sort as any, (row: any, key: string) => row[key] || 0).map((d: any) => (<tr key={d.platform} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors"><td className="p-4 font-bold text-gray-900">{d.platform}</td><td className="p-4 text-right">{formatMoney(d.revenue, 0)}</td><td className="p-4 text-right">{formatMoney(d.profit, 0)}</td><td className="p-4 text-right font-bold">{formatPct(d.marginPct)}</td><td className="p-4 text-right text-orange-700">{formatMoney(d.adSpend, 0)}</td><td className="p-4 text-right">{formatPct(d.tacosPct)}</td><td className="p-4 text-right font-bold text-green-700">{formatMoney(d.netAfterAds, 0)}</td><td className="p-4 text-right font-black text-indigo-700">{d.roiAfterAds?.toFixed(2)}x</td></tr>))}</tbody></table></div></div>
+        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+            <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
+                <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Coins className="w-4 h-4 text-amber-500" />Fees Table</h3>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200/50 text-[10px] uppercase tracking-wider">
+                        <tr>
+                            <SortableHeader label="Platform" sortKey="name" sort={sort} onChange={setSort as any} themeColor={themeColor} />
+                            <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort as any} themeColor={themeColor} align="right" />
+                            <th className="px-4 py-3 text-right">Profit (Gross)</th>
+                            <SortableHeader label="Margin %" sortKey="margin" sort={sort} onChange={setSort as any} themeColor={themeColor} align="right" />
+                            <th className="px-4 py-3 text-right">Ad Spend</th>
+                            <th className="px-4 py-3 text-right">TACoS %</th>
+                            <th className="px-4 py-3 text-right bg-green-50/30">Net Profit</th>
+                            <th className="px-4 py-3 text-right bg-green-50/30">ROI After Ads</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100/50">
+                        {sortRows(roiData, sort as any, (row: any, key: string) => row[key] || 0).map((d: any) => (
+                            <tr key={d.platform} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors">
+                                <td className="p-4 font-bold text-gray-900">{d.platform}</td>
+                                <td className="p-4 text-right font-medium">{formatMoney(d.revenue, 0)}</td>
+                                <td className="p-4 text-right font-medium text-gray-600">{formatMoney(d.profit, 0)}</td>
+                                <td className="p-4 text-right font-bold text-gray-800">{formatPct(d.marginPct)}</td>
+                                <td className="p-4 text-right text-orange-700">{formatMoney(d.adSpend, 0)}</td>
+                                <td className="p-4 text-right text-gray-600">{formatPct(d.tacosPct)}</td>
+                                <td className="p-4 text-right font-bold text-green-700">{formatMoney(d.netAfterAds, 0)}</td>
+                                <td className="p-4 text-right font-bold text-indigo-700">{d.roiAfterAds?.toFixed(2)}x</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
       </div>
     );
 };

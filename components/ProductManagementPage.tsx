@@ -23,6 +23,7 @@ interface ProductManagementPageProps {
     thresholds?: ThresholdConfig;
     deductRefunds: boolean;
     setDeductRefunds: (v: boolean) => void;
+    onAnalyzeCarrier: (carrier: string) => void;
 }
 
 const ProductManagementPage: React.FC<ProductManagementPageProps> = (props) => {

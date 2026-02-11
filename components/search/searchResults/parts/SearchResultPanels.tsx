@@ -74,8 +74,8 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                 } else if (volumeContextStats.getBand) {
                     const band = volumeContextStats.getBand(group.totalQty);
                     if (band === 'Top') volumeBadge = <span className="text-[9px] bg-slate-200 text-slate-700 px-1 rounded border border-slate-300 font-medium">Top 20%</span>;
-                    if (band === 'Middle') volumeBadge = <span className="text-[9px] bg-gray-100 text-gray-600 px-1 rounded border border-gray-200">Mid 60%</span>;
-                    if (band === 'Bottom') volumeBadge = <span className="text-[9px] bg-white text-gray-400 px-1 rounded border border-gray-200">Bot 20%</span>;
+                    if (band === 'Middle') volumeBadge = <span className="text-[9px] bg-gray-100 text-gray-600 px-1 rounded border border-gray-200 font-medium">Mid 60%</span>;
+                    if (band === 'Bottom') volumeBadge = <span className="text-[9px] bg-white text-gray-400 px-1 rounded border border-gray-200 font-medium">Bot 20%</span>;
                 }
             }
 
@@ -400,7 +400,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                 <div className="px-6 pb-4 animate-in fade-in slide-in-from-top-1">
                                                     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
                                                         <table className="w-full text-xs text-left">
-                                                            <thead className="bg-gray-50 text-gray-500 font-medium">
+                                                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
                                                                 {context.isReturn ? (
                                                                     <tr>
                                                                         <th className="p-2 pl-3">Date</th>

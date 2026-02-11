@@ -72,7 +72,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                     {error && <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm">{error}</div>}
                     
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Product SKU</label>
+                        <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Product SKU</label>
                         <div className="relative">
                             <input
                                 type="text"
@@ -99,7 +99,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                     )}
 
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Change Date</label>
+                        <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Change Date</label>
                         <input
                             type="date"
                             value={date}
@@ -110,7 +110,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Old Price (£)</label>
+                            <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Old Price (£)</label>
                             <div className="relative">
                                 <input
                                     type="number"
@@ -124,7 +124,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">New Price (£)</label>
+                            <label className="text-xs font-medium text-gray-500 uppercase block mb-1">New Price (£)</label>
                             <div className="relative">
                                 <input
                                     type="number"
