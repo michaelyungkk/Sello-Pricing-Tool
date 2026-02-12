@@ -120,6 +120,46 @@ const ProductRow = React.memo(({
 
     return (
         <tr key={product.id} className="even:bg-gray-50/50 hover:bg-gray-100/50 transition-colors group text-sm border-b border-gray-50 last:border-none">
+            <td className="px-2 py-3 text-center w-[80px]">
+                <div className="grid grid-cols-2 gap-1.5 w-fit mx-auto">
+                    {onDeepDive && (
+                        <button
+                            onClick={() => onDeepDive(product.sku)}
+                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1.5 rounded hover:bg-indigo-50 border border-transparent hover:border-indigo-100"
+                            title="Deep Dive SKU Analysis"
+                        >
+                            <Search className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                    {onViewElasticity && (
+                        <button
+                            onClick={() => onViewElasticity(product)}
+                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1.5 rounded hover:bg-indigo-50 border border-transparent hover:border-indigo-100"
+                            title="View Price Elasticity Chart"
+                        >
+                            <LineChart className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                    {onEditTags && (
+                        <button
+                            onClick={() => onEditTags(product)}
+                            className="text-gray-400 hover:text-sky-600 transition-colors p-1.5 rounded hover:bg-sky-50 border border-transparent hover:border-sky-100"
+                            title="Edit Seasonal/Event Tags"
+                        >
+                            <Tag className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                    {onEditAliases && (
+                        <button
+                            onClick={() => onEditAliases(product)}
+                            className="text-gray-400 hover:text-amber-600 transition-colors p-1.5 rounded hover:bg-amber-50 border border-transparent hover:border-amber-100"
+                            title="Edit Aliases / SKU Mapping"
+                        >
+                            <GitMerge className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+            </td>
             <td className="px-4 py-3">
                 <div>
                     <div className="flex items-center">
@@ -220,46 +260,6 @@ const ProductRow = React.memo(({
                         {product.returnRate.toFixed(1)}%
                     </div>
                 ) : <span className="text-gray-300">-</span>}
-            </td>
-            <td className="px-4 py-3 text-right">
-                <div className="flex items-center justify-end gap-2">
-                    {onDeepDive && (
-                        <button
-                            onClick={() => onDeepDive(product.sku)}
-                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1 rounded hover:bg-indigo-50"
-                            title="Deep Dive SKU Analysis"
-                        >
-                            <Search className="w-4 h-4" />
-                        </button>
-                    )}
-                    {onViewElasticity && (
-                        <button
-                            onClick={() => onViewElasticity(product)}
-                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1 rounded hover:bg-indigo-50"
-                            title="View Price Elasticity Chart"
-                        >
-                            <LineChart className="w-4 h-4" />
-                        </button>
-                    )}
-                    {onEditTags && (
-                        <button
-                            onClick={() => onEditTags(product)}
-                            className="text-gray-400 hover:text-sky-600 transition-colors p-1 rounded hover:bg-sky-50"
-                            title="Edit Seasonal/Event Tags"
-                        >
-                            <Tag className="w-4 h-4" />
-                        </button>
-                    )}
-                    {onEditAliases && (
-                        <button
-                            onClick={() => onEditAliases(product)}
-                            className="text-gray-400 hover:text-amber-600 transition-colors p-1 rounded hover:bg-amber-50"
-                            title="Edit Aliases / SKU Mapping"
-                        >
-                            <GitMerge className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
             </td>
         </tr>
     );
@@ -900,6 +900,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-medium">
+                                <th className="px-2 py-3 font-semibold text-center w-[80px] text-[10px] uppercase text-gray-500">Actions</th>
                                 <SortableHeader label="Product" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} className="min-w-[250px]" />
                                 <SortableHeader label="Optimal Ref." sortKey="optimalPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
                                 <SortableHeader label="Last Week" sortKey="oldPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
@@ -908,7 +909,6 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
                                 <SortableHeader label="Inventory" sortKey="stockLevel" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[120px]" />
                                 <SortableHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[140px]" />
                                 <SortableHeader label="Returns" sortKey="returnRate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
-                                <th className="px-4 py-3 font-semibold text-right w-[60px]">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100/50">

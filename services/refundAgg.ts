@@ -1,4 +1,3 @@
-
 import { RefundLog, ReturnDateBasis } from '../types';
 import { asDateKey, getReturnDateKey } from './dateUtils';
 import { VAT_MULTIPLIER } from '../constants';
@@ -23,6 +22,7 @@ export interface RefundSkuRow {
   logisticsFeeValue: number;
   topReasons: { reason: string; count: number }[];
   refundRate: number | null; // %
+  refundRateValue: number | null;
   flags: string[];
 }
 
@@ -197,12 +197,19 @@ export const buildRefundOverview = (
 
     // 3. Refund Rate
     let refundRate: number | null = null;
+    let refundRateValue: number | null = null;
     if (opts.salesMap && opts.salesMap.has(sku)) {
       const sales = opts.salesMap.get(sku) || 0;
       if (sales > 0) {
         refundRate = (data.qty / sales) * 100;
         if (refundRate > 10) flags.push("High Rate");
       }
+    }
+    if (opts.revenueMap && opts.revenueMap.has(sku)) {
+        const revenue = opts.revenueMap.get(sku) || 0;
+        if (revenue > 0) {
+            refundRateValue = (data.value / revenue) * 100;
+        }
     }
 
     // Title resolution
@@ -223,6 +230,7 @@ export const buildRefundOverview = (
       logisticsFeeValue: data.logistics,
       topReasons,
       refundRate,
+      refundRateValue,
       flags
     });
   });

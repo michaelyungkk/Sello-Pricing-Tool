@@ -8,8 +8,7 @@ import {
   ZAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
-  Legend
+  ResponsiveContainer
 } from 'recharts';
 import { Activity, Info } from 'lucide-react';
 import { parseReturnsReason } from '../../../services/returnsReasonCodes';
@@ -36,7 +35,8 @@ const COLORS = [
 ];
 
 interface RefundPoint {
-    date: string;
+    date: number; // Timestamp for correct X-Axis sorting
+    dateStr: string; // Original string for display consistency
     count: number;
     reasonCode: string;
     reasonDesc: string;
@@ -49,7 +49,7 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
   title = "Refund Reason Timeline"
 }) => {
   // 1. Process Data into Scatter Points
-  const { chartPoints, reasonMetaMap, reasonKeys } = useMemo(() => {
+  const { chartPoints, reasonMetaMap, reasonKeys, xDomain } = useMemo(() => {
     const pointMap = new Map<string, number>(); // Key: "date|reasonCode"
     const metaMap = new Map<string, string>(); // short -> description
     const keysSet = new Set<string>();
@@ -71,19 +71,39 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
     });
 
     const points: RefundPoint[] = Array.from(pointMap.entries()).map(([key, count]) => {
-        const [date, reasonCode] = key.split('|');
+        const [dateStr, reasonCode] = key.split('|');
         return {
-            date,
+            date: new Date(dateStr).getTime(),
+            dateStr,
             count,
             reasonCode,
             reasonDesc: metaMap.get(reasonCode) || reasonCode
         };
-    }).sort((a, b) => a.date.localeCompare(b.date));
+    }).sort((a, b) => a.date - b.date);
+
+    // Domain Logic: Auto-scale but ensure we show "Today" if data is recent
+    let domain: [number | 'auto', number | 'auto'] = ['auto', 'auto'];
+    
+    if (points.length > 0) {
+        const minTs = points[0].date;
+        const maxTs = points[points.length - 1].date;
+        const nowTs = new Date().getTime();
+
+        // If the latest data point is within the last 90 days, extend the chart to "Today"
+        const isRecent = (nowTs - maxTs) < (90 * 24 * 60 * 60 * 1000);
+        
+        // Add a small buffer (3 days) to start/end so dots aren't cut off at the edge
+        const dayBuffer = 3 * 86400000;
+        const finalMax = isRecent ? Math.max(maxTs, nowTs) : maxTs;
+        
+        domain = [minTs - dayBuffer, finalMax + dayBuffer];
+    }
 
     return {
       chartPoints: points,
       reasonMetaMap: metaMap,
-      reasonKeys: Array.from(keysSet).sort()
+      reasonKeys: Array.from(keysSet).sort(),
+      xDomain: domain
     };
   }, [data, getDate, getReason]);
 
@@ -137,23 +157,38 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
       <div className="h-[320px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart
-            margin={{ top: 20, right: 20, bottom: 0, left: 0 }}
+            margin={{ top: 20, right: 20, bottom: 20, left: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+            {/* Major Axis (Data-bound) */}
             <XAxis
+              xAxisId={0}
               dataKey="date"
-              type="category"
-              name="Date"
+              type="number"
+              domain={xDomain}
               tickFormatter={(val) =>
                 new Date(val).toLocaleDateString('en-GB', {
                   day: 'numeric',
                   month: 'short'
                 })
               }
-              tick={{ fontSize: 11, fill: '#4b5563' }}
+              tick={{ fontSize: 11, fill: '#4b5563', dy: 5 }}
+              tickCount={8}
+              axisLine={{ stroke: '#e5e7eb' }}
+              tickLine={{ stroke: '#d1d5db', height: 6 }}
+            />
+            {/* Minor Axis (Visual only) */}
+            <XAxis
+              xAxisId="minor"
+              dataKey="date"
+              type="number"
+              domain={xDomain}
+              tickCount={32}
+              tick={false}
               axisLine={false}
-              tickLine={false}
-              minTickGap={30}
+              tickLine={{ stroke: '#e5e7eb', height: 3 }}
+              orientation="bottom"
+              mirror={false}
             />
             <YAxis
               dataKey="count"
@@ -176,6 +211,7 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
               <Scatter
                 key={key}
                 name={key}
+                xAxisId={0}
                 data={chartPoints.filter(p => p.reasonCode === key)}
                 fill={COLORS[index % COLORS.length]}
                 shape="circle"

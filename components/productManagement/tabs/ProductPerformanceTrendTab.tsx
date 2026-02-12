@@ -203,6 +203,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
             <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-gray-100/50 text-gray-500 font-bold border-b border-gray-200/50 text-[10px] uppercase tracking-wider">
                     <tr>
+                        <th className="p-4 w-12 text-center">Detail</th>
                         <SortableHeader label="Product SKU" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
                         <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                         <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
@@ -210,7 +211,6 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                         <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                         <SortableHeader label="Quality (Refunds)" sortKey="refund" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                         <th className="px-4 py-3 text-center">Flags</th>
-                        <th className="px-4 py-3 text-right">Action</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100/50">
@@ -221,6 +221,15 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                     
                     return (
                     <tr key={row.sku} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-all group">
+                        <td className="p-4 text-center">
+                            <button 
+                                onClick={() => onDeepDive(row.sku)}
+                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-gray-200 shadow-none hover:shadow-sm transition-colors"
+                                title="Deep Dive SKU"
+                            >
+                                <Search className="w-4 h-4" />
+                            </button>
+                        </td>
                         <td className="p-4">
                         <div className="flex items-center gap-2">
                             <span className="font-bold text-gray-900 font-mono text-sm leading-none">{row.sku}</span>
@@ -271,15 +280,6 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                                 {isTacosHigh && <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-100 text-purple-800 border border-purple-200 shadow-xs">Ads</span>}
                                 {row.current.unitsSold === 0 && <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-gray-100 text-gray-500 border border-gray-200 shadow-xs">Dormant</span>}
                             </div>
-                        </td>
-                        <td className="p-4 text-right">
-                            <button 
-                                onClick={() => onDeepDive(row.sku)}
-                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-gray-200 shadow-none hover:shadow-sm"
-                                title="Deep Dive SKU"
-                            >
-                                <Search className="w-4 h-4" />
-                            </button>
                         </td>
                     </tr>
                     );

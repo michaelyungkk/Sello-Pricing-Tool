@@ -55,7 +55,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     const [sortConfig, setSortConfig] = useState<SortState<string>>({ key: 'totalValue', dir: 'desc' });
     
     // Sort state for the triage table
-    const [triageSortConfig, setTriageSortConfig] = useState<SortState<string>>({ key: 'refundQty', dir: 'desc' });
+    const [triageSortConfig, setTriageSortConfig] = useState<SortState<string>>({ key: 'refundValue', dir: 'desc' });
 
     // Expanded Carrier Row State
     const [expandedPartner, setExpandedPartner] = useState<string | null>(null);
@@ -324,9 +324,9 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     const sortedTriageRows = useMemo(() => {
         const getValue = (row: any, key: string) => {
             if (key === 'refundQty') return row.refundQty;
-            if (key === 'refundCount') return row.refundCount;
             if (key === 'refundValue') return row.refundValue;
             if (key === 'refundRate') return row.refundRate || 0;
+            if (key === 'refundRateValue') return row.refundRateValue || 0;
             return row[key];
         };
         return sortRows(triageOverview.skuRows, triageSortConfig, getValue);
@@ -490,57 +490,62 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         <table className="w-full text-left text-sm whitespace-nowrap">
                             <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100 text-[10px] uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                                 <tr>
+                                    <th className="p-3 w-12 text-center">Detail</th>
                                     <SortableHeader label="SKU / Product" sortKey="sku" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} />
-                                    <SortableHeader label="Count" sortKey="refundCount" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Qty" sortKey="refundQty" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Item Val" sortKey="itemValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Total Val" sortKey="refundValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Rate %" sortKey="refundRate" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
+                                    <SortableHeader label="Return QTY" sortKey="refundQty" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
+                                    <SortableHeader label="Return QTY%" sortKey="refundRate" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
+                                    <SortableHeader label="Return AMT" sortKey="refundValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
+                                    <SortableHeader label="Return AMT%" sortKey="refundRateValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
                                     <th className="p-3">Top Reason</th>
                                     <th className="p-3">Flags</th>
-                                    <th className="p-3 text-right pr-4">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {sortedTriageRows.length > 0 ? (
-                                    sortedTriageRows.map((row) => {
+                                    sortedTriageRows.map((row: any) => {
                                         const isInvalidSku = !row.sku || row.sku === 'Unknown' || row.sku === 'Freight';
                                         return (
                                             <tr key={row.sku} className="hover:bg-gray-50/80 transition-colors group even:bg-gray-50/20">
-                                                <td className="p-3 pl-4">
+                                                <td className="p-3 text-center">
+                                                    <button 
+                                                        onClick={() => !isInvalidSku && handleDeepDiveClick(row.sku)}
+                                                        className={`p-1.5 rounded-lg transition-colors ${isInvalidSku ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                                                        disabled={isInvalidSku}
+                                                        title="Deep Dive SKU"
+                                                    >
+                                                        <Search className="w-4 h-4" />
+                                                    </button>
+                                                </td>
+                                                <td className="p-3">
                                                     <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{row.sku}</div>
                                                     <div className="text-[10px] text-gray-500 truncate max-w-[200px]">{row.title}</div>
                                                 </td>
-                                                <td className="p-3 text-right font-medium text-gray-500">{row.refundCount}</td>
-                                                <td className="p-3 text-right font-bold text-indigo-700 bg-indigo-50/30">{row.refundQty}</td>
-                                                <td className="p-3 text-right font-medium text-gray-600">{formatMoney(row.itemValue)}</td>
-                                                <td className="p-3 text-right font-bold text-red-600">{formatMoney(row.refundValue)}</td>
+                                                <td className="p-3 text-right font-bold text-gray-800">{row.refundQty}</td>
                                                 <td className="p-3 text-right font-mono">
                                                     {row.refundRate !== null 
-                                                        ? <span className={row.refundRate > 10 ? 'text-red-600 font-bold' : 'text-gray-600'}>{row.refundRate.toFixed(1)}%</span>
+                                                        ? <span className="text-gray-600">{row.refundRate.toFixed(1)}%</span>
                                                         : <span className="text-gray-300">-</span>
                                                     }
                                                 </td>
-                                                <td className="p-3 text-gray-600 truncate max-w-[180px]">
+                                                <td className="p-3 text-right font-bold text-gray-800">{formatMoney(row.refundValue)}</td>
+                                                <td className="p-3 text-right font-mono">
+                                                    {row.refundRateValue !== null 
+                                                        ? <span className="text-gray-600">{(row.refundRateValue || 0).toFixed(1)}%</span>
+                                                        : <span className="text-gray-300">-</span>
+                                                    }
+                                                </td>
+                                                <td className="p-3 text-gray-600 truncate max-w-[180px]" title={parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}>
                                                     {parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}
                                                     {row.topReasons[0] && <span className="text-gray-400 ml-1 text-[10px]">({row.topReasons[0].count})</span>}
                                                 </td>
                                                 <td className="p-3">
                                                     <div className="flex gap-1 flex-wrap">
-                                                        {row.flags.map(flag => (
+                                                        {row.flags.map((flag: string) => (
                                                             <span key={flag} className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] rounded border border-red-200 font-bold uppercase whitespace-nowrap">
                                                                 {flag}
                                                             </span>
                                                         ))}
                                                     </div>
-                                                </td>
-                                                <td className="p-3 pr-4 text-right">
-                                                    <button 
-                                                        onClick={() => !isInvalidSku && handleDeepDiveClick(row.sku)}
-                                                        className={`px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold shadow-sm transition-all flex items-center gap-1 ml-auto ${isInvalidSku ? 'opacity-30 cursor-not-allowed grayscale' : 'hover:border-indigo-300 hover:text-indigo-600 text-gray-600'}`}
-                                                    >
-                                                        Deep Dive <ArrowRight className="w-3 h-3" />
-                                                    </button>
                                                 </td>
                                             </tr>
                                         )
