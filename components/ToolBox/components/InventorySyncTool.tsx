@@ -1,9 +1,46 @@
 
-import React, { useState, useRef, useMemo } from 'react';
-import { Settings, Check, Upload, Trash2, Database, FileSpreadsheet, AlertCircle, Play, Download, AlertTriangle } from 'lucide-react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { Settings, Check, Upload, Trash2, Database, FileSpreadsheet, AlertCircle, Play, Download, AlertTriangle, ArrowRightLeft, Sliders, ShieldCheck, XCircle, FileWarning, FileText, Plus, X, Search, Link, Edit2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { InventorySyncToolProps } from '../types';
-import { InventoryTemplate } from '../../../types';
+import { InventoryTemplate, SingleBufferRule, BufferRules } from '../../../types';
+
+// Helper component to handle local input state before confirming match
+const MatchInput = ({ 
+    onConfirm, 
+    placeholder = "Search SKU..." 
+}: { 
+    onConfirm: (val: string) => void, 
+    placeholder?: string
+}) => {
+    const [val, setVal] = useState('');
+    
+    const commit = () => {
+        if(val.trim()) onConfirm(val.trim());
+    };
+
+    return (
+        <div className="flex items-center gap-1 w-full">
+            <input 
+                type="text" 
+                list="master-sku-list" 
+                className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-indigo-500"
+                placeholder={placeholder}
+                value={val}
+                onChange={(e) => setVal(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && commit()}
+            />
+            <button 
+                onClick={commit}
+                disabled={!val.trim()}
+                className="p-1.5 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 disabled:opacity-50 transition-colors border border-indigo-100"
+                title="Confirm Match"
+            >
+                <Check className="w-3 h-3" />
+            </button>
+        </div>
+    );
+};
 
 export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({ 
     templates, 
@@ -21,7 +58,10 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
     
     // Parsed Data
     const [masterInventory, setMasterInventory] = useState<Map<string, number> | null>(null);
+    const [specificInventory, setSpecificInventory] = useState<Map<string, number> | null>(null); // New: Track exact raw SKU counts
     const [platformRows, setPlatformRows] = useState<any[] | null>(null);
+    const [platformHeaders, setPlatformHeaders] = useState<string[]>([]);
+    const [platformMetaRows, setPlatformMetaRows] = useState<any[][]>([]);
     
     // Template Config State
     const [newTemplateHeaders, setNewTemplateHeaders] = useState<string[]>([]);
@@ -29,6 +69,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
     const [newTemplateSkuCol, setNewTemplateSkuCol] = useState('');
     const [newTemplateStockCol, setNewTemplateStockCol] = useState('');
     const [newTemplateName, setNewTemplateName] = useState('');
+    const [newTemplateFormat, setNewTemplateFormat] = useState<'csv' | 'xlsx'>('xlsx'); // New: File format state
     const [isMappingTemplate, setIsMappingTemplate] = useState(false);
     
     // New: Template Header Row Selection
@@ -40,7 +81,22 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
 
     // Processing State
     const [syncStats, setSyncStats] = useState<{ matched: number, unmatched: number, totalStock: number } | null>(null);
+    const [unmatchedItems, setUnmatchedItems] = useState<string[]>([]); // Items currently unmatched (for stats/download)
+    const [detectedMismatches, setDetectedMismatches] = useState<string[]>([]); // ALL items that failed auto-match (for UI list stability)
     const [error, setError] = useState<string | null>(null);
+
+    // Manual Matching State
+    const [manualMatches, setManualMatches] = useState<Map<string, string>>(new Map());
+    const [isFixingModalOpen, setIsFixingModalOpen] = useState(false);
+    const [fixerSearch, setFixerSearch] = useState('');
+
+    // Unmatched Handling
+    const [unmatchedAction, setUnmatchedAction] = useState<'SKIP' | 'ZERO'>('SKIP');
+
+    // Buffer Logic State (Dynamic List)
+    const [bufferRulesList, setBufferRulesList] = useState<SingleBufferRule[]>([
+        { id: 'default_1', operator: 'EQ', trigger: '', value: '' }
+    ]);
 
     const masterRef = useRef<HTMLInputElement>(null);
     const platformRef = useRef<HTMLInputElement>(null);
@@ -60,8 +116,31 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
         });
     }, [platformOptions, templates]);
 
+    const masterSkuList = useMemo(() => {
+        if (!masterInventory) return [];
+        return Array.from(masterInventory.keys()).sort();
+    }, [masterInventory]);
+
+    // --- UTILS ---
+    const normalizeBufferRules = (br?: BufferRules): SingleBufferRule[] => {
+        if (!br) return [{ id: Date.now().toString(), operator: 'EQ', trigger: '', value: '' }];
+        
+        if (br.rules && br.rules.length > 0) return br.rules;
+        
+        // Convert legacy structure
+        const rules: SingleBufferRule[] = [];
+        if (br.triggerA) rules.push({ id: 'legacy_a', operator: br.operatorA || 'EQ', trigger: br.triggerA, value: br.valueA || '' });
+        if (br.triggerB) rules.push({ id: 'legacy_b', operator: br.operatorB || 'EQ', trigger: br.triggerB, value: br.valueB || '' });
+        
+        if (rules.length === 0) rules.push({ id: Date.now().toString(), operator: 'EQ', trigger: '', value: '' });
+        
+        return rules;
+    };
+
     const triggerPlatformUpload = (pName: string) => {
         setPendingPlatformUpload(pName);
+        setBufferRulesList([{ id: Date.now().toString(), operator: 'EQ', trigger: '', value: '' }]);
+        setNewTemplateFormat('xlsx');
         if (templateRef.current) {
             templateRef.current.value = ''; // Reset
             templateRef.current.click();
@@ -75,6 +154,11 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
         setNewTemplateSkuCol(t.skuColumn);
         setNewTemplateStockCol(t.stockColumn);
         setHeaderRowIndex(t.metaRows ? t.metaRows.length + 1 : 1);
+        setNewTemplateFormat(t.exportFormat || 'xlsx');
+        
+        // Load saved buffer rules or default
+        setBufferRulesList(normalizeBufferRules(t.bufferRules));
+
         setIsMappingTemplate(true);
         setSelectedTemplateId(t.id);
         // Important: We cannot show previewRows correctly here without re-uploading the file.
@@ -167,12 +251,11 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                 if (skuIdx === -1 || stockIdx === -1) throw new Error("Could not detect SKU or Stock columns in Master file.");
 
                 // --- SMART AGGREGATION LOGIC ---
-                // Problem: Master file might contain multiple rows for aliases (e.g. Item & Item_1).
-                // Solution: Group by Normalized SKU.
-                // - If multiple DIFFERENT Raw SKUs map to one Master -> Assume Virtual Aliases -> Take MAX stock.
-                // - If multiple SAME Raw SKUs map to one Master -> Assume Split Locations -> Take SUM stock.
+                // 1. Specific Map: Exact SKU -> Total Stock (Handles duplicate rows for same SKU by summing)
+                // 2. Master Map: Normalized SKU -> Aggregate Stock (For sharing logic)
 
                 const tempMap = new Map<string, { rawSkus: Set<string>, sum: number, max: number }>();
+                const specificMap = new Map<string, number>();
 
                 for (let i = headerRowIdx + 1; i < rows.length; i++) {
                     const r = rows[i];
@@ -181,8 +264,14 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                     const skuVal = String(r[skuIdx] || '').trim();
                     if (!skuVal) continue;
 
-                    const normalizedSku = normalizeSku(skuVal); 
                     const stock = parseFloat(r[stockIdx]) || 0;
+
+                    // Populate Specific Map (Summing duplicates)
+                    const currentSpecific = specificMap.get(skuVal) || 0;
+                    specificMap.set(skuVal, currentSpecific + Math.max(0, stock));
+
+                    // Populate Normalized Aggregators
+                    const normalizedSku = normalizeSku(skuVal); 
                     
                     if (!tempMap.has(normalizedSku)) {
                         tempMap.set(normalizedSku, { rawSkus: new Set(), sum: 0, max: 0 });
@@ -208,6 +297,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                 });
 
                 setMasterInventory(invMap);
+                setSpecificInventory(specificMap);
                 setError(null);
             } catch (err: any) {
                 setError("Master File Error: " + err.message);
@@ -226,7 +316,11 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                 
                 const { index, headers } = detectHeaderRow(rows);
                 
-                // Convert to objects starting from index + 1
+                // Store structural data for perfect reconstruction
+                setPlatformHeaders(headers);
+                setPlatformMetaRows(rows.slice(0, index));
+
+                // Convert to objects starting from index + 1 for processing
                 const data = rows.slice(index + 1).map(row => {
                     const obj: any = {};
                     headers.forEach((h: any, i: number) => {
@@ -236,6 +330,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                 });
                 
                 setPlatformRows(data);
+                setManualMatches(new Map()); // Reset manual matches on new file
                 setError(null);
             } catch (err: any) {
                 setError("Platform File Error: " + err.message);
@@ -329,7 +424,9 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
             headers: newTemplateHeaders,
             skuColumn: newTemplateSkuCol,
             stockColumn: newTemplateStockCol,
-            metaRows: newTemplateMeta // Save detected pre-header data
+            metaRows: newTemplateMeta, // Save detected pre-header data
+            bufferRules: { rules: bufferRulesList }, // Save dynamic buffer list
+            exportFormat: newTemplateFormat // Save selected format
         };
         const updated = [...cleanList, newTemplate];
         onSaveTemplates(updated);
@@ -342,16 +439,40 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
         if (confirm("Delete this template?")) {
             const updated = templates.filter(t => t.id !== id);
             onSaveTemplates(updated);
-            if (selectedTemplateId === id) setSelectedTemplateId('');
+            // Ensure UI state resets if we deleted the currently selected one
+            if (selectedTemplateId === id) {
+                setSelectedTemplateId('');
+                setBufferRulesList([{ id: 'default', operator: 'EQ', trigger: '', value: '' }]);
+            }
         }
     };
 
-    const runReconciliation = () => {
-        if (!masterInventory || !platformRows) return;
+    const handleApplyManualMatch = (platformSku: string, masterSku: string) => {
+        setManualMatches(prev => new Map(prev).set(platformSku, masterSku));
+    };
+    
+    const handleClearManualMatch = (platformSku: string) => {
+        setManualMatches(prev => {
+            const next = new Map(prev);
+            next.delete(platformSku);
+            return next;
+        });
+    };
+
+    // Auto-Run Reconciliation Effect
+    useEffect(() => {
+        if (!masterInventory || !platformRows) {
+            setSyncStats(null);
+            setUnmatchedItems([]);
+            setDetectedMismatches([]);
+            return;
+        }
         
         let matchedCount = 0;
         let unmatchedCount = 0;
         let totalDistributed = 0;
+        const remainingUnmatched: string[] = [];
+        const allMismatchesSet = new Set<string>();
 
         const groupedMap = new Map<string, any[]>();
         
@@ -362,7 +483,19 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
 
         platformRows.forEach(row => {
             const pSku = String(row[platSkuKey]).trim();
-            const masterKey = normalizeSku(pSku);
+            
+            const normalized = normalizeSku(pSku);
+            const isAutoMatched = masterInventory.has(normalized);
+
+            if (!isAutoMatched) {
+                allMismatchesSet.add(pSku);
+            }
+
+            // Resolve using manual matches first
+            let masterKey = manualMatches.get(pSku);
+            if (!masterKey) {
+                masterKey = normalized;
+            }
             
             if (!groupedMap.has(masterKey)) {
                 groupedMap.set(masterKey, []);
@@ -370,16 +503,29 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
             groupedMap.get(masterKey)!.push(row);
         });
 
+        setDetectedMismatches(Array.from(allMismatchesSet));
+
         groupedMap.forEach((rows, masterKey) => {
             if (masterInventory.has(masterKey)) {
                 matchedCount += rows.length;
                 totalDistributed += masterInventory.get(masterKey) || 0;
             } else {
                 unmatchedCount += rows.length;
+                // Add the specific platform SKUs that failed to match (remaining)
+                rows.forEach(r => remainingUnmatched.push(String(r[platSkuKey]).trim()));
             }
         });
 
         setSyncStats({ matched: matchedCount, unmatched: unmatchedCount, totalStock: totalDistributed });
+        setUnmatchedItems(remainingUnmatched);
+    }, [masterInventory, platformRows, manualMatches]);
+
+    const downloadUnmatched = () => {
+        if (unmatchedItems.length === 0) return;
+        const ws = XLSX.utils.aoa_to_sheet([["Missing Platform SKU"], ...unmatchedItems.map(s => [s])]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Unmatched");
+        XLSX.writeFile(wb, `unmatched_skus_${new Date().toISOString().slice(0,10)}.csv`);
     };
 
     const handleExport = () => {
@@ -391,63 +537,216 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
         const template = templates.find(t => t.id === selectedTemplateId);
         if (!template) return;
 
+        // Normalize rules into array (handle backward compat)
+        const effectiveRules = normalizeBufferRules(template.bufferRules);
+        const format = template.exportFormat || 'xlsx';
+
+        // Determine the SKU Key in the platform data (Step 2 file)
         const firstRow = platformRows[0];
         const platSkuKey = Object.keys(firstRow).find(k => k.toLowerCase().includes('sku')) || Object.keys(firstRow)[0];
         
-        const groupedMap = new Map<string, any[]>();
+        // Pass 1: Group by Master SKU to count aliases (needed for stock division)
+        const aliasCounts = new Map<string, number>();
         platformRows.forEach(row => {
             const pSku = String(row[platSkuKey]).trim();
-            const masterKey = normalizeSku(pSku);
-            if (!groupedMap.has(masterKey)) groupedMap.set(masterKey, []);
-            groupedMap.get(masterKey)!.push(row);
+            // Resolve manual or normalize
+            let masterKey = manualMatches.get(pSku);
+            if (!masterKey) masterKey = normalizeSku(pSku);
+
+            aliasCounts.set(masterKey, (aliasCounts.get(masterKey) || 0) + 1);
         });
 
-        const outputRows: any[] = [];
-
-        groupedMap.forEach((rows, masterKey) => {
-            let stockToDistribute = 0;
+        // Pass 2: Generate output rows
+        const outputRows = platformRows.map(row => {
+            const pSku = String(row[platSkuKey]).trim();
+            let masterKey = manualMatches.get(pSku);
+            if (!masterKey) masterKey = normalizeSku(pSku);
             
-            if (masterInventory.has(masterKey)) {
-                stockToDistribute = masterInventory.get(masterKey)!;
-            } else {
-                stockToDistribute = 0; 
+            let stockToDistribute = 0;
+            let isMatched = false;
+            
+            // PRIORITY: Check Specific (Exact) Match first
+            if (specificInventory && specificInventory.has(pSku)) {
+                stockToDistribute = specificInventory.get(pSku)!;
+                isMatched = true;
+            } 
+            // FALLBACK: Use Master Normalized Logic (Divided by aliases)
+            else if (masterInventory.has(masterKey)) {
+                const total = masterInventory.get(masterKey)!;
+                const count = aliasCounts.get(masterKey) || 1;
+                stockToDistribute = Math.floor(total / count); 
+                isMatched = true;
             }
 
-            const count = rows.length;
-            const perUnit = Math.floor(stockToDistribute / count); 
+            if (!isMatched) {
+                // UNMATCHED ACTION LOGIC
+                if (unmatchedAction === 'SKIP') return null;
+                // If ZERO, we fall through with stockToDistribute = 0
+            }
 
-            rows.forEach(row => {
-                const newRow: any[] = [];
-                // Map based on header position
-                template.headers.forEach(h => {
-                    if (h === template.skuColumn) {
-                        newRow.push(row[platSkuKey]);
-                    } else if (h === template.stockColumn) {
-                        newRow.push(perUnit);
-                    } else {
-                        newRow.push(""); // Empty string for unmapped cols
+            // Distribute is now handled above (specific vs shared)
+            const perUnit = stockToDistribute;
+            
+            // --- BUFFER LOGIC START ---
+            let finalStock = perUnit;
+            
+            // Iterate through rules (First match wins)
+            for (const rule of bufferRulesList) {
+                if (!rule.trigger) continue; // Skip empty rules
+
+                // Range Logic
+                if (rule.operator === 'RANGE') {
+                    const parts = rule.trigger.split('-').map(s => parseFloat(s.trim()));
+                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                        if (perUnit >= parts[0] && perUnit <= parts[1]) {
+                            const v = parseFloat(rule.value);
+                            if (!isNaN(v)) finalStock = v;
+                            break; // Stop after first match
+                        }
                     }
-                });
-                outputRows.push(newRow);
+                } else {
+                    // Standard Logic
+                    const t = parseFloat(rule.trigger);
+                    if (!isNaN(t)) {
+                        let matches = false;
+                        if (rule.operator === 'EQ') matches = perUnit === t;
+                        if (rule.operator === 'LT') matches = perUnit < t;
+                        if (rule.operator === 'GT') matches = perUnit > t;
+                        if (rule.operator === 'LTE') matches = perUnit <= t;
+                        if (rule.operator === 'GTE') matches = perUnit >= t;
+                        
+                        if (matches) {
+                            const v = parseFloat(rule.value);
+                            if (!isNaN(v)) finalStock = v;
+                            break; // Stop after first match
+                        }
+                    }
+                }
+            }
+            // --- BUFFER LOGIC END ---
+
+            // Create a new row object with updated stock
+            return {
+                ...row,
+                [template.stockColumn]: finalStock
+            };
+        }).filter(r => r !== null); // Filter out skipped rows
+
+        // Convert Objects back to Arrays based on TEMPLATE HEADERS order
+        const finalDataRows = outputRows.map(row => {
+            return template.headers.map(header => {
+                // Special handling: if the header is the designated Stock Column, use our calculated stock
+                if (header === template.stockColumn) {
+                    return row[template.stockColumn];
+                }
+                
+                let val = row[header] !== undefined ? row[header] : '';
+                
+                // Force large numbers to String
+                if (typeof val === 'number' && String(val).length > 11) {
+                    val = String(val);
+                }
+                
+                return val;
             });
         });
 
-        // RECONSTRUCT FILE: Meta Rows + Headers + Data
+        // RECONSTRUCT FILE: Template Meta Rows + Template Headers + Data
         const finalData = [
-            ...(template.metaRows || []), // Add pre-header rows if they exist
-            template.headers,
-            ...outputRows
+            ...(template.metaRows || []), // Restore pre-header rows from TEMPLATE
+            template.headers,             // Original headers from TEMPLATE
+            ...finalDataRows             // Data with updated stock mapped to template
         ];
 
         const ws = XLSX.utils.aoa_to_sheet(finalData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "InventoryUpdate");
-        XLSX.writeFile(wb, `${template.name}_InventoryUpdate_${new Date().toISOString().slice(0,10)}.csv`);
+        
+        // Generate filename
+        const stamp = new Date().toISOString().slice(0,10);
+        const hasBuffer = bufferRulesList.some(r => r.trigger !== '');
+        const suffix = hasBuffer ? '_Buffered' : '';
+        const filename = `${template.name}_InventoryUpdate${suffix}_${stamp}`;
+        
+        // Export based on preference
+        if (format === 'csv') {
+            XLSX.writeFile(wb, `${filename}.csv`, { bookType: 'csv' });
+        } else {
+            XLSX.writeFile(wb, `${filename}.xlsx`);
+        }
+    };
+
+    const updateBufferRule = (id: string, field: keyof SingleBufferRule, val: string) => {
+        setBufferRulesList(prev => prev.map(r => r.id === id ? { ...r, [field]: val } : r));
+    };
+
+    const addBufferRule = () => {
+        setBufferRulesList(prev => [...prev, { id: Date.now().toString(), operator: 'EQ', trigger: '', value: '' }]);
+    };
+
+    const removeBufferRule = (id: string) => {
+        setBufferRulesList(prev => prev.filter(r => r.id !== id));
+    };
+
+    const renderBufferRule = (
+        rule: SingleBufferRule,
+        index: number,
+        updateRule: (id: string, field: keyof SingleBufferRule, val: string) => void,
+        deleteRule: (id: string) => void
+    ) => {
+        const isRange = rule.operator === 'RANGE';
+        return (
+            <div key={rule.id} className="flex items-center gap-2 group mb-2">
+                <div className="flex-1 flex items-center gap-3 bg-white p-2 rounded border border-gray-200">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <span className="font-bold text-xs text-indigo-500 w-5">{index + 1}.</span>
+                        <span className="font-medium">If Stock</span>
+                        <select
+                            value={rule.operator}
+                            onChange={e => updateRule(rule.id, 'operator', e.target.value)}
+                            className="bg-white border border-gray-300 rounded px-2 py-1 text-xs font-bold focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                        >
+                            <option value="EQ">=</option>
+                            <option value="LT">&lt;</option>
+                            <option value="GT">&gt;</option>
+                            <option value="LTE">&le;</option>
+                            <option value="GTE">&ge;</option>
+                            <option value="RANGE">Range</option>
+                        </select>
+                        <input 
+                            type={isRange ? "text" : "number"}
+                            placeholder={isRange ? "Min-Max" : "Val"}
+                            value={rule.trigger}
+                            onChange={e => updateRule(rule.id, 'trigger', e.target.value)}
+                            className={`border border-gray-300 rounded px-2 py-1 text-center font-bold text-sm ${isRange ? 'w-24' : 'w-16'}`}
+                        />
+                    </div>
+                    <ArrowRightLeft className="w-3 h-3 text-gray-300" />
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <span className="font-medium">Set to</span>
+                        <input 
+                            type="number" 
+                            placeholder="0" 
+                            value={rule.value}
+                            onChange={e => updateRule(rule.id, 'value', e.target.value)}
+                            className="w-16 border border-gray-300 rounded px-2 py-1 text-center font-bold text-indigo-600 text-sm"
+                        />
+                    </div>
+                </div>
+                <button 
+                    onClick={() => deleteRule(rule.id)}
+                    className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-60 hover:opacity-100"
+                    title="Remove Rule"
+                >
+                    <Trash2 className="w-4 h-4" />
+                </button>
+            </div>
+        );
     };
 
     return (
         <div className="space-y-6 animate-in fade-in">
-            {/* 0. Platform Templates Grid (NEW) */}
+            {/* 0. Platform Templates Grid */}
             <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm backdrop-blur-custom">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
                     <Settings className="w-4 h-4 text-indigo-500" />
@@ -495,7 +794,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                 <input ref={templateRef} type="file" hidden accept=".csv,.xlsx" onChange={handleTemplateUpload} />
             </div>
 
-            {/* Template Mapping Modal (Inline) - UPDATED */}
+            {/* Template Mapping Modal (Inline) */}
             {isMappingTemplate && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 animate-in fade-in slide-in-from-top-2">
                     <div className="flex justify-between items-start mb-4">
@@ -576,6 +875,58 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                             </select>
                         </div>
                     </div>
+
+                    {/* File Format Selector */}
+                    <div className="mb-6">
+                        <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Output Format</label>
+                        <div className="flex gap-4">
+                            <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all ${newTemplateFormat === 'xlsx' ? 'bg-green-50 border-green-200 text-green-800 shadow-sm' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                                <input 
+                                    type="radio" 
+                                    name="fileFormat" 
+                                    value="xlsx" 
+                                    checked={newTemplateFormat === 'xlsx'} 
+                                    onChange={() => setNewTemplateFormat('xlsx')}
+                                    className="hidden"
+                                />
+                                <FileSpreadsheet className="w-4 h-4" />
+                                <span className="text-sm font-medium">Excel (.xlsx)</span>
+                            </label>
+                            <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all ${newTemplateFormat === 'csv' ? 'bg-blue-50 border-blue-200 text-blue-800 shadow-sm' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                                <input 
+                                    type="radio" 
+                                    name="fileFormat" 
+                                    value="csv" 
+                                    checked={newTemplateFormat === 'csv'} 
+                                    onChange={() => setNewTemplateFormat('csv')}
+                                    className="hidden"
+                                />
+                                <FileText className="w-4 h-4" />
+                                <span className="text-sm font-medium">CSV (.csv)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    {/* Buffer Logic Section - INSIDE EDIT MODAL */}
+                    <div className="border-t border-amber-200 pt-4 w-full mb-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Sliders className="w-4 h-4 text-amber-600" />
+                            <h4 className="text-xs font-bold text-amber-700 uppercase">Template-Specific Buffer Rules</h4>
+                        </div>
+                        
+                        <div className="bg-white/50 p-4 rounded-lg border border-amber-100">
+                             {bufferRulesList.map((rule, idx) => (
+                                 renderBufferRule(rule, idx, updateBufferRule, removeBufferRule)
+                             ))}
+                             <button
+                                onClick={addBufferRule}
+                                className="mt-2 flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
+                             >
+                                <Plus className="w-3 h-3" /> Add Condition
+                             </button>
+                        </div>
+                    </div>
+
                     <div className="flex justify-end gap-3">
                         <button onClick={() => { setIsMappingTemplate(false); setPendingPlatformUpload(null); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button>
                         <button onClick={saveTemplate} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-amber-700">Save Template</button>
@@ -605,7 +956,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                     <input ref={masterRef} type="file" hidden accept=".csv,.xlsx" onChange={handleMasterUpload} />
                 </div>
 
-                {/* 2. Platform Data (Modified) */}
+                {/* 2. Platform Data */}
                 <div className={`p-6 rounded-xl border flex flex-col justify-between h-56 transition-all ${platformFile && targetPlatform ? 'bg-green-50 border-green-200' : 'bg-custom-glass border-custom-glass shadow-sm'}`}>
                     <div>
                         <div className="flex items-center gap-2 mb-2">
@@ -638,7 +989,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                     <input ref={platformRef} type="file" hidden accept=".csv,.xlsx" onChange={handlePlatformUpload} />
                 </div>
 
-                {/* 3. Export Template (Modified) */}
+                {/* 3. Export Template */}
                 <div className="p-6 rounded-xl border border-custom-glass bg-custom-glass shadow-sm flex flex-col justify-between h-56 relative">
                     <div>
                         <div className="flex items-center justify-between gap-2 mb-2">
@@ -653,11 +1004,16 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                             <select 
                                 className="w-full border rounded p-2 text-sm mb-2 appearance-none bg-white"
                                 value={selectedTemplateId}
-                                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                                onChange={(e) => {
+                                    const tId = e.target.value;
+                                    setSelectedTemplateId(tId);
+                                    // Update live buffer view on selection
+                                    const tmpl = templates.find(t => t.id === tId);
+                                    if (tmpl) setBufferRulesList(normalizeBufferRules(tmpl.bufferRules));
+                                }}
                             >
                                 <option value="" disabled>Select Output Template</option>
                                 {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                {/* Smart Suggestion: If matching name exists */}
                                 {!selectedTemplateId && targetPlatform && templates.some(t => t.name === targetPlatform) && (
                                     <option value="suggested" disabled>--- Suggested ---</option>
                                 )}
@@ -665,7 +1021,6 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                         </div>
                     </div>
                     
-                    {/* The primary management is now via the Header Grid, but we keep this button for ad-hoc custom templates */}
                     <button onClick={() => templateRef.current?.click()} className="w-full py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50">
                         Upload Custom Template
                     </button>
@@ -682,43 +1037,186 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
 
             {/* Action Bar */}
             {masterInventory && platformRows && selectedTemplateId && !isMappingTemplate && (
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-bottom-4">
-                    <div className="flex-1">
-                        <h3 className="font-bold text-gray-900 text-lg">Ready to Reconcile</h3>
-                        <p className="text-sm text-gray-500">The system will map Platform Aliases to Master SKUs and distribute stock evenly.</p>
-                        
-                        {syncStats ? (
-                            <div className="flex gap-4 mt-3">
-                                <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold border border-green-200">
-                                    {syncStats.matched} Aliases Matched
-                                </div>
-                                {syncStats.unmatched > 0 && (
-                                    <div className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold border border-red-200 flex items-center gap-1">
-                                        <AlertTriangle className="w-3 h-3"/> {syncStats.unmatched} Unmatched
+                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 flex flex-col animate-in slide-in-from-bottom-4">
+                    
+                    {/* Top Row: Info & Stats */}
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
+                        <div className="flex-1">
+                            <h3 className="font-bold text-gray-900 text-lg">Ready to Reconcile</h3>
+                            <p className="text-sm text-gray-500">The system will map Platform Aliases to Master SKUs and distribute stock evenly.</p>
+                            
+                            {syncStats && (
+                                <div className="flex gap-4 mt-3">
+                                    <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold border border-green-200">
+                                        {syncStats.matched} Aliases Matched
                                     </div>
-                                )}
-                                <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold border border-blue-200">
-                                    Total Stock: {syncStats.totalStock}
+                                    {syncStats.unmatched > 0 && (
+                                        <div className="flex items-center gap-2">
+                                            <div className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold border border-red-200 flex items-center gap-1">
+                                                <AlertTriangle className="w-3 h-3"/> {syncStats.unmatched} Unmatched
+                                            </div>
+                                            <button 
+                                                onClick={() => setIsFixingModalOpen(true)}
+                                                className="text-[10px] font-bold text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded border border-transparent shadow-sm transition-colors flex items-center gap-1"
+                                                title="Manually link platform items to master SKUs"
+                                            >
+                                                <Link className="w-3 h-3" /> Review & Match
+                                            </button>
+                                            <button 
+                                                onClick={downloadUnmatched}
+                                                className="text-[10px] font-bold text-red-600 hover:text-red-800 hover:bg-red-50 px-2 py-1 rounded border border-transparent hover:border-red-100 transition-colors flex items-center gap-1"
+                                                title="Download CSV of missing SKUs"
+                                            >
+                                                <Download className="w-3 h-3" /> Download List
+                                            </button>
+                                        </div>
+                                    )}
+                                    <div className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold border border-blue-200">
+                                        Total Stock: {syncStats.totalStock}
+                                    </div>
                                 </div>
+                            )}
+
+                            {/* Unmatched Action Control */}
+                            <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-4">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Unmatched Action:</span>
+                                <div className="flex bg-white border border-gray-300 rounded p-0.5">
+                                    <button 
+                                        onClick={() => setUnmatchedAction('SKIP')}
+                                        className={`px-3 py-1 text-[10px] font-bold rounded transition-colors ${unmatchedAction === 'SKIP' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:text-gray-900'}`}
+                                    >
+                                        Skip (Safe)
+                                    </button>
+                                    <button 
+                                        onClick={() => setUnmatchedAction('ZERO')}
+                                        className={`px-3 py-1 text-[10px] font-bold rounded transition-colors ${unmatchedAction === 'ZERO' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:text-gray-900'}`}
+                                    >
+                                        Set to 0
+                                    </button>
+                                </div>
+                                <span className="text-[10px] text-gray-400 italic">
+                                    {unmatchedAction === 'SKIP' 
+                                        ? 'Unmatched rows will be EXCLUDED from the export file.' 
+                                        : 'Unmatched rows will be included with 0 stock.'}
+                                </span>
                             </div>
-                        ) : (
-                            <button 
-                                onClick={runReconciliation}
-                                className="mt-3 text-indigo-600 text-sm font-bold hover:underline flex items-center gap-1"
-                            >
-                                <Play className="w-3 h-3 fill-current"/> Preview Stats
-                            </button>
-                        )}
+                        </div>
+
+                        <button 
+                            onClick={handleExport}
+                            className="px-8 py-4 bg-indigo-600 text-white rounded-xl shadow-xl hover:bg-indigo-700 hover:shadow-2xl transition-all font-bold text-lg flex items-center gap-3"
+                            style={{ backgroundColor: themeColor }}
+                        >
+                            <Download className="w-6 h-6" />
+                            Generate Update File
+                        </button>
                     </div>
 
-                    <button 
-                        onClick={handleExport}
-                        className="px-8 py-4 bg-indigo-600 text-white rounded-xl shadow-xl hover:bg-indigo-700 hover:shadow-2xl transition-all font-bold text-lg flex items-center gap-3"
-                        style={{ backgroundColor: themeColor }}
-                    >
-                        <Download className="w-6 h-6" />
-                        Generate Update File
-                    </button>
+                    {/* Buffer Logic Section - Always Visible */}
+                    <div className="border-t border-gray-100 pt-4 w-full">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Sliders className="w-4 h-4 text-gray-400" />
+                            <h4 className="text-xs font-bold text-gray-600 uppercase">Active Buffer Rules</h4>
+                        </div>
+                        
+                        <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-1">
+                            {bufferRulesList.map((rule, idx) => (
+                                renderBufferRule(rule, idx, updateBufferRule, removeBufferRule)
+                            ))}
+                             <button
+                                onClick={addBufferRule}
+                                className="mt-2 flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
+                             >
+                                <Plus className="w-3 h-3" /> Add Condition
+                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* MANUAL MATCH MODAL */}
+            {isFixingModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh]">
+                        <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                                <Link className="w-4 h-4 text-indigo-600" /> 
+                                Manual SKU Match
+                            </h3>
+                            <button onClick={() => setIsFixingModalOpen(false)}><X className="w-5 h-5 text-gray-400 hover:text-gray-600"/></button>
+                        </div>
+                        <div className="p-4 bg-blue-50 border-b border-blue-100 text-xs text-blue-800 flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <p>Map unknown platform items to your Master Inventory. These mappings apply to this session only.</p>
+                        </div>
+                        <div className="p-4 border-b">
+                            <input 
+                                type="text" 
+                                placeholder="Filter unmatched items..." 
+                                value={fixerSearch}
+                                onChange={e => setFixerSearch(e.target.value)}
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-0">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0 font-bold">
+                                    <tr>
+                                        <th className="p-3 w-1/3">Unmatched Platform SKU</th>
+                                        <th className="p-3 w-1/3">Map to Master SKU</th>
+                                        <th className="p-3 w-1/3 text-right">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {detectedMismatches.filter(s => s.toLowerCase().includes(fixerSearch.toLowerCase())).map((item, idx) => {
+                                        const matched = manualMatches.get(item);
+                                        return (
+                                            <tr key={idx} className={`hover:bg-gray-50 ${matched ? 'bg-green-50/50' : ''}`}>
+                                                <td className="p-3 font-mono text-gray-700">{item}</td>
+                                                <td className="p-3">
+                                                    {matched ? (
+                                                        <span className="font-bold text-indigo-700">{matched}</span>
+                                                    ) : (
+                                                        <MatchInput 
+                                                            onConfirm={(val) => handleApplyManualMatch(item, val)}
+                                                        />
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-right">
+                                                    {matched ? (
+                                                        <button 
+                                                            onClick={() => handleClearManualMatch(item)}
+                                                            className="text-xs text-gray-400 hover:text-red-500 flex items-center justify-end gap-1 ml-auto"
+                                                        >
+                                                            <Edit2 className="w-3 h-3" /> Change
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-[10px] text-gray-400 italic">Unmatched</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {detectedMismatches.length === 0 && (
+                                        <tr>
+                                            <td colSpan={3} className="p-8 text-center text-gray-400 italic">No unmatched items found.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
+                            <button 
+                                onClick={() => setIsFixingModalOpen(false)} 
+                                className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-sm"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                    <datalist id="master-sku-list">
+                        {masterSkuList.map(s => <option key={s} value={s} />)}
+                    </datalist>
                 </div>
             )}
         </div>

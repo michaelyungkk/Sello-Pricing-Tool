@@ -20,7 +20,8 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
         itemsPerPage, setItemsPerPage,
         filteredAndSorted,
         paginatedProducts,
-        totalPages
+        totalPages,
+        handleExport
     } = useCostManagementState(products);
 
     return (
@@ -40,6 +41,7 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
                 setCurrentPage={setCurrentPage}
                 showInactive={showInactive}
                 setShowInactive={setShowInactive}
+                onExport={handleExport}
             />
 
             <FeeBreakdownTable

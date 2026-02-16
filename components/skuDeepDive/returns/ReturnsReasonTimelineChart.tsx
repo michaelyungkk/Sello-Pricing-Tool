@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ScatterChart,
   Scatter,
@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import { Activity, Info } from 'lucide-react';
 import { parseReturnsReason } from '../../../services/returnsReasonCodes';
-import { asDateKey } from '../../../services/dateUtils';
+import { asDateKey, getTodayKeyMelbourne, addDaysToDateKey } from '../../../services/dateUtils';
 
 interface ReturnsReasonTimelineChartProps {
   data: any[];
@@ -48,15 +48,28 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
   getReason,
   title = "Refund Reason Timeline"
 }) => {
+  const [timeWindow, setTimeWindow] = useState<'7D' | '30D' | '90D' | 'ALL'>('ALL');
+
   // 1. Process Data into Scatter Points
   const { chartPoints, reasonMetaMap, reasonKeys, xDomain } = useMemo(() => {
     const pointMap = new Map<string, number>(); // Key: "date|reasonCode"
     const metaMap = new Map<string, string>(); // short -> description
     const keysSet = new Set<string>();
 
+    // Calculate Start Date Key based on filter
+    const todayKey = getTodayKeyMelbourne();
+    let startKey = '0000-00-00';
+    
+    if (timeWindow === '7D') startKey = addDaysToDateKey(todayKey, -7);
+    else if (timeWindow === '30D') startKey = addDaysToDateKey(todayKey, -30);
+    else if (timeWindow === '90D') startKey = addDaysToDateKey(todayKey, -90);
+
     data.forEach((row) => {
       const dateStr = asDateKey(getDate(row));
       if (!dateStr) return;
+
+      // Filter Logic
+      if (timeWindow !== 'ALL' && dateStr < startKey) return;
 
       const rawReason = getReason(row);
       const { short, description } = parseReturnsReason(rawReason);
@@ -97,6 +110,11 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
         const finalMax = isRecent ? Math.max(maxTs, nowTs) : maxTs;
         
         domain = [minTs - dayBuffer, finalMax + dayBuffer];
+    } else if (timeWindow !== 'ALL') {
+        // If no data but filter is active, show the filtered range empty
+        const minTs = new Date(startKey).getTime();
+        const maxTs = new Date(todayKey).getTime();
+        domain = [minTs, maxTs];
     }
 
     return {
@@ -105,16 +123,7 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
       reasonKeys: Array.from(keysSet).sort(),
       xDomain: domain
     };
-  }, [data, getDate, getReason]);
-
-  if (!chartPoints || chartPoints.length === 0) {
-    return (
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center h-[380px] text-gray-400">
-        <Activity className="w-8 h-8 mb-2 opacity-50" />
-        <span className="text-sm">No return data available for timeline.</span>
-      </div>
-    );
-  }
+  }, [data, getDate, getReason, timeWindow]);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -147,14 +156,37 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
 
   return (
     <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-auto">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="p-1.5 bg-red-50 text-red-600 rounded-lg">
-          <Activity className="w-4 h-4" />
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-red-50 text-red-600 rounded-lg">
+            <Activity className="w-4 h-4" />
+            </div>
+            <h3 className="text-sm font-bold text-gray-800">{title}</h3>
         </div>
-        <h3 className="text-sm font-bold text-gray-800">{title}</h3>
+        <div className="flex bg-gray-100 p-0.5 rounded-lg">
+            {(['7D', '30D', '90D', 'ALL'] as const).map(window => (
+                <button
+                    key={window}
+                    onClick={() => setTimeWindow(window)}
+                    className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${
+                        timeWindow === window 
+                        ? 'bg-white text-indigo-600 shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                    {window === 'ALL' ? 'All Time' : window}
+                </button>
+            ))}
+        </div>
       </div>
 
       <div className="h-[320px] w-full">
+        {(!chartPoints || chartPoints.length === 0) ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                <Activity className="w-8 h-8 mb-2 opacity-50" />
+                <span className="text-sm">No return data in this period.</span>
+            </div>
+        ) : (
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart
             margin={{ top: 20, right: 20, bottom: 20, left: 0 }}
@@ -219,30 +251,33 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
             ))}
           </ScatterChart>
         </ResponsiveContainer>
+        )}
       </div>
 
       {/* Reason Code Key */}
-      <div className="mt-4 pt-4 border-t border-gray-100">
-        <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
-          <Info className="w-3.5 h-3.5" /> Reason Code Key
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
-          {reasonKeys.map((key, index) => (
-            <div key={key} className="flex items-start gap-2 text-xs">
-              <span
-                className="flex-shrink-0 w-2.5 h-2.5 rounded-full mt-0.5"
-                style={{ backgroundColor: COLORS[index % COLORS.length] }}
-              />
-              <div className="min-w-0">
-                <span className="font-bold text-gray-800 mr-1">{key}:</span>
-                <span className="text-gray-600 block leading-tight">
-                  {reasonMetaMap.get(key)}
-                </span>
-              </div>
+      {reasonKeys.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+            <Info className="w-3.5 h-3.5" /> Reason Code Key
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
+            {reasonKeys.map((key, index) => (
+                <div key={key} className="flex items-start gap-2 text-xs">
+                <span
+                    className="flex-shrink-0 w-2.5 h-2.5 rounded-full mt-0.5"
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                />
+                <div className="min-w-0">
+                    <span className="font-bold text-gray-800 mr-1">{key}:</span>
+                    <span className="text-gray-600 block leading-tight">
+                    {reasonMetaMap.get(key)}
+                    </span>
+                </div>
+                </div>
+            ))}
             </div>
-          ))}
         </div>
-      </div>
+      )}
     </div>
   );
 };

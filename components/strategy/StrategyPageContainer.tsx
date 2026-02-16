@@ -342,6 +342,12 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
     };
 
     const tableData = useMemo(() => {
+        // Calculate date limit for 30D recent changes scan
+        const today = new Date();
+        const d30 = new Date(today);
+        d30.setDate(d30.getDate() - 30);
+        const limitDate30d = d30.toISOString().split('T')[0];
+
         return products
             .filter(p => {
                 const matchesTerm = (term: string) => {
@@ -365,6 +371,33 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                 
                 const rec = getRecommendation(p, effectiveDailySales, global.netPmPercent, thresholds);
                 
+                // --- Recent Changes Bucketing (30D Timeline) ---
+                // Changes sorted by date ascending
+                const changes30d = priceChangeHistory
+                    .filter(c => c.sku.toUpperCase() === p.sku.toUpperCase() && c.date >= limitDate30d)
+                    .sort((a, b) => a.date.localeCompare(b.date));
+                
+                // Buckets: [22-30 days ago, 15-21 days ago, 8-14 days ago, 0-7 days ago]
+                // Index 3 is most recent (rightmost)
+                const weeklyChanges: (string | null)[] = [null, null, null, null]; 
+                
+                changes30d.forEach(change => {
+                     const cDate = new Date(change.date);
+                     const diffTime = Math.abs(today.getTime() - cDate.getTime());
+                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                     
+                     let bucketIdx = -1;
+                     if (diffDays <= 7) bucketIdx = 3;
+                     else if (diffDays <= 14) bucketIdx = 2;
+                     else if (diffDays <= 21) bucketIdx = 1;
+                     else if (diffDays <= 30) bucketIdx = 0;
+                     
+                     if (bucketIdx !== -1) {
+                         // Overwrite if multiple changes in same week - assumes latest change defines the week's state
+                         weeklyChanges[bucketIdx] = change.changeType;
+                     }
+                });
+
                 return { 
                     ...p, 
                     recentTotalSales: local.totalSales,
@@ -373,6 +406,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                     netPmPercent: local.netPmPercent,
                     totalProfit: local.totalProfit,
                     dailyVelocity: effectiveDailySales,
+                    recentChanges: weeklyChanges,
                     ...rec 
                 };
             })
@@ -383,7 +417,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                 if (isOOS && !showOOS) return false;
                 return true;
             });
-    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, refundHistory, deductRefunds, includeIncoming, pricingRules, showOOS, thresholds, promotions, inventoryChangeHistory]);
+    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, refundHistory, deductRefunds, includeIncoming, pricingRules, showOOS, thresholds, promotions, inventoryChangeHistory, priceChangeHistory]);
 
     const filteredAndSortedData = useMemo(() => {
         let data = tableData.filter(row => filterTab === 'All' || row.action === filterTab);
@@ -402,6 +436,10 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                     case 'caPrice': return row.caPrice;
                     case 'newPrice': return row.adjustedPrice;
                     case 'action': return row.action;
+                    case 'recentChanges': {
+                        // Sort by number of active changes for now
+                        return row.recentChanges.filter((c: any) => c !== null).length;
+                    }
                     default: return 0;
                 }
             };

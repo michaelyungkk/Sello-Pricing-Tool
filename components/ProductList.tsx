@@ -5,7 +5,7 @@ import { Product, PricingRules } from '../types';
 import { VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
 import { GradeBadge } from './GradeBadge';
-import { Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart } from 'lucide-react';
+import { Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart, Zap } from 'lucide-react';
 import { SortState, sortRows } from '../utils/tableSort';
 import { SortableHeader } from './common/SortableHeader';
 
@@ -106,7 +106,12 @@ const ProductRow = React.memo(({
     // Apply 20% VAT Uplift for Display using shared constant
     const currentPriceWithVat = (product.currentPrice || 0) * VAT_MULTIPLIER;
     const oldPriceWithVat = product.oldPrice ? product.oldPrice * VAT_MULTIPLIER : null;
+    
+    // Optimal Price Logic (Profit)
     const optimalPriceWithVat = product.optimalPrice ? product.optimalPrice * VAT_MULTIPLIER : null;
+    
+    // Max Velocity Price Logic (Volume Fallback)
+    const volumePriceWithVat = product.maxVelocityPrice ? product.maxVelocityPrice * VAT_MULTIPLIER : null;
 
     const runwayWeeks = (product.daysRemaining || 0) / 7;
     const runwayBin = {
@@ -193,6 +198,11 @@ const ProductRow = React.memo(({
                     <div className="flex items-center justify-end gap-1 font-bold" style={{ color: themeColor }} title="Based on historical margin & velocity performance (VAT Inc)">
                         <Star className="w-3 h-3" style={{ fill: `${themeColor}20` }} />
                         £{optimalPriceWithVat.toFixed(2)}
+                    </div>
+                ) : volumePriceWithVat ? (
+                    <div className="flex items-center justify-end gap-1 font-bold text-amber-600" title="Fallback: Price with highest sales volume (VAT Inc)">
+                        <Zap className="w-3 h-3 text-amber-500 fill-amber-100" />
+                        £{volumePriceWithVat.toFixed(2)}
                     </div>
                 ) : (
                     <span className="text-gray-300">-</span>
@@ -605,16 +615,19 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
             return `"${str.replace(/"/g, '""')}"`;
         };
 
-        const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Current Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost', 'Return Rate %'];
+        const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Optimal Price', 'Current Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost', 'Return Rate %'];
         const rows: (string | number)[][] = [];
 
         (filteredProducts || []).forEach(p => {
+            const effectiveOptimal = p.optimalPrice || p.maxVelocityPrice;
+
             const commonData = [
                 cleanChar(p.sku),
                 cleanChar(p.name),
                 cleanChar(p.brand || ''),
                 cleanChar(p.category || ''),
                 cleanChar(p.subcategory || ''),
+                effectiveOptimal ? effectiveOptimal.toFixed(2) : '',
                 (p.currentPrice || 0).toFixed(2),
                 p.stockLevel || 0,
                 (p.averageDailySales || 0).toFixed(2),

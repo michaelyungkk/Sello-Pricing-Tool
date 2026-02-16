@@ -59,7 +59,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                     </div>
                 </div>
                 
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-auto select-none">
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-auto select-none relative">
                     <div className="flex justify-between items-start mb-4">
                         <h4 className="text-xs font-bold text-gray-500 uppercase">
                             Aggregated Volume by Price Delta
@@ -72,37 +72,45 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                     </div>
 
                     <div className="w-full h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis type="category" dataKey="period" name="Period" allowDuplicatedCategory={false} tick={{fontSize: 12, style: { userSelect: 'none' }}} />
-                                <YAxis type="number" dataKey="delta" name="Price Deviation" unit="£" domain={['auto', 'auto']} tick={{fontSize: 12, style: { userSelect: 'none' }}} label={{ value: 'Price Deviation (£)', angle: -90, position: 'insideLeft' }} />
-                                <ZAxis type="number" dataKey="totalQty" range={[60, 600]} name="Volume" />
-                                
-                                <ReferenceArea y1={priceVolumeAnalysis.thresholds.amber} y2={1000} fill="green" fillOpacity={0.05} />
-                                <ReferenceArea y1={priceVolumeAnalysis.thresholds.red} y2={priceVolumeAnalysis.thresholds.amber} fill="orange" fillOpacity={0.05} />
-                                <ReferenceArea y1={-1000} y2={priceVolumeAnalysis.thresholds.red} fill="red" fillOpacity={0.05} />
-                                
-                                <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" label={{ value: 'Ref Price', position: 'right', fill: '#6b7280', fontSize: 10 }} />
-                                
-                                <Scatter 
-                                    name="Price Bands" 
-                                    data={filteredChartData} 
-                                    fill="#8884d8" 
-                                    fillOpacity={0.7} 
-                                    onMouseEnter={(data) => setHoveredBubble(data.payload)}
-                                    onMouseLeave={() => setHoveredBubble(null)}
-                                />
+                        {filteredChartData.length === 0 ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                                <Info className="w-8 h-8 mb-2 opacity-50" />
+                                <span className="text-sm font-medium">No comparable sell-price data</span>
+                                <span className="text-xs opacity-75">(cost-based platforms excluded)</span>
+                            </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis type="category" dataKey="period" name="Period" allowDuplicatedCategory={false} tick={{fontSize: 12, style: { userSelect: 'none' }}} />
+                                    <YAxis type="number" dataKey="delta" name="Price Deviation" unit="£" domain={['auto', 'auto']} tick={{fontSize: 12, style: { userSelect: 'none' }}} label={{ value: 'Price Deviation (£)', angle: -90, position: 'insideLeft' }} />
+                                    <ZAxis type="number" dataKey="totalQty" range={[60, 600]} name="Volume" />
+                                    
+                                    <ReferenceArea y1={priceVolumeAnalysis.thresholds.amber} y2={1000} fill="green" fillOpacity={0.05} />
+                                    <ReferenceArea y1={priceVolumeAnalysis.thresholds.red} y2={priceVolumeAnalysis.thresholds.amber} fill="orange" fillOpacity={0.05} />
+                                    <ReferenceArea y1={-1000} y2={priceVolumeAnalysis.thresholds.red} fill="red" fillOpacity={0.05} />
+                                    
+                                    <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" label={{ value: 'Ref Price', position: 'right', fill: '#6b7280', fontSize: 10 }} />
+                                    
+                                    <Scatter 
+                                        name="Price Bands" 
+                                        data={filteredChartData} 
+                                        fill="#8884d8" 
+                                        fillOpacity={0.7} 
+                                        onMouseEnter={(data) => setHoveredBubble(data.payload)}
+                                        onMouseLeave={() => setHoveredBubble(null)}
+                                    />
 
-                                <Scatter 
-                                    name="Weighted Avg" 
-                                    data={filteredAvgStats} 
-                                    shape="star" 
-                                    fill="#be185d" 
-                                    legendType="star"
-                                />
-                            </ScatterChart>
-                        </ResponsiveContainer>
+                                    <Scatter 
+                                        name="Weighted Avg" 
+                                        data={filteredAvgStats} 
+                                        shape="star" 
+                                        fill="#be185d" 
+                                        legendType="star"
+                                    />
+                                </ScatterChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
                     
                     <div className="mt-2 h-10 bg-gray-50 rounded-lg border border-gray-100 flex items-center px-4 text-xs">
@@ -151,17 +159,26 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                 return (
                                     <tr key={i} className={`hover:bg-gray-50 ${isLowest ? 'bg-amber-50/30' : isHighest ? 'bg-indigo-50/30' : ''}`}>
                                         <td className="p-3 font-mono font-bold text-gray-700">
-                                            <div className="flex items-center gap-2">
-                                                £{pt.price.toFixed(2)}
-                                                {isLowest && (
-                                                    <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 font-medium uppercase tracking-wide flex items-center gap-1">
-                                                        <TrendingDown className="w-2.5 h-2.5" /> Lowest
-                                                    </span>
-                                                )}
-                                                {isHighest && (
-                                                    <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 font-medium uppercase tracking-wide flex items-center gap-1">
-                                                        <TrendingUp className="w-2.5 h-2.5" /> Highest
-                                                    </span>
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-2">
+                                                    £{pt.price.toFixed(2)}
+                                                    {isLowest && (
+                                                        <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 font-medium uppercase tracking-wide flex items-center gap-1">
+                                                            <TrendingDown className="w-2.5 h-2.5" /> Lowest
+                                                        </span>
+                                                    )}
+                                                    {isHighest && (
+                                                        <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 font-medium uppercase tracking-wide flex items-center gap-1">
+                                                            <TrendingUp className="w-2.5 h-2.5" /> Highest
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {pt.isCostBased && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase font-medium cursor-help" title="This price point originates from a Cost-Based Platform (e.g. Wayfair). It represents an agreed cost price, not a consumer selling price.">
+                                                            Fixed Cost Price
+                                                        </span>
+                                                    </div>
                                                 )}
                                             </div>
                                         </td>

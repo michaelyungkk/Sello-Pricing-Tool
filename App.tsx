@@ -130,13 +130,25 @@ const recalculateProductMetrics = (
         let currentQty = 0;
         let prevQty = 0;
 
+        // Calc for Max Velocity Price
+        const priceMap = new Map<number, number>(); // Price -> Total Qty
+
         logs.forEach(l => {
             const d = new Date(l.date);
             if (isNaN(d.getTime())) return;
+            
+            // Velocity calculation logic based on dates
             if (d >= cutoffDate) {
                 currentQty += toNumber(l.velocity);
             } else if (d >= prevCutoffDate) {
                 prevQty += toNumber(l.velocity);
+            }
+
+            // Max Velocity Price logic (All Time)
+            if (l.velocity > 0 && l.price > 0) {
+                 // Round to 2 decimals to group effectively
+                 const pricePoint = Math.round(l.price * 100) / 100;
+                 priceMap.set(pricePoint, (priceMap.get(pricePoint) || 0) + l.velocity);
             }
         });
 
@@ -158,12 +170,28 @@ const recalculateProductMetrics = (
             ? ((currentCalculatedVelocity - calculatedPrevDailySales) / calculatedPrevDailySales) * 100 
             : 0;
 
+        // Determine price with max velocity
+        let maxVel = 0;
+        let maxVelocityPrice = undefined;
+        priceMap.forEach((qty, price) => {
+             if (qty > maxVel) {
+                 maxVel = qty;
+                 maxVelocityPrice = price;
+             } else if (qty === maxVel && maxVel > 0) {
+                 // If tie, prefer higher price
+                 if (price > (maxVelocityPrice || 0)) {
+                     maxVelocityPrice = price;
+                 }
+             }
+        });
+
         return {
             ...p,
             averageDailySales: effectiveDailySales, // Use resolved value (ERP prioritized)
             previousDailySales: calculatedPrevDailySales,
             daysRemaining,
             status,
+            maxVelocityPrice, // Fallback Reference Price
             _trendData: { velocityChange }
         };
     }).filter(Boolean);

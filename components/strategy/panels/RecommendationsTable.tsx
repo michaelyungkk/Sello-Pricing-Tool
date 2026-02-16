@@ -4,7 +4,7 @@ import { TagSearchInput } from '../../TagSearchInput';
 import { GradeBadge } from '../../GradeBadge';
 import { SortableHeader } from '../../common/SortableHeader';
 import { SortState } from '../../../utils/tableSort';
-import { Eye, EyeOff, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
 
 interface RecommendationsTableProps {
@@ -117,6 +117,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                             <SortableHeader label="Recent Sales $" sortKey="sales" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="bg-blue-50/50" />
                             <SortableHeader label="Recent Qty" sortKey="qty" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="bg-blue-50/50" />
                             <SortableHeader label="Net PM%" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="bg-green-50/50" />
+                            <SortableHeader label="Recent Changes (30D)" sortKey="recentChanges" sort={sort} onChange={setSort} themeColor={themeColor} align="center" />
                             <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="text-purple-600" />
                             <SortableHeader label="New Price" sortKey="newPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                             <SortableHeader label="Action" sortKey="action" sort={sort} onChange={setSort} themeColor={themeColor} align="center" />
@@ -151,6 +152,23 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                     <span title={`Profit: £${formatMoney(row.totalProfit, 4, '')} / Sales: £${formatNumber(row.recentTotalSales, 2)}`} className="cursor-help border-b border-dotted border-green-700/50">
                                         {formatPct(row.netPmPercent, 1)}
                                     </span>
+                                </td>
+                                <td className="p-4 text-center">
+                                    {row.recentChanges && Array.isArray(row.recentChanges) && row.recentChanges.length > 0 ? (
+                                        <div className="flex items-center justify-center gap-1.5" title="History (30D): Oldest → Newest (4 Weeks)">
+                                            {row.recentChanges.map((type: string | null, idx: number) => {
+                                                if (type === 'INCREASE') {
+                                                    return <span key={idx} title="Price Increase" className="inline-flex"><ArrowUpRight className="w-4 h-4 text-green-600 stroke-[3]" /></span>;
+                                                }
+                                                if (type === 'DECREASE') {
+                                                    return <span key={idx} title="Price Decrease" className="inline-flex"><ArrowDownRight className="w-4 h-4 text-red-500 stroke-[3]" /></span>;
+                                                }
+                                                return <span key={idx} className="text-gray-300 font-mono text-xs select-none" title="No change">-</span>;
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <span className="text-gray-300">-</span>
+                                    )}
                                 </td>
                                 <td className="p-4 text-right font-bold text-purple-600 font-mono">{row.caPrice ? `£${formatMoney(row.caPrice, 2, '')}` : '-'}</td>
                                 <td className="p-4 text-right font-mono font-bold">

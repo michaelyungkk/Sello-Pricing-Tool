@@ -165,7 +165,8 @@ export interface Product {
   // Strategic Bounds & Intelligence
   floorPrice?: number;   // Minimum allowable price
   ceilingPrice?: number; // Maximum allowable price
-  optimalPrice?: number; // Calculated "Sweet Spot" based on history
+  optimalPrice?: number; // Calculated "Sweet Spot" based on history (Max Profit)
+  maxVelocityPrice?: number; // Calculated price based on history (Max Volume)
 
   // Analysis Fields (Populated during import)
   status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock';
@@ -389,6 +390,23 @@ export interface SearchChip {
 }
 
 // --- INVENTORY TOOL TYPES ---
+export interface SingleBufferRule {
+  id: string;
+  operator: string; // 'EQ' | 'LT' | 'GT' | 'LTE' | 'GTE' | 'RANGE'
+  trigger: string;
+  value: string;
+}
+
+export interface BufferRules {
+  operatorA?: string;
+  triggerA?: string;
+  valueA?: string;
+  operatorB?: string;
+  triggerB?: string;
+  valueB?: string;
+  rules?: SingleBufferRule[];
+}
+
 export interface InventoryTemplate {
   id: string;
   name: string; // Platform name
@@ -396,6 +414,8 @@ export interface InventoryTemplate {
   skuColumn: string; // Mapped header name for SKU
   stockColumn: string; // Mapped header name for Stock
   metaRows?: any[][]; // Store rows appearing BEFORE headers (e.g. Amazon version info)
+  bufferRules?: BufferRules; // Save buffer settings per template
+  exportFormat?: 'csv' | 'xlsx'; // Output file format preference
 }
 
 export interface SearchSession {

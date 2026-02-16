@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, Upload, Zap, Activity, BarChart3, Target, RotateCcw, AlertCircle, Trash2, Download, Star, TrendingUp, Info } from 'lucide-react';
+import { ArrowLeft, Upload, Zap, Activity, BarChart3, Target, RotateCcw, AlertCircle, Trash2, Download, Star, TrendingUp, Info, Sparkles } from 'lucide-react';
 import { PromotionEvent, Product, PriceLog, PriceChangeRecord, PromotionItem } from '../../../types';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
@@ -8,7 +8,7 @@ import { GradeBadge } from '../../GradeBadge';
 import { asDateKey, getTodayKeyMelbourne } from '../../../services/dateUtils';
 import { computePromoWindows, computePromoEffectiveness, deriveDiscountedPrice } from '../../../services/promotionAnalytics';
 import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
-import { PromoUploadModal } from './PromoUploadModal';
+import { PromoUploadModal, UploadDiscountMode } from './PromoUploadModal';
 
 // Local helper to ensure price consistency
 const getBaselineForProduct = (promo: PromotionEvent, product?: Product): number => {
@@ -20,6 +20,7 @@ const getBaselineForProduct = (promo: PromotionEvent, product?: Product): number
 
 interface EventDetailViewProps {
     promo: PromotionEvent;
+    allPromotions?: PromotionEvent[]; // New prop for historical context
     products: Product[];
     priceHistoryMap: Map<string, PriceLog[]>;
     priceChangeHistory?: PriceChangeRecord[];
@@ -31,7 +32,7 @@ interface EventDetailViewProps {
     themeColor: string;
 }
 
-export const EventDetailView = ({ promo, products, priceHistoryMap, priceChangeHistory, onBack, onAddProducts, onDeleteItem, onUpdateMeta, onUpdateItem, themeColor }: EventDetailViewProps) => {
+export const EventDetailView = ({ promo, allPromotions = [], products, priceHistoryMap, priceChangeHistory, onBack, onAddProducts, onDeleteItem, onUpdateMeta, onUpdateItem, themeColor }: EventDetailViewProps) => {
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'startDate', dir: 'asc' });
     const [activeSection, setActiveSection] = useState<'nomination' | 'analytics'>('nomination');
@@ -123,6 +124,98 @@ export const EventDetailView = ({ promo, products, priceHistoryMap, priceChangeH
         const getValue = (row: any, key: string) => (row as any)[key];
         return sortRows(itemsWithData, sortConfig, getValue);
     }, [aggregatedEffectiveness, products, sortConfig, promo, isSkuScope]);
+
+    // SMART LIFT SUGGESTION (Data Driven)
+    const suggestedLiftData = useMemo(() => {
+        if (!sortedItems || sortedItems.length === 0) return { val: 0, source: 'None' };
+        
+        // 1. Calculate Average Discount Depth for Current Promo
+        const validItems = sortedItems.filter(i => i.discountPercent > 0);
+        if (validItems.length === 0) return { val: 0, source: 'None' };
+        
+        const avgCurrentDiscount = validItems.reduce((sum, i) => sum + i.discountPercent, 0) / validItems.length;
+
+        // 2. Look for Historical Campaigns on same Platform
+        const today = getTodayKeyMelbourne();
+        const pastPromos = allPromotions.filter(p => 
+            p.id !== promo.id && 
+            p.platform === promo.platform &&
+            p.endDate < today // Only look at ended promos
+        );
+
+        let elasticities: number[] = [];
+        let campaignsUsed = 0;
+
+        if (pastPromos.length > 0) {
+            // Calculate actual realized elasticity for each past promo
+            pastPromos.forEach(pastP => {
+                let pastTotalUplift = 0;
+                let pastTotalBaseline = 0;
+                let pastTotalDiscount = 0;
+                let pastDiscountCount = 0;
+
+                (pastP.items || []).forEach(item => {
+                    const product = products.find(prod => prod.sku === item.sku);
+                    // Heavy computation, but necessary for data-driven insights
+                    const metrics = computePromoEffectiveness(pastP, item.sku, Array.from((priceHistoryMap || new Map()).values()).flat(), priceChangeHistory || [], product);
+                    
+                    const baseline = metrics.actualUnits - metrics.upliftUnits;
+                    if (baseline > 1) { // Filter out noise
+                        pastTotalUplift += metrics.upliftUnits;
+                        pastTotalBaseline += baseline;
+                        
+                        // Approximate discount calc for past items
+                        const pctOff = metrics.baselinePrice > 0 ? ((metrics.baselinePrice - metrics.promoPrice) / metrics.baselinePrice) * 100 : 0;
+                        if (pctOff > 0) {
+                            pastTotalDiscount += pctOff;
+                            pastDiscountCount++;
+                        }
+                    }
+                });
+
+                if (pastTotalBaseline > 10 && pastDiscountCount > 0) {
+                    const actualLiftPct = (pastTotalUplift / pastTotalBaseline) * 100;
+                    const avgPastDiscount = pastTotalDiscount / pastDiscountCount;
+                    
+                    // Elasticity = Lift % / Discount %
+                    // e.g. 50% Lift from 20% Discount = 2.5 Elasticity
+                    if (avgPastDiscount > 0) {
+                        const elasticity = actualLiftPct / avgPastDiscount;
+                        // Filter out crazy outliers (e.g. 5% discount causing 500% lift = 100x elasticity, likely external factor)
+                        if (elasticity > -10 && elasticity < 20) { 
+                             elasticities.push(elasticity);
+                             campaignsUsed++;
+                        }
+                    }
+                }
+            });
+        }
+
+        let elasticityToUse = 2.0; // Default Conservative
+        let sourceLabel = "Standard Estimate";
+
+        if (elasticities.length > 0) {
+            // Average the historical elasticities
+            const avgHistoricalElasticity = elasticities.reduce((a,b) => a+b, 0) / elasticities.length;
+            elasticityToUse = Math.max(0.5, avgHistoricalElasticity); // Safety floor
+            sourceLabel = `Based on ${campaignsUsed} past campaigns`;
+        } else {
+             // Fallback to platform heuristics if no data
+            const p = promo.platform.toLowerCase();
+            if (p.includes('amazon')) elasticityToUse = 3.0;
+            if (p.includes('temu')) elasticityToUse = 2.5;
+        }
+        
+        // 3. Prediction: Current Discount * Derived Elasticity
+        const prediction = avgCurrentDiscount * elasticityToUse;
+        
+        return { 
+            val: Math.round(prediction), 
+            source: sourceLabel,
+            elasticity: elasticityToUse
+        };
+
+    }, [sortedItems, promo.platform, allPromotions, priceHistoryMap]);
 
     const handleExportPostMortem = () => {
         const { totals } = aggregatedEffectiveness;
@@ -479,14 +572,26 @@ export const EventDetailView = ({ promo, products, priceHistoryMap, priceChangeH
                                 <Zap className="w-4 h-4 text-indigo-600" />
                                 Pre-Event Forecast
                             </h4>
-                            <div className="flex items-center gap-1">
-                                <span className="text-[9px] font-black text-gray-400 uppercase">Lift %</span>
-                                <input 
-                                    type="number"
-                                    value={promo.expectedLiftPct || 0}
-                                    onChange={(e) => onUpdateMeta({ expectedLiftPct: parseFloat(e.target.value) || 0 })}
-                                    className="w-12 text-right text-[9px] font-bold border border-gray-200 rounded p-0.5 bg-white"
-                                />
+                            <div className="flex items-center gap-2">
+                                {suggestedLiftData.val > 0 && Math.abs(suggestedLiftData.val - (promo.expectedLiftPct || 0)) > 1 && (
+                                    <button
+                                        onClick={() => onUpdateMeta({ expectedLiftPct: suggestedLiftData.val })}
+                                        className="flex items-center gap-1 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200 transition-all animate-in fade-in"
+                                        title={`${suggestedLiftData.source}. Calculated Sensitivity: ${suggestedLiftData.elasticity.toFixed(1)}`}
+                                    >
+                                        <Sparkles className="w-2.5 h-2.5" />
+                                        Sugg: {suggestedLiftData.val}%
+                                    </button>
+                                )}
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[9px] font-black text-gray-400 uppercase">Lift %</span>
+                                    <input 
+                                        type="number"
+                                        value={promo.expectedLiftPct || 0}
+                                        onChange={(e) => onUpdateMeta({ expectedLiftPct: parseFloat(e.target.value) || 0 })}
+                                        className="w-12 text-right text-[9px] font-bold border border-gray-200 rounded p-0.5 bg-white"
+                                    />
+                                </div>
                             </div>
                         </div>
                         <div className="p-6 space-y-6">
@@ -659,16 +764,36 @@ export const EventDetailView = ({ promo, products, priceHistoryMap, priceChangeH
                     products={products}
                     themeColor={themeColor}
                     onClose={() => setIsUploadOpen(false)}
-                    onConfirm={(items) => {
+                    onConfirm={(items, mode) => {
                         const newItems: PromotionItem[] = items.map((i: any) => {
                             const product = (products || []).find(p => p.sku.toUpperCase() === i.sku.toUpperCase());
                             const basePrice = getBaselineForProduct(promo, product);
+                            
+                            let discountType: UploadDiscountMode | 'FIXED_PRICE' = 'FIXED_PRICE';
+                            let discountValue = 0;
+                            let promoPrice = 0;
+
+                            if (mode === 'PERCENT_OFF') {
+                                discountType = 'PERCENT_OFF';
+                                discountValue = i.value;
+                                promoPrice = deriveDiscountedPrice(basePrice, 'PERCENT_OFF', i.value);
+                            } else if (mode === 'FIXED_OFF') {
+                                discountType = 'FIXED_OFF';
+                                discountValue = i.value;
+                                promoPrice = deriveDiscountedPrice(basePrice, 'FIXED_OFF', i.value);
+                            } else {
+                                // FIXED_PRICE mode (default)
+                                discountType = 'FIXED_PRICE';
+                                discountValue = i.value;
+                                promoPrice = i.value;
+                            }
+
                             return {
                                 sku: i.sku,
                                 basePrice: Number(basePrice.toFixed(2)),
-                                discountType: 'FIXED_PRICE',
-                                discountValue: i.price,
-                                promoPrice: i.price
+                                discountType: discountType as any,
+                                discountValue: discountValue,
+                                promoPrice: promoPrice
                             };
                         });
 

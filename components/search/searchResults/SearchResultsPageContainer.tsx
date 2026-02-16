@@ -469,7 +469,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
         const resultSnapshot = data.results[0];
         const liveProduct = liveProductMap.get(resultSnapshot.product.sku);
         const hydratedData = liveProduct ? { ...resultSnapshot, product: liveProduct } : resultSnapshot;
-        return <SkuDeepDivePage data={hydratedData} themeColor={themeColor} priceChangeHistory={priceChangeHistory} thresholds={thresholds} />;
+        return <SkuDeepDivePage data={hydratedData} themeColor={themeColor} priceChangeHistory={priceChangeHistory} thresholds={thresholds} pricingRules={pricingRules} />;
     }
 
     return (

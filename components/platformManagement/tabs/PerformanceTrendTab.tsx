@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Trophy, BellRing, X, Settings, Plus, Layers, TrendingUp, RotateCcw, BarChart as BarChartIcon, ArrowUpRight, ArrowDownRight, Activity, Check, ChevronDown, Minus, Medal, Info, ArrowUp, ArrowDown, LayoutGrid, Maximize2, Sparkles } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, ReferenceArea, BarChart, Bar, Cell, ReferenceLine, AreaChart, Area } from 'recharts';
@@ -411,6 +412,8 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                 const isMarginCritical = row.current.marginPct < alertRules.marginLowThreshold;
                                 const isTacosHigh = row.current.tacosPct > alertRules.tacosHighThreshold;
                                 const isRefundHigh = row.current.refundRatePct > 5.0;
+                                const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
+
                                 const flags: Flag[] = []; 
                                 if (isRevWarning) flags.push({ label: "Growth Drop", style: "bg-red-100 text-red-800 border-red-200", tooltip: `Revenue down ${revDelta?.toFixed(1)}%` }); 
                                 if (isMarginCritical) flags.push({ label: "Low Margin", style: "bg-amber-100 text-amber-800 border-amber-200", tooltip: "Below efficiency target" });
@@ -421,7 +424,13 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                     <tr key={row.platform} className={`even:bg-gray-50/20 hover:bg-gray-100/40 transition-all cursor-pointer ${hoveredPlatform === row.platform ? 'bg-indigo-50/40 ring-1 ring-inset ring-indigo-200' : ''}`} onMouseEnter={() => setHoveredPlatform(row.platform)} onMouseLeave={() => setHoveredPlatform(null)}>
                                         <td className="p-4 text-center"><div className="flex flex-col items-center gap-0.5"><div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-black border border-gray-200">{row.currentPos}</div>{row.shift !== 0 ? (<div className={`text-[8px] font-black flex items-center ${row.shift > 0 ? 'text-green-600' : 'text-red-500'}`}>{row.shift > 0 ? <ArrowUp className="w-2 h-2" /> : <ArrowDown className="w-2 h-2" />}{Math.abs(row.shift)}</div>) : <Minus className="w-2 h-2 text-gray-300" />}</div></td>
                                         <td className="p-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white shadow-sm" style={{ backgroundColor: rule?.color || '#6366f1' }}>{row.platform[0]}</div><div className="flex flex-col"><div className="font-bold text-gray-900 text-sm leading-none">{row.platform}</div><div className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-wider">{rule?.manager || 'Unassigned'}</div></div></div></td>
-                                        <td className={`p-4 text-right transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}><div className="flex flex-col items-end"><span className="font-bold text-gray-900">{formatMoney(row.current.revenue, 0)}</span><TrendDeltaPill value={revDelta} /></div></td>
+                                        <td className={`p-4 text-right transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}>
+                                            <div className="flex flex-col items-end">
+                                                <span className="font-bold text-gray-900">{formatMoney(row.current.revenue, 0)}</span>
+                                                {isCostBased && <span className="text-[8px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded border border-slate-200 cursor-help" title="Cost-based Revenue">Cost Basis</span>}
+                                                <TrendDeltaPill value={revDelta} />
+                                            </div>
+                                        </td>
                                         <td className={`p-4 text-right transition-colors ${isMarginCritical ? 'bg-amber-50/30' : ''}`}><div className="flex flex-col items-end"><span className={`font-black ${row.current.marginPct < 15 ? 'text-amber-600' : 'text-green-600'}`}>{formatPct(row.current.marginPct)}</span><TrendDeltaPill value={marginDelta} isPp /></div></td>
                                         <td className={`p-4 text-right transition-colors ${isTacosHigh ? 'bg-purple-50/30' : ''}`}><div className="flex flex-col items-end"><span className="font-medium text-gray-700">{formatPct(row.current.tacosPct)}</span><TrendDeltaPill value={tacosDelta} isPp invert /></div></td>
                                         <td className={`p-4 text-right transition-colors ${isRefundHigh ? 'bg-orange-50/30' : ''}`}><div className="flex flex-col items-end"><span className="font-medium text-gray-700">{formatPct(row.current.refundRatePct)}</span><TrendDeltaPill value={refundDelta} isPp invert /></div></td>
@@ -595,7 +604,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                                         stroke={color} 
                                                         strokeWidth={2.5} 
                                                         fill={`url(#gradient-${sId})`} 
-                                                        connectNulls={true}
+                                                        connectNulls={true} 
                                                         dot={false} 
                                                         isAnimationActive={false} 
                                                     />

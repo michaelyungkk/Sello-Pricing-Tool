@@ -73,6 +73,70 @@ export const useCostManagementState = (products: Product[]) => {
     const totalPages = Math.ceil(filteredAndSorted.length / itemsPerPage);
     const paginatedProducts = filteredAndSorted.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+    const handleExport = () => {
+        const vatLabel = includeVat ? '(Inc VAT)' : '(Ex VAT)';
+        const modeLabel = viewMode === 'PER_UNIT' ? 'Per Unit' : 'Absolute';
+        
+        const headers = [
+            'SKU', 'Name', `CA Price ${vatLabel}`, `Unit Price ${vatLabel}`, `Sales Amt ${vatLabel}`,
+            `COGS ${vatLabel}`, `Postage ${vatLabel}`, `Selling Fee ${vatLabel}`, `Ads Fee ${vatLabel}`,
+            `Other Fee ${vatLabel}`, `Sub Fee ${vatLabel}`, `WMS Fee ${vatLabel}`, `Refunds ${vatLabel}`,
+            `Net Profit ${vatLabel}`, 'Net Margin %', 'Sku Qty'
+        ];
+
+        const csvRows = filteredAndSorted.map(p => {
+            const detail = p.costDetail;
+            if (!detail) return [];
+
+            const escape = (str: string) => `"${String(str || '').replace(/"/g, '""')}"`;
+            
+            const skuQty = detail.skuQty > 0 ? detail.skuQty : 1;
+            
+            // Helper to process values based on current view settings
+            // isAlreadyPerUnit flag prevents double-division for metrics that are inherently per-unit (like Unit Price)
+            const proc = (val: number, isAlreadyPerUnit = false) => {
+                let v = val;
+                if (viewMode === 'PER_UNIT' && !isAlreadyPerUnit) {
+                    v = val / skuQty;
+                }
+                if (includeVat) v *= VAT_RATE;
+                return v.toFixed(2);
+            };
+
+            const caPrice = p.caPrice ? (includeVat ? p.caPrice : p.caPrice / VAT_RATE) : 0;
+
+            return [
+                escape(p.sku),
+                escape(p.name),
+                caPrice.toFixed(2),
+                proc(detail.unitPrice, true), // Unit Price is already per-unit, do not divide again
+                proc(detail.salesAmt),
+                proc(detail.cogs),
+                proc(detail.postage),
+                proc(detail.sellingFee),
+                proc(detail.adsFee),
+                proc(detail.otherFee),
+                proc(detail.subscriptionFee),
+                proc(detail.wmsFee),
+                proc(detail.refundAmt),
+                proc(detail.profitInclRn),
+                (detail.profitInclRnPct || 0).toFixed(2) + '%',
+                detail.skuQty.toString()
+            ].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...csvRows].filter(r => r.length > 0).join('\n');
+        const blob = new Blob(['\uFEFF', csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `cost_breakdown_${modeLabel}_${includeVat ? 'IncVAT' : 'ExVAT'}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     return {
         search, setSearch,
         searchTags, setSearchTags,
@@ -85,6 +149,7 @@ export const useCostManagementState = (products: Product[]) => {
         itemsPerPage, setItemsPerPage,
         filteredAndSorted,
         paginatedProducts,
-        totalPages
+        totalPages,
+        handleExport
     };
 };

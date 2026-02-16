@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Trophy, ChevronRight, Hash, Database, Wallet } from 'lucide-react';
+import { Trophy, ChevronRight, Hash, Database, Wallet, Info } from 'lucide-react';
 import { formatMoney, formatPct, formatNumber } from '../../../utils/format';
 import { PlatformSummary } from '../platformManagement.types';
 import { PlatformConfig } from '../../../types';
@@ -15,6 +15,8 @@ interface PlatformMetricCardProps {
 }
 
 export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary, isTop, isSelected, onSelect, rule, themeColor }) => {
+    const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
+
     return (
         <div 
             onClick={onSelect}
@@ -43,7 +45,14 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
             <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-0.5">
-                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Revenue</span>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide flex items-center gap-1">
+                            Revenue
+                            {isCostBased && (
+                                <span className="text-[8px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded border border-slate-200 cursor-help" title="Cost-based Revenue: This platform records sales at agreed cost price, not consumer sell price.">
+                                    Cost Basis
+                                </span>
+                            )}
+                        </span>
                         <div className="text-sm font-bold text-gray-900 leading-none">{formatMoney(summary.revenue, 0)}</div>
                     </div>
                     <div className="space-y-0.5 text-right bg-indigo-50/50 -m-1 p-1 rounded">

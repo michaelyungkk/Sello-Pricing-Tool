@@ -1,26 +1,9 @@
 
 import React from 'react';
 import { TagSearchInput } from '../../TagSearchInput';
-import { Percent, Hash, Divide, Eye, EyeOff } from 'lucide-react';
+import { Percent, Hash, Divide, Eye, EyeOff, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { ViewMode } from '../types';
-
-interface CostSummarySectionProps {
-    themeColor: string;
-    headerStyle: React.CSSProperties;
-    includeVat: boolean;
-    setIncludeVat: (v: boolean) => void;
-    showPercentPrimary: boolean;
-    setShowPercentPrimary: (v: boolean) => void;
-    viewMode: ViewMode;
-    setViewMode: (v: any) => void;
-    searchTags: string[];
-    setSearchTags: (t: string[]) => void;
-    setSearch: (s: string) => void;
-    setCurrentPage: (p: number) => void;
-    showInactive: boolean;
-    setShowInactive: (v: boolean) => void;
-}
+import { ViewMode, CostSummarySectionProps } from '../types';
 
 export const CostSummarySection: React.FC<CostSummarySectionProps> = ({
     themeColor, headerStyle,
@@ -28,7 +11,8 @@ export const CostSummarySection: React.FC<CostSummarySectionProps> = ({
     showPercentPrimary, setShowPercentPrimary,
     viewMode, setViewMode,
     searchTags, setSearchTags, setSearch, setCurrentPage,
-    showInactive, setShowInactive
+    showInactive, setShowInactive,
+    onExport
 }) => {
     const { t } = useTranslation();
 
@@ -56,6 +40,13 @@ export const CostSummarySection: React.FC<CostSummarySectionProps> = ({
                     >
                         {viewMode === 'PER_UNIT' ? <Divide className="w-3 h-3" /> : <Hash className="w-3 h-3" />}
                         {viewMode === 'PER_UNIT' ? 'Per Unit' : 'Absolute'}
+                    </button>
+                    <button 
+                        onClick={onExport}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors bg-white text-gray-700 border-gray-300 hover:bg-gray-50 shadow-sm"
+                    >
+                        <Download className="w-3 h-3" />
+                        Export
                     </button>
                 </div>
             </div>

@@ -42,16 +42,41 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [editingPromo, setEditingPromo] = useState<PromotionEvent | null>(null);
 
-    // Dynamic Status Calculation
+    // Dynamic Status & Lift Calculation
     const effectivePromotions = useMemo(() => {
         const today = getTodayKeyMelbourne();
         return (promotions || []).map(p => {
             let derivedStatus: 'UPCOMING' | 'ACTIVE' | 'ENDED' = 'ACTIVE';
             if (p.startDate > today) derivedStatus = 'UPCOMING';
             else if (p.endDate < today) derivedStatus = 'ENDED';
-            return { ...p, status: derivedStatus };
+
+            let lift: number | null = null;
+            // Calculate lift for Active and Ended campaigns if data available
+            if (derivedStatus !== 'UPCOMING' && p.items && p.items.length > 0) {
+                let totalUplift = 0;
+                let totalBaseline = 0;
+
+                p.items.forEach(item => {
+                    const product = products.find(prod => prod.sku === item.sku);
+                    const logs = priceHistoryMap?.get(item.sku) || [];
+                    const metrics = computePromoEffectiveness(p, item.sku, logs, priceChangeHistory, product);
+                    
+                    const baseline = metrics.actualUnits - metrics.upliftUnits;
+                    
+                    if (baseline > 0.001) {
+                        totalUplift += metrics.upliftUnits;
+                        totalBaseline += baseline;
+                    }
+                });
+
+                if (totalBaseline > 0.001) {
+                    lift = totalUplift / totalBaseline;
+                }
+            }
+
+            return { ...p, status: derivedStatus, lift };
         });
-    }, [promotions]);
+    }, [promotions, products, priceHistoryMap, priceChangeHistory]);
 
     const handleDeleteClick = (e: React.MouseEvent, id: string, name: string) => {
         e.stopPropagation();
@@ -93,20 +118,22 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
     }, [effectivePromotions, statusFilter]);
 
     const sortedPromotions = useMemo(() => {
-        const getValue = (promo: PromotionEvent, key: string) => {
+        const getValue = (promo: any, key: string) => {
             if (!promo) return 0;
             switch (key) {
                 case 'startDate':
                 case 'endDate':
-                    const dateVal = (promo as any)[key];
+                    const dateVal = promo[key];
                     return dateVal ? new Date(dateVal).getTime() : 0;
                 case 'items':
                     return (promo.items || []).length;
                 case 'status':
                     const priority = { 'ACTIVE': 3, 'UPCOMING': 2, 'ENDED': 1 };
                     return priority[promo.status as keyof typeof priority] || 0;
+                case 'lift':
+                    return promo.lift ?? -9999;
                 default:
-                    return (promo as any)[key];
+                    return promo[key];
             }
         };
         return sortRows(filteredPromotions, sortConfig, getValue);
@@ -131,28 +158,8 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
             if (p.status === 'ACTIVE') activeCount++;
             if (p.status === 'ENDED') {
                 endedCount++;
-                
-                let campaignUplift = 0;
-                let campaignBaseline = 0;
-                let validItems = 0;
-    
-                (p.items || []).forEach(item => {
-                    const product = products.find((prod: Product) => prod.sku === item.sku);
-                    const logs = priceHistoryMap?.get(item.sku) || [];
-                    const metrics = computePromoEffectiveness(p, item.sku, logs, priceChangeHistory, product);
-                    
-                    const baselineUnits = metrics.actualUnits - metrics.upliftUnits;
-                    
-                    if (baselineUnits > 0.01) {
-                        campaignUplift += metrics.upliftUnits;
-                        campaignBaseline += baselineUnits;
-                        validItems++;
-                    }
-                });
-    
-                if (validItems > 0 && campaignBaseline > 0) {
-                    const lift = campaignUplift / campaignBaseline;
-                    lifts.push(lift);
+                if (p.lift !== null) {
+                    lifts.push(p.lift);
                 }
             }
         });
@@ -174,7 +181,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
             positivePct,
             hasLifts
         };
-    }, [effectivePromotions, products, priceHistoryMap, priceChangeHistory]);
+    }, [effectivePromotions]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -252,6 +259,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                             <SortableHeader label="Dates" sortKey="startDate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
                             <th className="p-4">Scope</th>
                             <SortableHeader label="Items" sortKey="items" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                            <SortableHeader label="Lift" sortKey="lift" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                             <SortableHeader label="Status" sortKey="status" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="center" />
                             <th className="p-4 text-right">Actions</th>
                         </tr>
@@ -294,6 +302,15 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                                     <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded">
                                         {(promo.items || []).length}
                                     </span>
+                                </td>
+                                <td className="p-4 text-right">
+                                    {promo.lift !== null ? (
+                                        <span className={`font-bold ${promo.lift > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {promo.lift > 0 ? '+' : ''}{formatPct(promo.lift * 100)}
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-300">-</span>
+                                    )}
                                 </td>
                                 <td className="p-4 text-center">
                                     <StatusBadge status={promo.status} />

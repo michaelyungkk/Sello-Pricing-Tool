@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Product, PromotionEvent, PromotionItem } from '../../../types';
 import { TagSearchInput } from '../../TagSearchInput';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, Minus } from 'lucide-react';
 
 interface ProductSelectorProps {
     products: Product[];
@@ -48,6 +48,19 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
             return matchesTerm(searchQuery);
         });
     }, [products, searchQuery, searchTags, existingSkuSet]);
+
+    const allSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedSkus.has(p.sku));
+    const isIndeterminate = !allSelected && filteredProducts.some(p => selectedSkus.has(p.sku));
+
+    const toggleSelectAll = () => {
+        const newSet = new Set(selectedSkus);
+        if (allSelected) {
+            filteredProducts.forEach(p => newSet.delete(p.sku));
+        } else {
+            filteredProducts.forEach(p => newSet.add(p.sku));
+        }
+        setSelectedSkus(newSet);
+    };
 
     const handleRowClick = (sku: string) => {
         const newSet = new Set(selectedSkus);
@@ -102,7 +115,15 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
                 <table className="w-full text-left text-sm">
                     <thead className="bg-gray-50 font-bold border-b border-gray-200 text-gray-500 uppercase text-[10px] tracking-wider sticky top-0 z-10">
                         <tr>
-                            <th className="p-4 w-10"></th>
+                            <th className="p-4 w-10">
+                                <div 
+                                    className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all ${allSelected || isIndeterminate ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 bg-white'}`}
+                                    onClick={toggleSelectAll}
+                                >
+                                    {allSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                    {isIndeterminate && <Minus className="w-3.5 h-3.5 text-white" />}
+                                </div>
+                            </th>
                             <th className="p-4">SKU / Title</th>
                             <th className="p-4 text-right">CA Price</th>
                             <th className="p-4 text-right">Current Stock</th>

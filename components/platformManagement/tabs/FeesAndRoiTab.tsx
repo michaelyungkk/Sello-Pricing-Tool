@@ -155,18 +155,24 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
-                        {sortRows(roiData, sort as any, (row: any, key: string) => row[key] || 0).map((d: any) => (
-                            <tr key={d.platform} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors">
-                                <td className="p-4 font-bold text-gray-900">{d.platform}</td>
-                                <td className="p-4 text-right font-medium">{formatMoney(d.revenue, 0)}</td>
-                                <td className="p-4 text-right font-medium text-gray-600">{formatMoney(d.profit, 0)}</td>
-                                <td className="p-4 text-right font-bold text-gray-800">{formatPct(d.marginPct)}</td>
-                                <td className="p-4 text-right text-orange-700">{formatMoney(d.adSpend, 0)}</td>
-                                <td className="p-4 text-right text-gray-600">{formatPct(d.tacosPct)}</td>
-                                <td className="p-4 text-right font-bold text-green-700">{formatMoney(d.netAfterAds, 0)}</td>
-                                <td className="p-4 text-right font-bold text-indigo-700">{d.roiAfterAds?.toFixed(2)}x</td>
-                            </tr>
-                        ))}
+                        {sortRows(roiData, sort as any, (row: any, key: string) => row[key] || 0).map((d: any) => {
+                            const isCostBased = pricingRules[d.platform]?.pricingControl === 'PLATFORM_COST_BASED';
+                            return (
+                                <tr key={d.platform} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors">
+                                    <td className="p-4 font-bold text-gray-900">{d.platform}</td>
+                                    <td className="p-4 text-right font-medium">
+                                        {formatMoney(d.revenue, 0)}
+                                        {isCostBased && <span className="block text-[8px] text-slate-400 font-normal uppercase mt-0.5">Cost Basis</span>}
+                                    </td>
+                                    <td className="p-4 text-right font-medium text-gray-600">{formatMoney(d.profit, 0)}</td>
+                                    <td className="p-4 text-right font-bold text-gray-800">{formatPct(d.marginPct)}</td>
+                                    <td className="p-4 text-right text-orange-700">{formatMoney(d.adSpend, 0)}</td>
+                                    <td className="p-4 text-right text-gray-600">{formatPct(d.tacosPct)}</td>
+                                    <td className="p-4 text-right font-bold text-green-700">{formatMoney(d.netAfterAds, 0)}</td>
+                                    <td className="p-4 text-right font-bold text-indigo-700">{d.roiAfterAds?.toFixed(2)}x</td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

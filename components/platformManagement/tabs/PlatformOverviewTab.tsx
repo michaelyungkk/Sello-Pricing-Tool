@@ -74,7 +74,8 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                             <tbody className="divide-y divide-gray-100/50">
                                 {sortedSummaries.map((summary) => { 
                                     const rule = pricingRules[summary.platform]; 
-                                    const isSelected = selectedPlatformKey === summary.platform; 
+                                    const isSelected = selectedPlatformKey === summary.platform;
+                                    const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
                                     return (
                                         <tr key={summary.platform} className={`even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`} onClick={() => setSelectedPlatformKey(isSelected ? null : summary.platform)}>
                                             <td className="p-4">
@@ -85,7 +86,10 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                             </td>
                                             {!selectedPlatformKey && (<td className="p-4"><div className="flex items-center gap-2 text-gray-600"><User className="w-3.5 h-3.5" />{rule?.manager || 'Unassigned'}</div></td>)}
                                             <td className="p-4 text-right font-medium">{summary.skuCount}</td>
-                                            <td className="p-4 text-right font-bold text-indigo-600">{formatMoney(summary.revenue, 0)}</td>
+                                            <td className="p-4 text-right font-bold text-indigo-600">
+                                                {formatMoney(summary.revenue, 0)}
+                                                {isCostBased && <span className="block text-[8px] text-slate-400 font-normal uppercase mt-0.5">Cost Basis</span>}
+                                            </td>
                                             <td className="p-4 text-right font-medium text-gray-700">{formatMoney(summary.profit, 0)}</td>
                                             <td className="p-4 text-right font-bold text-green-700 bg-green-50/10">{formatMoney(summary.netProfit, 0)}</td>
                                             <td className="p-4 text-right"><span className={`font-bold ${summary.marginPct >= 15 ? 'text-green-600' : summary.marginPct >= 0 ? 'text-amber-600' : 'text-red-600'}`}>{formatPct(summary.marginPct)}</span></td>
@@ -109,7 +113,13 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                             </div>
                             <div className="p-5 space-y-5">
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Revenue</span><div className="text-xl font-bold text-gray-900">{formatMoney(selectedSummary.revenue, 0)}</div></div>
+                                    <div>
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">
+                                            Revenue
+                                            {pricingRules[selectedPlatformKey]?.pricingControl === 'PLATFORM_COST_BASED' && <span className="ml-1 text-[8px] bg-slate-100 text-slate-500 px-1 rounded">Cost Basis</span>}
+                                        </span>
+                                        <div className="text-xl font-bold text-gray-900">{formatMoney(selectedSummary.revenue, 0)}</div>
+                                    </div>
                                     <div><span className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Net Profit</span><div className={`text-xl font-bold ${selectedSummary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(selectedSummary.netProfit, 0)}</div></div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">

@@ -1,5 +1,5 @@
 
-import { PriceLog } from '../types';
+import { PriceLog, PricingRules } from '../types';
 
 const KEY = 'sello_platform_ads_config';
 let cache: Record<string, boolean> | null = null;
@@ -41,4 +41,15 @@ export const ensureCapabilities = (platforms: string[], history: PriceLog[]) => 
     changed = true;
   });
   if (changed) localStorage.setItem(KEY, JSON.stringify(cache));
+};
+
+/**
+ * Checks if a platform operates on a Cost-Based Revenue model.
+ * In this model, ERP "sales" revenue is recorded at the agreed cost price (transfer price),
+ * not the final consumer selling price.
+ */
+export const isCostBasedPlatform = (platform: string, rules: PricingRules): boolean => {
+  if (!platform || !rules) return false;
+  const config = rules[platform];
+  return config?.pricingControl === 'PLATFORM_COST_BASED';
 };

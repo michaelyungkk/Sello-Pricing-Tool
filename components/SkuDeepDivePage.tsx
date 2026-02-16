@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Info, AlertTriangle, Package, RotateCcw, Megaphone, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
-import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis } from '../types';
+import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules } from '../types';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 import { calcProfit, calcRevenue, calcAdSpend, marginPct, calcTACoSPct, calcUnits } from '../services/metrics';
 import { buildWindow } from '../services/dateWindow';
@@ -36,6 +36,7 @@ interface SkuDeepDivePageProps {
     initialTimeWindow?: 'yesterday' | '7d' | '30d' | 'custom';
     focus?: string;
     thresholds: ThresholdConfig;
+    pricingRules?: PricingRules;
 }
 
 // Helper to read URL params
@@ -45,7 +46,7 @@ const getActiveSectionFromUrl = () => {
     return params.get('section');
 };
 
-const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onBack, onViewShipments, priceChangeHistory = [], initialTimeWindow, focus, thresholds }) => {
+const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onBack, onViewShipments, priceChangeHistory = [], initialTimeWindow, focus, thresholds, pricingRules }) => {
     const { product, allTimeSales, allTimeQty, transactions = [], refunds = [] } = data;
     
     // Analytics State
@@ -446,7 +447,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         ];
         const chartData: any[] = [];
         const periodStats: any[] = []; 
-        const aggregatedPrices: Record<number, number> = {}; 
+        const aggregatedPoints: Record<number, { qty: number, costBasedCount: number }> = {};
         const safeChanges = Array.isArray(priceChangeHistory) ? priceChangeHistory : [];
         const getEffectiveCA = (dateStr: string) => {
             const txDate = new Date(dateStr).getTime();
@@ -474,16 +475,29 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 const scaledPrice = t.price * VAT_MULTIPLIER;
                 const rawDelta = scaledPrice - effectiveRef;
                 const band = (Math.round(rawDelta / BAND_SIZE) * BAND_SIZE).toFixed(2);
-                if (!groups[band]) groups[band] = { totalQty: 0, totalRev: 0, sumDelta: 0, sumPrice: 0 };
-                groups[band].totalQty += t.velocity;
-                groups[band].totalRev += (scaledPrice * t.velocity);
-                groups[band].sumDelta += (rawDelta * t.velocity);
-                groups[band].sumPrice += (scaledPrice * t.velocity);
-                totalPeriodQty += t.velocity;
-                totalPeriodDelta += (rawDelta * t.velocity);
+                
+                const rule = pricingRules ? pricingRules[t.platform || ''] : undefined;
+                const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
+
+                // Exclude cost-based platforms from Chart Data: ERP sales recorded at agreed cost price; not comparable for sell-price deviation.
+                if (!isCostBased) {
+                    if (!groups[band]) groups[band] = { totalQty: 0, totalRev: 0, sumDelta: 0, sumPrice: 0 };
+                    groups[band].totalQty += t.velocity;
+                    groups[band].totalRev += (scaledPrice * t.velocity);
+                    groups[band].sumDelta += (rawDelta * t.velocity);
+                    groups[band].sumPrice += (scaledPrice * t.velocity);
+                    totalPeriodQty += t.velocity;
+                    totalPeriodDelta += (rawDelta * t.velocity);
+                }
+
                 if (bucket.days === 90) {
                     const p = Number(scaledPrice.toFixed(2));
-                    aggregatedPrices[p] = (aggregatedPrices[p] || 0) + t.velocity;
+                    if (!aggregatedPoints[p]) aggregatedPoints[p] = { qty: 0, costBasedCount: 0 };
+                    aggregatedPoints[p].qty += t.velocity;
+                    
+                    if (isCostBased) {
+                         aggregatedPoints[p].costBasedCount += t.velocity;
+                    }
                 }
             });
             Object.entries(groups).forEach(([b, stats]) => {
@@ -503,11 +517,15 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 });
             }
         });
-        const pointsTable = Object.entries(aggregatedPrices)
-            .map(([price, qty]) => ({ price: parseFloat(price), qty }))
+        const pointsTable = Object.entries(aggregatedPoints)
+            .map(([price, data]) => ({ 
+                price: parseFloat(price), 
+                qty: data.qty,
+                isCostBased: data.costBasedCount > 0 
+            }))
             .sort((a, b) => b.qty - a.qty);
         return { chartData, pointsTable, periodStats, thresholds: { amber: thresholdAmber, red: thresholdRed } };
-    }, [sortedTransactions, priceChangeHistory, product]);
+    }, [sortedTransactions, priceChangeHistory, product, pricingRules]);
 
     const minPricePoint = useMemo(() => {
         if (priceVolumeAnalysis.pointsTable.length === 0) return null;

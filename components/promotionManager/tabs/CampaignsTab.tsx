@@ -53,18 +53,6 @@ export const CampaignsTab: React.FC<CampaignsTabProps> = ({
         if (!selectedPromo) return;
         const updatedItems = (selectedPromo.items || []).map(i => {
             if (i && i.sku.toUpperCase() === sku.toUpperCase()) {
-                // We recalculate derived fields here or let the parent do it, 
-                // but for clean separation, ideally parent or the update function handles deep logic.
-                // For now, we assume simple update. If recalc needed (e.g. promoPrice), it's in the detail view typically.
-                // However, EventDetailView logic was moved inside component in previous step.
-                // Let's rely on EventDetailView's handlers passing correct data back up.
-                // Actually, EventDetailView handler calls onUpdateItem which just passes partials.
-                // The price recalculation logic is actually inside EventDetailView right now in the extracted part?
-                // Let's check... in the original code, handleUpdateItem did recalculation.
-                // I need to replicate that logic here or pass it down.
-                // Since this component is the controller now, I should keep the logic here.
-                
-                // Re-implementing logic from original PromotionPage.tsx:
                 const product = (products || []).find(p => p && p.sku.toUpperCase() === sku.toUpperCase());
                 
                 // Helper needed again...
@@ -131,6 +119,7 @@ export const CampaignsTab: React.FC<CampaignsTabProps> = ({
         return (
             <EventDetailView 
                 promo={selectedPromo}
+                allPromotions={promotions} // Pass full history
                 products={products}
                 priceHistoryMap={priceHistoryMap || new Map()}
                 priceChangeHistory={priceChangeHistory}
