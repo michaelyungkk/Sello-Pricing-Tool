@@ -440,15 +440,37 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         const refPrice = product.caPrice || (product.currentPrice * VAT_MULTIPLIER) || 1; 
         const thresholdAmber = -(refPrice * 0.05); 
         const thresholdRed = -(refPrice * 0.15);   
+        
+        // --- 1. Global Price Point Aggregation (All Time) ---
+        const aggregatedPoints: Record<number, { qty: number, costBasedCount: number }> = {};
+        
+        validTx.forEach(t => {
+             const scaledPrice = t.price * VAT_MULTIPLIER;
+             const p = Number(scaledPrice.toFixed(2));
+             
+             const rule = pricingRules ? pricingRules[t.platform || ''] : undefined;
+             const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
+
+             if (!aggregatedPoints[p]) aggregatedPoints[p] = { qty: 0, costBasedCount: 0 };
+             aggregatedPoints[p].qty += t.velocity;
+             
+             if (isCostBased) {
+                  aggregatedPoints[p].costBasedCount += t.velocity;
+             }
+        });
+
+        // --- 2. Chart Buckets ---
         const buckets = [
             { label: '7 Days', days: 7 },
             { label: '30 Days', days: 30 },
-            { label: '90 Days', days: 90 }
+            { label: '90 Days', days: 90 },
+            { label: 'All', days: 36500 }
         ];
+        
         const chartData: any[] = [];
         const periodStats: any[] = []; 
-        const aggregatedPoints: Record<number, { qty: number, costBasedCount: number }> = {};
         const safeChanges = Array.isArray(priceChangeHistory) ? priceChangeHistory : [];
+        
         const getEffectiveCA = (dateStr: string) => {
             const txDate = new Date(dateStr).getTime();
             const changes = safeChanges
@@ -470,6 +492,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             const groups: Record<string, { totalQty: number, totalRev: number, sumDelta: number, sumPrice: number }> = {};
             let totalPeriodQty = 0;
             let totalPeriodDelta = 0;
+            
             bucketTx.forEach(t => {
                 const effectiveRef = getEffectiveCA(t.date);
                 const scaledPrice = t.price * VAT_MULTIPLIER;
@@ -489,17 +512,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                     totalPeriodQty += t.velocity;
                     totalPeriodDelta += (rawDelta * t.velocity);
                 }
-
-                if (bucket.days === 90) {
-                    const p = Number(scaledPrice.toFixed(2));
-                    if (!aggregatedPoints[p]) aggregatedPoints[p] = { qty: 0, costBasedCount: 0 };
-                    aggregatedPoints[p].qty += t.velocity;
-                    
-                    if (isCostBased) {
-                         aggregatedPoints[p].costBasedCount += t.velocity;
-                    }
-                }
             });
+            
             Object.entries(groups).forEach(([b, stats]) => {
                 chartData.push({
                     period: bucket.label,
@@ -509,6 +523,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                     tooltipPrice: stats.totalQty > 0 ? (stats.sumPrice / stats.totalQty).toFixed(2) : 0
                 });
             });
+            
             if (totalPeriodQty > 0) {
                 periodStats.push({
                     period: bucket.label,
@@ -517,6 +532,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 });
             }
         });
+        
         const pointsTable = Object.entries(aggregatedPoints)
             .map(([price, data]) => ({ 
                 price: parseFloat(price), 
@@ -524,6 +540,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 isCostBased: data.costBasedCount > 0 
             }))
             .sort((a, b) => b.qty - a.qty);
+            
         return { chartData, pointsTable, periodStats, thresholds: { amber: thresholdAmber, red: thresholdRed } };
     }, [sortedTransactions, priceChangeHistory, product, pricingRules]);
 
@@ -687,6 +704,10 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         startKey={startKey}
                         endKey={endKey}
                         themeColor={themeColor}
+                        // Use optimal price (Profit) as priority, fallback to maxVelocity (Velocity) if not set.
+                        // Ensure VAT scaling is applied as it is raw in source.
+                        optimalPrice={(product.optimalPrice || product.maxVelocityPrice || 0) * VAT_MULTIPLIER}
+                        currentPrice={product.currentPrice * VAT_MULTIPLIER}
                     />
                 </div>
             )}
@@ -718,6 +739,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         calcProfit={calcProfit}
                         calcAdSpend={calcAdSpend}
                         marginPct={marginPct}
+                        product={product}
                     />
                 </div>
             )}

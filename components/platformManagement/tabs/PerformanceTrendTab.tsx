@@ -631,7 +631,47 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                 <XAxis dataKey="platform" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
                                 <XAxis dataKey="platform" hide xAxisId="bg" />
                                 <YAxis tickFormatter={formatYAxis} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                <RechartsTooltip cursor={{ fill: 'transparent' }} content={({ active, payload, label }) => (active && payload && payload.length) ? (<div className="bg-gray-900 text-white p-3 rounded-xl shadow-2xl border border-gray-700 text-xs"><div className="font-bold border-b border-gray-700 pb-1 mb-2">{label}</div><div className="space-y-1"><div className="flex justify-between gap-6"><span className="text-gray-400">Current:</span><span className="font-mono font-medium text-white">{trendMetric === 'MARGIN_PCT' ? (payload[0].value as number).toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(payload[0].value as number) : formatMoney(payload[0].value as number)}</span></div><div className="flex justify-between gap-6"><span className="text-gray-400">Prior:</span><span className="font-mono font-medium text-blue-300">{trendMetric === 'MARGIN_PCT' ? (payload[1].value as number).toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(payload[1].value as number) : formatMoney(payload[1].value as number)}</span></div>{payload[0].value !== undefined && payload[1].value !== undefined && (<div className="pt-1 border-t border-gray-700 mt-1 flex justify-between gap-4"><span className="text-gray-400">Change:</span><span className={`font-medium ${(payload[0].value as number) >= (payload[1].value as number) ? 'text-green-400' : 'text-red-400'}`}>{((payload[0].value as number) - (payload[1].value as number) >= 0 ? '+' : '')}{trendMetric === 'MARGIN_PCT' ? ((payload[0].value as number) - (payload[1].value as number)).toFixed(1) + 'pp' : (((((payload[0].value as number) - (payload[1].value as number)) / (Math.abs(payload[1].value as number) || 1)) * 100).toFixed(1) + '%')}</span></div>)}</div></div>) : null} />
+                                <RechartsTooltip cursor={{ fill: 'transparent' }} content={({ active, payload, label }) => {
+                                    if (active && payload && payload.length) {
+                                        const currentItem = payload.find((p: any) => p.name === 'Current');
+                                        const priorItem = payload.find((p: any) => p.name === 'Prior');
+
+                                        const currVal = currentItem ? (currentItem.value as number) : 0;
+                                        const priorVal = priorItem ? (priorItem.value as number) : 0;
+
+                                        return (
+                                            <div className="bg-gray-900 text-white p-3 rounded-xl shadow-2xl border border-gray-700 text-xs">
+                                                <div className="font-bold border-b border-gray-700 pb-1 mb-2">{label}</div>
+                                                <div className="space-y-1">
+                                                    <div className="flex justify-between gap-6">
+                                                        <span className="text-gray-400">Current:</span>
+                                                        <span className="font-mono font-medium text-white">
+                                                            {trendMetric === 'MARGIN_PCT' ? currVal.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(currVal) : formatMoney(currVal)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between gap-6">
+                                                        <span className="text-gray-400">Prior:</span>
+                                                        <span className="font-mono font-medium text-blue-300">
+                                                            {trendMetric === 'MARGIN_PCT' ? priorVal.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(priorVal) : formatMoney(priorVal)}
+                                                        </span>
+                                                    </div>
+                                                    {(currentItem || priorItem) && (
+                                                        <div className="pt-1 border-t border-gray-700 mt-1 flex justify-between gap-4">
+                                                            <span className="text-gray-400">Change:</span>
+                                                            <span className={`font-medium ${currVal >= priorVal ? 'text-green-400' : 'text-red-400'}`}>
+                                                                {(currVal - priorVal >= 0 ? '+' : '')}
+                                                                {trendMetric === 'MARGIN_PCT' 
+                                                                    ? (currVal - priorVal).toFixed(1) + 'pp' 
+                                                                    : (((currVal - priorVal) / (Math.abs(priorVal) || 1)) * 100).toFixed(1) + '%'}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                }} />
                                 <Legend verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: '20px' }} iconType="rect" />
                                 <Bar xAxisId="bg" dataKey="bgValue" barSize={64} isAnimationActive={false} legendType="none">
                                     {barChartData.map((entry: any, index: number) => (

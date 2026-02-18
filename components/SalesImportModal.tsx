@@ -247,6 +247,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 postcode?: string; // New: Receive Postcode
                 logisticPartner?: string; // New: Logistic Partner
                 logisticService?: string; // New: Logistic Service
+                totalPostage: number; // Capture aggregated postage
+                totalExtraFreight: number; // Capture aggregated extra freight
             }> = {};
 
             const discoveredPlatforms = new Set<string>();
@@ -427,10 +429,12 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                 // Aggregating Fees
                 const postageCost = parseVal(postIdx);
+                const extraFreightInc = parseVal(extraIdx);
+
                 item.fees.selling += parseVal(sellingIdx);
                 item.fees.ads += adsCost;
                 item.fees.postage += postageCost;
-                item.fees.extra += parseVal(extraIdx);
+                item.fees.extra += extraFreightInc;
                 item.fees.other += parseVal(otherIdx);
                 item.fees.sub += parseVal(subIdx);
                 item.fees.wms += parseVal(wmsIdx);
@@ -489,12 +493,16 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                             orderId: orderId || undefined, 
                             postcode: postcode || undefined,
                             logisticPartner: partner || undefined,
-                            logisticService: serviceName || undefined
+                            logisticService: serviceName || undefined,
+                            totalPostage: 0,
+                            totalExtraFreight: 0
                         };
                     }
                     dailyAggregated[dailyKey].totalQty += qty;
                     dailyAggregated[dailyKey].totalRevenue += rev;
                     dailyAggregated[dailyKey].totalAds += adsCost;
+                    dailyAggregated[dailyKey].totalPostage += postageCost;
+                    dailyAggregated[dailyKey].totalExtraFreight += extraFreightInc;
                     
                     const dailyWeight = Math.abs(qty) || 0;
                     dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);
@@ -550,7 +558,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         postcode: bucket.postcode,
                         logisticPartner: bucket.logisticPartner,
                         logisticService: bucket.logisticService,
-                        adsSpend: Number(bucket.totalAds.toFixed(4))
+                        adsSpend: Number(bucket.totalAds.toFixed(4)),
+                        realPostage: Number(bucket.totalPostage.toFixed(4)),
+                        realExtraFreight: Number(bucket.totalExtraFreight.toFixed(4))
                     };
 
                     if (!isNaN(finalMargin)) {

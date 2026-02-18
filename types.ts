@@ -227,6 +227,8 @@ export interface PriceLog {
   postcode?: string; // New: Receive Postcode
   logisticPartner?: string; // New: For carrier performance analysis (label_provider)
   logisticService?: string; // New: Granular service level (e.g. Yodel 24, Evri Next Day)
+  realPostage?: number; // Actual Postage cost from transaction
+  realExtraFreight?: number; // Actual Extra Freight income from transaction
 }
 
 export interface HistoryPayload {
@@ -242,6 +244,8 @@ export interface HistoryPayload {
   postcode?: string; // New: Receive Postcode
   logisticPartner?: string; // New: Label Provider
   logisticService?: string; // New: Service Name
+  realPostage?: number; // Actual Postage cost from transaction
+  realExtraFreight?: number; // Actual Extra Freight income from transaction
 }
 
 export interface ShipmentLog {

@@ -6,6 +6,7 @@ import { GradeBadge } from '../../GradeBadge';
 import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
 import { asDateKey } from '../../../services/dateUtils';
 import { VAT_MULTIPLIER } from '../../../constants';
+import { Product } from '../../../types';
 
 interface TransactionLedgerSectionProps {
     ledgerStats: any;
@@ -27,12 +28,12 @@ interface TransactionLedgerSectionProps {
     endKey: string;
     filteredTransactions: any[];
     thresholds: any;
-    // Helper functions for AuditPanel
     calcRevenue: (row: any) => number;
     calcUnits: (row: any) => number;
     calcProfit: (row: any) => number;
     calcAdSpend: (row: any) => number;
     marginPct: (profit: number, revenue: number) => number | null;
+    product: Product; // Keeping product prop for potential future context, but not using for calc
 }
 
 export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> = ({
@@ -59,7 +60,8 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     calcUnits,
     calcProfit,
     calcAdSpend,
-    marginPct
+    marginPct,
+    product
 }) => {
     return (
         <div className="space-y-6">
@@ -219,6 +221,8 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 <th className="p-3 text-right">Price</th>
                                 <th className="p-3 text-right">Qty</th>
                                 <th className="p-3 text-right">Revenue</th>
+                                <th className="p-3 text-right">Ex. Freight</th>
+                                <th className="p-3 text-right">Postage</th>
                                 <th className="p-3 text-right">Ads</th>
                                 <th className="p-3 text-right">Margin</th>
                             </tr>
@@ -229,6 +233,10 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
                                 const isZeroRev = Math.abs(tx.price * tx.velocity) < 0.01 && !isAdRow && !isRefund;
                                 const margin = marginPct(calcProfit(tx), calcRevenue(tx));
+                                
+                                // USE REAL DATA FROM IMPORT (WITH VAT SCALING)
+                                const totalExtraFreight = !isRefund && !isAdRow ? (tx.realExtraFreight || 0) * VAT_MULTIPLIER : 0;
+                                const totalPostage = !isRefund && !isAdRow ? (tx.realPostage || 0) * VAT_MULTIPLIER : 0;
 
                                 return (
                                     <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${
@@ -254,6 +262,12 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                         <td className={`p-3 text-right ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
                                             {formatMoney(tx.price * tx.velocity * VAT_MULTIPLIER)}
                                         </td>
+                                        <td className="p-3 text-right text-green-600 font-medium">
+                                            {totalExtraFreight > 0 ? formatMoney(totalExtraFreight) : '-'}
+                                        </td>
+                                        <td className="p-3 text-right text-orange-600 font-medium">
+                                            {totalPostage > 0 ? formatMoney(totalPostage) : '-'}
+                                        </td>
                                         <td className="p-3 text-right text-orange-600 font-medium">
                                             {(tx.adsSpend || 0) > 0 ? formatMoney(tx.adsSpend * VAT_MULTIPLIER) : '-'}
                                         </td>
@@ -264,7 +278,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 );
                             })}
                             {paginatedTransactions.length === 0 && (
-                                <tr><td colSpan={7} className="p-8 text-center text-gray-400">No transactions match filters</td></tr>
+                                <tr><td colSpan={9} className="p-8 text-center text-gray-400">No transactions match filters</td></tr>
                             )}
                         </tbody>
                     </table>

@@ -2,13 +2,14 @@
 import React, { useState, useMemo } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, RefundLog, SearchChip } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
-import { List, Ship, RotateCcw, DollarSign, Activity, Calendar, ChevronDown } from 'lucide-react';
+import { List, Ship, RotateCcw, DollarSign, Activity, Calendar, ChevronDown, Columns } from 'lucide-react';
 
 import { MasterCatalogueTab } from './tabs/MasterCatalogueTab';
 import { ShipmentsTab } from './tabs/ShipmentsTab';
 import { ReturnsAndRefundsTab } from './tabs/ReturnsAndRefundsTab';
 import { PriceMatrixTab } from './tabs/PriceMatrixTab';
 import { ProductPerformanceTrendTab } from './tabs/ProductPerformanceTrendTab';
+import { PlatformComparisonTab } from './tabs/PlatformComparisonTab';
 
 import { AliasDrawer } from './parts/AliasDrawer';
 import { TagsDrawer } from './parts/TagsDrawer';
@@ -38,7 +39,7 @@ interface ProductManagementPageContainerProps {
     onAnalyzeCarrier: (carrier: string) => void;
 }
 
-type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns';
+type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison';
 
 export const ProductManagementPageContainer: React.FC<ProductManagementPageContainerProps> = ({
     products,
@@ -145,6 +146,14 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         <DollarSign className="w-4 h-4" />
                         Price Matrix
                     </button>
+
+                    <button
+                        onClick={() => setActiveTab('comparison')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'comparison' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Columns className="w-4 h-4" />
+                        Platform Comparison
+                    </button>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -237,6 +246,18 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         pricingRules={pricingRules}
                         promotions={promotions}
                         themeColor={themeColor}
+                    />
+                )}
+
+                {activeTab === 'comparison' && (
+                    <PlatformComparisonTab 
+                        products={products}
+                        priceHistoryMap={priceHistoryMap}
+                        pricingRules={pricingRules}
+                        dateWindow={{ startKey: dateWindow.startKey, endKey: dateWindow.endKey }}
+                        themeColor={themeColor}
+                        deductRefunds={deductRefunds}
+                        refundHistory={refundHistory}
                     />
                 )}
             </div>
