@@ -6,7 +6,8 @@ import { PlatformConfigSection } from './sections/PlatformConfigSection';
 import { SystemBehaviorSection } from './sections/SystemBehaviorSection';
 import { AnalysisLogicSection } from './sections/AnalysisLogicSection';
 import { PersonalizationSection } from './sections/PersonalizationSection';
-import { Globe, Truck, AlertTriangle, Search, Save } from 'lucide-react';
+import { DataNormalizationSection } from './sections/DataNormalizationSection';
+import { Globe, Truck, AlertTriangle, Search, Save, Database } from 'lucide-react';
 
 export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
     const {
@@ -52,6 +53,14 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
                     <Search className="w-4 h-4" />
                     Search Settings
                 </button>
+
+                <button
+                    onClick={() => setActiveTab('normalization')}
+                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'normalization' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <Database className="w-4 h-4" />
+                    Data Normalization
+                </button>
             </div>
 
             <div className="pr-2">
@@ -91,6 +100,18 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
                         themeColor={props.themeColor}
                         headerStyle={props.headerStyle}
                         onRefreshThresholds={props.onRefreshThresholds}
+                    />
+                )}
+
+                {activeTab === 'normalization' && (
+                    <DataNormalizationSection
+                        products={props.products}
+                        brandMap={props.brandMap}
+                        categoryMap={props.categoryMap}
+                        onSaveBrandMap={props.onSaveBrandMap}
+                        onSaveCategoryMap={props.onSaveCategoryMap}
+                        themeColor={props.themeColor}
+                        headerStyle={props.headerStyle}
                     />
                 )}
                 

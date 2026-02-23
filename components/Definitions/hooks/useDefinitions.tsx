@@ -59,7 +59,7 @@ export const useDefinitions = () => {
                             <Database className="w-4 h-4 text-blue-500" /> The 2nd Order Effect
                         </h4>
                         <p className="text-sm text-gray-600 leading-relaxed">
-                            We prioritize "Step 1: Inventory" before "Step 2: Sales". Without a clean Inventory map, sales data is just noise. The Hub ensures every platform order is anchored to a physical Master SKU.
+                            We prioritize &quot;Step 1: Inventory&quot; before &quot;Step 2: Sales&quot;. Without a clean Inventory map, sales data is just noise. The Hub ensures every platform order is anchored to a physical Master SKU.
                         </p>
                     </div>
                 </div>
@@ -76,21 +76,21 @@ export const useDefinitions = () => {
                     <div className="bg-custom-glass rounded-xl p-6 border border-custom-glass">
                         <div className="grid md:grid-cols-3 gap-8">
                             <div className="space-y-3">
-                                <h4 className="font-bold text-sm text-gray-900 uppercase tracking-wider">The "Ground Truth"</h4>
+                                <h4 className="font-bold text-sm text-gray-900 uppercase tracking-wider">The &quot;Ground Truth&quot;</h4>
                                 <p className="text-xs text-gray-600 leading-relaxed">
-                                    Your <strong>ERP Inventory Report</strong> defines the "Master SKU". This includes name, category, brand, COGS, and current warehouse stock.
+                                    Your <strong>ERP Inventory Report</strong> defines the &quot;Master SKU&quot;. This includes name, category, brand, COGS, and current warehouse stock.
                                 </p>
                             </div>
                             <div className="space-y-3">
                                 <h4 className="font-bold text-sm text-gray-900 uppercase tracking-wider">Platform Aliases</h4>
                                 <p className="text-xs text-gray-600 leading-relaxed">
-                                    Platforms like Amazon or eBay often use different SKUs (e.g., <code>SKU-AMZ-FBA</code>). We use "Aliases" to map these back to your Master SKU.
+                                    Platforms like Amazon or eBay often use different SKUs (e.g., <code>SKU-AMZ-FBA</code>). We use &quot;Aliases&quot; to map these back to your Master SKU.
                                 </p>
                             </div>
                             <div className="space-y-3">
                                 <h4 className="font-bold text-sm text-gray-900 uppercase tracking-wider">Velocity Aggregation</h4>
                                 <p className="text-xs text-gray-600 leading-relaxed">
-                                    When you import sales, the system automatically checks aliases. All sales for <code>SKU-AMZ</code> and <code>SKU-EBY</code> are summed into the Master SKU's velocity.
+                                    When you import sales, the system automatically checks aliases. All sales for <code>SKU-AMZ</code> and <code>SKU-EBY</code> are summed into the Master SKU&apos;s velocity.
                                 </p>
                             </div>
                         </div>
@@ -147,7 +147,7 @@ export const useDefinitions = () => {
         {
             id: 'strategy',
             title: '4. Strategy Engine & Safety Logic',
-            desc: 'How the "Brain" makes price recommendations.',
+            desc: 'How the &quot;Brain&quot; makes price recommendations.',
             icon: Cpu,
             color: 'purple',
             content: (
@@ -195,12 +195,12 @@ export const useDefinitions = () => {
                             <ShieldCheck className="w-4 h-4 text-emerald-500" /> AI-Augmented Search
                         </h4>
                         <p className="text-sm text-gray-600 leading-relaxed mb-4">
-                            You don't need to build complex filters. Just type what you're thinking into the Global Search:
+                            You don&apos;t need to build complex filters. Just type what you&apos;re thinking into the Global Search:
                         </p>
                         <div className="space-y-2">
-                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-indigo-600">"Healthy SKUs with margin &gt; 40% on Amazon"</div>
-                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-indigo-600">"Critical stock under £10 in Home Category"</div>
-                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-indigo-600">"Top 20% products by units sold last week"</div>
+                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-indigo-600">&quot;Healthy SKUs with margin &gt; 40% on Amazon&quot;</div>
+                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-indigo-600">&quot;Critical stock under £10 in Home Category&quot;</div>
+                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-indigo-600">&quot;Top 20% products by units sold last week&quot;</div>
                         </div>
                     </div>
                     <div className="bg-custom-glass rounded-xl p-6 border border-custom-glass">
@@ -208,7 +208,7 @@ export const useDefinitions = () => {
                             <TrendingUp className="w-4 h-4 text-purple-500" /> Price Elasticity Insights
                         </h4>
                         <p className="text-sm text-gray-600 leading-relaxed">
-                            Click the "Elasticity" button on any SKU to see a visual map of how price changes affected velocity. It automatically identifies the <strong>Profit Sweet Spot</strong>—the price point where volume and margin are perfectly balanced for maximum daily income.
+                            Click the &quot;Elasticity&quot; button on any SKU to see a visual map of how price changes affected velocity. It automatically identifies the <strong>Profit Sweet Spot</strong>—the price point where volume and margin are perfectly balanced for maximum daily income.
                         </p>
                     </div>
                 </div>
@@ -259,7 +259,7 @@ export const useDefinitions = () => {
                         <div className="space-y-4">
                             <h4 className="font-bold text-sm text-gray-900 flex items-center gap-2"><Layout className="w-4 h-4 text-blue-500" /> Personalization (Liquid Glass)</h4>
                             <p className="text-xs text-gray-600 leading-relaxed">
-                                The Hub uses a high-density "Liquid Glass" design system. You can adjust background images, glass blur, and ambient transparency in <strong>User Profile</strong> to suit your workflow—whether you prefer high-contrast light mode or a immersive dark cockpit.
+                                The Hub uses a high-density &quot;Liquid Glass&quot; design system. You can adjust background images, glass blur, and ambient transparency in <strong>User Profile</strong> to suit your workflow—whether you prefer high-contrast light mode or a immersive dark cockpit.
                             </p>
                         </div>
                     </div>

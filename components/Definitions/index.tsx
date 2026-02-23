@@ -61,7 +61,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                             </DefinitionGrid>
                             <div className="mt-6 bg-blue-50/50 p-4 rounded-lg border border-blue-100 text-sm text-blue-800">
                                 <p className="font-bold mb-3 flex items-center gap-2 border-b border-blue-200 pb-2">
-                                    <Clock className="w-4 h-4" /> The "Runway" Calculation
+                                    <Clock className="w-4 h-4" /> The &quot;Runway&quot; Calculation
                                 </p>
                                 <div className="mb-4">
                                     <p className="mb-2">The core formula for days remaining is:</p>
@@ -71,10 +71,10 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                 </div>
                                 <div className="bg-white/60 p-3 rounded-lg border border-blue-200">
                                     <p className="font-bold mb-2 flex items-center gap-2 text-xs uppercase text-indigo-600">
-                                        <Ship className="w-3 h-3" /> Strategy Engine: "Include Incoming" Toggle
+                                        <Ship className="w-3 h-3" /> Strategy Engine: &quot;Include Incoming&quot; Toggle
                                     </p>
                                     <p className="text-xs text-gray-600 mb-2">
-                                        By default, 'Effective Stock' is your 'On Hand' quantity. In the Strategy Engine, you can toggle a switch to also include 'Incoming Stock' for more aggressive planning.
+                                        By default, &apos;Effective Stock&apos; is your &apos;On Hand&apos; quantity. In the Strategy Engine, you can toggle a switch to also include &apos;Incoming Stock&apos; for more aggressive planning.
                                     </p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div className="bg-white p-2 rounded border border-gray-200">
@@ -137,7 +137,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                             </div>
                             <div className="prose prose-sm text-gray-600 max-w-none">
                                 <p>
-                                    The "Average Daily Sales" metric is the heartbeat of the system. It is calculated based on the sales history you import, within the selected date range (e.g., Last 30 Days).
+                                    The &quot;Average Daily Sales&quot; metric is the heartbeat of the system. It is calculated based on the sales history you import, within the selected date range (e.g., Last 30 Days).
                                 </p>
                                 <div className="bg-amber-50/50 p-3 rounded-lg border border-amber-200 text-sm text-amber-800 my-4">
                                     <p className="font-bold flex items-center gap-2"><Info className="w-4 h-4" /> ERP Override Logic</p>
@@ -169,7 +169,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                 <div className="p-2 bg-pink-50 rounded-lg text-pink-600">
                                     <Layers className="w-5 h-5" />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Data Hierarchy & "Ghost" Products</h3>
+                                <h3 className="text-lg font-semibold text-gray-900">Data Hierarchy &amp; &quot;Ghost&quot; Products</h3>
                             </div>
                             <div className="space-y-4">
                                 <div className="flex gap-4 items-start">
@@ -186,10 +186,10 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                 <div className="flex gap-4 items-start">
                                     <div className="bg-gray-100 p-2 rounded text-gray-500"><Eye className="w-4 h-4" /></div>
                                     <div>
-                                        <h4 className="font-bold text-gray-900 text-sm">Inactive / "Ghost" Products</h4>
+                                        <h4 className="font-bold text-gray-900 text-sm">Inactive / &quot;Ghost&quot; Products</h4>
                                         <p className="text-xs text-gray-500 mt-1">
                                             To keep the dashboard clean, products with <strong>0 Stock</strong> AND <strong>0 Sales</strong> (in the selected period) are hidden by default.
-                                            Toggle the "Show Inactive" eye icon in filters to reveal them.
+                                            Toggle the &quot;Show Inactive&quot; eye icon in filters to reveal them.
                                         </p>
                                     </div>
                                 </div>
@@ -229,7 +229,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                 <div className="bg-gray-50/50 p-3 rounded-lg border border-gray-100 mt-2">
                                     <code className="bg-white px-2 py-1 rounded border text-xs">Fri 28 Nov - Thu 04 Dec</code>
                                     <p className="text-xs text-gray-500 mt-2">
-                                        This full calendar history feeds the "Optimal Price" algorithm, allowing it to see trends over months rather than just weeks.
+                                        This full calendar history feeds the &quot;Optimal Price&quot; algorithm, allowing it to see trends over months rather than just weeks.
                                     </p>
                                 </div>
                             </div>
@@ -249,7 +249,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                 <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100 mt-2">
                                     <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">Comparison Logic</h4>
                                     <p className="text-xs text-gray-600 italic">
-                                        "Current Selected Period vs Immediately Preceding Period of Same Length"
+                                        &quot;Current Selected Period vs Immediately Preceding Period of Same Length&quot;
                                     </p>
                                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>

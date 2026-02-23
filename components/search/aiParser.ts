@@ -79,7 +79,8 @@ export function buildQueryPlanFromText(text: string, context: Context): QueryPla
       'stock', 'inventory', 'runway', 'cover', 'days', 'remaining', 'overstock', 'stockout', 'risk', 'excess',
       'scale', 'winning', 'best', 'top', 'limit', 'show', 'worst', 'bad', 'drop', 'decline', 'wow', 'trend',
       'return', 'returns', 'refund', 'refunds', 'rate', 'rates', 'rr', // Updated to include plurals
-      'sku', 'product', 'item', 'list', 'table',
+      'sku', 'product', 'item', 'list', 'table', 'products', 'items', 'skus',
+      'show', 'me', 'with', 'on', 'the', 'of', 'in', 'for', 'and', 'at', 'from',
       'last', 'month', 'year', 'ytd', 'this', 'all time', 'history',
       'amazon', 'ebay', 'range', 'manomano', 'wayfair', 'onbuy', 'groupon', 'tiktok', 'volume', 'sales', 'revenue',
       'transaction', 'transactions', // Added to prevent these from being seen as product names

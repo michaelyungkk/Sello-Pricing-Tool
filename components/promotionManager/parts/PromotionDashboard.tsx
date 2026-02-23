@@ -122,14 +122,16 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
             if (!promo) return 0;
             switch (key) {
                 case 'startDate':
-                case 'endDate':
+                case 'endDate': {
                     const dateVal = promo[key];
                     return dateVal ? new Date(dateVal).getTime() : 0;
+                }
                 case 'items':
                     return (promo.items || []).length;
-                case 'status':
+                case 'status': {
                     const priority = { 'ACTIVE': 3, 'UPCOMING': 2, 'ENDED': 1 };
                     return priority[promo.status as keyof typeof priority] || 0;
+                }
                 case 'lift':
                     return promo.lift ?? -9999;
                 default:

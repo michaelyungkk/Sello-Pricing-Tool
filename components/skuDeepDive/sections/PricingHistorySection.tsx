@@ -57,7 +57,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                         Price Deviation vs Volume
                     </h3>
                     <div className="flex bg-gray-100 p-1 rounded-lg">
-                        {['7 Days', '30 Days', '90 Days', 'All'].map(p => (
+                        {['7 Days', '14 Days', '30 Days', '90 Days', 'All'].map(p => (
                             <button
                                 key={p}
                                 onClick={() => setChartPeriod(p)}

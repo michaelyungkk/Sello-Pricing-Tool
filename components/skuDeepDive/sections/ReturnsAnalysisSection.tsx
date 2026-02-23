@@ -281,7 +281,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                             const isFallbackDate = returnDateBasis === 'orderDate' && !displayDateKey && r.date;
                                             
                                             return (
-                                                <tr key={r.id || i} className="hover:bg-gray-50/80 transition-colors">
+                                                <tr key={`${r.id || 'ref'}-${i}`} className="hover:bg-gray-50/80 transition-colors">
                                                     <td className="p-3 font-mono opacity-80 whitespace-nowrap">
                                                         {displayDateKey ? new Date(displayDateKey).toLocaleDateString('en-GB') : (r.date ? new Date(r.date).toLocaleDateString('en-GB') : '-')}
                                                         {isFallbackDate && <span className="text-red-400 ml-1 text-[9px] font-bold" title="Order date unavailable, using refund date">*</span>}

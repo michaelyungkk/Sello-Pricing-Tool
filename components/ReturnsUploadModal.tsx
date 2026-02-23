@@ -93,9 +93,9 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
   };
 
   // Helper to generate a deterministic ID based on row content
-  const generateRefundId = (sku: string, date: string, amount: number, qty: number, reason: string | undefined) => {
+  const generateRefundId = (sku: string, date: string, amount: number, qty: number, reason: string | undefined, orderId: string) => {
       const safeReason = (reason || 'unknown').trim().toLowerCase().substring(0, 20); 
-      const signature = `${sku.trim().toUpperCase()}|${date}|${amount.toFixed(2)}|${qty}|${safeReason}`;
+      const signature = `${sku.trim().toUpperCase()}|${orderId}|${date}|${amount.toFixed(2)}|${qty}|${safeReason}`;
       
       let hash = 0;
       for (let i = 0; i < signature.length; i++) {
@@ -118,7 +118,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
       // 1. Map Comments by Order ID
       const commentMap = new Map<string, { cn: string, en: string }>();
       if (commentsRows.length > 1) {
-          const cHeaders = commentsRows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
+          const cHeaders = commentsRows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-/]/g, ''));
           const cOrderIdx = findColPriority(cHeaders, ['outerorderid', 'orderid']);
           const cnIdx = findColPriority(cHeaders, ['commentcn', 'chinesememo']);
           const enIdx = findColPriority(cHeaders, ['commenten', 'englishmemo']);
@@ -139,7 +139,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
 
       // 2. Parse Details
       if (detailsRows.length < 2) throw new Error("Details file empty");
-      const dHeaders = detailsRows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
+      const dHeaders = detailsRows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-/]/g, ''));
       
       const skuIdx = findColPriority(dHeaders, ['skucode', 'sku']);
       const orderIdx = findColPriority(dHeaders, ['outerorderid', 'orderid']);
@@ -182,7 +182,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
               group.freight += amt;
           } else {
               const sku = getCanonicalSku(rawSku);
-              group.items.push({ row, sku, amt });
+              group.items.push({ row, sku, amt, rawSku });
           }
       }
 
@@ -196,7 +196,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
           const totalItemVal = group.items.reduce((sum, it) => sum + it.amt, 0);
           
           group.items.forEach(it => {
-              const { row, sku, amt } = it;
+              const { row, sku, amt, rawSku } = it;
               
               // Allocate freight proportionally by value
               const allocatedFreight = totalItemVal > 0 
@@ -239,7 +239,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
               }
 
               const comments = commentMap.get(oid);
-              const uniqueId = generateRefundId(sku, dateStr, amt, qty, reason);
+              const uniqueId = generateRefundId(rawSku, dateStr, amt, qty, reason, oid);
 
               let resendBase = undefined;
               if (oType.includes('resend') || oid.includes('-resend')) {
@@ -249,6 +249,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
               refunds.push({
                   id: uniqueId,
                   sku,
+                  rawSku,
                   date: dateStr,
                   amount: amt, // Ex-VAT
                   freightAmount: allocatedFreight, // Ex-VAT
@@ -307,7 +308,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
           <div className="flex items-center gap-3">
               <div className="p-2 bg-red-100 rounded-lg text-red-600"><RotateCcw className="w-5 h-5" /></div>
-              <div><h2 className="text-xl font-bold text-gray-900">Import Refunds & Returns</h2><p className="text-xs text-gray-500">Upload the "Return Details" and "Comments" files from ERP.</p></div>
+              <div><h2 className="text-xl font-bold text-gray-900">Import Refunds &amp; Returns</h2><p className="text-xs text-gray-500">Upload the &quot;Return Details&quot; and &quot;Comments&quot; files from ERP.</p></div>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
         </div>

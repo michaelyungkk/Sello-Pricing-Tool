@@ -40,6 +40,8 @@ const sanitizeProduct = (p: any): any => {
     dailyAverageSales: toNumber(p.dailyAverageSales),
     daysRemaining: toNumber(p.daysRemaining, 999),
     category: toString(p.category, "Uncategorized"),
+    // Keep raw values raw here, normalization happens in recalculateProductMetrics or accessors
+    brand: toString(p.brand),
   };
 };
 
@@ -86,6 +88,8 @@ export const normalizeRestoredState = (db: any): any => {
     strategyRules: toObject(d.strategyRules, DEFAULT_STRATEGY_RULES),
     searchConfig: toObject(d.searchConfig, DEFAULT_SEARCH_CONFIG),
     thresholds: toObject(d.thresholds, DEFAULT_THRESHOLDS),
+    brandMap: toObject(d.brandMap),
+    categoryMap: toObject(d.categoryMap),
     
     // Standardize user context
     userProfile: toObject(d.userProfile),

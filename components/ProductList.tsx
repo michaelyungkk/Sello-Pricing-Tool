@@ -274,6 +274,7 @@ const ProductRow = React.memo(({
         </tr>
     );
 });
+ProductRow.displayName = 'ProductRow';
 
 const FilterDropdown = ({ label, icon: Icon, value, onChange, options, themeColor }: any) => (
     <div
@@ -461,7 +462,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
 
     const filteredProducts = useMemo(() => {
         const searchQueryLower = (debouncedSearch || '').toLowerCase();
-        let filtered = (products || []).filter(p => {
+        const filtered = (products || []).filter(p => {
             if (searchTags && searchTags.length > 0) {
                 const matchesTag = searchTags.some(tag => {
                     const t = tag.toLowerCase();

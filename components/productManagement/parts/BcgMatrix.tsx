@@ -161,8 +161,8 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
         const xCenter = (xDomain[0] + xDomain[1]) / 2;
         const yCenter = (yDomain[0] + yDomain[1]) / 2;
 
-        let nextX: [number, number] = [xCenter - newXRange / 2, xCenter + newXRange / 2];
-        let nextY: [number, number] = [yCenter - newYRange / 2, yCenter + newYRange / 2];
+        const nextX: [number, number] = [xCenter - newXRange / 2, xCenter + newXRange / 2];
+        const nextY: [number, number] = [yCenter - newYRange / 2, yCenter + newYRange / 2];
         
         // Clamp Zoom Out to max bounds
         if (direction === 'out' && boundsRef.current) {

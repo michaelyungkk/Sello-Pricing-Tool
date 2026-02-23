@@ -124,8 +124,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platfo
     };
 
     const handleSearch = () => {
-        let currentInput = inputValue.trim();
-        let currentChips = [...chips];
+        const currentInput = inputValue.trim();
+        const currentChips = [...chips];
 
         if (searchMode === 'SKU' && currentInput) {
              const formatted = `SKU: ${currentInput}`;

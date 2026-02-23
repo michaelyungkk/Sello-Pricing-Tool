@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { PricingRules, LogisticsRule, SearchConfig, VelocityLookback, Product, PriceLog, PromotionEvent, ShipmentLog } from '../../types';
+import { PricingRules, LogisticsRule, SearchConfig, VelocityLookback, Product, PriceLog, PromotionEvent, ShipmentLog, AttributeMap } from '../../types';
 
 export interface ConfigurationPageProps {
     currentRules: PricingRules;
@@ -18,6 +18,10 @@ export interface ConfigurationPageProps {
     searchConfig?: SearchConfig;
     velocityLookback: VelocityLookback;
     onRefreshThresholds?: () => void;
+    brandMap: AttributeMap;
+    categoryMap: AttributeMap;
+    onSaveBrandMap: (map: AttributeMap) => void;
+    onSaveCategoryMap: (map: AttributeMap) => void;
 }
 
-export type ConfigTab = 'platforms' | 'logistics' | 'thresholds' | 'search';
+export type ConfigTab = 'platforms' | 'logistics' | 'thresholds' | 'search' | 'normalization';

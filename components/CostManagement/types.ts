@@ -8,7 +8,8 @@ export interface CostManagementPageProps {
     headerStyle: React.CSSProperties;
 }
 
-export type SortKey = keyof SkuCostDetail | 'sku' | 'caPrice';
+// Ensure SortKey extends string for SortState compatibility
+export type SortKey = Extract<keyof SkuCostDetail, string> | 'sku' | 'caPrice';
 
 export type ViewMode = 'ABSOLUTE' | 'PER_UNIT';
 

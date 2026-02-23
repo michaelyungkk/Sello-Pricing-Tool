@@ -89,6 +89,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
                             >
                                 <option value={7}>Last 7 Days</option>
+                                <option value={14}>Last 14 Days</option>
                                 <option value={30}>Last 30 Days</option>
                                 <option value={90}>Last 90 Days</option>
                             </select>

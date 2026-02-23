@@ -357,7 +357,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     }), [processedData, thresholds]);
 
     const workbenchData = useMemo(() => {
-        let data = !selectedAlert ? processedData.filter(p => p.periodRevenue > 0) : alerts[selectedAlert];
+        const data = !selectedAlert ? processedData.filter(p => p.periodRevenue > 0) : alerts[selectedAlert];
         const getValue = (row: any, key: string) => {
             switch(key) {
                 case 'sku': return row.sku;

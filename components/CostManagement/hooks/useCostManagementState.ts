@@ -20,7 +20,7 @@ export const useCostManagementState = (products: Product[]) => {
     const [itemsPerPage, setItemsPerPage] = useState(25);
 
     const filteredAndSorted = useMemo(() => {
-        let result = products.filter(p => {
+        const result = products.filter(p => {
             if (!p.costDetail) return false; // Only show products with cost details uploaded
             if (!showInactive && p.stockLevel <= 0 && p.averageDailySales === 0) return false;
             

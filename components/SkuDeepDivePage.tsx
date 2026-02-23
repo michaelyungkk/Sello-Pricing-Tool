@@ -462,6 +462,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         // --- 2. Chart Buckets ---
         const buckets = [
             { label: '7 Days', days: 7 },
+            { label: '14 Days', days: 14 },
             { label: '30 Days', days: 30 },
             { label: '90 Days', days: 90 },
             { label: 'All', days: 36500 }

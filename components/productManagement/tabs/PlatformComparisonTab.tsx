@@ -9,6 +9,7 @@ import { calcRevenue, calcProfit, calcUnits } from '../../../services/metrics';
 import { formatPct, formatNumber, formatMoney } from '../../../utils/format';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { GradeBadge } from '../../GradeBadge';
+import { hexToRgb } from '../../../utils/color';
 import * as XLSX from 'xlsx';
 
 interface PlatformComparisonTabProps {
@@ -601,15 +602,22 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                 <th className="p-0 border-r border-gray-200 bg-gray-50"></th>
                                 {selectedPlatforms.map(p => (
                                     <React.Fragment key={`${p}-sub`}>
-                                        {visibleColumns.map(col => (
+                                        {visibleColumns.map(col => {
+                                            const platformColor = pricingRules[p]?.color || '#9ca3af';
+                                            const rgb = hexToRgb(platformColor);
+                                            const headerBgStyle = rgb ? { backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)` } : {};
+
+                                            return (
                                             <th 
                                                 key={`${p}-${col}`}
                                                 className="px-2 py-1 text-right border-b border-gray-200 bg-gray-50/50 text-gray-500 cursor-pointer hover:bg-gray-100 min-w-[60px] border-r border-gray-100 last:border-gray-200" 
                                                 onClick={(e) => handleSort(`${p}_${colConfig[col].key}`, e)}
+                                                style={headerBgStyle}
                                             >
                                                 {colConfig[col].label} {getSortIndicator(`${p}_${colConfig[col].key}`)}
                                             </th>
-                                        ))}
+                                            );
+                                        })}
                                     </React.Fragment>
                                 ))}
                             </tr>
@@ -646,36 +654,46 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                             const pm = row[`${p}_pm`];
                                             const pmClass = pm < 0 ? 'text-red-600 bg-red-50' : pm >= 15 ? 'text-green-600 bg-green-50' : 'text-amber-600';
                                             const hasActivity = qty > 0;
+                                            
+                                            // Platform Tint
+                                            const platformColor = pricingRules[p]?.color || '#9ca3af';
+                                            const rgb = hexToRgb(platformColor);
+                                            const bgStyle = rgb ? { backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)` } : {};
+                                            
+                                            const hasPmBg = pm < 0 || pm >= 15;
 
                                             return (
                                                 <React.Fragment key={p}>
                                                     {visibleColumns.includes('qty') && (
-                                                        <td className="px-2 py-3 text-right font-medium text-gray-700 border-gray-50 text-xs border-r border-gray-50">
+                                                        <td className="px-2 py-3 text-right font-medium text-gray-700 border-gray-50 text-xs border-r border-gray-100" style={bgStyle}>
                                                             {hasActivity ? qty : <span className="text-gray-300">-</span>}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('share') && (
-                                                        <td className="px-2 py-3 text-right text-xs text-gray-500 border-gray-50 border-r border-gray-50">
+                                                        <td className="px-2 py-3 text-right text-xs text-gray-500 border-gray-50 border-r border-gray-50" style={bgStyle}>
                                                             {hasActivity ? `${row[`${p}_share`].toFixed(0)}%` : <span className="text-gray-300">-</span>}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('pm') && (
-                                                        <td className={`px-2 py-3 text-right text-xs font-bold border-r border-gray-50 ${hasActivity ? pmClass : 'text-gray-300'}`}>
+                                                        <td 
+                                                            className={`px-2 py-3 text-right text-xs font-bold border-r border-gray-50 ${hasActivity ? pmClass : 'text-gray-300'}`}
+                                                            style={hasPmBg ? {} : bgStyle}
+                                                        >
                                                             {hasActivity ? `${pm.toFixed(0)}%` : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('avgPrice') && (
-                                                        <td className="px-2 py-3 text-right text-xs text-gray-600 border-r border-gray-50">
+                                                        <td className="px-2 py-3 text-right text-xs text-gray-600 border-r border-gray-50" style={bgStyle}>
                                                             {hasActivity ? `£${row[`${p}_avgPrice`].toFixed(2)}` : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('revenue') && (
-                                                        <td className="px-2 py-3 text-right text-xs text-indigo-600 font-medium border-r border-gray-50">
+                                                        <td className="px-2 py-3 text-right text-xs text-indigo-600 font-medium border-r border-gray-50" style={bgStyle}>
                                                             {hasActivity ? formatMoney(row[`${p}_revenue`], 0) : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('profit') && (
-                                                        <td className={`px-2 py-3 text-right text-xs font-bold border-r border-gray-100 ${row[`${p}_profit`] >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                        <td className={`px-2 py-3 text-right text-xs font-bold border-r border-gray-100 ${row[`${p}_profit`] >= 0 ? 'text-green-600' : 'text-red-600'}`} style={bgStyle}>
                                                             {hasActivity ? formatMoney(row[`${p}_profit`], 0) : '-'}
                                                         </td>
                                                     )}

@@ -1,143 +1,30 @@
 
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { Product, AnalysisResult, PlatformConfig, RefundLog, PriceLog, PricingRules } from "../types";
+import { Product, AnalysisResult, PlatformConfig } from "../types";
 import { buildQueryPlanFromText } from "../components/search/aiParser";
 import { QueryPlan } from "../components/search/queryPlan";
 import { ThresholdConfig, DEFAULT_THRESHOLDS } from "../services/thresholdsConfig";
 import { VAT_MULTIPLIER } from "../constants";
 
-// ... (Existing imports and Analyze function)
-// Initialize the Gemini AI client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-const MODEL_ID = "gemini-3-pro-preview";
-
-export const analyzePriceAdjustment = async (product: Product, platformRule: PlatformConfig, context?: string, thresholds: ThresholdConfig = DEFAULT_THRESHOLDS): Promise<AnalysisResult> => {
-  const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General');
+/**
+ * Placeholder for price adjustment analysis.
+ * The AI-driven analysis has been removed as requested.
+ */
+export const analyzePriceAdjustment = async (product: Product, _platformRule: PlatformConfig, _context?: string, _thresholds: ThresholdConfig = DEFAULT_THRESHOLDS): Promise<AnalysisResult> => {
   const currentPriceWithVat = (product.currentPrice || 0) * VAT_MULTIPLIER;
+  const velocity = product.averageDailySales || 0.1;
+  const stock = product.stockLevel;
+  const daysRemaining = stock / velocity;
 
-  // --- AI PROMPT CONSTRUCTION ---
-  const primaryGoal = context === 'margin'
-    ? `The primary goal is to resolve a critical low margin issue on this platform. The current price of £${currentPriceWithVat.toFixed(2)} is not profitable enough given the costs. Your recommendation should prioritize increasing the price to improve the margin. Balance this against sales velocity; we want to be more profitable, not stall sales completely. The low margin threshold is ${thresholds.marginBelowTargetPct}%.`
-    : `The primary goal is to optimize inventory runway. We need to ensure we do not run out of stock before the replenishment arrives, but also avoid holding too much stock if sales are slow. The stockout risk buffer is ${thresholds.stockoutRunwayMultiplier}x lead time.`;
-
-  const prompt = `
-    Act as a senior inventory and pricing analyst for an ecommerce business.
-    
-    Current Scenario:
-    Product: ${product.name}
-    Platform: ${platformName}
-    Current Price: £${currentPriceWithVat.toFixed(2)} (Gross, VAT inclusive)
-    Cost of Goods (COGS): £${(product.costPrice || 0).toFixed(2)} (Net, VAT exclusive)
-    Current Stock Level: ${product.stockLevel} units
-    Average Daily Sales Velocity: ${product.averageDailySales.toFixed(2)} units/day
-    Replenishment Lead Time: ${product.leadTimeDays} days
-
-    Primary Goal:
-    ${primaryGoal}
-
-    Strategic Rules & Costs for ${platformName}:
-    - Platform Commission Fee: ${platformRule.commission}% of the gross selling price.
-    - Other known costs per unit (VAT exclusive):
-      - Average Ad Fee: £${(product.adsFee || 0).toFixed(2)}
-      - Average Postage: £${(product.postage || 0).toFixed(2)}
-      - WMS/Other Fees: £${((product.wmsFee || 0) + (product.otherFee || 0)).toFixed(2)}
-    - Extra Freight Income per unit (VAT exclusive): £${(product.extraFreight || 0).toFixed(2)}
-
-    Task:
-    1. Analyze the situation based on the Primary Goal.
-    2. If the goal is to fix margin, calculate the current net margin and determine a new price that achieves a healthier margin (e.g., above 10-15%) while considering market elasticity.
-    3. If the goal is inventory optimization, calculate "Days of Stock Remaining" (Stock / Daily Sales) and compare it against "Replenishment Lead Time".
-    4. Provide a clear reasoning for your recommendation, explaining the trade-offs.
-
-    Return a JSON object with the recommended price, the percentage change, the calculated days remaining, a status (Critical, Warning, Healthy, Overstock), and a short strategic reasoning sentence.
-  `;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_ID,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            recommendedPrice: { type: Type.NUMBER, description: "The new suggested price per unit" },
-            percentageChange: { type: Type.NUMBER, description: "The percentage change (positive for increase, negative for decrease)" },
-            daysRemaining: { type: Type.NUMBER, description: "Calculated days until current stock is depleted at current rate" },
-            status: { type: Type.STRING, enum: ["Critical", "Warning", "Healthy", "Overstock"], description: "Inventory health status" },
-            reasoning: { type: Type.STRING, description: "A concise explanation of the strategy." }
-          },
-          required: ["recommendedPrice", "percentageChange", "daysRemaining", "status", "reasoning"]
-        }
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No response from AI");
-
-    const result = JSON.parse(text);
-    
-    return {
-      productId: product.id,
-      ...result
-    };
-
-  } catch (error) {
-    console.warn("Gemini Analysis Failed (Quota or Error). Switching to Offline Simulation Engine.", error);
-    
-    // --- OFFLINE SIMULATION ENGINE ---
-    const velocity = product.averageDailySales || 0.1; // Prevent div by zero
-    const stock = product.stockLevel;
-    const leadTime = product.leadTimeDays;
-    const daysRemaining = stock / velocity;
-    const currentPrice = currentPriceWithVat;
-
-    // Simulate Calculation
-    let newPrice = currentPrice;
-    let pctChange = 0;
-    let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
-    let reasoning = "";
-
-    const criticalThreshold = leadTime * thresholds.stockoutRunwayMultiplier;
-    const overstockThreshold = thresholds.overstockDays;
-
-    if (daysRemaining < criticalThreshold) {
-        // Stockout Risk: Increase Price to slow down
-        status = 'Critical';
-        pctChange = 10; // +10%
-        newPrice = currentPrice * 1.10;
-        reasoning = `[OFFLINE MODE] Simulated Action: Inventory covers ${daysRemaining.toFixed(0)} days, which is below the critical threshold of ${criticalThreshold.toFixed(0)} days. Recommendation: Increase price by 10% to slow velocity and prevent stockout.`;
-    } else if (daysRemaining > overstockThreshold) {
-        // Overstock: Decrease Price
-        status = 'Overstock';
-        pctChange = -5; // -5%
-        newPrice = currentPrice * 0.95;
-        reasoning = `[OFFLINE MODE] Simulated Action: Massive overstock detected (${daysRemaining.toFixed(0)} days cover > ${overstockThreshold}). Recommendation: Decrease price by 5% to boost velocity and free up capital.`;
-    } else if (daysRemaining < criticalThreshold * 1.5) {
-        status = 'Warning';
-        reasoning = `[OFFLINE MODE] Simulated Action: Stock levels are tight (${daysRemaining.toFixed(0)} days). Monitor closely, but no immediate price action required.`;
-    } else {
-        status = 'Healthy';
-        reasoning = `[OFFLINE MODE] Simulated Action: Inventory levels are healthy. Maintain current price strategy.`;
-    }
-
-    // Round to .99 for realism
-    newPrice = Math.ceil(newPrice) - 0.01;
-
-    // Simulate Network Delay for realism
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    return {
-      productId: product.id,
-      recommendedPrice: newPrice,
-      percentageChange: pctChange,
-      daysRemaining: Math.floor(daysRemaining),
-      status: status,
-      reasoning: reasoning
-    };
-  }
+  // Simple deterministic logic as a placeholder
+  return {
+    productId: product.id,
+    recommendedPrice: currentPriceWithVat,
+    percentageChange: 0,
+    daysRemaining: Math.floor(daysRemaining),
+    status: daysRemaining < 14 ? 'Critical' : 'Healthy',
+    reasoning: "Analysis functionality has been disabled. This is a placeholder result based on current stock cover."
+  };
 };
 
 // --- SEARCH PARSER ---
@@ -307,7 +194,7 @@ export const parseSearchQuery = async (query: string): Promise<SearchIntent> => 
  */
 const legacyParseSearchQuery = (query: string): SearchIntent => {
   const lower = query.toLowerCase().trim();
-  let intent: SearchIntent = {
+  const intent: SearchIntent = {
     targetData: 'inventory', // Default context
     filters: [],
     limit: 50,
