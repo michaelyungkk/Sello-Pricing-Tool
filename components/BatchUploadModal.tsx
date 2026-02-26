@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, FileText, Database, ArrowRight, Coins, TrendingUp, TrendingDown } from 'lucide-react';
+import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, Database, Coins, TrendingUp, TrendingDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
 import { useTranslation } from 'react-i18next';
@@ -110,7 +110,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
         if (rows.length < 2) throw new Error("File empty.");
 
         // Clean headers: lower case, remove spaces/underscores/special chars for robust matching
-        const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
+        const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-/]/g, ''));
         
         // Mapping helpers
         const findCol = (terms: string[]) => headers.findIndex(h => terms.some(t => h.includes(t)));

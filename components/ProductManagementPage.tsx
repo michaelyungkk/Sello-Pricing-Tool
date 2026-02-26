@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { ProductManagementPageContainer } from './productManagement/ProductManagementPageContainer';
-import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, RefundLog, SearchChip } from '../types';
+import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, RefundLog, SearchChip, SkuFamily } from '../types';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 
 interface ProductManagementPageProps {
@@ -24,6 +24,10 @@ interface ProductManagementPageProps {
     deductRefunds: boolean;
     setDeductRefunds: (v: boolean) => void;
     onAnalyzeCarrier: (carrier: string) => void;
+    skuFamilies: SkuFamily[];
+    setSkuFamilies: (families: SkuFamily[]) => void;
+    pendingFamilySuggestions: SkuFamily[];
+    setPendingFamilySuggestions: (suggestions: SkuFamily[]) => void;
 }
 
 const ProductManagementPage: React.FC<ProductManagementPageProps> = (props) => {

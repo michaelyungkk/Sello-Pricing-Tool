@@ -138,7 +138,7 @@ export const ConfigParametersPanel: React.FC<ConfigParametersPanelProps> = ({ co
                     </div>
                     <div className="bg-gray-50/50 p-2 rounded text-xs text-gray-600 mb-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <Info className="w-3 h-3" /><span>Include "New Products"?</span>
+                            <Info className="w-3 h-3" /><span>Include &quot;New Products&quot;?</span>
                         </div>
                         <button 
                             onClick={() => toggleBool(['decrease', 'includeNewProducts'])} 

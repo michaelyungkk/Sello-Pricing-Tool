@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Product, SkuCostDetail } from '../../../types';
+import { Product } from '../../../types';
 import { SortState } from '../../../utils/tableSort';
 import { SortKey, ViewMode } from '../types';
 import { SortableHeader } from '../../common/SortableHeader';

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { Upload, X, Check, AlertCircle, Loader2, Ship, Calendar, Box, ArrowRight, Clock, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Upload, X, Check, AlertCircle, Loader2, Ship, Calendar, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product, ShipmentDetail } from '../types';
 
@@ -120,7 +120,7 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
         if (rows.length < 2) throw new Error("File empty.");
 
         // Headers cleaning
-        const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-\/]/g, ''));
+        const headers = rows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-/]/g, ''));
         
         // --- Column Mapping ---
         const findCol = (terms: string[]) => headers.findIndex(h => terms.some(t => h.includes(t)));
@@ -158,8 +158,8 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                 const existing = existingContainerMap.get(id);
                 let changeType: ChangeType = existing ? 'UNCHANGED' : 'NEW';
                 let daysDiff = 0;
-                let oldEta = existing?.eta;
-                let oldStatus = existing?.status;
+                const oldEta = existing?.eta;
+                const oldStatus = existing?.status;
 
                 if (existing) {
                     // 1. Check ETA Difference

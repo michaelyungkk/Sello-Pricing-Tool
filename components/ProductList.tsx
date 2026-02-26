@@ -1,31 +1,32 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, PricingRules } from '../types';
+import { Product, PricingRules, SkuFamily, PriceLog } from '../types';
 import { VAT_MULTIPLIER } from '../constants';
 import { TagSearchInput } from './TagSearchInput';
 import { GradeBadge } from './GradeBadge';
-import { Search, Filter, AlertCircle, CheckCircle, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, Save, RotateCcw, ArrowUpDown, ChevronUp, ChevronDown, SlidersHorizontal, Clock, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, Lock, RefreshCw, Percent, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart, Zap } from 'lucide-react';
+import { Search, Filter, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, SlidersHorizontal, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart, Zap } from 'lucide-react';
 import { SortState, sortRows } from '../utils/tableSort';
 import { SortableHeader } from './common/SortableHeader';
 
 interface ProductListProps {
     products: Product[];
+    skuFamilies?: SkuFamily[]; // Added
     onEditAliases?: (product: Product) => void;
     onEditTags?: (product: Product) => void;
-    onViewShipments?: (sku: string) => void; // New Callback
-    onViewElasticity?: (product: Product) => void; // New Callback for Elasticity
-    onDeepDive?: (sku: string) => void; // New callback for Deep Dive
-    dateLabels?: { current: string, last: string };
+    onViewShipments?: (sku: string) => void;
+    onViewElasticity?: (product: Product) => void;
+    onDeepDive?: (sku: string) => void;
     pricingRules?: PricingRules;
     themeColor: string;
+    priceHistoryMap: Map<string, PriceLog[]>;
 }
 
 const RecommendationTooltip = ({ product, rect }: { product: Product, rect: DOMRect }) => {
     // Add Scroll Offset to ensure fixed position works correctly on scrolled pages
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
-    
+
     const style: React.CSSProperties = {
         position: 'absolute',
         top: `${rect.top + scrollY}px`,
@@ -90,6 +91,7 @@ interface ProductRowProps {
     hoveredProduct: { id: string; rect: DOMRect } | null;
     handleMouseEnter: (id: string, e: React.MouseEvent) => void;
     handleMouseLeave: () => void;
+    priceHistoryMap: Map<string, PriceLog[]>;
 }
 
 const ProductRow = React.memo(({
@@ -101,15 +103,27 @@ const ProductRow = React.memo(({
     onViewElasticity,
     onDeepDive,
     handleMouseEnter,
-    handleMouseLeave
+    handleMouseLeave,
+    priceHistoryMap
 }: ProductRowProps) => {
+
+    const { totalAdSpend, totalRevenue, acos } = useMemo(() => {
+        if (!priceHistoryMap || !priceHistoryMap.get) return { totalAdSpend: 0, totalRevenue: 0, acos: null };
+        const logs = priceHistoryMap.get(product.sku) || [];
+        const adSpend = logs.reduce((sum, l) => sum + (l.adsSpend || 0), 0);
+        const revenue = logs.reduce((sum, l) =>
+            sum + (l.price * (l.velocity || 0) * VAT_MULTIPLIER), 0);
+        const acosVal = revenue > 0 ? (adSpend / revenue) * 100 : null;
+        return { totalAdSpend: adSpend, totalRevenue: revenue, acos: acosVal };
+    }, [product.sku, priceHistoryMap]);
+
     // Apply 20% VAT Uplift for Display using shared constant
     const currentPriceWithVat = (product.currentPrice || 0) * VAT_MULTIPLIER;
     const oldPriceWithVat = product.oldPrice ? product.oldPrice * VAT_MULTIPLIER : null;
-    
+
     // Optimal Price Logic (Profit)
     const optimalPriceWithVat = product.optimalPrice ? product.optimalPrice * VAT_MULTIPLIER : null;
-    
+
     // Max Velocity Price Logic (Volume Fallback)
     const volumePriceWithVat = product.maxVelocityPrice ? product.maxVelocityPrice * VAT_MULTIPLIER : null;
 
@@ -182,13 +196,13 @@ const ProductRow = React.memo(({
                             <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
                         ))}
                         {(product.seasonTags?.length || 0) > 2 && (
-                            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.seasonTags?.length || 0) - 2 }</span>
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{(product.seasonTags?.length || 0) - 2}</span>
                         )}
                         {product.festivalTags?.slice(0, 2).map(tag => (
                             <span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>
                         ))}
                         {(product.festivalTags?.length || 0) > 2 && (
-                            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{ (product.festivalTags?.length || 0) - 2 }</span>
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{(product.festivalTags?.length || 0) - 2}</span>
                         )}
                     </div>
                 </div>
@@ -225,17 +239,17 @@ const ProductRow = React.memo(({
                     <span className="text-gray-300">—</span>
                 )}
             </td>
-            
+
             <td className="px-4 py-3 text-right">
                 <div className="flex flex-col items-end gap-0.5">
                     <span className="font-bold text-gray-900">{product.stockLevel}</span>
                     {product.incomingStock && product.incomingStock > 0 ? (
-                        <button 
+                        <button
                             onClick={(e) => {
                                 e.stopPropagation();
                                 if (onViewShipments) onViewShipments(product.sku);
                             }}
-                            className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center gap-1 hover:bg-indigo-100 hover:border-indigo-300 transition-colors cursor-pointer" 
+                            className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center gap-1 hover:bg-indigo-100 hover:border-indigo-300 transition-colors cursor-pointer"
                             title="Click to view incoming shipments"
                         >
                             <Ship className="w-3 h-3" />
@@ -245,7 +259,7 @@ const ProductRow = React.memo(({
                 </div>
             </td>
 
-            <td 
+            <td
                 className="px-4 py-3 text-right cursor-help"
                 onMouseEnter={(e) => handleMouseEnter(product.id, e)}
                 onMouseLeave={handleMouseLeave}
@@ -270,6 +284,23 @@ const ProductRow = React.memo(({
                         {product.returnRate.toFixed(1)}%
                     </div>
                 ) : <span className="text-gray-300">-</span>}
+            </td>
+            <td className="px-4 py-3 text-right">
+                <div className="flex flex-col items-end">
+                    <span className="text-orange-600 font-bold">
+                        £{(totalAdSpend || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    {totalAdSpend > 0 ? (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold mt-1 ${acos === null ? 'text-gray-400 italic' :
+                            acos < 15 ? 'text-green-600 bg-green-50' :
+                                acos <= 30 ? 'text-amber-600 bg-amber-50' : 'text-red-600 bg-red-50'
+                            }`}>
+                            {acos !== null ? `${acos.toFixed(1)}%` : 'No revenue'}
+                        </span>
+                    ) : (
+                        <span className="text-[10px] text-gray-400 italic">No spend</span>
+                    )}
+                </div>
             </td>
         </tr>
     );
@@ -380,7 +411,169 @@ const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, t
     );
 };
 
-const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases, onEditTags, onViewShipments, onViewElasticity, onDeepDive, dateLabels, pricingRules, themeColor }) => {
+const FamilyGridView = ({
+    products,
+    skuFamilies,
+    themeColor,
+    collapsedFamilies,
+    setCollapsedFamilies,
+    onEditAliases,
+    onEditTags,
+    onViewShipments,
+    onViewElasticity,
+    onDeepDive,
+    hoveredProduct,
+    handleMouseEnter,
+    handleMouseLeave,
+    priceHistoryMap
+}: any) => {
+    const familiesWithProducts = useMemo(() => {
+        const familyMap = new Map<string, { family: SkuFamily, items: Product[] }>();
+        const ungrouped: Product[] = [];
+
+        if (!skuFamilies) return { families: [], ungrouped: products || [] };
+
+        const skuToFamily = new Map<string, SkuFamily>();
+        skuFamilies.forEach((f: SkuFamily) => {
+            if (!f || !f.memberSkus) return;
+            f.memberSkus.forEach((sku: string) => {
+                skuToFamily.set(sku, f);
+            });
+        });
+
+        (products || []).forEach((p: Product) => {
+            if (!p) return;
+            const family = skuToFamily.get(p.sku);
+            if (family) {
+                if (!familyMap.has(family.id)) {
+                    familyMap.set(family.id, { family, items: [] });
+                }
+                familyMap.get(family.id)!.items.push(p);
+            } else {
+                ungrouped.push(p);
+            }
+        });
+
+        return {
+            families: Array.from(familyMap.values()),
+            ungrouped
+        };
+    }, [products, skuFamilies]);
+
+    const toggleFamily = (id: string) => {
+        const next = new Set(collapsedFamilies);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setCollapsedFamilies(next);
+    };
+
+    return (
+        <tbody className="divide-y divide-gray-100/50">
+            {familiesWithProducts.families.map(({ family, items }) => {
+                const totalStock = items.reduce((sum, p) => sum + (p.stockLevel || 0), 0);
+                const avgVelocity = items.reduce((sum, p) => sum + (p.averageDailySales || 0), 0) / (items.length || 1);
+                const lastUpdates = items.map(p => p.lastUpdated).filter(Boolean).map(d => new Date(d!).getTime());
+                let updateRange = '-';
+                if (lastUpdates.length > 0) {
+                    const minUpdate = new Date(Math.min(...lastUpdates)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                    const maxUpdate = new Date(Math.max(...lastUpdates)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                    updateRange = minUpdate === maxUpdate ? maxUpdate : `${minUpdate} - ${maxUpdate}`;
+                }
+                const isCollapsed = collapsedFamilies.has(family.id);
+
+                return (
+                    <React.Fragment key={family.id}>
+                        <tr
+                            className="bg-gray-100/80 border-y border-gray-200 cursor-pointer hover:bg-gray-200/80 transition-colors group"
+                            onClick={() => toggleFamily(family.id)}
+                        >
+                            <td className="px-4 py-3" colSpan={2}>
+                                <div className="flex items-center gap-3">
+                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+                                    <div className="flex items-center gap-2">
+                                        <Layers className="w-4 h-4 text-indigo-500" />
+                                        <span className="font-bold text-gray-900">{family.name}</span>
+                                        <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">{items.length} SKUs</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td colSpan={3} className="px-4 py-3">
+                                <div className="flex items-center gap-6 text-xs font-medium text-gray-500">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] uppercase text-gray-400">Total Stock</span>
+                                        <span className="font-bold text-gray-700">{totalStock}</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] uppercase text-gray-400">Avg. Velocity</span>
+                                        <span className="font-bold text-gray-700">{avgVelocity.toFixed(1)}/day</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td colSpan={5} className="px-4 py-3 text-right">
+                                <div className="flex flex-col items-end pr-4">
+                                    <span className="text-[10px] uppercase text-gray-400">Last Synced</span>
+                                    <span className="font-bold text-gray-700">{updateRange}</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {!isCollapsed && items.map(p => (
+                            <ProductRow
+                                key={p.id}
+                                product={p}
+                                themeColor={themeColor}
+                                onEditAliases={onEditAliases}
+                                onEditTags={onEditTags}
+                                onViewShipments={onViewShipments}
+                                onViewElasticity={onViewElasticity}
+                                onDeepDive={onDeepDive}
+                                hoveredProduct={hoveredProduct}
+                                handleMouseEnter={handleMouseEnter}
+                                handleMouseLeave={handleMouseLeave}
+                                priceHistoryMap={priceHistoryMap}
+                            />
+                        ))}
+                    </React.Fragment>
+                );
+            })}
+
+            {familiesWithProducts.ungrouped.length > 0 && (
+                <React.Fragment key="ungrouped">
+                    <tr
+                        className="bg-gray-50 border-y border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
+                        onClick={() => toggleFamily('ungrouped')}
+                    >
+                        <td className="px-4 py-3" colSpan={10}>
+                            <div className="flex items-center gap-3">
+                                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${collapsedFamilies.has('ungrouped') ? '-rotate-90' : ''}`} />
+                                <span className="font-bold text-gray-600 italic">Ungrouped ({familiesWithProducts.ungrouped.length} SKUs)</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {!collapsedFamilies.has('ungrouped') && familiesWithProducts.ungrouped.map(p => (
+                        <ProductRow
+                            key={p.id}
+                            product={p}
+                            themeColor={themeColor}
+                            onEditAliases={onEditAliases}
+                            onEditTags={onEditTags}
+                            onViewShipments={onViewShipments}
+                            onViewElasticity={onViewElasticity}
+                            onDeepDive={onDeepDive}
+                            hoveredProduct={hoveredProduct}
+                            handleMouseEnter={handleMouseEnter}
+                            handleMouseLeave={handleMouseLeave}
+                            priceHistoryMap={priceHistoryMap}
+                        />
+                    ))}
+                </React.Fragment>
+            )}
+        </tbody>
+    );
+};
+
+const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = [], onEditAliases, onEditTags, onViewShipments, onViewElasticity, onDeepDive, pricingRules, themeColor, priceHistoryMap }) => {
+    const [viewMode, setViewMode] = useState<'LIST' | 'FAMILY'>('LIST');
+    const [collapsedFamilies, setCollapsedFamilies] = useState<Set<string>>(new Set(['ungrouped']));
     const [searchQuery, setSearchQuery] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -402,7 +595,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
 
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [velocityFilter, setVelocityFilter] = useState<{ min: string, max: string }>({ min: '', max: '' });
-    const [runwayFilter, setRunwayFilter] = useState<{ min: string, max: string }>({ min: '', max: '' });
+
 
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
@@ -430,7 +623,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
             });
         }
         return Array.from(managerSet).sort();
-    }, [products, pricingRules]);
+    }, [products, pricingRules, getEffectiveManager]);
 
     const uniquePlatforms = useMemo(() => {
         const platformSet = new Set<string>();
@@ -466,9 +659,9 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
             if (searchTags && searchTags.length > 0) {
                 const matchesTag = searchTags.some(tag => {
                     const t = tag.toLowerCase();
-                    return (p.sku || '').toLowerCase().includes(t) || 
-                           (p.name || '').toLowerCase().includes(t) ||
-                           (p.channels || []).some(c => c.skuAlias?.toLowerCase().includes(t));
+                    return (p.sku || '').toLowerCase().includes(t) ||
+                        (p.name || '').toLowerCase().includes(t) ||
+                        (p.channels || []).some(c => c.skuAlias?.toLowerCase().includes(t));
                 });
                 if (!matchesTag) return false;
             } else if (searchQueryLower) {
@@ -576,7 +769,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
 
         return sortRows(aggregatedData, sortConfig, getValue);
 
-    }, [products, debouncedSearch, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, showInactive, showOOS, velocityFilter]);
+    }, [products, debouncedSearch, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, showInactive, showOOS, velocityFilter, getEffectiveManager]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -685,11 +878,30 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
     return (
         <div className="space-y-4">
             <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative overflow-hidden backdrop-blur-custom">
-                <div className="flex items-center gap-6 w-full xl:w-auto">
+                <div className="flex items-center justify-between w-full xl:w-auto gap-6">
                     <div className="flex items-center gap-2">
                         <List className="w-5 h-5 text-gray-400" />
                         <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Master Catalogue</span>
                     </div>
+
+                    {skuFamilies.length > 0 && (
+                        <div className="flex bg-gray-100/50 p-1 rounded-lg border border-gray-200">
+                            <button
+                                onClick={() => setViewMode('LIST')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${viewMode === 'LIST' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                <List className="w-3.5 h-3.5" />
+                                List View
+                            </button>
+                            <button
+                                onClick={() => setViewMode('FAMILY')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${viewMode === 'FAMILY' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                <Layers className="w-3.5 h-3.5" />
+                                Family View
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="w-full xl:w-auto flex justify-end relative">
@@ -755,7 +967,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
                 <div className="p-4 space-y-4">
                     <div className="flex flex-col lg:flex-row gap-4">
                         <div className="flex-1 min-w-[250px]">
-                            <TagSearchInput 
+                            <TagSearchInput
                                 tags={searchTags}
                                 onTagsChange={(tags) => { setSearchTags(tags); setCurrentPage(1); }}
                                 onInputChange={(val) => { setSearchQuery(val); setCurrentPage(1); }}
@@ -923,43 +1135,66 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], onEditAliases,
                                 <SortableHeader label="Inventory" sortKey="stockLevel" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[120px]" />
                                 <SortableHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[140px]" />
                                 <SortableHeader label="Returns" sortKey="returnRate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
+                                <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[120px]" title="All-time ad spend and ACOS. ACOS = Ad Spend / Revenue × 100">
+                                    Ad Spend / ACOS
+                                </th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100/50">
-                            {paginatedProducts.map((product) =>
-                                <ProductRow
-                                    key={product.id}
-                                    product={product}
-                                    themeColor={themeColor}
-                                    onEditAliases={onEditAliases}
-                                    onEditTags={onEditTags}
-                                    onViewShipments={onViewShipments} 
-                                    onViewElasticity={onViewElasticity} 
-                                    onDeepDive={onDeepDive}
-                                    hoveredProduct={hoveredProduct}
-                                    handleMouseEnter={handleMouseEnter}
-                                    handleMouseLeave={handleMouseLeave}
-                                />
-                            )}
-                            {(!filteredProducts || filteredProducts.length === 0) && (
-                                <tr>
-                                    <td colSpan={9} className="p-8 text-center text-gray-500">
-                                        <div className="flex flex-col items-center justify-center gap-2">
-                                            <p>No products found matching your filters.</p>
-                                            {products && products.length > 0 && !showInactive && (
-                                                <button
-                                                    onClick={() => setShowInactive(true)}
-                                                    className="text-indigo-600 text-sm font-medium hover:underline flex items-center gap-1"
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                    Show {products.length - (filteredProducts?.length || 0)} hidden items (Inactive/Ghost)
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
+                        {viewMode === 'LIST' ? (
+                            <tbody className="divide-y divide-gray-100/50">
+                                {paginatedProducts.map((product) =>
+                                    <ProductRow
+                                        key={product.id}
+                                        product={product}
+                                        themeColor={themeColor}
+                                        onEditAliases={onEditAliases}
+                                        onEditTags={onEditTags}
+                                        onViewShipments={onViewShipments}
+                                        onViewElasticity={onViewElasticity}
+                                        onDeepDive={onDeepDive}
+                                        hoveredProduct={hoveredProduct}
+                                        handleMouseEnter={handleMouseEnter}
+                                        handleMouseLeave={handleMouseLeave}
+                                        priceHistoryMap={priceHistoryMap}
+                                    />
+                                )}
+                                {(!filteredProducts || filteredProducts.length === 0) && (
+                                    <tr>
+                                        <td colSpan={10} className="p-8 text-center text-gray-500">
+                                            <div className="flex flex-col items-center justify-center gap-2">
+                                                <p>No products found matching your filters.</p>
+                                                {products && products.length > 0 && !showInactive && (
+                                                    <button
+                                                        onClick={() => setShowInactive(true)}
+                                                        className="text-indigo-600 text-sm font-medium hover:underline flex items-center gap-1"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                        Show {products.length - (filteredProducts?.length || 0)} hidden items (Inactive/Ghost)
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        ) : (
+                            <FamilyGridView
+                                products={filteredProducts}
+                                skuFamilies={skuFamilies}
+                                themeColor={themeColor}
+                                collapsedFamilies={collapsedFamilies}
+                                setCollapsedFamilies={setCollapsedFamilies}
+                                onEditAliases={onEditAliases}
+                                onEditTags={onEditTags}
+                                onViewShipments={onViewShipments}
+                                onViewElasticity={onViewElasticity}
+                                onDeepDive={onDeepDive}
+                                hoveredProduct={hoveredProduct}
+                                handleMouseEnter={handleMouseEnter}
+                                handleMouseLeave={handleMouseLeave}
+                                priceHistoryMap={priceHistoryMap}
+                            />
+                        )}
                     </table>
                 </div>
 

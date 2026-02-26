@@ -4,7 +4,7 @@ import { Product, PriceLog, CategoryPolicy, RefundLog } from '../types';
 import { aggregateCategoryData, MainCategoryData, SubCategoryData, CategoryMetric } from '../services/categoryAgg';
 import { getPolicyForProduct, upsertCategoryPolicy, getCategoryPolicies } from '../services/categoryPolicyService';
 import { asDateKey, addDaysToDateKey, isDateKeyBetween } from '../services/dateUtils';
-import { DollarSign, PieChart, Megaphone, ChevronDown, ChevronRight, Layers, LayoutGrid, Coins, Target, Save, AlertCircle, Upload, X, ArrowRight, TrendingUp, TrendingDown, Package, ArrowLeftRight, Table, Globe, Hash, ShoppingCart, Repeat, RotateCcw } from 'lucide-react';
+import { DollarSign, PieChart, Megaphone, ChevronRight, Layers, LayoutGrid, Coins, Target, Save, AlertCircle, Upload, X, TrendingUp, TrendingDown, Package, Table, Globe, ShoppingCart, Repeat } from 'lucide-react';
 import { scaleLinear } from 'd3-scale';
 import { Treemap, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -225,19 +225,6 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
         return baseAgg;
     }, [products, priceHistoryMap, refundHistory, dateRange, deductRefunds]);
 
-    const popDateContext = useMemo(() => {
-        if (!dateRange || !dateRange.start || !dateRange.end) return '';
-        const startKey = asDateKey(dateRange.start);
-        const endKey = asDateKey(dateRange.end);
-        if (!startKey || !endKey) return '';
-        const durationMs = new Date(endKey).getTime() - new Date(startKey).getTime();
-        const durationDays = Math.round(durationMs / (1000 * 60 * 60 * 24)) + 1;
-        const prevEndKey = addDaysToDateKey(startKey, -1);
-        const prevStartKey = addDaysToDateKey(prevEndKey, -(durationDays - 1));
-        const formatDate = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-        return `Comparing ${formatDate(startKey)}–${formatDate(endKey)} vs ${formatDate(prevStartKey)}–${formatDate(prevEndKey)}`;
-    }, [dateRange]);
-
     const kpiStats = useMemo(() => {
         const skuCounts: Record<string, number> = {};
         products.forEach(p => { const cat = p.category || 'Uncategorized'; skuCounts[cat] = (skuCounts[cat] || 0) + 1; });
@@ -355,9 +342,9 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
     const colorScaleDomain = useMemo(() => {
         let min = Infinity, max = -Infinity;
         categories.forEach(cat => { [...platforms, 'All'].forEach(plat => { const val = getCellValue(cat, plat); if (isFinite(val)) { if (val < min) min = val; if (val > max) max = val; } }); });
-        if (min === Infinity) { min = 0; max = 100; } if (min === max) { if (min === 0) max = 1; else max = min * 1.1; };
+        if (min === Infinity) { min = 0; max = 100; } if (min === max) { if (min === 0) max = 1; else max = min * 1.1; }
         return { min, max };
-    }, [categories, platforms, metric, mode]);
+        }, [categories, platforms, getCellValue]);
 
     const colorScale = useMemo(() => {
         const { min, max } = colorScaleDomain;

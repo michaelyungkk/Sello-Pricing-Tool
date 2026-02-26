@@ -1,9 +1,13 @@
 
-import React, { useMemo } from 'react';
-import { DollarSign, Tag, TrendingUp, TrendingDown, ArrowRight, Info } from 'lucide-react';
-import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, ReferenceArea, ReferenceLine, Tooltip as RechartsTooltip, Legend } from 'recharts';
+import React, { useMemo, useState } from 'react';
+import { DollarSign, Tag, TrendingUp, TrendingDown, ArrowRight, Info, Users, Clock, LayoutGrid } from 'lucide-react';
+import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, ReferenceArea, ReferenceLine, Tooltip as RechartsTooltip, Legend, BarChart, Bar } from 'recharts';
 import { PriceChangeHistoryPanel } from '../../strategy/PriceChangeHistoryPanel';
 import { OptimalPriceCard } from '../parts/OptimalPriceCard';
+import { Product, PriceLog } from '../../../types';
+import { formatMoney } from '../../../utils/format';
+import { VAT_MULTIPLIER } from '../../../constants';
+import { asDateKey, addDaysToDateKey } from '../../../services/dateUtils';
 
 interface PricingHistorySectionProps {
     priceVolumeAnalysis: any;
@@ -20,9 +24,12 @@ interface PricingHistorySectionProps {
     startKey: string;
     endKey: string;
     themeColor: string;
-    formatYAxis?: (val: any) => string; 
-    optimalPrice?: number;
-    currentPrice?: number;
+    formatYAxis?: (val: any) => string;
+    optimalPrice: number;
+    currentPrice: number;
+    siblings: Product[];
+    isInFamily: boolean;
+    priceHistoryMap: Map<string, PriceLog[]>;
 }
 
 export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
@@ -41,188 +48,447 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
     endKey,
     themeColor,
     optimalPrice,
-    currentPrice
+    currentPrice,
+    siblings,
+    isInFamily,
+    priceHistoryMap
 }) => {
+    const [viewMode, setViewMode] = useState<'deviation' | 'velocity'>('deviation');
+
     // Calculate total volume for share % calculation
     const totalVolume = useMemo(() => {
         return priceVolumeAnalysis.pointsTable.reduce((sum: number, pt: any) => sum + pt.qty, 0);
     }, [priceVolumeAnalysis.pointsTable]);
 
+    const siblingColors = ['#64748b', '#f59e0b', '#14b8a6', '#f43f5e', '#8b5cf6', '#ec4899'];
+
+    const aggregatedFamilyVelocityData = useMemo(() => {
+        if (!isInFamily || !startKey || !endKey) return [];
+
+        const allFamilySkus = [productSku, ...siblings.map(s => s.sku)];
+        const data: any[] = [];
+
+        // 1. Determine Bucket Strategy
+        let bucketSize: 'daily' | 'weekly' | 'monthly' = 'daily';
+        if (chartPeriod === '30 Days' || chartPeriod === '90 Days') bucketSize = 'weekly';
+        if (chartPeriod === 'All') bucketSize = 'monthly';
+
+        // 2. Generate Buckets
+        const startDate = new Date(startKey);
+        const endDate = new Date(endKey);
+
+        if (bucketSize === 'daily') {
+            let curr = startKey;
+            while (curr <= endKey) {
+                const d = new Date(curr);
+                const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                data.push({ period: label, dateKey: curr });
+                curr = addDaysToDateKey(curr, 1);
+            }
+        } else if (bucketSize === 'weekly') {
+            let curr = startKey;
+            let weekCount = 1;
+            while (curr <= endKey) {
+                const weekEnd = addDaysToDateKey(curr, 6);
+                const actualEnd = weekEnd > endKey ? endKey : weekEnd;
+
+                const dStart = new Date(curr);
+                const dEnd = new Date(actualEnd);
+                const label = `${dStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${dEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+
+                data.push({
+                    period: label,
+                    start: curr,
+                    end: actualEnd,
+                    weekLabel: `Week ${weekCount++}`
+                });
+                curr = addDaysToDateKey(actualEnd, 1);
+            }
+        } else { // monthly
+            let curr = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+            while (curr <= endDate) {
+                const monthEnd = new Date(curr.getFullYear(), curr.getMonth() + 1, 0);
+                const mStartKey = asDateKey(curr)!;
+                const mEndKey = asDateKey(monthEnd)!;
+
+                const label = curr.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+                data.push({
+                    period: label,
+                    start: mStartKey,
+                    end: mEndKey
+                });
+                curr = new Date(curr.getFullYear(), curr.getMonth() + 1, 1);
+            }
+        }
+
+        // 3. Fill Buckets with Data
+        allFamilySkus.forEach(sku => {
+            const logs = priceHistoryMap.get(sku) || [];
+            data.forEach(bucket => {
+                let units = 0;
+                if (bucketSize === 'daily') {
+                    units = logs
+                        .filter(l => asDateKey(l.date) === bucket.dateKey)
+                        .reduce((sum, l) => sum + (l.velocity || 0), 0);
+                } else {
+                    units = logs
+                        .filter(l => {
+                            const d = asDateKey(l.date);
+                            return d && d >= bucket.start && d <= bucket.end;
+                        })
+                        .reduce((sum, l) => sum + (l.velocity || 0), 0);
+                }
+                bucket[sku] = units;
+            });
+        });
+
+        return data;
+    }, [isInFamily, siblings, productSku, priceHistoryMap, chartPeriod, startKey, endKey]);
+
+    const familySkus = [productSku, ...siblings.map(s => s.sku)];
+
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-                <div className="flex justify-between items-center min-h-[42px]">
-                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <DollarSign className="w-5 h-5 text-green-600" />
-                        Price Deviation vs Volume
-                    </h3>
-                    <div className="flex bg-gray-100 p-1 rounded-lg">
-                        {['7 Days', '14 Days', '30 Days', '90 Days', 'All'].map(p => (
-                            <button
-                                key={p}
-                                onClick={() => setChartPeriod(p)}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${chartPeriod === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                {p}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-[420px] select-none relative">
-                    <div className="flex justify-between items-start mb-4 shrink-0">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase">
-                            Aggregated Volume by Price Delta
-                        </h4>
-                        <div className="text-[10px] text-gray-400 flex items-center gap-2">
-                            <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 opacity-20 rounded-full"></div> Safe ({'>'} -5%)</span>
-                            <span className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-500 opacity-20 rounded-full"></div> Moderate (-5% to -15%)</span>
-                            <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-500 opacity-20 rounded-full"></div> Severe ({'<'} -15%)</span>
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="flex justify-between items-center min-h-[42px]">
+                        <div className="flex items-center gap-4">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                {viewMode === 'deviation' ? (
+                                    <>
+                                        <DollarSign className="w-5 h-5 text-green-600" />
+                                        Price Deviation vs Volume
+                                    </>
+                                ) : (
+                                    <>
+                                        <TrendingUp className="w-5 h-5 text-indigo-600" />
+                                        Family Sales Velocity
+                                    </>
+                                )}
+                            </h3>
+
+                            {isInFamily && (
+                                <div className="flex items-center">
+                                    <div className="flex bg-gray-100 p-1 rounded-full border border-gray-200 shadow-inner">
+                                        <button
+                                            onClick={() => setViewMode('deviation')}
+                                            className={`px-4 py-1.5 text-[10px] font-bold rounded-full transition-all flex items-center gap-2 ${viewMode === 'deviation' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            <LayoutGrid className="w-3.5 h-3.5" /> Price Deviation
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode('velocity')}
+                                            className={`px-4 py-1.5 text-[10px] font-bold rounded-full transition-all flex items-center gap-2 ${viewMode === 'velocity' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                            <TrendingUp className="w-3.5 h-3.5" /> Family Velocity
+                                        </button>
+                                    </div>
+                                    <div className="mx-4 h-6 w-px bg-gray-200"></div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            {['7 Days', '14 Days', '30 Days', '90 Days', 'All'].map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => setChartPeriod(p)}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${chartPeriod === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    {p}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="w-full flex-1 min-h-0">
-                        {filteredChartData.length === 0 ? (
-                            <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                                <Info className="w-8 h-8 mb-2 opacity-50" />
-                                <span className="text-sm font-medium">No comparable sell-price data</span>
-                                <span className="text-xs opacity-75">(cost-based platforms excluded)</span>
-                            </div>
-                        ) : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis type="category" dataKey="period" name="Period" allowDuplicatedCategory={false} tick={{fontSize: 12, style: { userSelect: 'none' }}} />
-                                    <YAxis type="number" dataKey="delta" name="Price Deviation" unit="£" domain={['auto', 'auto']} tick={{fontSize: 12, style: { userSelect: 'none' }}} label={{ value: 'Price Deviation (£)', angle: -90, position: 'insideLeft' }} />
-                                    <ZAxis type="number" dataKey="totalQty" range={[60, 600]} name="Volume" />
-                                    
-                                    <ReferenceArea y1={priceVolumeAnalysis.thresholds.amber} y2={1000} fill="green" fillOpacity={0.05} />
-                                    <ReferenceArea y1={priceVolumeAnalysis.thresholds.red} y2={priceVolumeAnalysis.thresholds.amber} fill="orange" fillOpacity={0.05} />
-                                    <ReferenceArea y1={-1000} y2={priceVolumeAnalysis.thresholds.red} fill="red" fillOpacity={0.05} />
-                                    
-                                    <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" label={{ value: 'Ref Price', position: 'right', fill: '#6b7280', fontSize: 10 }} />
-                                    
-                                    <Scatter 
-                                        name="Price Bands" 
-                                        data={filteredChartData} 
-                                        fill="#8884d8" 
-                                        fillOpacity={0.7} 
-                                        onMouseEnter={(data) => setHoveredBubble(data.payload)}
-                                        onMouseLeave={() => setHoveredBubble(null)}
-                                    />
+                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-[420px] select-none relative">
+                        {viewMode === 'deviation' ? (
+                            <>
+                                <div className="flex justify-between items-start mb-4 shrink-0">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase font-mono">
+                                        Aggregated Volume by Price Delta
+                                    </h4>
+                                    <div className="text-[10px] text-gray-400 flex items-center gap-2">
+                                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 opacity-20 rounded-full"></div> Safe ({'>'} -5%)</span>
+                                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-500 opacity-20 rounded-full"></div> Moderate (-5% to -15%)</span>
+                                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-500 opacity-20 rounded-full"></div> Severe ({'<'} -15%)</span>
+                                    </div>
+                                </div>
 
-                                    <Scatter 
-                                        name="Weighted Avg" 
-                                        data={filteredAvgStats} 
-                                        shape="star" 
-                                        fill="#be185d" 
-                                        legendType="star"
-                                    />
-                                </ScatterChart>
-                            </ResponsiveContainer>
+                                <div className="w-full flex-1 min-h-0">
+                                    {filteredChartData.length === 0 ? (
+                                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                                            <Info className="w-8 h-8 mb-2 opacity-50" />
+                                            <span className="text-sm font-medium">No comparable sell-price data</span>
+                                            <span className="text-xs opacity-75">(cost-based platforms excluded)</span>
+                                        </div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                <XAxis type="category" dataKey="period" name="Period" allowDuplicatedCategory={false} tick={{ fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} />
+                                                <YAxis type="number" dataKey="delta" name="Price Deviation" unit="£" domain={['auto', 'auto']} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} label={{ value: 'Price Deviation (£)', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#94a3b8' } }} />
+                                                <ZAxis type="number" dataKey="totalQty" range={[60, 600]} name="Volume" />
+
+                                                <ReferenceArea y1={priceVolumeAnalysis.thresholds.amber} y2={1000} fill="green" fillOpacity={0.05} />
+                                                <ReferenceArea y1={priceVolumeAnalysis.thresholds.red} y2={priceVolumeAnalysis.thresholds.amber} fill="orange" fillOpacity={0.05} />
+                                                <ReferenceArea y1={-1000} y2={priceVolumeAnalysis.thresholds.red} fill="red" fillOpacity={0.05} />
+
+                                                <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="3 3" label={{ value: 'Ref Price', position: 'right', fill: '#6b7280', fontSize: 10 }} />
+
+                                                <Scatter
+                                                    name="Price Bands"
+                                                    data={filteredChartData}
+                                                    fill="#818cf8"
+                                                    fillOpacity={0.7}
+                                                    onMouseEnter={(data) => setHoveredBubble(data.payload)}
+                                                    onMouseLeave={() => setHoveredBubble(null)}
+                                                />
+
+                                                <Scatter
+                                                    name="Weighted Avg"
+                                                    data={filteredAvgStats}
+                                                    shape="star"
+                                                    fill="#be185d"
+                                                    legendType="star"
+                                                />
+                                            </ScatterChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+
+                                <div className="mt-2 h-10 bg-gray-50 rounded-lg border border-gray-100 flex items-center px-4 text-xs shrink-0">
+                                    {hoveredBubble ? (
+                                        <div className="flex flex-wrap items-center gap-4 w-full animate-in fade-in duration-200">
+                                            <span className="font-medium text-gray-900 bg-white px-2 py-0.5 rounded shadow-sm border border-gray-200">{hoveredBubble.period}</span>
+                                            <div className="h-4 w-px bg-gray-300 hidden sm:block"></div>
+                                            <span className="text-gray-600">Band: <strong>{hoveredBubble.delta > 0 ? '+' : ''}£{hoveredBubble.delta.toFixed(2)}</strong></span>
+                                            <span className="text-gray-600">Avg Selling Price: <strong>£{hoveredBubble.tooltipPrice}</strong></span>
+                                            <span className="text-gray-600">Vol: <strong className="text-gray-900">{hoveredBubble.totalQty}</strong></span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-gray-400 italic flex items-center gap-2">
+                                            <Info className="w-4 h-4" /> Hover over a bubble to see aggregated volume details
+                                        </span>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="w-full flex-1 flex flex-col min-h-0">
+                                <div className="flex justify-between items-start mb-4 shrink-0">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase font-mono">
+                                        Family Sales Velocity ({chartPeriod})
+                                    </h4>
+                                    <div className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+                                        Units per bucket
+                                    </div>
+                                </div>
+                                <div className="flex-1 min-h-0">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart
+                                            data={aggregatedFamilyVelocityData}
+                                            margin={{ top: 10, right: 10, left: 10, bottom: 20 }}
+                                            barGap={4}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                            <XAxis
+                                                dataKey="period"
+                                                tick={{ fontSize: 10, fontWeight: 500, fill: '#64748b' }}
+                                                axisLine={false}
+                                                tickLine={false}
+                                                interval={chartPeriod === '7 Days' ? 0 : undefined}
+                                            />
+                                            <YAxis
+                                                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                                axisLine={false}
+                                                tickLine={false}
+                                            />
+                                            <RechartsTooltip
+                                                cursor={{ fill: '#f8fafc' }}
+                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                                                itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+                                            />
+                                            <Legend
+                                                verticalAlign="bottom"
+                                                align="center"
+                                                iconType="circle"
+                                                wrapperStyle={{ fontSize: '10px', paddingTop: '20px', fontWeight: 'bold', color: '#64748b' }}
+                                            />
+                                            {familySkus.map((sku, index) => (
+                                                <Bar
+                                                    key={sku}
+                                                    dataKey={sku}
+                                                    name={sku === productSku ? `${sku} (Target)` : sku}
+                                                    fill={sku === productSku ? themeColor : siblingColors[index % siblingColors.length]}
+                                                    radius={[4, 4, 0, 0]}
+                                                    animationDuration={1500}
+                                                />
+                                            ))}
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
                         )}
                     </div>
-                    
-                    <div className="mt-2 h-10 bg-gray-50 rounded-lg border border-gray-100 flex items-center px-4 text-xs shrink-0">
-                        {hoveredBubble ? (
-                            <div className="flex flex-wrap items-center gap-4 w-full animate-in fade-in duration-200">
-                                <span className="font-medium text-gray-900 bg-white px-2 py-0.5 rounded shadow-sm border border-gray-200">{hoveredBubble.period}</span>
-                                <div className="h-4 w-px bg-gray-300 hidden sm:block"></div>
-                                <span className="text-gray-600">Band: <strong>{hoveredBubble.delta > 0 ? '+' : ''}£{hoveredBubble.delta.toFixed(2)}</strong></span>
-                                <span className="text-gray-600">Avg Selling Price: <strong>£{hoveredBubble.tooltipPrice}</strong></span>
-                                <span className="text-gray-600">Vol: <strong className="text-gray-900">{hoveredBubble.totalQty}</strong></span>
-                            </div>
-                        ) : (
-                            <span className="text-gray-400 italic flex items-center gap-2">
-                                <Info className="w-4 h-4"/> Hover over a bubble to see aggregated volume details
-                            </span>
-                        )}
+
+                    <PriceChangeHistoryPanel
+                        history={priceChangeHistory}
+                        sku={productSku}
+                        windowStart={startKey}
+                        windowEnd={endKey}
+                        themeColor={themeColor}
+                    />
+                </div>
+
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center min-h-[42px]">
+                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-purple-600" />
+                            Price Points
+                        </h3>
                     </div>
-                </div>
 
-                <PriceChangeHistoryPanel 
-                    history={priceChangeHistory} 
-                    sku={productSku}
-                    windowStart={startKey}
-                    windowEnd={endKey}
-                    themeColor={themeColor}
-                />
-            </div>
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-[420px] overflow-y-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0">
+                                <tr>
+                                    <th className="p-3">Price Point</th>
+                                    <th className="p-3 text-right">Total Qty</th>
+                                    <th className="p-3 text-right">Share %</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {priceVolumeAnalysis.pointsTable.map((pt: any, i: number) => {
+                                    const isLowest = minPricePoint !== null && pt.price === minPricePoint;
+                                    const isHighest = maxPricePoint !== null && pt.price === maxPricePoint;
+                                    const isOptimal = optimalPrice && Math.abs(pt.price - optimalPrice) < 0.01;
+                                    const sharePct = totalVolume > 0 ? (pt.qty / totalVolume) * 100 : 0;
 
-            <div className="space-y-4">
-                <div className="flex justify-between items-center min-h-[42px]">
-                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <Tag className="w-5 h-5 text-purple-600" />
-                        Price Points
-                    </h3>
-                </div>
-
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-[420px] overflow-y-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0">
-                            <tr>
-                                <th className="p-3">Price Point</th>
-                                <th className="p-3 text-right">Total Qty</th>
-                                <th className="p-3 text-right">Share %</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {priceVolumeAnalysis.pointsTable.map((pt: any, i: number) => {
-                                const isLowest = minPricePoint !== null && pt.price === minPricePoint;
-                                const isHighest = maxPricePoint !== null && pt.price === maxPricePoint;
-                                const isOptimal = optimalPrice && Math.abs(pt.price - optimalPrice) < 0.01;
-                                const sharePct = totalVolume > 0 ? (pt.qty / totalVolume) * 100 : 0;
-                                
-                                return (
-                                    <tr key={i} className={`hover:bg-gray-50 ${isOptimal ? 'bg-indigo-50 border-l-4 border-indigo-500' : isLowest ? 'bg-amber-50/30' : isHighest ? 'bg-indigo-50/30' : ''}`}>
-                                        <td className="p-3 font-mono font-bold text-gray-700">
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-2">
-                                                    £{pt.price.toFixed(2)}
-                                                    {isOptimal && (
-                                                        <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold uppercase tracking-wide flex items-center gap-1">
-                                                            <Tag className="w-2.5 h-2.5" /> Optimal
-                                                        </span>
-                                                    )}
-                                                    {isLowest && !isOptimal && (
-                                                        <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 font-medium uppercase tracking-wide flex items-center gap-1">
-                                                            <TrendingDown className="w-2.5 h-2.5" /> Lowest
-                                                        </span>
-                                                    )}
-                                                    {isHighest && !isOptimal && (
-                                                        <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 font-medium uppercase tracking-wide flex items-center gap-1">
-                                                            <TrendingUp className="w-2.5 h-2.5" /> Highest
-                                                        </span>
+                                    return (
+                                        <tr key={i} className={`hover:bg-gray-50 ${isOptimal ? 'bg-indigo-50 border-l-4 border-indigo-500' : isLowest ? 'bg-amber-50/30' : isHighest ? 'bg-indigo-50/30' : ''}`}>
+                                            <td className="p-3 font-mono font-bold text-gray-700">
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-2">
+                                                        £{pt.price.toFixed(2)}
+                                                        {isOptimal && (
+                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold uppercase tracking-wide flex items-center gap-1">
+                                                                <Tag className="w-2.5 h-2.5" /> Optimal
+                                                            </span>
+                                                        )}
+                                                        {isLowest && !isOptimal && (
+                                                            <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 font-medium uppercase tracking-wide flex items-center gap-1">
+                                                                <TrendingDown className="w-2.5 h-2.5" /> Lowest
+                                                            </span>
+                                                        )}
+                                                        {isHighest && !isOptimal && (
+                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 font-medium uppercase tracking-wide flex items-center gap-1">
+                                                                <TrendingUp className="w-2.5 h-2.5" /> Highest
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {pt.isCostBased && (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase font-medium cursor-help" title="This price point originates from a Cost-Based Platform (e.g. Wayfair). It represents an agreed cost price, not a consumer selling price.">
+                                                                Fixed Cost Price
+                                                            </span>
+                                                        </div>
                                                     )}
                                                 </div>
-                                                {pt.isCostBased && (
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase font-medium cursor-help" title="This price point originates from a Cost-Based Platform (e.g. Wayfair). It represents an agreed cost price, not a consumer selling price.">
-                                                            Fixed Cost Price
-                                                        </span>
-                                                    </div>
-                                                )}
+                                            </td>
+                                            <td className="p-3 text-right">{pt.qty}</td>
+                                            <td className="p-3 text-right text-gray-500 font-medium">{sharePct.toFixed(1)}%</td>
+                                        </tr>
+                                    );
+                                })}
+                                {priceVolumeAnalysis.pointsTable.length === 0 && (
+                                    <tr><td colSpan={3} className="p-4 text-center text-gray-400">No data</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {optimalPrice && optimalPrice > 0 && (
+                        <OptimalPriceCard
+                            optimalPrice={optimalPrice}
+                            currentPrice={currentPrice || 0}
+                        />
+                    )}
+                </div>
+            </div>
+
+            {isInFamily && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom duration-500 delay-150">
+                    <div className="p-4 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 border-b border-gray-100 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-white p-2 rounded-lg shadow-sm">
+                                <Users className="w-5 h-5 text-indigo-600" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-gray-800">Family Price Comparison</h4>
+                                <p className="text-[10px] text-gray-500">Prices for sibling SKUs in the same family library</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left whitespace-nowrap">
+                            <thead className="bg-gray-50/50 text-[10px] text-gray-400 font-bold uppercase tracking-wider border-b border-gray-100">
+                                <tr>
+                                    <th className="px-6 py-3">Sibling SKU</th>
+                                    <th className="px-6 py-3">Product Name</th>
+                                    <th className="px-6 py-3 text-right">Price (Inc. VAT)</th>
+                                    <th className="px-6 py-3 text-right">Last Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                <tr className="bg-indigo-50/30">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-mono font-bold text-indigo-700">{productSku}</span>
+                                            <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold uppercase">Current</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-xs text-gray-900 font-medium truncate max-w-[300px]" title="Current product">This Product</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <span className="font-mono font-bold text-indigo-700">{formatMoney(currentPrice)}</span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">
+                                            <Clock className="w-3.5 h-3.5" />
+                                            Active
+                                        </div>
+                                    </td>
+                                </tr>
+                                {siblings.map((sib) => (
+                                    <tr key={sib.sku} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4 font-mono text-gray-600">{sib.sku}</td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-xs text-gray-600 truncate max-w-[300px]" title={sib.name}>{sib.name}</div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <span className="font-mono font-bold text-gray-900">{formatMoney(sib.currentPrice * VAT_MULTIPLIER)}</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">
+                                                <Clock className="w-3.5 h-3.5" />
+                                                {sib.updatedAt ? new Date(sib.updatedAt).toLocaleDateString('en-GB') : 'Unknown'}
                                             </div>
                                         </td>
-                                        <td className="p-3 text-right">{pt.qty}</td>
-                                        <td className="p-3 text-right text-gray-500 font-medium">{sharePct.toFixed(1)}%</td>
                                     </tr>
-                                );
-                            })}
-                            {priceVolumeAnalysis.pointsTable.length === 0 && (
-                                <tr><td colSpan={3} className="p-4 text-center text-gray-400">No data</td></tr>
-                            )}
-                        </tbody>
-                    </table>
+                                ))}
+                                {siblings.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-8 text-center text-gray-400 italic text-xs">
+                                            No other active siblings found in this family.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-
-                {optimalPrice && optimalPrice > 0 && (
-                    <OptimalPriceCard 
-                        optimalPrice={optimalPrice}
-                        currentPrice={currentPrice || 0}
-                    />
-                )}
-            </div>
+            )}
         </div>
     );
 };

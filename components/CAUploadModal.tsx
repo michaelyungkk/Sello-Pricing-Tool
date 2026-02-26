@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Upload, X, FileText, Check, AlertCircle, Loader2, RefreshCw, Calendar, TrendingUp, AlertTriangle, Hash, ArrowRight, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, Calendar, TrendingUp, Hash, ArrowRight, Image as ImageIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
 
@@ -106,7 +106,6 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
         }
 
         const results = [];
-        let skippedCount = 0;
 
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
@@ -115,7 +114,6 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
 
             // Skip parent SKUs matching pattern *-UK-ALL
             if (sku.match(/-UK-ALL$/i)) {
-                skippedCount++;
                 results.push({
                     sku,
                     caPrice: 0,

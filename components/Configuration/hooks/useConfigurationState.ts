@@ -23,9 +23,9 @@ export const useConfigurationState = ({
 
     const [newPlatformName, setNewPlatformName] = useState('');
     const [isSaved, setIsSaved] = useState(false);
+    const [adsRefresh, setAdsRefresh] = useState(0);
     
     // Ads capabilities refresh trigger
-    const [adsRefresh, setAdsRefresh] = useState(0);
 
     // Sync state with props
     useEffect(() => {

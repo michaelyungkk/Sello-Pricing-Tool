@@ -14,7 +14,7 @@ import { SortableHeader } from '../common/SortableHeader';
 import UkSalesMap from '../UkSalesMap';
 import { CategoryPerformanceSlide } from '../CategoryPerformanceSlide';
 import AuditPanel from '../AuditPanel';
-import { Calendar, ChevronDown, Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingUp, TrendingDown, DollarSign, Megaphone, Clock, AlertTriangle, Coins, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Tag, ArrowRight, Wallet, Zap, History, Ship, Calculator } from 'lucide-react';
+import { Calendar, ChevronDown, Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingUp, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator } from 'lucide-react';
 import { formatMoney, formatNumber, formatPct } from '../../utils/format';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, Bar, Line, BarChart, Cell } from 'recharts';
 import { resolveEffectiveVelocity } from '../../services/metrics';
@@ -65,7 +65,6 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     onDeepDive,
     onSearch,
     thresholds: propThresholds,
-    headerStyle,
     deductRefunds,
     setDeductRefunds,
     mapJumpState

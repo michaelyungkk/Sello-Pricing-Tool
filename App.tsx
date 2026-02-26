@@ -1,19 +1,20 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { INITIAL_PRODUCTS, MOCK_PRICE_HISTORY, MOCK_PROMOTIONS, DEFAULT_PRICING_RULES, DEFAULT_LOGISTICS_RULES, DEFAULT_STRATEGY_RULES, DEFAULT_SEARCH_CONFIG, VAT_MULTIPLIER } from './constants';
-import { Product, PricingRules, PriceLog, PromotionEvent, UserProfile as UserProfileType, ChannelData, LogisticsRule, ShipmentLog, StrategyConfig, VelocityLookback, RefundLog, ShipmentDetail, HistoryPayload, PriceChangeRecord, AnalysisResult, SearchChip, SearchConfig, SkuCostDetail, InventoryTemplate, SearchSession, CostChangeRecord, InventoryChangeRecord, AttributeMap } from './types';
+import React from 'react';
+import { useAppState } from './hooks/useAppState';
+import { QuickUploadMenu } from './components/QuickUploadMenu';
 
 // Components
 import { OverviewPageContainer } from './components/overview/OverviewPageContainer';
+
 import ProductManagementPage from './components/ProductManagementPage';
 import StrategyPage from './components/StrategyPage';
 import PlatformManagementPage from './components/PlatformManagementPage';
 
-import { 
-  LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X, 
-  Download, Upload, Database, CheckCircle, FileBarChart, Bell, History, 
-  UploadCloud, ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Globe,
-  ArrowUp, Package, Table
+import {
+    LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X, Lock, AlertTriangle, RefreshCw,
+    Download, Upload, Database, CheckCircle, FileBarChart, Bell, History,
+    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Globe,
+    ArrowUp, Package, Table, UploadCloud
 } from 'lucide-react';
 
 import GlobalSearch from './components/GlobalSearch';
@@ -28,7 +29,6 @@ import { CustomReportPage } from './components/CustomReportPage';
 import BatchUploadModal from './components/BatchUploadModal';
 import SalesImportModal from './components/SalesImportModal';
 import SkuDetailUploadModal from './components/SkuDetailUploadModal';
-import CostUploadModal from './components/CostUploadModal';
 import MappingUploadModal from './components/MappingUploadModal';
 import ReturnsUploadModal from './components/ReturnsUploadModal';
 import CAUploadModal from './components/CAUploadModal';
@@ -36,876 +36,856 @@ import ShipmentUploadModal from './components/ShipmentUploadModal';
 import PriceElasticityModal from './components/PriceElasticityModal';
 import AnalysisModal from './components/AnalysisModal';
 
-import { analyzePriceAdjustment, parseSearchQuery, SearchIntent } from './services/geminiService';
-import { processDataForSearch } from './services/searchExecution';
-import { getThresholdConfig, ThresholdConfig, saveThresholdConfig } from './services/thresholdsConfig';
-import { useTranslation } from 'react-i18next';
 import { TAX_NOTE_SHORT } from './services/taxPolicy';
-import { migrateRestoredDatabase, auditRestoredDatabase } from './services/migrationService';
-import { normalizeRestoredState } from './services/restoreSanitizer';
-import { hexToRgb, extractFirstHex } from './utils/color';
-import { getCanonicalSku } from './services/skuNormalization';
-import { resolveEffectiveVelocity, calculateWeightedVelocity, toNumber } from './services/metrics';
-import { asDateKey } from './services/dateUtils';
-import { resolveAttribute } from './services/mappingService';
-
-// Helper functions
-const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-};
-
-const getFridayThursdayRanges = () => {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 (Sun) - 6 (Sat)
-    // Friday is 5
-    const daysSinceFriday = (dayOfWeek + 7 - 5) % 7;
-    
-    const currentStart = new Date(today);
-    currentStart.setDate(today.getDate() - daysSinceFriday);
-    
-    const currentEnd = new Date(currentStart);
-    currentEnd.setDate(currentStart.getDate() + 6);
-    
-    const lastStart = new Date(currentStart);
-    lastStart.setDate(currentStart.getDate() - 7);
-    
-    const lastEnd = new Date(currentStart);
-    lastEnd.setDate(currentStart.getDate() + 6);
-    
-    return {
-        current: { start: currentStart, end: currentEnd },
-        last: { start: lastStart, end: lastEnd }
-    };
-};
-
-const QuickUploadMenu = ({ themeColor, actions }: any) => { 
-    const { t } = useTranslation();
-    const [isOpen, setIsOpen] = useState(false); 
-    const menuRef = useRef<HTMLDivElement>(null); 
-    useEffect(() => { const handleClickOutside = (event: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(event.target as Node)) { setIsOpen(false); } }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []); 
-    
-    return ( <div className="relative z-50" ref={menuRef}> <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md transition-all font-medium" style={{ backgroundColor: themeColor }}> <UploadCloud className="w-4 h-4" /> <span className="hidden md:inline">{t('upload_data')}</span> <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} /> </button> {isOpen && ( <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right"> <div className="p-2 grid gap-1"> {actions.map((item: any) => ( <button key={item.label} onClick={() => { item.action(); setIsOpen(false); }} className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-left w-full group" > <div className={`p-1.5 rounded-md bg-gray-50 group-hover:bg-white border border-gray-100 group-hover:shadow-sm transition-all ${item.color}`}> <item.icon className="w-4 h-4" /> </div> <span className="font-medium">{item.label}</span> </button> ))} </div> </div> )} </div> ); 
-};
-
-// --- CENTRAL RECALCULATION LOGIC ---
-const recalculateProductMetrics = (
-    products: Product[],
-    history: PriceLog[],
-    lookback: VelocityLookback,
-    thresholds: ThresholdConfig,
-    pricingRules?: PricingRules,
-    brandMap?: AttributeMap,
-    categoryMap?: AttributeMap
-): Product[] => {
-    // 1. Build History Map
-    const historyMap = new Map<string, PriceLog[]>();
-    (history || []).forEach(h => {
-        if (!h || !h.sku) return;
-        if (!historyMap.has(h.sku)) historyMap.set(h.sku, []);
-        historyMap.get(h.sku)!.push(h);
-    });
-
-    // 2. Determine Time Window for Comparison (PoP Trend Analysis)
-    let days = 30;
-    if (lookback === 'ALL') {
-        if (history && history.length > 0) {
-            const daysArr = history.map(l => new Date(l.date).getTime()).filter(t => !isNaN(t));
-            if (daysArr.length > 0) {
-                const minDate = Math.min(...daysArr);
-                const diff = Date.now() - minDate;
-                days = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-            }
-        }
-    } else {
-        days = parseInt(lookback) || 30;
-    }
-
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-    cutoffDate.setHours(0, 0, 0, 0);
-
-    const prevCutoffDate = new Date(cutoffDate);
-    prevCutoffDate.setDate(prevCutoffDate.getDate() - days);
-
-    // 3. Process Products
-    return (products || []).map(p => {
-        if (!p) return p;
-        const logs = historyMap.get(p.sku) || [];
-        
-        let currentQty = 0;
-        let prevQty = 0;
-
-        // Calc for Max Velocity Price
-        const priceMap = new Map<number, number>(); // Price -> Total Qty
-
-        logs.forEach(l => {
-            const d = new Date(l.date);
-            if (isNaN(d.getTime())) return;
-            
-            // Velocity calculation logic based on dates
-            if (d >= cutoffDate) {
-                currentQty += toNumber(l.velocity);
-            } else if (d >= prevCutoffDate) {
-                prevQty += toNumber(l.velocity);
-            }
-
-            // Max Velocity Price logic (All Time)
-            let isCostBased = false;
-            if (pricingRules && l.platform) {
-                const config = pricingRules[l.platform];
-                if (config && config.pricingControl === 'PLATFORM_COST_BASED') {
-                    isCostBased = true;
-                }
-            }
-
-            if (!isCostBased && l.velocity > 0 && l.price > 0) {
-                 // Round to 2 decimals to group effectively
-                 const pricePoint = Math.round(l.price * 100) / 100;
-                 priceMap.set(pricePoint, (priceMap.get(pricePoint) || 0) + l.velocity);
-            }
-        });
-
-        // 4. Resolve Effective Velocity (Priority: ERP > Weighted Fallback)
-        const effectiveDailySales = resolveEffectiveVelocity(p, logs);
-
-        const calculatedPrevDailySales = prevQty / days;
-        const daysRemaining = effectiveDailySales > 0 ? toNumber(p.stockLevel) / effectiveDailySales : 999;
-        
-        let status: 'Critical' | 'Warning' | 'Healthy' | 'Overstock' = 'Healthy';
-        if (toNumber(p.stockLevel) <= 0) status = 'Critical';
-        else if (daysRemaining < toNumber(p.leadTimeDays, 30) * toNumber(thresholds.stockoutRunwayMultiplier, 1)) status = 'Critical';
-        else if (daysRemaining > toNumber(thresholds.overstockDays, 120)) status = 'Overstock';
-        else if (daysRemaining < toNumber(p.leadTimeDays, 30) * (toNumber(thresholds.stockoutRunwayMultiplier, 1) + 0.5)) status = 'Warning';
-
-        // Trend is purely based on historical comparison (PoP)
-        const currentCalculatedVelocity = currentQty / days;
-        const velocityChange = calculatedPrevDailySales > 0 
-            ? ((currentCalculatedVelocity - calculatedPrevDailySales) / calculatedPrevDailySales) * 100 
-            : 0;
-
-        // Determine price with max velocity
-        let maxVel = 0;
-        let maxVelocityPrice = undefined;
-        priceMap.forEach((qty, price) => {
-             if (qty > maxVel) {
-                 maxVel = qty;
-                 maxVelocityPrice = price;
-             } else if (qty === maxVel && maxVel > 0) {
-                 // If tie, prefer higher price
-                 if (price > (maxVelocityPrice || 0)) {
-                     maxVelocityPrice = price;
-                 }
-             }
-        });
-        
-        // Apply Attribute Mappings dynamically
-        let resolvedBrand = p.brand;
-        let resolvedCategory = p.category;
-        
-        if (brandMap && p.brand) {
-            resolvedBrand = resolveAttribute(p.brand, brandMap);
-        }
-        if (categoryMap && p.category) {
-            resolvedCategory = resolveAttribute(p.category, categoryMap);
-        }
-
-        return {
-            ...p,
-            averageDailySales: effectiveDailySales, // Use resolved value (ERP prioritized)
-            previousDailySales: calculatedPrevDailySales,
-            daysRemaining,
-            status,
-            maxVelocityPrice, // Fallback Reference Price
-            _trendData: { velocityChange },
-            brand: resolvedBrand,
-            category: resolvedCategory
-        };
-    }).filter(Boolean);
-};
+import { StrategyConfig } from './types';
 
 const App: React.FC = () => {
-    const { t } = useTranslation();
-    
-    const [isDataLoaded, setIsDataLoaded] = useState(false);
-    const [products, setProducts] = useState<Product[]>([]);
-    const [priceHistoryHistory, setPriceHistory] = useState<PriceLog[]>([]);
-    const [refundHistory, setRefundHistory] = useState<RefundLog[]>([]);
-    const [shipmentHistory, setShipmentHistory] = useState<ShipmentLog[]>([]);
-    const [priceChangeHistory, setPriceChangeHistory] = useState<PriceChangeRecord[]>([]);
-    const [costChangeHistory, setCostChangeHistory] = useState<CostChangeRecord[]>([]);
-    const [inventoryChangeHistory, setInventoryChangeHistory] = useState<InventoryChangeRecord[]>([]);
-    const [promotions, setPromotions] = useState<PromotionEvent[]>([]);
-    const [learnedAliases, setLearnedAliases] = useState<Record<string, string>>({});
-    const [inventoryTemplates, setInventoryTemplates] = useState<InventoryTemplate[]>([]); 
-    const [pricingRules, setPricingRules] = useState<PricingRules>(DEFAULT_PRICING_RULES);
-    const [logisticsRules, setLogisticsRules] = useState<LogisticsRule[]>(DEFAULT_LOGISTICS_RULES);
-    const [strategyRules, setStrategyRules] = useState<StrategyConfig>(DEFAULT_STRATEGY_RULES);
-    const [searchConfig, setSearchConfig] = useState<SearchConfig>(DEFAULT_SEARCH_CONFIG);
-    
-    // Attribute Maps
-    const [brandMap, setBrandMap] = useState<AttributeMap>({});
-    const [categoryMap, setCategoryMap] = useState<AttributeMap>({});
-    
-    // Globalsetting for deducting refunds in calculation - UPDATED: Default to true
-    const [deductRefunds, setDeductRefunds] = useState<boolean>(() => {
-        const saved = localStorage.getItem('sello_global_deduct_refunds');
-        return saved === null ? true : saved === 'true';
-    });
+    const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false);
+    const [adminPassword, setAdminPassword] = React.useState('');
+    const [adminError, setAdminError] = React.useState<string | null>(null);
+    const [showAdminExitConfirmation, setShowAdminExitConfirmation] = React.useState(false);
 
-    useEffect(() => {
-        localStorage.setItem('sello_global_deduct_refunds', deductRefunds.toString());
-    }, [deductRefunds]);
+    const {
+        t,
+        products,
+        setProducts,
+        salesHistory,
+        refundHistory,
+        shipmentHistory,
+        priceChangeHistory,
+        costChangeHistory,
+        inventoryChangeHistory,
+        promotions,
+        setPromotions,
+        learnedAliases,
+        inventoryTemplates,
+        setInventoryTemplates,
+        pricingRules,
+        setPricingRules,
+        logisticsRules,
+        setLogisticsRules,
+        strategyRules,
+        setStrategyRules,
+        searchConfig,
+        setSearchConfig,
+        skuFamilies,
+        setSkuFamilies,
+        pendingFamilySuggestions,
+        setPendingFamilySuggestions,
+        adGroups,
+        setAdGroups,
+        onSyncFromFamilies,
+        onAddAdGroup,
+        onEditAdGroup,
+        onRemoveAdGroup,
+        handleAdGroupSave,
+        lastRecalculationSummary,
+        brandMap,
+        setBrandMap,
+        categoryMap,
+        setCategoryMap,
+        deductRefunds,
+        setDeductRefunds,
+        uploadTimestamps,
+        thresholds,
+        velocityLookback,
+        setVelocityLookback,
+        userProfile,
+        setUserProfile,
+        showBackToTop,
+        mainContentRef,
+        fileRestoreRef,
+        selectedElasticityProduct,
+        setSelectedElasticityProduct,
+        isUploadModalOpen,
+        setIsUploadModalOpen,
+        isSalesImportModalOpen,
+        setIsSalesImportModalOpen,
+        isSkuDetailModalOpen,
+        setIsSkuDetailModalOpen,
+        isMappingModalOpen,
+        setIsMappingModalOpen,
+        isReturnsModalOpen,
+        setIsReturnsModalOpen,
+        isCAUploadModalOpen,
+        setIsCAUploadModalOpen,
+        isShipmentModalOpen,
+        setIsShipmentModalOpen,
+        selectedAnalysisProduct,
+        setSelectedAnalysisProduct,
+        analysisResult,
+        setAnalysisResult,
+        isAnalysisLoading,
+        isSearchLoading,
+        searchSessions,
+        activeSearchId,
+        setActiveSearchId,
+        currentView,
+        setCurrentView,
+        isOnline,
+        isFreshnessExpanded,
+        setIsFreshnessExpanded,
+        mapJumpState,
+        priceHistoryMap,
+        existingOrders,
+        dynamicDateLabels,
+        ambientRgb,
+        handleRefreshThresholds,
+        handleRecalculateVelocity,
+        handleSearch,
+        handleDeepDiveRequest,
+        handleManualPriceChange,
+        handleManualCostChange,
+        handleAnalyzeCarrier,
+        handleRefineSearch,
+        deleteSearchSession,
+        handleViewElasticity,
+        handleAnalyze,
+        handleApplyPrice,
+        handleBackup,
+        handleRestore,
+        handleResetRefunds,
+        handleUpdatePriceChangeRecord,
+        handleUpdateCostChangeRecord,
+        handleUpdateInventoryChangeRecord,
+        handleSalesImportConfirm,
+        handleInventoryImport,
+        handleResetSalesData,
+        handleSkuDetailImport,
+        handleMappingImport,
+        handleReturnsImport,
+        handleCAImport,
+        handleShipmentImport,
+        isAdminMode,
+        adminSessionActive,
+        handleAdminToggle,
+        handleAdminExit,
+        lastSyncedAt,
+        syncStatus,
+        handleSync,
+        pendingFamilyConflicts,
+        resolveConflicts,
+        showSaveToast,
+        isDirty,
+        handleAdminPush
+    } = useAppState();
 
-    const [uploadTimestamps, setUploadTimestamps] = useState<Record<string, string>>(() => {
-        try {
-            return JSON.parse(localStorage.getItem('sello_upload_timestamps') || '{}') || {};
-        } catch { return {}; }
-    });
+    const quickUploadActions = [
+        { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-indigo-600' },
+        { label: t('quick_upload_sales'), icon: FileBarChart, action: () => setIsSalesImportModalOpen(true), color: 'text-blue-600' },
+        { label: t('quick_upload_refunds'), icon: RotateCcw, action: () => setIsReturnsModalOpen(true), color: 'text-red-600' },
+        { label: t('quick_upload_sku_detail'), icon: FileText, action: () => setIsSkuDetailModalOpen(true), color: 'text-teal-600' },
+        { label: t('quick_upload_ca_report'), icon: Upload, action: () => setIsCAUploadModalOpen(true), color: 'text-purple-600' },
+        { label: t('quick_upload_sku_mapping'), icon: LinkIcon, action: () => setIsMappingModalOpen(true), color: 'text-amber-600' },
+        { label: t('quick_upload_shipment'), icon: Ship, action: () => setIsShipmentModalOpen(true), color: 'text-teal-600' },
+    ];
 
-    const updateTimestamp = (key: string) => {
-        const now = new Date().toISOString();
-        setUploadTimestamps(prev => {
-            const next = { ...(prev || {}), [key]: now };
-            localStorage.setItem('sello_upload_timestamps', JSON.stringify(next));
-            return next;
-        });
-    };
-    
-    const [thresholds, setThresholds] = useState<ThresholdConfig>(getThresholdConfig());
-
-    const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(() => {
-        return (localStorage.getItem('sello_velocity_setting') as VelocityLookback) || '30';
-    });
-
-    const [userProfile, setUserProfile] = useState<UserProfileType>({
-        name: '', themeColor: '#4f46e5', backgroundImage: '', backgroundColor: '#f3f4f6', glassMode: 'light', glassOpacity: 90, glassBlur: 10, ambientGlass: true, ambientGlassOpacity: 15
-    });
-
-    const [showBackToTop, setShowBackToTop] = useState(false);
-    const mainContentRef = useRef<HTMLDivElement>(null); // Ref for scrollable content area
-
-    useEffect(() => {
-        const loadDatabase = async () => {
-            setIsDataLoaded(true);
-        };
-        loadDatabase();
-
-        // Attach scroll listener to the main content div, not window
-        const handleScroll = () => {
-            if (mainContentRef.current) {
-                setShowBackToTop(mainContentRef.current.scrollTop > 400);
-            }
-        };
-        
-        const scrollContainer = mainContentRef.current;
-        if (scrollContainer) {
-            scrollContainer.addEventListener('scroll', handleScroll);
-        }
-        
-        return () => {
-             if (scrollContainer) scrollContainer.removeEventListener('scroll', handleScroll);
-        };
-    }, []);
-
-    const [selectedElasticityProduct, setSelectedElasticityProduct] = useState<Product | null>(null);
-    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-    const [isSalesImportModalOpen, setIsSalesImportModalOpen] = useState(false);
-    const [isCostUploadModalOpen, setIsCostUploadModalOpen] = useState(false);
-    const [isSkuDetailModalOpen, setIsSkuDetailModalOpen] = useState(false);
-    const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
-    const [isReturnsModalOpen, setIsReturnsModalOpen] = useState(false);
-    const [isCAUploadModalOpen, setIsCAUploadModalOpen] = useState(false);
-    const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
-    const [selectedAnalysisProduct, setSelectedAnalysisProduct] = useState<Product | null>(null);
-    const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-    const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
-    const [isSearchLoading, setIsSearchLoading] = useState(false);
-    const [searchSessions, setSearchSessions] = useState<SearchSession[]>([]);
-    const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
-    const [currentView, setCurrentView] = useState<'overview' | 'strategy' | 'products' | 'platforms' | 'settings' | 'costs' | 'definitions' | 'promotions' | 'tools' | 'search' | 'custom-report'>('overview');
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
-    const [isFreshnessExpanded, setIsFreshnessExpanded] = useState(false);
-    const [mapJumpState, setMapJumpState] = useState<{ carrier: string, metric: 'RETURN_RATE' | 'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS' } | null>(null);
-    const fileRestoreRef = useRef<HTMLInputElement>(null);
-
-    const priceHistoryMap = useMemo(() => {
-        const map = new Map<string, PriceLog[]>();
-        (priceHistoryHistory || []).forEach(h => {
-            if (!h || !h.sku) return;
-            if (!map.has(h.sku)) map.set(h.sku, []);
-            map.get(h.sku)!.push(h);
-        });
-        return map;
-    }, [priceHistoryHistory]);
-
-    const existingOrders = useMemo(() => {
-        const map = new Map<string, string>();
-        (priceHistoryHistory || []).forEach(p => {
-            if (p && p.orderId) map.set(p.orderId, p.platform || 'Unknown');
-        });
-        return map;
-    }, [priceHistoryHistory]);
-
-    // NEW: Implementation of order-to-date lookup map for returns attribution
-    const orderDateMap = useMemo(() => {
-        const map = new Map<string, string>();
-        (priceHistoryHistory || []).forEach(p => {
-            if (p && p.orderId) {
-                const dKey = asDateKey(p.date);
-                if (dKey) {
-                    // We only need one date per order ID.
-                    // If multiple rows for same order ID (aggregated daily logs), date should be consistent.
-                    map.set(p.orderId, dKey);
-                }
-            }
-        });
-        return map;
-    }, [priceHistoryHistory]);
-
-    const dynamicDateLabels = useMemo(() => {
-        const ranges = getFridayThursdayRanges();
-        return {
-            current: `${formatDate(ranges.current.start)} - ${formatDate(ranges.current.end)}`,
-            last: `${formatDate(ranges.last.start)} - ${formatDate(ranges.last.end)}`
-        };
-    }, []);
-
-    const ambientRgb = useMemo(() => {
-        let hex = userProfile.themeColor; // Ultimate fallback
-
-        const bgImageHex = (userProfile.backgroundImage && userProfile.backgroundImage !== 'none') 
-            ? extractFirstHex(userProfile.backgroundImage) 
-            : null;
-
-        if (bgImageHex) {
-            hex = bgImageHex;
-        } else if (userProfile.backgroundColor && userProfile.backgroundColor !== 'none') {
-            hex = userProfile.backgroundColor;
-        }
-
-        const rgb = hexToRgb(hex);
-        return rgb || (userProfile.glassMode === 'dark' ? {r:0, g:0, b:0} : {r:255, g:255, b:255});
-    }, [userProfile.backgroundImage, userProfile.backgroundColor, userProfile.themeColor, userProfile.glassMode]);
-
-    const handleRefreshProductStatuses = (config: ThresholdConfig) => {
-        const recalculated = recalculateProductMetrics(products, priceHistoryHistory, velocityLookback, config, pricingRules, brandMap, categoryMap);
-        setProducts(recalculated);
-    };
-
-    const handleRefreshThresholds = () => {
-        const newConfig = getThresholdConfig();
-        setThresholds(newConfig);
-        handleRefreshProductStatuses(newConfig);
-    };
-
-    const handleRecalculateVelocity = (newLookback: VelocityLookback, currentPriceHistory: PriceLog[]) => {
-        const currentThresholds = getThresholdConfig();
-        const recalculated = recalculateProductMetrics(products, currentPriceHistory, newLookback, currentThresholds, pricingRules, brandMap, categoryMap);
-        setProducts(recalculated);
-    };
-
-    const handleSearch = async (queryOrChips: string | SearchChip[]) => {
-       let rawText = "";
-       if (typeof queryOrChips === 'string') { rawText = queryOrChips; } 
-       else { const chips = queryOrChips; const metrics = chips.filter(c => c.type === 'METRIC').map(c => c.label).join(' '); const conditions = chips.filter(c => c.type === 'CONDITION').map(c => c.label).join(' '); const platforms = chips.filter(c => c.type === 'PLATFORM').map(c => `on ${c.label}`).join(' '); const text = chips.filter(c => c.type === 'TEXT').map(c => c.value).join(' '); const time = chips.filter(c => c.type === 'TIME').map(c => c.label).join(' '); rawText = `${time} ${conditions} ${metrics} ${platforms} ${text}`.trim(); }
-       
-       const cleanQuery = rawText.replace(/^SKU:\s*/i, '').trim(); 
-       const normalizedQuery = cleanQuery.toLowerCase();
-
-       const directMatch = products.find(p => {
-           if (!p) return false;
-           if (p.sku.toLowerCase() === normalizedQuery) return true;
-           return (p.channels || []).some(c => c.skuAlias && c.skuAlias.split(',').some(a => a.trim().toLowerCase() === normalizedQuery));
-       });
-
-       if (directMatch) {
-           setIsSearchLoading(true);
-           setTimeout(() => {
-               const deepDiveIntent: SearchIntent = {
-                   targetData: 'inventory',
-                   filters: [{ field: 'sku', operator: '=', value: directMatch.sku }],
-                   primaryMetric: 'DEEP_DIVE',
-                   limit: 1,
-                   explanation: `Deep Dive: ${directMatch.sku}`
-               };
-               const { results, timeLabel } = processDataForSearch(deepDiveIntent, products, priceHistoryHistory, pricingRules, refundHistory);
-               const newSession: SearchSession = { id: `search-${Date.now()}`, query: `SKU: ${directMatch.sku}`, results: results || [], params: deepDiveIntent, explanation: deepDiveIntent.explanation, timeLabel: timeLabel, timestamp: Date.now() };
-               setSearchSessions(prev => [newSession, ...(prev || [])]); setActiveSearchId(newSession.id); setCurrentView('search'); setIsSearchLoading(false);
-           }, 150);
-           return;
-       }
-
-       setIsSearchLoading(true);
-       try {
-         const intent = await parseSearchQuery(rawText);
-         const { results, timeLabel } = processDataForSearch(intent, products, priceHistoryHistory, pricingRules, refundHistory);
-         const newSession: SearchSession = { id: `search-${Date.now()}`, query: rawText, results: results || [], params: intent, explanation: intent.explanation, timeLabel: timeLabel, timestamp: Date.now() };
-         setSearchSessions(prev => [newSession, ...(prev || [])]); setActiveSearchId(newSession.id); setCurrentView('search');
-       } catch(e) { console.error("Search failed", e); } finally { setIsSearchLoading(false); }
-    };
-    
-    const handleDeepDiveRequest = (sku: string) => { handleSearch(`SKU: ${sku}`); };
-
-    const handleManualPriceChange = (data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => {
-        const { sku, productName, date, oldPrice, newPrice } = data;
-        const changeType = newPrice > oldPrice ? 'INCREASE' : 'DECREASE';
-        const percentChange = oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : (newPrice > 0 ? 100 : 0);
-        const newRecord: PriceChangeRecord = { id: `manual-${Date.now()}-${sku}`, sku, productName, date, oldPrice, newPrice, changeType, percentChange };
-        setPriceChangeHistory(prev => [newRecord, ...(prev || [])]);
-    };
-
-    const handleManualCostChange = (data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => {
-        const { sku, productName, date, oldCost, newCost } = data;
-        const changeType = newCost > oldCost ? 'INCREASE' : 'DECREASE';
-        const percentChange = oldCost > 0 ? ((newCost - oldCost) / oldCost) * 100 : (newCost > 0 ? 100 : 0);
-        const newRecord: CostChangeRecord = { id: `manual-cost-${Date.now()}-${sku}`, sku, productName, date, oldCost, newCost, changeType, percentChange };
-        setCostChangeHistory(prev => [...(prev || []), newRecord].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    };
-
-    const handleAnalyzeCarrier = (carrier: string) => {
-        setMapJumpState({ carrier, metric: 'RETURN_RATE' });
-        setCurrentView('overview');
-    };
-
-    const handleRefineSearch = (sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, priceHistoryHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel }; } return s; })); setIsSearchLoading(false); }, 150); };
-    const deleteSearchSession = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } };
-    const handleViewElasticity = (product: Product) => { setSelectedElasticityProduct(product); };
-    const handleAnalyze = async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } };
-    const handleApplyPrice = (productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = (prev || []).find(p => p.id === productId); if (!productToUpdate) return prev; const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...(prevHistory || []), change]); return prev.map(p => { if (p.id !== productId) return p; return { ...p, caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }; }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); };
-    
-    const handleBackup = () => { 
-        const data = { products, priceHistory: priceHistoryHistory, refundHistory, shipmentHistory, priceChangeHistory, costChangeHistory, inventoryChangeHistory, promotions, learnedAliases, pricingRules, logisticsRules, strategyRules, searchConfig, velocityLookback, userProfile, inventoryTemplates, thresholds, uploadTimestamps, brandMap, categoryMap, exportDate: new Date().toISOString() }; 
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); 
-        const url = URL.createObjectURL(blob); 
-        const link = document.createElement('a'); 
-        link.href = url; link.download = `sello_backup_${new Date().toISOString().slice(0, 10)}.json`; 
-        document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); 
-    };
-    
-    const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const rawJson = JSON.parse(event.target?.result as string);
-                const safeJson = normalizeRestoredState(rawJson);
-                const migrated = migrateRestoredDatabase(safeJson);
-                const report = auditRestoredDatabase(migrated);
-                if (report.hasFatal) {
-                    console.error('[RESTORE AUDIT FAIL]', report);
-                    alert("Restore file contains invalid structure. Check console for details.");
-                    if (fileRestoreRef.current) fileRestoreRef.current.value = '';
-                    return;
-                }
-                const hasThresholds = rawJson && typeof rawJson === 'object' && 'thresholds' in rawJson;
-                const hasVelocity = rawJson && typeof rawJson === 'object' && 'velocityLookback' in rawJson;
-
-                const restored = {
-                    products: Array.isArray(migrated.products) ? migrated.products : [],
-                    priceHistory: Array.isArray(migrated.priceHistory) ? migrated.priceHistory : [],
-                    refundHistory: Array.isArray(migrated.refundHistory) ? migrated.refundHistory : [],
-                    shipmentHistory: Array.isArray(migrated.shipmentHistory) ? migrated.shipmentHistory : [],
-                    priceChangeHistory: Array.isArray(migrated.priceChangeHistory) ? migrated.priceChangeHistory : [],
-                    costChangeHistory: Array.isArray(migrated.costChangeHistory) ? migrated.costChangeHistory : [],
-                    inventoryChangeHistory: Array.isArray(migrated.inventoryChangeHistory) ? migrated.inventoryChangeHistory : [],
-                    promotions: Array.isArray(migrated.promotions) ? migrated.promotions : [],
-                    learnedAliases: migrated.learnedAliases && typeof migrated.learnedAliases === 'object' ? migrated.learnedAliases : {},
-                    pricingRules: migrated.pricingRules || DEFAULT_PRICING_RULES,
-                    logisticsRules: Array.isArray(migrated.logisticsRules) ? migrated.logisticsRules : DEFAULT_LOGISTICS_RULES,
-                    strategyRules: migrated.strategyRules || DEFAULT_STRATEGY_RULES,
-                    searchConfig: migrated.searchConfig || DEFAULT_SEARCH_CONFIG,
-                    userProfile: migrated.userProfile && typeof migrated.userProfile === 'object' ? migrated.userProfile : {},
-                    inventoryTemplates: Array.isArray(migrated.inventoryTemplates) ? migrated.inventoryTemplates : [],
-                    uploadTimestamps: migrated.uploadTimestamps && typeof migrated.uploadTimestamps === 'object' ? migrated.uploadTimestamps : {},
-                    thresholds: hasThresholds ? migrated.thresholds : null,
-                    velocityLookback: hasVelocity ? migrated.velocityLookback : null,
-                    brandMap: migrated.brandMap && typeof migrated.brandMap === 'object' ? migrated.brandMap : {},
-                    categoryMap: migrated.categoryMap && typeof migrated.categoryMap === 'object' ? migrated.categoryMap : {}
-                };
-                setPriceHistory(restored.priceHistory);
-                setRefundHistory(restored.refundHistory);
-                setShipmentHistory(restored.shipmentHistory);
-                setPriceChangeHistory(restored.priceChangeHistory);
-                setCostChangeHistory(restored.costChangeHistory);
-                setInventoryChangeHistory(restored.inventoryChangeHistory);
-                setPromotions(restored.promotions);
-                setLearnedAliases(restored.learnedAliases);
-                setPricingRules(restored.pricingRules);
-                setLogisticsRules(restored.logisticsRules);
-                setStrategyRules(restored.strategyRules);
-                setSearchConfig(restored.searchConfig);
-                setInventoryTemplates(restored.inventoryTemplates);
-                setUploadTimestamps(restored.uploadTimestamps);
-                setBrandMap(restored.brandMap);
-                setCategoryMap(restored.categoryMap);
-                localStorage.setItem('sello_upload_timestamps', JSON.stringify(restored.uploadTimestamps));
-                setUserProfile(prev => ({ ...prev, ...restored.userProfile }));
-                let currentThresholds = thresholds;
-                if (restored.thresholds) {
-                    setThresholds(restored.thresholds);
-                    saveThresholdConfig(restored.thresholds);
-                    currentThresholds = restored.thresholds;
-                }
-                let currentVelocity = velocityLookback;
-                if (restored.velocityLookback) {
-                    setVelocityLookback(restored.velocityLookback);
-                    localStorage.setItem('sello_velocity_setting', restored.velocityLookback);
-                    currentVelocity = restored.velocityLookback;
-                }
-                const recalculatedProducts = recalculateProductMetrics(restored.products, restored.priceHistory, currentVelocity, currentThresholds, restored.pricingRules, restored.brandMap, restored.categoryMap);
-                setProducts(recalculatedProducts);
-                alert(t('alert_db_restore_success'));
-            } catch (err) {
-                console.error("Restore failed", err);
-                alert(t('alert_db_restore_fail'));
-            }
-        };
-        reader.readAsText(file);
-        if (fileRestoreRef.current) fileRestoreRef.current.value = '';
-    };
-    
-    const handleResetRefunds = () => { setRefundHistory([]); setProducts(prev => (prev || []).map(p => ({ ...p, returnRate: 0 }))); setIsReturnsModalOpen(false); };
-
-    const handleUpdatePriceChangeRecord = (recordToUpdate: PriceChangeRecord) => { setPriceChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); };
-    const handleUpdateCostChangeRecord = (recordToUpdate: CostChangeRecord) => { setCostChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); };
-    const handleUpdateInventoryChangeRecord = (recordToUpdate: InventoryChangeRecord) => { setInventoryChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); };
-
-    const quickUploadActions = [ 
-        { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-indigo-600' }, 
-        { label: t('quick_upload_sales'), icon: FileBarChart, action: () => setIsSalesImportModalOpen(true), color: 'text-blue-600' }, 
-        { label: t('quick_upload_refunds'), icon: RotateCcw, action: () => setIsReturnsModalOpen(true), color: 'text-red-600' }, 
-        { label: t('quick_upload_sku_detail'), icon: FileText, action: () => setIsSkuDetailModalOpen(true), color: 'text-teal-600' }, 
-        { label: t('quick_upload_ca_report'), icon: Upload, action: () => setIsCAUploadModalOpen(true), color: 'text-purple-600' }, 
-        { label: t('quick_upload_sku_mapping'), icon: LinkIcon, action: () => setIsMappingModalOpen(true), color: 'text-amber-600' }, 
-        { label: t('quick_upload_shipment'), icon: Ship, action: () => setIsShipmentModalOpen(true), color: 'text-teal-600' }, 
-    ]; 
-    
     const headerTextColor = userProfile.textColor || '#111827';
     const textShadowStyle = userProfile.backgroundImage && userProfile.backgroundImage !== 'none' ? { textShadow: '0 1px 3px rgba(0,0,0,0.3)' } : {};
     const headerStyle = { color: headerTextColor, ...textShadowStyle };
     const hasInventory = products && products.length > 0;
     const activeSearch = (searchSessions || []).find(s => s.id === activeSearchId);
 
-    const handleSalesImportConfirm = (updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: ShipmentLog[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>) => { 
-        if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
-        let updatedPriceHistory = [...(priceHistoryHistory || [])];
-        if (historyPayload && historyPayload.length > 0) { 
-            const newLogs: PriceLog[] = historyPayload.map(h => ({ 
-                id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
-                sku: h.sku, 
-                date: h.date, 
-                price: h.price, 
-                velocity: h.velocity, 
-                margin: h.margin || 0, 
-                profit: h.profit, 
-                adsSpend: h.adsSpend, 
-                platform: h.platform, 
-                orderId: h.orderId, 
-                postcode: h.postcode,
-                logisticPartner: h.logisticPartner,
-                logisticService: h.logisticService,
-                realPostage: h.realPostage,
-                realExtraFreight: h.realExtraFreight
-            })); 
-            const transactionKeys = new Set<string>(); const dailyActivityKeys = new Set<string>(); newLogs.forEach(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { transactionKeys.add(`${l.sku}|${l.orderId}`); } dailyActivityKeys.add(`${l.sku}|${d}|${p}`); }); 
-            const keptHistory = (priceHistoryHistory || []).filter(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { const txKey = `${l.sku}|${l.orderId}`; if (transactionKeys.has(txKey)) return false; return true; } const dailyKey = `${l.sku}|${d}|${p}`; if (dailyActivityKeys.has(dailyKey)) return false; return true; }); 
-            updatedPriceHistory = [...newLogs, ...keptHistory]; setPriceHistory(updatedPriceHistory);
-        }
-        const mergedProducts = (products || []).map(p => { const update = (updatedProductsFromImport || []).find(u => u.id === p.id); return update ? update : p; });
-        const finalProducts = recalculateProductMetrics(mergedProducts, updatedPriceHistory, velocityLookback, getThresholdConfig(), pricingRules, brandMap, categoryMap);
-        setProducts(finalProducts);
-        if (newShipmentLogs && newShipmentLogs.length > 0) setShipmentHistory(prev => [...newShipmentLogs, ...(prev || [])]); 
-        if (discoveredPlatforms && discoveredPlatforms.length > 0) { setPricingRules(prev => { const newRules = { ...(prev || {}) }; let changed = false; discoveredPlatforms.forEach(p => { if (!newRules[p]) { newRules[p] = { markup: 0, commission: 15, manager: 'Unassigned', color: '#6b7280', pricingControl: 'MERCHANT', feeModel: 'COMMISSION_PCT', adsEnabled: false }; changed = true; } }); return changed ? newRules : prev; }); } 
-        updateTimestamp('Sales'); setIsSalesImportModalOpen(false); 
+    const pageTitles: Record<string, string> = {
+        search: t('header_search'),
+        products: t('header_products'),
+        platforms: t('header_platforms'),
+        overview: t('header_dashboard'),
+        strategy: t('header_strategy'),
+        costs: t('header_costs'),
+        definitions: t('header_definitions'),
+        promotions: t('header_promotions'),
+        tools: t('header_toolbox'),
+        'family-groups': 'Family Groups',
+        'custom-report': 'Custom Report Builder',
+        settings: t('desc_settings'),
     };
 
-    const handleInventoryImport = (data: any[]) => {
-        const costChanges: CostChangeRecord[] = [];
-        const inventoryLogs: InventoryChangeRecord[] = [];
-        const reportDate = new Date().toISOString().split('T')[0];
-        const timestamp = Date.now();
-        const uploadBatchId = `batch-${timestamp}`;
-        const aggregatedDataMap = new Map<string, any>();
-        data.forEach(item => { 
-            const rawSku = String(item.sku || '').trim();
-            if (!rawSku) return;
-            const canonicalSku = getCanonicalSku(rawSku);
-            const existing = aggregatedDataMap.get(canonicalSku) || {}; 
-            Object.entries(item).forEach(([k, v]) => { 
-                if (v !== undefined) {
-                    if (k === 'stock') existing[k] = (Number(existing.k) || 0) + Number(v);
-                    else if (k === 'sku') existing[k] = canonicalSku;
-                    else existing[k] = v;
-                }
-            }); 
-            aggregatedDataMap.set(canonicalSku, existing); 
-        });
-        const finalData = Array.from(aggregatedDataMap.values());
-        setProducts(prev => {
-            const currentThresholds = getThresholdConfig();
-            const newProducts = [...(prev || [])];
-            finalData.forEach(item => {
-                const existingIndex = newProducts.findIndex(p => p.sku === item.sku);
-                const existingProduct = existingIndex !== -1 ? newProducts[existingIndex] : null;
-                if (existingProduct) {
-                    const existing = { ...existingProduct };
-                    if (item.stock !== undefined) {
-                        const prevStock = existing.stockLevel || 0; const newStock = Number(item.stock);
-                        if (newStock > prevStock) {
-                            const deltaStock = newStock - prevStock; const pctIncrease = prevStock === 0 ? 1 : deltaStock / prevStock; const isSignificant = pctIncrease >= 0.05;
-                            const hasMatchingShipment = (existing.shipments || []).some(s => { if (!s.eta) return false; const shipmentDate = new Date(s.eta).getTime(); const reportTime = new Date(reportDate).getTime(); return Math.abs((shipmentDate - reportTime) / (1000 * 60 * 60 * 24)) <= 7; });
-                            const isStrategic = isSignificant && hasMatchingShipment;
-                            inventoryLogs.push({ id: `inv-chg-${timestamp}-${item.sku}`, sku: item.sku, productName: existing.name, timestamp, date: reportDate, prevStock, newStock, deltaStock, source: "ERP_UPLOAD", uploadBatchId, isStrategic, reason: isStrategic ? "Strategic Restock" : "Routine Adjustment" });
-                        }
-                        existing.stockLevel = newStock;
-                    }
-                    if (item.cost !== undefined) {
-                        const oldCost = existing.costPrice || 0; const newCost = Number(item.cost);
-                        if (oldCost > 0 && Math.abs(oldCost - newCost) > 0.02) { costChanges.push({ id: `cost-chg-${Date.now()}-${item.sku}`, sku: item.sku, productName: existing.name, date: reportDate, oldCost, newCost, changeType: newCost > oldCost ? 'INCREASE' : 'DECREASE', percentChange: ((newCost - oldCost) / oldCost) * 100 }); }
-                        existing.costPrice = newCost;
-                    }
-                    // Capture ERP Daily Sales directly
-                    if (item.dailyAverageSales !== undefined) {
-                        existing.dailyAverageSales = toNumber(item.dailyAverageSales);
-                    }
-                    if (item.name) existing.name = item.name;
-                    if (item.brand) existing.brand = item.brand; // Capture raw brand
-                    if (item.category) existing.category = item.category; // Capture raw category
-                    existing.lastUpdated = reportDate;
-                    newProducts[existingIndex] = existing;
-                } else {
-                    newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: toNumber(item.dailyAverageSales), leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, category: item.category || 'Uncategorized', brand: item.brand, dailyAverageSales: toNumber(item.dailyAverageSales) });
-                }
-            });
-            // CRITICAL: Always trigger a full recalculation to ensure averageDailySales maps correctly to ERP vs Fallback
-            return recalculateProductMetrics(newProducts, priceHistoryMap, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
-        });
-        if (costChanges.length > 0) setCostChangeHistory(prev => [...costChanges, ...(prev || [])]);
-        if (inventoryLogs.length > 0) setInventoryChangeHistory(prev => [...inventoryLogs, ...(prev || [])]);
-        updateTimestamp('Inventory'); setIsUploadModalOpen(false);
-    };
-
-    const handleResetSalesData = () => {
-        setPriceHistory([]);
-        setShipmentHistory([]);
-        const currentThresholds = getThresholdConfig();
-        const recalculated = recalculateProductMetrics(products, [], velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
-        setProducts(recalculated);
-        setIsSalesImportModalOpen(false);
-    };
-
-    const handleSkuDetailImport = (data: { masterSku: string; detail: SkuCostDetail }[]) => {
-        setProducts(prev => (prev || []).map(p => {
-            const update = data.find(d => d.masterSku === p.sku);
-            return update ? { ...p, costDetail: update.detail } : p;
-        }));
-        updateTimestamp('SKU Details');
-        setIsSkuDetailModalOpen(false);
-    };
-
-    const handleMappingImport = (mappings: any[], mode: 'merge' | 'replace', platform: string) => {
-        setProducts(prev => (prev || []).map(p => {
-            const platformMappings = mappings.filter(m => m.masterSku === p.sku && m.platform === platform);
-            if (platformMappings.length === 0 && mode === 'merge') return p;
-            const updatedChannels = [...p.channels];
-            const channelIdx = updatedChannels.findIndex(c => c.platform === platform);
-            const newAliases = platformMappings.map(m => m.alias).join(', ');
-            if (channelIdx >= 0) {
-                const existingAliases = updatedChannels[channelIdx].skuAlias?.split(',').map(s => s.trim()).filter(Boolean) || [];
-                const importedAliases = newAliases.split(',').map(s => s.trim()).filter(Boolean);
-                updatedChannels[channelIdx] = { ...updatedChannels[channelIdx], skuAlias: mode === 'replace' ? newAliases : [...new Set([...existingAliases, ...importedAliases])].join(', ') };
-            } else if (newAliases) {
-                updatedChannels.push({ platform, manager: pricingRules[platform]?.manager || 'Unassigned', velocity: 0, skuAlias: newAliases });
-            }
-            return { ...p, channels: updatedChannels };
-        }));
-        setIsMappingModalOpen(false);
-    };
-
-    const handleReturnsImport = (newRefunds: RefundLog[]) => {
-        const existingIds = new Set((refundHistory || []).map(r => r.id));
-        
-        // Deduplicate newRefunds itself first, then filter against existing
-        const uniqueInNew = new Map<string, RefundLog>();
-        newRefunds.forEach(r => {
-            if (!uniqueInNew.has(r.id)) {
-                uniqueInNew.set(r.id, r);
-            }
-        });
-
-        const uniqueNew = Array.from(uniqueInNew.values()).filter(r => !existingIds.has(r.id));
-        const mergedRefunds = [...(refundHistory || []), ...uniqueNew];
-
-        setRefundHistory(mergedRefunds);
-        setProducts(prev => (prev || []).map(p => {
-            const productRefunds = mergedRefunds.filter(r => r.sku === p.sku);
-            const totalRefundQty = productRefunds.reduce((sum, r) => sum + r.quantity, 0);
-            const returnRate = p.averageDailySales > 0 ? (totalRefundQty / (p.averageDailySales * 30)) * 100 : 0; 
-            return { ...p, returnRate };
-        }));
-        updateTimestamp('Refunds');
-        setIsReturnsModalOpen(false);
-    };
-
-    const handleCAImport = (data: { sku: string; caPrice: number; imageUrl?: string }[], reportDate: string) => {
-        const changes: PriceChangeRecord[] = [];
-        setProducts(prev => (prev || []).map(p => {
-            const update = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
-            if (update) {
-                const oldPrice = p.caPrice || (p.currentPrice * VAT_MULTIPLIER);
-                if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
-                    changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
-                }
-                return { 
-                    ...p, 
-                    caPrice: update.caPrice, 
-                    lastUpdated: reportDate,
-                    imageUrl: update.imageUrl || p.imageUrl 
-                };
-            }
-            return p;
-        }));
-        if (changes.length > 0) setPriceChangeHistory(prev => [...changes, ...(prev || [])]);
-        updateTimestamp('CA Prices');
-        setIsCAUploadModalOpen(false);
-    };
-
-    const handleShipmentImport = (updates: any[]) => {
-        setProducts(prev => (prev || []).map(p => {
-            const update = updates.find(u => u.sku === p.sku);
-            if (update) {
-                const incomingStock = update.shipments.reduce((sum: number, s: any) => sum + s.quantity, 0);
-                return { ...p, shipments: update.shipments, incomingStock };
-            }
-            return p;
-        }));
-        updateTimestamp('Shipments');
-        setIsShipmentModalOpen(false);
+    const pageDescs: Record<string, string> = {
+        search: t('desc_search'),
+        overview: t('desc_dashboard'),
+        strategy: t('desc_strategy'),
+        products: t('desc_products'),
+        platforms: t('desc_platforms'),
+        costs: t('desc_costs'),
+        definitions: t('desc_definitions'),
+        promotions: t('desc_promotions'),
+        tools: t('desc_toolbox'),
+        'family-groups': 'Manage SKU family groups for analytics',
+        'custom-report': 'Build and save custom data views',
+        settings: t('desc_settings'),
     };
 
     return (
         <>
-            <style>{` html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity??90)/100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity??90)/100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur??10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity??90)/100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity??90)/100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur??10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity??15)/100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur??10) + 4)}px); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } `}</style>
+            <style>{` html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity ?? 90) / 100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity ?? 90) / 100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur ?? 10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur ?? 10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity ?? 15) / 100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur ?? 10) + 4)}px); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } `}</style>
             <div className="h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent overflow-hidden">
                 {userProfile.ambientGlass && <div className="fixed inset-0 z-[1] pointer-events-none transition-all duration-500 bg-custom-ambient backdrop-blur-custom-ambient" />}
-                <aside className={`w-64 border-r border-custom-glass hidden md:flex flex-col fixed h-full z-40 shadow-sm transition-all duration-300 bg-custom-glass`}>
-                    <div className="p-6 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold" style={{ backgroundColor: userProfile.themeColor }}>S</div>
-                        <span className="font-bold text-xl tracking-tight text-gray-900">Sello UK Hub</span>
+                <aside className={`w-60 border-r border-custom-glass hidden md:flex flex-col fixed h-full z-40 shadow-sm transition-all duration-300 bg-custom-glass`}>
+                    <div className="p-4 flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: userProfile.themeColor }}>S</div>
+                        <span className="font-bold text-lg tracking-tight text-gray-900">Sello UK Hub</span>
                     </div>
-                    <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
-                        {[ 
-                          { id: 'overview', icon: LayoutDashboard, label: t('nav_overview') }, 
-                          { id: 'products', icon: Package, label: t('nav_products') }, 
-                          { id: 'platforms', icon: Globe, label: t('nav_platforms') },
-                          { id: 'strategy', icon: Calculator, label: t('nav_strategy') }, 
-                          { id: 'costs', icon: DollarSign, label: t('nav_costs') }, 
-                          { id: 'promotions', icon: Tag, label: t('nav_promotions') }, 
-                          { id: 'custom-report', icon: Table, label: 'Custom Reports' },
-                          { id: 'tools', icon: Wrench, label: t('nav_toolbox') }, 
-                          { id: 'settings', icon: Settings, label: t('nav_config') }, 
-                          { id: 'definitions', icon: BookOpen, label: t('nav_definitions') } 
-                        ].map((item) => { const isActive = currentView === item.id; return ( <button key={item.id} onClick={() => setCurrentView(item.id as any)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${isActive ? 'bg-opacity-10' : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'}`} style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}} > <item.icon className="w-5 h-5" style={isActive ? { color: userProfile.themeColor } : {}} /> {item.label} </button> ); })}
-                        {searchSessions && searchSessions.length > 0 && ( <div className="mt-6 pt-4 border-t border-gray-100/50"> <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-2 flex items-center gap-2"> <History className="w-3 h-3" /> {t('active_searches')} </div> <div className="space-y-1"> {searchSessions.map(session => ( <div key={session.id} className="group relative flex items-center"> <button onClick={() => { setActiveSearchId(session.id); setCurrentView('search'); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all text-left overflow-hidden ${activeSearchId === session.id && currentView === 'search' ? 'bg-white/40 shadow-sm' : 'text-gray-600 hover:bg-gray-100/50'}`} style={activeSearchId === session.id && currentView === 'search' ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}} > <Search className={`w-4 h-4 flex-shrink-0 ${activeSearchId === session.id && currentView === 'search' ? '' : 'opacity-70'}`} /> <span className="truncate pr-4 block w-full">{session.query}</span> </button> <button onClick={(e) => deleteSearchSession(session.id, e)} className="absolute right-1 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10" title="Close Search" > <X className="w-3 h-3" /> </button> </div> ))} </div> </div> )} 
+                    <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+                        {[
+                            { id: 'overview', icon: LayoutDashboard, label: t('nav_overview') },
+                            { id: 'products', icon: Package, label: t('nav_products') },
+                            { id: 'platforms', icon: Globe, label: t('nav_platforms') },
+                            { id: 'strategy', icon: Calculator, label: t('nav_strategy') },
+                            { id: 'costs', icon: DollarSign, label: t('nav_costs') },
+                            { id: 'promotions', icon: Tag, label: t('nav_promotions') },
+                            { id: 'custom-report', icon: Table, label: 'Custom Reports' },
+                            { id: 'tools', icon: Wrench, label: t('nav_toolbox') },
+                            { id: 'settings', icon: Settings, label: t('nav_config') },
+                            { id: 'definitions', icon: BookOpen, label: t('nav_definitions') }
+                        ].map((item) => {
+                            const isActive = currentView === item.id;
+                            return (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setCurrentView(item.id as any)}
+                                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all text-sm ${isActive ? 'bg-opacity-10' : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'}`}
+                                    style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
+                                >
+                                    <item.icon className="w-4 h-4" style={isActive ? { color: userProfile.themeColor } : {}} />
+                                    {item.label}
+                                </button>
+                            );
+                        })}
+                        {searchSessions && searchSessions.length > 0 && (
+                            <div className="mt-4 pt-3 border-t border-gray-100/50">
+                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-2 flex items-center gap-2">
+                                    <History className="w-3 h-3" />
+                                    {t('active_searches')}
+                                </div>
+                                <div className="space-y-0.5">
+                                    {searchSessions.map(session => (
+                                        <div key={session.id} className="group relative flex items-center">
+                                            <button
+                                                onClick={() => { setActiveSearchId(session.id); setCurrentView('search'); }}
+                                                className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs font-medium transition-all text-left overflow-hidden ${activeSearchId === session.id && currentView === 'search' ? 'bg-white/40 shadow-sm' : 'text-gray-600 hover:bg-gray-100/50'}`}
+                                                style={activeSearchId === session.id && currentView === 'search' ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
+                                            >
+                                                <Search className={`w-3.5 h-3.5 flex-shrink-0 ${activeSearchId === session.id && currentView === 'search' ? '' : 'opacity-70'}`} />
+                                                <span className="truncate pr-4 block w-full">{session.query}</span>
+                                            </button>
+                                            <button
+                                                onClick={(e) => deleteSearchSession(session.id, e)}
+                                                className="absolute right-1 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10"
+                                                title="Close Search"
+                                            >
+                                                <X className="w-2.5 h-2.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </nav>
-                    <div className="p-4 border-t border-custom-glass space-y-3">
-                        <div className="px-2 space-y-2"> <button onClick={handleBackup} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-transparent hover:border-custom-glass"><Download className="w-3.5 h-3.5" /> {t('backup_db')}</button> <button onClick={() => fileRestoreRef.current?.click()} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-transparent hover:border-custom-glass"><Upload className="w-3.5 h-3.5" /> {t('restore_db')}</button> <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} /> </div>
-                        <div className="bg-gray-50/50 rounded-xl border border-custom-glass overflow-hidden transition-all duration-300">
-                            <button onClick={() => setIsFreshnessExpanded(!isFreshnessExpanded)} className="w-full flex justify-between items-center p-3 hover:bg-gray-100/50 transition-colors"> <div className="flex items-center gap-2"> <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Data Freshness</span> <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isFreshnessExpanded ? 'rotate-180' : ''}`} /> </div> <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span> </button>
-                            {isFreshnessExpanded && ( <div className="px-3 pb-3 space-y-1.5 pt-0 animate-in slide-in-from-top-1 duration-200"> <div className="border-t border-gray-200/50 mb-2"></div> {[ { label: 'Inventory', key: 'Inventory' }, { label: 'Sales', key: 'Sales' }, { label: 'SKU Detail', key: 'SKU Details' }, { label: 'Refunds', key: 'Refunds' }, { label: 'CA Prices', key: 'CA Prices' }, { label: 'Shipments', key: 'Shipments' }, ].map(item => ( <div key={item.key} className="flex justify-between items-center text-[10px]"> <span className="text-gray-500">{item.label}</span> <span className={`font-mono ${uploadTimestamps[item.key] ? 'text-gray-700 font-medium' : 'text-gray-300 italic'}`}> {uploadTimestamps[item.key] ? new Date(uploadTimestamps[item.key]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'} </span> </div> ))} </div> )}
+                    <div className="p-3 border-t border-custom-glass space-y-2">
+                        <div className="px-1 flex gap-1">
+                            <button onClick={handleBackup} className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-custom-glass">
+                                <Download className="w-3 h-3" /> {t('backup_db')}
+                            </button>
+                            <button onClick={() => fileRestoreRef.current?.click()} className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-custom-glass">
+                                <Upload className="w-3 h-3" /> {t('restore_db')}
+                            </button>
+                            <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />
+                        </div>
+
+                        {/* Sync Button Section */}
+                        <div className="px-1 pt-1">
+                            <button
+                                onClick={() => {
+                                    if (isAdminMode && isDirty) {
+                                        handleAdminPush();
+                                    } else {
+                                        handleSync();
+                                    }
+                                }}
+                                disabled={syncStatus === 'syncing' || syncStatus === 'pushing'}
+                                className={`w-full flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all border ${syncStatus === 'error'
+                                    ? 'bg-red-50 border-red-200 text-red-600'
+                                    : (isAdminMode && isDirty)
+                                        ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                                        : 'bg-white border-custom-glass text-gray-700 hover:bg-gray-50'
+                                    } shadow-sm group relative overflow-hidden`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    {syncStatus === 'pushing' ? (
+                                        <UploadCloud className="w-3.5 h-3.5 animate-bounce" />
+                                    ) : (
+                                        <RotateCcw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                                    )}
+                                    <span className="text-[10px] font-bold tracking-wider uppercase">
+                                        {syncStatus === 'syncing' ? t('syncing...') : syncStatus === 'pushing' ? 'Pushing...' : syncStatus === 'error' ? t('sync_failed_retry') : (isAdminMode && isDirty) ? 'Push Changes' : t('sync_data')}
+                                    </span>
+                                    {isAdminMode && isDirty && syncStatus === 'idle' && (
+                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                    )}
+                                </div>
+                                <div className="text-[9px] text-gray-500 font-medium">
+                                    {lastSyncedAt ? `${t('last_synced')}: ${new Date(lastSyncedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : t('never_synced')}
+                                </div>
+                                {(syncStatus === 'syncing' || syncStatus === 'pushing') && <div className="absolute bottom-0 left-0 h-0.5 bg-indigo-500 animate-progress-fast shadow-[0_0_8px_rgba(79,70,229,0.5)] w-full"></div>}
+                            </button>
+                        </div>
+
+                        <div className="bg-gray-50/50 rounded-lg border border-custom-glass overflow-hidden transition-all duration-300">
+                            <button onClick={() => setIsFreshnessExpanded(!isFreshnessExpanded)} className="w-full flex justify-between items-center p-2 hover:bg-gray-100/50 transition-colors">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">Data Freshness</span>
+                                    <ChevronDown className={`w-2.5 h-2.5 text-gray-400 transition-transform duration-200 ${isFreshnessExpanded ? 'rotate-180' : ''}`} />
+                                </div>
+                                <span className={`w-1 h-1 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                            </button>
+                            {isFreshnessExpanded && (
+                                <div className="px-2 pb-2 space-y-1 pt-0 animate-in slide-in-from-top-1 duration-200 text-[9px]">
+                                    <div className="border-t border-gray-200/50 mb-1.5"></div>
+                                    {[
+                                        { label: 'Inventory', key: 'Inventory' },
+                                        { label: 'Sales', key: 'Sales' },
+                                        { label: 'SKU Detail', key: 'SKU Details' },
+                                        { label: 'Refunds', key: 'Refunds' },
+                                        { label: 'CA Prices', key: 'CA Prices' },
+                                        { label: 'Shipments', key: 'Shipments' },
+                                    ].map(item => (
+                                        <div key={item.key} className="flex justify-between items-center">
+                                            <span className="text-gray-500">{item.label}</span>
+                                            <span className={`font-mono ${uploadTimestamps[item.key] ? 'text-gray-700 font-medium' : 'text-gray-300 italic'}`}>
+                                                {uploadTimestamps[item.key] ? new Date(uploadTimestamps[item.key]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '-'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </aside>
-                <main className="flex-1 md:ml-64 min-0 relative z-10 flex flex-col h-full overflow-hidden">
+                <main className="flex-1 md:ml-60 min-0 relative z-10 flex flex-col h-full overflow-hidden">
                     <header className="sticky top-0 z-50 flex justify-between items-center gap-8 px-8 py-4 bg-custom-glass border-b border-custom-glass/50 shadow-sm transition-all duration-300">
-                        <div> <h1 className="text-2xl font-bold transition-colors" style={headerStyle}> {currentView === 'search' ? t('header_search') : currentView === 'products' ? t('header_products') : currentView === 'platforms' ? t('header_platforms') : currentView === 'overview' ? t('header_dashboard') : currentView === 'strategy' ? t('header_strategy') : currentView === 'costs' ? t('header_costs') : currentView === 'definitions' ? t('header_definitions') : currentView === 'promotions' ? t('header_promotions') : currentView === 'tools' ? t('header_toolbox') : currentView === 'custom-report' ? 'Custom Report Builder' : t('desc_settings')} </h1> <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}> {currentView === 'search' ? t('desc_search') : currentView === 'overview' ? t('desc_dashboard') : currentView === 'strategy' ? t('desc_strategy') : currentView === 'products' ? t('desc_products') : currentView === 'platforms' ? t('desc_platforms') : currentView === 'costs' ? t('desc_costs') : currentView === 'definitions' ? t('desc_definitions') : currentView === 'promotions' ? t('desc_promotions') : currentView === 'tools' ? t('desc_toolbox') : currentView === 'custom-report' ? 'Build and save custom data views' : t('desc_settings')} </p> </div>
+                        <div>
+                            <h1 className="text-2xl font-bold transition-colors" style={headerStyle}>
+                                {pageTitles[currentView] || pageTitles.settings}
+                            </h1>
+                            <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
+                                {pageDescs[currentView] || pageDescs.settings}
+                            </p>
+                        </div>
                         <div className="flex-1 max-w-2xl"> <GlobalSearch onSearch={handleSearch} isLoading={isSearchLoading} platforms={Object.keys(pricingRules)} products={products} /> </div>
                         <div className="flex flex-col items-end gap-1">
-                            <div className="flex items-center gap-4"> 
-                                {userProfile.name && <span className="text-sm font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>} 
-                                {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />} 
-                                <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button> 
-                                <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div> 
-                                <UserProfile profile={userProfile} onUpdate={setUserProfile} /> 
+                            <div className="flex items-center gap-4">
+                                {userProfile.name && <span className="text-sm font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>}
+
+                                {/* Admin Mode Indicator */}
+                                <div className="flex flex-col items-center">
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setIsAdminModalOpen(true)}
+                                            className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase transition-all flex items-center gap-1.5 shadow-sm border ${isAdminMode
+                                                ? 'bg-green-500/10 text-green-500 border-green-500/30'
+                                                : 'bg-gray-500/10 text-gray-400 border-gray-500/30'
+                                                }`}
+                                        >
+                                            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isAdminMode ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                                            {isAdminMode && <Lock className="w-3 h-3" />}
+                                            {isAdminMode ? 'Admin Mode' : 'User Mode'}
+                                        </button>
+
+                                        {isAdminMode && (
+                                            <button
+                                                onClick={handleAdminPush}
+                                                disabled={(!isDirty && syncStatus === 'idle') || syncStatus === 'pushing'}
+                                                className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase transition-all shadow-sm border relative ${syncStatus === 'error'
+                                                    ? 'bg-red-500 text-white border-red-600'
+                                                    : (isDirty && syncStatus === 'idle')
+                                                        ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 shadow-indigo-200'
+                                                        : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                    }`}
+                                                title={!isDirty && syncStatus === 'idle' ? "No changes to push" : ""}
+                                            >
+                                                {syncStatus === 'pushing' ? (
+                                                    <RotateCcw className="w-3 h-3 animate-spin" />
+                                                ) : (
+                                                    <UploadCloud className="w-3 h-3" />
+                                                )}
+                                                <span>
+                                                    {syncStatus === 'pushing' ? 'Pushing...' : syncStatus === 'error' ? 'Push Failed — Retry' : 'Push to Database'}
+                                                </span>
+                                                {isDirty && syncStatus === 'idle' && (
+                                                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full animate-pulse border-2 border-white"></span>
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
+                                    {isAdminMode && syncStatus === 'pushing' && (
+                                        <span className="text-[8px] text-indigo-500 font-bold mt-0.5 animate-pulse">
+                                            Uploading master data and transactions...
+                                        </span>
+                                    )}
+                                </div>
+
+                                {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />}
+                                <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button>
+                                <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
+                                <UserProfile profile={userProfile} onUpdate={setUserProfile} />
                             </div>
-                            <span className="text-[10px]" style={{...headerStyle, opacity: 0.6}}>{TAX_NOTE_SHORT}</span> 
+                            <span className="text-[10px]" style={{ ...headerStyle, opacity: 0.6 }}>{TAX_NOTE_SHORT}</span>
                         </div>
                     </header>
                     <div ref={mainContentRef} className="flex-1 overflow-y-auto relative p-4 md:p-8">
                         <div style={{ display: currentView === 'search' ? 'block' : 'none' }}>
-                            {activeSearch ? ( <SearchResultsPage data={{ results: activeSearch.results || [], query: activeSearch.query, params: activeSearch.params, id: activeSearch.id }} products={products} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} timeLabel={activeSearch.timeLabel} onRefine={handleRefineSearch} searchConfig={searchConfig} priceChangeHistory={priceChangeHistory} thresholds={thresholds} /> ) : ( <div className="flex flex-col items-center justify-center h-full text-gray-400"> <Search className="w-12 h-12 mb-4 opacity-50" /> <p className="text-lg font-medium">{t('search_empty_state')}</p> </div> )}
+                            {activeSearch ? (
+                                <SearchResultsPage
+                                    data={{ results: activeSearch.results || [], query: activeSearch.query, params: activeSearch.params, id: activeSearch.id }}
+                                    products={products}
+                                    pricingRules={pricingRules}
+                                    themeColor={userProfile.themeColor}
+                                    timeLabel={activeSearch.timeLabel}
+                                    onRefine={handleRefineSearch}
+                                    searchConfig={searchConfig}
+                                    priceChangeHistory={priceChangeHistory}
+                                    thresholds={thresholds}
+                                    headerStyle={headerStyle}
+                                    skuFamilies={skuFamilies}
+                                    adGroups={adGroups}
+                                    priceHistoryMap={priceHistoryMap}
+                                />
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                                    <Search className="w-12 h-12 mb-4 opacity-50" />
+                                    <p className="text-lg font-medium">{t('search_empty_state')}</p>
+                                </div>
+                            )}
                         </div>
                         <div style={{ display: currentView === 'overview' ? 'block' : 'none' }}>
-                            {products.length === 0 ? ( <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full"> <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}><Database className="w-10 h-10" /></div> <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3> <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p> <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative"> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{hasInventory ? t('step_completed') : t('step_1')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4">{hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}</div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p> <button onClick={() => setIsUploadModalOpen(true)} className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300'}`} style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}>{hasInventory ? t('reupload_inventory') : t('upload_inventory')}</button> </div> <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}> <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>{t('step_2')}</div> <div className="p-4 bg-white rounded-full shadow-sm mb-4"><FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} /></div> <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4> <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p> <button onClick={() => hasInventory && setIsSalesImportModalOpen(true)} disabled={!hasInventory} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}} className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}><Upload className="w-5 h-5" /> {t('upload_sales')}</button> </div> </div> </div> ) : ( <OverviewPageContainer products={products} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} pricingRules={pricingRules} priceChangeHistory={priceChangeHistory} promotions={promotions} themeColor={userProfile.themeColor} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} headerStyle={headerStyle} mapJumpState={mapJumpState} /> )}
+                            {products.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full">
+                                    <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}>
+                                        <Database className="w-10 h-10" />
+                                    </div>
+                                    <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3>
+                                    <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative">
+                                        <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}>
+                                            <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                                {hasInventory ? t('step_completed') : t('step_1')}
+                                            </div>
+                                            <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                                {hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}
+                                            </div>
+                                            <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4>
+                                            <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p>
+                                            <button
+                                                onClick={() => setIsUploadModalOpen(true)}
+                                                className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300'}`}
+                                                style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}
+                                            >
+                                                {hasInventory ? t('reupload_inventory') : t('upload_inventory')}
+                                            </button>
+                                        </div>
+                                        <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}>
+                                            <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                                {t('step_2')}
+                                            </div>
+                                            <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                                <FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} />
+                                            </div>
+                                            <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4>
+                                            <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p>
+                                            <button
+                                                onClick={() => hasInventory && setIsSalesImportModalOpen(true)}
+                                                disabled={!hasInventory}
+                                                style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}
+                                                className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}
+                                            >
+                                                <Upload className="w-5 h-5" /> {t('upload_sales')}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <OverviewPageContainer
+                                    products={products}
+                                    priceHistoryMap={priceHistoryMap}
+                                    refundHistory={refundHistory}
+                                    pricingRules={pricingRules}
+                                    priceChangeHistory={priceChangeHistory}
+                                    promotions={promotions}
+                                    themeColor={userProfile.themeColor}
+                                    onAnalyze={handleAnalyze}
+                                    onDeepDive={handleDeepDiveRequest}
+                                    onSearch={handleSearch}
+                                    thresholds={thresholds}
+                                    deductRefunds={deductRefunds}
+                                    setDeductRefunds={setDeductRefunds}
+                                    mapJumpState={mapJumpState}
+                                />
+                            )}
                         </div>
                         <div style={{ display: currentView === 'products' ? 'block' : 'none' }}>
-                             <ProductManagementPage products={products} pricingRules={pricingRules} promotions={promotions || []} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory || []} priceChangeHistory={priceChangeHistory || []} onOpenMappingModal={() => setIsMappingModalOpen(true)} dateLabels={dynamicDateLabels} onUpdateProduct={(p) => setProducts(prev => (prev || []).map(old => old.id === p.id ? p : old))} onViewElasticity={handleViewElasticity} themeColor={userProfile.themeColor} headerStyle={headerStyle} onAnalyze={handleAnalyze} onDeepDive={handleDeepDiveRequest} onSearch={handleSearch} thresholds={thresholds} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} onAnalyzeCarrier={handleAnalyzeCarrier} />
+                            <ProductManagementPage
+                                products={products}
+                                pricingRules={pricingRules}
+                                promotions={promotions || []}
+                                priceHistoryMap={priceHistoryMap}
+                                refundHistory={refundHistory || []}
+                                priceChangeHistory={priceChangeHistory || []}
+                                onOpenMappingModal={() => setIsMappingModalOpen(true)}
+                                dateLabels={dynamicDateLabels}
+                                onUpdateProduct={(p) => setProducts(prev => (prev || []).map(old => old.id === p.id ? p : old))}
+                                onViewElasticity={handleViewElasticity}
+                                themeColor={userProfile.themeColor}
+                                onAnalyze={handleAnalyze}
+                                onDeepDive={handleDeepDiveRequest}
+                                onSearch={handleSearch}
+                                thresholds={thresholds}
+                                deductRefunds={deductRefunds}
+                                setDeductRefunds={setDeductRefunds}
+                                onAnalyzeCarrier={handleAnalyzeCarrier}
+                                skuFamilies={skuFamilies}
+                                setSkuFamilies={setSkuFamilies}
+                                pendingFamilySuggestions={pendingFamilySuggestions}
+                                setPendingFamilySuggestions={setPendingFamilySuggestions}
+                                headerStyle={headerStyle}
+                            />
                         </div>
                         <div style={{ display: currentView === 'platforms' ? 'block' : 'none' }}>
-                            <PlatformManagementPage products={products} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} pricingRules={pricingRules} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
+                            <PlatformManagementPage
+                                products={products}
+                                priceHistoryMap={priceHistoryMap}
+                                refundHistory={refundHistory}
+                                deductRefunds={deductRefunds}
+                                setDeductRefunds={setDeductRefunds}
+                                pricingRules={pricingRules}
+                                themeColor={userProfile.themeColor}
+                                adGroups={adGroups}
+                                skuFamilies={skuFamilies}
+                                onSyncFromFamilies={onSyncFromFamilies}
+                                onAddAdGroup={onAddAdGroup}
+                                onEditAdGroup={onEditAdGroup}
+                                onRemoveAdGroup={onRemoveAdGroup}
+                                onSaveAdGroups={handleAdGroupSave}
+                                lastRecalculationSummary={lastRecalculationSummary}
+                                headerStyle={headerStyle}
+                            />
                         </div>
                         <div style={{ display: currentView === 'strategy' ? 'block' : 'none' }}>
-                            <StrategyPage products={products} pricingRules={pricingRules} currentConfig={strategyRules} onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); }} themeColor={userProfile.themeColor} headerStyle={headerStyle} priceHistoryMap={priceHistoryMap} refundHistory={refundHistory} deductRefunds={deductRefunds} setDeductRefunds={setDeductRefunds} promotions={promotions || []} priceChangeHistory={priceChangeHistory || []} costChangeHistory={costChangeHistory || []} inventoryChangeHistory={inventoryChangeHistory || []} onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord} onUpdateCostChangeRecord={handleUpdateCostChangeRecord} onUpdateInventoryChangeRecord={handleUpdateInventoryChangeRecord} onManualPriceChange={handleManualPriceChange} onManualCostChange={handleManualCostChange} velocityLookback={velocityLookback} thresholds={thresholds} />
+                            <StrategyPage
+                                products={products}
+                                pricingRules={pricingRules}
+                                currentConfig={strategyRules}
+                                onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); }}
+                                themeColor={userProfile.themeColor}
+                                priceHistoryMap={priceHistoryMap}
+                                refundHistory={refundHistory}
+                                deductRefunds={deductRefunds}
+                                setDeductRefunds={setDeductRefunds}
+                                promotions={promotions || []}
+                                priceChangeHistory={priceChangeHistory || []}
+                                costChangeHistory={costChangeHistory || []}
+                                inventoryChangeHistory={inventoryChangeHistory || []}
+                                onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord}
+                                onUpdateCostChangeRecord={handleUpdateCostChangeRecord}
+                                onUpdateInventoryChangeRecord={handleUpdateInventoryChangeRecord}
+                                onManualPriceChange={handleManualPriceChange}
+                                onManualCostChange={handleManualCostChange}
+                                velocityLookback={velocityLookback}
+                                thresholds={thresholds}
+                                skuFamilies={skuFamilies}
+                            />
                         </div>
                         <div style={{ display: currentView === 'costs' ? 'block' : 'none' }}>
                             <CostManagementPage products={products} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
                         </div>
                         <div style={{ display: currentView === 'promotions' ? 'block' : 'none' }}>
-                            <PromotionPage products={products} pricingRules={pricingRules} logisticsRules={logisticsRules || []} promotions={promotions || []} priceHistoryMap={priceHistoryMap} onAddPromotion={(p) => setPromotions(prev => [...(prev || []), p])} onUpdatePromotion={(p) => setPromotions(prev => (prev || []).map(o => o.id === p.id ? p : o))} onDeletePromotion={(id) => setPromotions(prev => (prev || []).filter(p => p.id !== id))} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
+                            <PromotionPage
+                                products={products}
+                                pricingRules={pricingRules}
+                                logisticsRules={logisticsRules || []}
+                                promotions={promotions || []}
+                                priceHistoryMap={priceHistoryMap}
+                                onAddPromotion={(p) => setPromotions(prev => [...(prev || []), p])}
+                                onUpdatePromotion={(p) => setPromotions(prev => (prev || []).map(o => o.id === p.id ? p : o))}
+                                onDeletePromotion={(id) => setPromotions(prev => (prev || []).filter(p => p.id !== id))}
+                                themeColor={userProfile.themeColor}
+                                headerStyle={headerStyle}
+                            />
                         </div>
                         <div style={{ display: currentView === 'tools' ? 'block' : 'none' }}>
-                            <ToolboxPage promotions={promotions || []} pricingRules={pricingRules} inventoryTemplates={inventoryTemplates || []} onSaveTemplates={setInventoryTemplates} products={products} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
+                            <ToolboxPage
+                                promotions={promotions || []}
+                                pricingRules={pricingRules}
+                                inventoryTemplates={inventoryTemplates || []}
+                                onSaveTemplates={setInventoryTemplates}
+                                products={products}
+                                themeColor={userProfile.themeColor}
+                                headerStyle={headerStyle}
+                            />
                         </div>
                         <div style={{ display: currentView === 'definitions' ? 'block' : 'none' }}>
-                            <DefinitionsPage headerStyle={headerStyle} />
+                            <DefinitionsPage />
                         </div>
                         <div style={{ display: currentView === 'custom-report' ? 'block' : 'none' }}>
-                            <CustomReportPage 
-                                products={products} 
-                                priceHistory={priceHistoryHistory} 
+                            <CustomReportPage
+                                products={products}
+                                priceHistory={salesHistory}
                                 refundHistory={refundHistory}
-                                headerStyle={headerStyle} 
                             />
                         </div>
                         <div style={{ display: currentView === 'settings' ? 'block' : 'none' }}>
-                            <SettingsPage 
-                                currentRules={pricingRules} 
-                                onSave={(newRules, newVelocity, newSearchConfig) => { 
-                                    setPricingRules(newRules); 
-                                    setVelocityLookback(newVelocity); 
-                                    if (newSearchConfig) setSearchConfig(newSearchConfig); 
-                                    localStorage.setItem('sello_velocity_setting', newVelocity); 
-                                    handleRecalculateVelocity(newVelocity, priceHistoryHistory); 
-                                }} 
-                                logisticsRules={logisticsRules || []} 
-                                onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }} 
-                                products={products} 
-                                shipmentHistory={shipmentHistory || []} 
-                                themeColor={userProfile.themeColor} 
-                                headerStyle={headerStyle} 
-                                searchConfig={searchConfig} 
-                                velocityLookback={velocityLookback} 
-                                extraData={{ priceHistory: priceHistoryHistory, promotions: promotions || [] }} 
+                            <SettingsPage
+                                currentRules={pricingRules}
+                                onSave={(newRules, newVelocity, newSearchConfig) => {
+                                    setPricingRules(newRules);
+                                    setVelocityLookback(newVelocity);
+                                    if (newSearchConfig) setSearchConfig(newSearchConfig);
+                                    localStorage.setItem('sello_velocity_setting', newVelocity);
+                                    handleRecalculateVelocity(newVelocity);
+                                }}
+                                logisticsRules={logisticsRules || []}
+                                onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }}
+                                products={products}
+                                shipmentHistory={shipmentHistory || []}
+                                themeColor={userProfile.themeColor}
+                                searchConfig={searchConfig}
+                                velocityLookback={velocityLookback}
+                                extraData={{ priceHistory: salesHistory, promotions: promotions || [] }}
                                 onRefreshThresholds={handleRefreshThresholds}
                                 brandMap={brandMap}
                                 categoryMap={categoryMap}
                                 onSaveBrandMap={setBrandMap}
                                 onSaveCategoryMap={setCategoryMap}
+                                headerStyle={headerStyle}
                             />
                         </div>
                     </div>
                 </main>
-                {isUploadModalOpen && <BatchUploadModal products={products} onClose={() => setIsUploadModalOpen(false)} onConfirm={handleInventoryImport} />}
-                {isSalesImportModalOpen && <SalesImportModal products={products} pricingRules={pricingRules} learnedAliases={learnedAliases} onClose={() => setIsSalesImportModalOpen(false)} onResetData={handleResetSalesData} onConfirm={handleSalesImportConfirm} />}
-                {isSkuDetailModalOpen && <SkuDetailUploadModal products={products} onClose={() => setIsUploadModalOpen(false)} onConfirm={handleSkuDetailImport} />}
-                {isMappingModalOpen && <MappingUploadModal products={products} platforms={Object.keys(pricingRules)} learnedAliases={learnedAliases} onClose={() => setIsMappingModalOpen(false)} onConfirm={handleMappingImport} />}
-                {isReturnsModalOpen && <ReturnsUploadModal onClose={() => setIsReturnsModalOpen(false)} onConfirm={handleReturnsImport} onReset={handleResetRefunds} existingOrders={existingOrders} />}
-                {isCAUploadModalOpen && <CAUploadModal products={products} onClose={() => setIsCAUploadModalOpen(false)} onConfirm={handleCAImport} />}
-                {isShipmentModalOpen && <ShipmentUploadModal products={products} onClose={() => setIsShipmentModalOpen(false)} onConfirm={handleShipmentImport} />}
-                {selectedElasticityProduct && ( <PriceElasticityModal product={selectedElasticityProduct} priceHistory={priceHistoryHistory} priceChangeHistory={priceChangeHistory || []} onClose={() => setSelectedElasticityProduct(null)} /> )}
-                {selectedAnalysisProduct && ( <AnalysisModal product={selectedAnalysisProduct} analysis={analysisResult} isLoading={isAnalysisLoading} onClose={() => { setSelectedAnalysisProduct(null); setAnalysisResult(null); }} onApplyPrice={handleApplyPrice} themeColor={userProfile.themeColor} /> )}
-                
+                {/* Admin Password Modal */}
+                {isAdminModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border border-gray-100">
+                            <div className="flex flex-col items-center gap-4 text-center mb-6">
+                                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${isAdminMode ? 'bg-green-100 text-green-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                    <Lock className="w-8 h-8" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900">
+                                        {isAdminMode ? 'Elevated Access Active' : 'Restricted Access'}
+                                    </h3>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        {isAdminMode
+                                            ? 'Manually synchronize your changes to the global cloud database.'
+                                            : 'Please enter your administrator credentials to enable global persistence.'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {!isAdminMode ? (
+                                <div className="space-y-4">
+                                    <input
+                                        type="password"
+                                        placeholder="Admin Password"
+                                        value={adminPassword}
+                                        onChange={(e) => setAdminPassword(e.target.value)}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                        autoFocus
+                                        onKeyDown={(e) => e.key === 'Enter' && (async () => {
+                                            const res = await handleAdminToggle(adminPassword);
+                                            if (res.success) {
+                                                setIsAdminModalOpen(false);
+                                                setAdminPassword('');
+                                                setAdminError(null);
+                                            } else {
+                                                setAdminError(res.error || 'Login failed');
+                                            }
+                                        })()}
+                                    />
+                                    {adminError && <p className="text-xs text-red-500 font-medium px-1">{adminError}</p>}
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => { setIsAdminModalOpen(false); setAdminPassword(''); setAdminError(null); }}
+                                            className="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                const res = await handleAdminToggle(adminPassword);
+                                                if (res.success) {
+                                                    setIsAdminModalOpen(false);
+                                                    setAdminPassword('');
+                                                    setAdminError(null);
+                                                } else {
+                                                    setAdminError(res.error || 'Login failed');
+                                                }
+                                            }}
+                                            className="flex-1 py-3 text-sm font-bold text-white rounded-xl transition-all shadow-md active:scale-95"
+                                            style={{ backgroundColor: userProfile.themeColor }}
+                                        >
+                                            Login
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <button
+                                        onClick={async () => {
+                                            const res = await handleAdminExit();
+                                            if (res.needsConfirmation) {
+                                                setShowAdminExitConfirmation(true);
+                                                setIsAdminModalOpen(false);
+                                            } else {
+                                                setIsAdminModalOpen(false);
+                                            }
+                                        }}
+                                        className="w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl border border-red-100 hover:bg-red-100 transition-colors shadow-sm"
+                                    >
+                                        Exit Admin Mode
+                                    </button>
+                                    <button
+                                        onClick={() => setIsAdminModalOpen(false)}
+                                        className="w-full py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl transition-colors"
+                                    >
+                                        Keep Active
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Save Toast */}
+                {showSaveToast && (
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <div className="bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-green-500/50">
+                            <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                            </div>
+                            <span className="font-bold text-sm">Saved to database ✓</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Family Conflict Modal */}
+                {pendingFamilyConflicts.length > 0 && (
+                    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+                        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                            <div className="flex flex-col items-center gap-4 text-center mb-8">
+                                <div className="w-20 h-20 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shadow-inner">
+                                    <AlertTriangle className="w-10 h-10" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-gray-900">Sync Conflicts Detected</h3>
+                                    <p className="text-sm text-gray-500 mt-2">
+                                        The following {pendingFamilyConflicts.length} family groups exist locally but are missing from the master database:
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="max-h-48 overflow-y-auto mb-8 pr-2 space-y-2">
+                                {pendingFamilyConflicts.map(fam => (
+                                    <div key={fam.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <span className="font-bold text-gray-700">{fam.name}</span>
+                                        <span className="text-[10px] text-gray-400 bg-white px-2 py-1 rounded-md border border-gray-100">
+                                            {fam.memberSkus.length} SKUs
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    onClick={() => resolveConflicts(false)}
+                                    className="py-4 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-2xl transition-all active:scale-95"
+                                >
+                                    Discard Local
+                                </button>
+                                <button
+                                    onClick={() => resolveConflicts(true)}
+                                    className="py-4 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-2xl transition-all shadow-lg shadow-amber-600/20 active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    Keep Local
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {isUploadModalOpen && (
+                    <BatchUploadModal
+                        products={products}
+                        onClose={() => setIsUploadModalOpen(false)}
+                        onConfirm={handleInventoryImport}
+                    />
+                )}
+                {isSalesImportModalOpen && (
+                    <SalesImportModal
+                        products={products}
+                        pricingRules={pricingRules}
+                        learnedAliases={learnedAliases}
+                        onClose={() => setIsSalesImportModalOpen(false)}
+                        onResetData={handleResetSalesData}
+                        onConfirm={handleSalesImportConfirm}
+                    />
+                )}
+                {isSkuDetailModalOpen && (
+                    <SkuDetailUploadModal
+                        products={products}
+                        onClose={() => setIsSkuDetailModalOpen(false)}
+                        onConfirm={handleSkuDetailImport}
+                    />
+                )}
+                {isMappingModalOpen && (
+                    <MappingUploadModal
+                        products={products}
+                        platforms={Object.keys(pricingRules)}
+                        learnedAliases={learnedAliases}
+                        onClose={() => setIsMappingModalOpen(false)}
+                        onConfirm={handleMappingImport}
+                    />
+                )}
+                {isReturnsModalOpen && (
+                    <ReturnsUploadModal
+                        onClose={() => setIsReturnsModalOpen(false)}
+                        onConfirm={handleReturnsImport}
+                        onReset={handleResetRefunds}
+                        existingOrders={existingOrders}
+                    />
+                )}
+                {isCAUploadModalOpen && (
+                    <CAUploadModal
+                        products={products}
+                        onClose={() => setIsCAUploadModalOpen(false)}
+                        onConfirm={handleCAImport}
+                    />
+                )}
+                {isShipmentModalOpen && (
+                    <ShipmentUploadModal
+                        products={products}
+                        onClose={() => setIsShipmentModalOpen(false)}
+                        onConfirm={handleShipmentImport}
+                    />
+                )}
+                {selectedElasticityProduct && (
+                    <PriceElasticityModal
+                        product={selectedElasticityProduct}
+                        priceHistory={salesHistory}
+                        priceChangeHistory={priceChangeHistory || []}
+                        onClose={() => setSelectedElasticityProduct(null)}
+                    />
+                )}
+                {selectedAnalysisProduct && (
+                    <AnalysisModal
+                        product={selectedAnalysisProduct}
+                        analysis={analysisResult}
+                        isLoading={isAnalysisLoading}
+                        onClose={() => { setSelectedAnalysisProduct(null); setAnalysisResult(null); }}
+                        onApplyPrice={handleApplyPrice}
+                        themeColor={userProfile.themeColor}
+                    />
+                )}
+
                 <button
                     onClick={() => {
                         if (mainContentRef.current) {
@@ -918,6 +898,59 @@ const App: React.FC = () => {
                 >
                     <ArrowUp className="w-5 h-5" />
                 </button>
+                {/* Admin Exit Confirmation Modal */}
+                {showAdminExitConfirmation && (
+                    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                            <div className="flex flex-col items-center gap-4 text-center mb-6">
+                                <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                                    <AlertTriangle className="w-8 h-8" />
+                                </div>
+                                <div className="space-y-2">
+                                    <h3 className="text-xl font-bold text-gray-900">Unsaved Changes</h3>
+                                    <p className="text-sm text-gray-500">
+                                        You have changes that haven't been pushed to the database yet. Your team won't see these updates until you push.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={async () => {
+                                        const success = await handleAdminPush();
+                                        if (success) {
+                                            await handleAdminExit(true);
+                                            setShowAdminExitConfirmation(false);
+                                        }
+                                    }}
+                                    disabled={syncStatus === 'pushing'}
+                                    className="w-full py-4 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    {syncStatus === 'pushing' ? <RotateCcw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                                    Push Now
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        await handleAdminExit(true);
+                                        setShowAdminExitConfirmation(false);
+                                    }}
+                                    className="w-full py-4 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl transition-colors"
+                                >
+                                    Exit Without Pushing
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowAdminExitConfirmation(false);
+                                        setIsAdminModalOpen(true);
+                                    }}
+                                    className="w-full py-2 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );

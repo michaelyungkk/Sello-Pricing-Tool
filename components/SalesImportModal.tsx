@@ -793,7 +793,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     {step === 'mapping' && (
                         <div className="space-y-6 animate-in slide-in-from-right duration-300">
                             <div className="flex items-center justify-between">
-                                <p className="text-sm text-gray-600">We couldn't auto-match everything. Please confirm columns.</p>
+                                <p className="text-sm text-gray-600">We couldn&apos;t auto-match everything. Please confirm columns.</p>
                                 <button
                                     onClick={() => setShowAdvancedMapping(!showAdvancedMapping)}
                                     className="text-xs text-indigo-600 font-medium flex items-center gap-1 hover:underline"
@@ -855,7 +855,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 <HelpCircle className="w-5 h-5 flex-shrink-0" />
                                 <div className="text-sm">
                                     <p className="font-bold">Unknown SKUs Detected</p>
-                                    <p className="opacity-80">These codes aren't in your inventory yet. Map them to a Master SKU to include them.</p>
+                                    <p className="opacity-80">These codes aren&apos;t in your inventory yet. Map them to a Master SKU to include them.</p>
                                 </div>
                             </div>
 

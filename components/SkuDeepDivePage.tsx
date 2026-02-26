@@ -31,12 +31,15 @@ interface SkuDeepDivePageProps {
     };
     themeColor: string;
     onBack?: () => void;
-    onViewShipments?: (sku: string) => void;
     priceChangeHistory?: PriceChangeRecord[];
     initialTimeWindow?: 'yesterday' | '7d' | '30d' | 'custom';
     focus?: string;
     thresholds: ThresholdConfig;
     pricingRules?: PricingRules;
+    skuFamilies: any[];
+    products: Product[];
+    adGroups: any[];
+    priceHistoryMap: Map<string, any[]>;
 }
 
 // Helper to read URL params
@@ -46,9 +49,12 @@ const getActiveSectionFromUrl = () => {
     return params.get('section');
 };
 
-const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onBack, onViewShipments, priceChangeHistory = [], initialTimeWindow, focus, thresholds, pricingRules }) => {
+const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
+    data, themeColor, onBack, priceChangeHistory = [], initialTimeWindow, focus, thresholds, pricingRules,
+    skuFamilies, products, adGroups, priceHistoryMap
+}) => {
     const { product, allTimeSales, allTimeQty, transactions = [], refunds = [] } = data;
-    
+
     // Analytics State
     const [txFilterPlatform, setTxFilterPlatform] = useState('All');
     const [txFilterType, setTxFilterType] = useState('All');
@@ -64,7 +70,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const [chartLayout, setChartLayout] = useState<'horizontal' | 'vertical'>('horizontal');
     const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number, source?: string } | null>(null);
     const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
-    
+
     // AI Toggle
     const [showAiInsights, setShowAiInsights] = useState(false);
 
@@ -76,7 +82,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const [refundSort, setRefundSort] = useState<SortState<string>>({ key: 'date', dir: 'desc' });
     const [refundPage, setRefundPage] = useState(1);
     const refundItemsPerPage = 10;
-    
+
     // Return Date Basis Toggle
     const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
 
@@ -107,9 +113,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     const { startKey, endKey, expectedDays } = useMemo(() => buildWindow({
         mode: 'days',
         days: txDays,
-        excludeToday: true 
+        excludeToday: true
     }), [txDays]);
-    
+
     // For Price History, we extend to Today to show recent actions
     const todayKey = getTodayKeyMelbourne();
     const historyEndKey = todayKey > endKey ? todayKey : endKey;
@@ -120,7 +126,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 activeSignalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
         }
-        
+
         // Deep linking for refunds
         const section = getActiveSectionFromUrl();
         if (section === 'refunds' && refundsRef.current) {
@@ -129,7 +135,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             }, 300);
         }
     }, [focus]);
-    
+
     // Derive Order Date Map for Order Date Basis logic
     const orderDateMap = useMemo(() => {
         const map = new Map<string, string>();
@@ -142,81 +148,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
         return map;
     }, [transactions]);
 
-    // Available Reason Codes for Filtering (Task C)
-    const availableReasonCodes = useMemo(() => {
-        const codes = new Set<string>();
-        refunds.forEach(r => {
-            const { short } = parseReturnsReason(r.platformReason || r.reason);
-            if (short && short !== 'UNK') codes.add(short);
-        });
-        return Array.from(codes).sort();
-    }, [refunds]);
-
-    // Refund Detail Table Data - MODIFIED: Removed date filtering to align with timeline chart
-    const filteredRefundsForTable = useMemo(() => {
-        const getValue = (row: RefundLog, key: string) => {
-            if (key === 'date') {
-                 const d = getReturnDateKey(row, returnDateBasis, orderDateMap);
-                 return d ? new Date(d).getTime() : 0;
-            }
-            if (key === 'reason') return parseReturnsReason(row.platformReason || row.reason).short;
-            return (row as any)[key];
-        };
-
-        return sortRows(refunds || [], refundSort, getValue);
-    }, [refunds, refundSort, returnDateBasis, orderDateMap]);
-
-    const paginatedRefunds = useMemo(() => {
-        return filteredRefundsForTable.slice((refundPage - 1) * refundItemsPerPage, refundPage * refundItemsPerPage);
-    }, [filteredRefundsForTable, refundPage]);
-
-    const totalRefundPages = Math.ceil(filteredRefundsForTable.length / refundItemsPerPage);
-
-    // Refunds Analysis (Task A + Task C + Garbage Filtering)
-    const refundAnalysis = useMemo(() => {
-        if (!refunds || refunds.length === 0) return null;
-        
-        // Use central aggregation service for consistent logic (which now includes freight scaling)
-        const overview = buildRefundOverview(refunds);
-        
-        // Separate totals for display
-        const totalFreight = refunds.reduce((sum, r) => sum + (Number(r.freightAmount || 0)), 0);
-        const resendCount = refunds.filter(r => r.orderType === 'resend').length;
-        const refundCount = refunds.filter(r => r.orderType === 'refund' || !r.orderType).length;
-
-        // Filter refunds based on selection (Task C)
-        const filteredRefundsForKeywords = kwMode === 'Reason' && kwReason 
-            ? refunds.filter(r => parseReturnsReason(r.platformReason || r.reason).short === kwReason)
-            : refunds;
-
-        const topKeywords = aggregateRefundKeywords(filteredRefundsForKeywords, 60);
-        
-        // Local Sentiment Tracking (Simplified for now, relying on aggregateRefundKeywords or custom logic if needed)
-        // Re-implementing sentiment stats locally as it was inside the hook previously
-        const sentimentStats = { negative: 0, neutral: 0, positive: 0 };
-        const negatives = ['broken', 'damage', 'defect', 'poor', 'bad', 'terrible', 'worst', 'awful', 'useless', 'dirty', 'rubbish', 'faulty', 'fake', 'counterfeit'];
-        const positives = ['great', 'good', 'love', 'excellent', 'perfect', 'nice'];
-
-        filteredRefundsForKeywords.forEach(r => {
-             const rawText = `${r.reason || ''} ${r.customerReason || ''} ${r.remarks || ''} ${r.comments || ''}`.toLowerCase();
-             let score = 0;
-             negatives.forEach(w => { if (rawText.includes(w)) score--; });
-             positives.forEach(w => { if (rawText.includes(w)) score++; });
-
-             if (score < 0) sentimentStats.negative++;
-             else if (score > 0) sentimentStats.positive++;
-             else sentimentStats.neutral++;
-        });
-
-        return {
-            overview,
-            topWords: topKeywords.map(w => ({ text: w.text, value: w.count })),
-            sentimentStats,
-            totalFreight,
-            resendCount,
-            refundCount
-        };
-    }, [refunds, kwMode, kwReason]);
+    // Family Logic
+    const myFamily = useMemo(() => skuFamilies.find((f: any) => f.memberSkus.includes(product.sku)), [skuFamilies, product.sku]);
+    const isInFamily = !!myFamily;
+    const siblings = useMemo(() =>
+        myFamily
+            ? products.filter(p => myFamily.memberSkus.includes(p.sku) && p.sku !== product.sku)
+            : []
+        , [myFamily, products, product.sku]);
 
     const sortedTransactions = useMemo(() => {
         const safeTx = Array.isArray(transactions) ? transactions : [];
@@ -227,12 +166,12 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             id: r.id,
             sku: r.sku,
             date: r.date,
-            velocity: r.quantity > 0 ? -r.quantity : 0, 
-            price: r.amount > 0 ? (r.quantity > 0 ? r.amount/r.quantity : r.amount) : 0,
+            velocity: r.quantity > 0 ? -r.quantity : 0,
+            price: r.amount > 0 ? (r.quantity > 0 ? r.amount / r.quantity : r.amount) : 0,
             platform: r.platform,
             margin: 0,
             // Consistency Fix: profit must be scaled by VAT since transactions.profit from searchExecution is scaled.
-            profit: -((Number(r.amount || 0) + Number(r.freightAmount || 0))), 
+            profit: -((Number(r.amount || 0) + Number(r.freightAmount || 0))),
             _type: 'REFUND_LOG',
             reason: r.reason
         } as unknown as PriceLog));
@@ -242,7 +181,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
     const filteredTransactions = useMemo(() => {
         let list = sortedTransactions;
-        
+
         // Date Filter
         list = list.filter(t => {
             const dKey = asDateKey(t.date);
@@ -260,8 +199,45 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 return true;
             });
         }
-        return list; 
+        return list;
     }, [sortedTransactions, txFilterPlatform, txFilterType, startKey, endKey]);
+
+    const activeAdGroupInFamily = useMemo(() => adGroups.find((g: any) =>
+        g.isActive && g.memberSkus.includes(product.sku)
+    ), [adGroups, product.sku]);
+
+
+    const adRedistributionSummary = useMemo(() => {
+        if (!activeAdGroupInFamily || !isInFamily) return null;
+
+        const redistributedLogs = filteredTransactions.filter(l =>
+            l.rawAdsSpend !== undefined && l.rawAdsSpend !== null
+        );
+
+        const rawSpend = redistributedLogs.reduce((sum, l) => sum + (l.rawAdsSpend || 0), 0);
+        const adjustedSpend = redistributedLogs.reduce((sum, l) => sum + (l.adsSpend || 0), 0);
+
+        const active = redistributedLogs.length > 0 && Math.abs(rawSpend - adjustedSpend) > 0.01;
+
+        if (!active) return null;
+
+        return {
+            active: true,
+            groupName: activeAdGroupInFamily.name,
+            rawSpend: rawSpend * VAT_MULTIPLIER,
+            adjustedSpend: adjustedSpend * VAT_MULTIPLIER
+        };
+    }, [activeAdGroupInFamily, isInFamily, filteredTransactions]);
+
+    // Available Reason Codes for Filtering (Task C)
+    const availableReasonCodes = useMemo(() => {
+        const codes = new Set<string>();
+        refunds.forEach(r => {
+            const { short } = parseReturnsReason(r.platformReason || r.reason);
+            if (short && short !== 'UNK') codes.add(short);
+        });
+        return Array.from(codes).sort();
+    }, [refunds]);
 
     const periodSalesQty = useMemo(() => {
         return filteredTransactions
@@ -271,24 +247,24 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
     const allTimeMarginStats = useMemo(() => {
         if (!transactions || transactions.length === 0) return { pct: 0, rawProfit: 0, refundVal: 0, netSales: 0, netProfit: 0, grossSales: 0 };
-        
+
         let rawProfit = 0;
         transactions.forEach(t => {
             // calcProfit uses t.profit if present. 
             // Since we reverted scaling in searchExecution for DEEP_DIVE, t.profit is Ex-VAT raw.
-            rawProfit += calcProfit(t); 
+            rawProfit += calcProfit(t);
         });
-        
+
         // Scale rawProfit to Inc-VAT once for comparison
         const rawProfitIncVat = rawProfit * VAT_MULTIPLIER;
-        
+
         // refunds[i].amount and freightAmount are raw Ex-VAT (reverted in searchExecution). 
         // Scale exactly once here.
         const refundVal = refunds ? refunds.reduce((sum, r) => sum + ((Number(r.amount || 0) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER), 0) : 0;
         const netProfit = rawProfitIncVat - refundVal;
-        
+
         const netSales = allTimeSales; // already scaled in searchExecution summary
-    
+
         const pct = marginPct(netProfit, netSales) || 0;
 
         return { pct, rawProfit: rawProfitIncVat, refundVal, netSales, netProfit, grossSales: allTimeSales };
@@ -297,17 +273,17 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
     // NEW: Calculate All-Time Return & Refund Rate
     const allTimeReturnStats = useMemo(() => {
         if (allTimeQty === 0) return { returnRate: 0, refundRate: 0, totalRefundQty: 0, totalRefundVal: 0 };
-        
+
         // --- FORMULA REFINEMENT ---
         // 1. Return Rate (Qty): Includes Refunds AND Resends (Total Returns)
         const totalRefundQty = refunds.reduce((sum, r) => sum + r.quantity, 0);
-        
+
         // 2. Refund Rate (Val): Includes Refunds AND Resends
         // Scaling exactly once.
         const totalRefundVal = refunds.reduce((sum, r) => {
             return sum + ((Number(r.amount || 0) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER);
         }, 0);
-        
+
         return {
             returnRate: (totalRefundQty / allTimeQty) * 100,
             refundRate: allTimeSales > 0 ? (totalRefundVal / allTimeSales) * 100 : 0,
@@ -315,6 +291,72 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             totalRefundVal
         };
     }, [refunds, allTimeQty, allTimeSales]);
+
+    // Refund Detail Table Data - MODIFIED: Removed date filtering to align with timeline chart
+    const filteredRefundsForTable = useMemo(() => {
+        const getValue = (row: RefundLog, key: string) => {
+            if (key === 'date') {
+                const d = getReturnDateKey(row, returnDateBasis, orderDateMap);
+                return d ? new Date(d).getTime() : 0;
+            }
+            if (key === 'reason') return parseReturnsReason(row.platformReason || row.reason).short;
+            return (row as any)[key];
+        };
+
+        return sortRows(refunds || [], refundSort, getValue);
+    }, [refunds, refundSort, returnDateBasis, orderDateMap]);
+
+    const paginatedRefunds = useMemo(() => {
+        return filteredRefundsForTable.slice((refundPage - 1) * refundItemsPerPage, refundPage * refundItemsPerPage);
+    }, [filteredRefundsForTable, refundPage]);
+
+    const totalRefundPages = Math.ceil(filteredRefundsForTable.length / refundItemsPerPage);
+
+    // Refunds Analysis (Task A + Task C + Garbage Filtering)
+    const refundAnalysis = useMemo(() => {
+        if (!refunds || refunds.length === 0) return null;
+
+        // Use central aggregation service for consistent logic (which now includes freight scaling)
+        const overview = buildRefundOverview(refunds);
+
+        // Separate totals for display
+        const totalFreight = refunds.reduce((sum, r) => sum + (Number(r.freightAmount || 0)), 0);
+        const resendCount = refunds.filter(r => r.orderType === 'resend').length;
+        const refundCount = refunds.filter(r => r.orderType === 'refund' || !r.orderType).length;
+
+        // Filter refunds based on selection (Task C)
+        const filteredRefundsForKeywords = kwMode === 'Reason' && kwReason
+            ? refunds.filter(r => parseReturnsReason(r.platformReason || r.reason).short === kwReason)
+            : refunds;
+
+        const topKeywords = aggregateRefundKeywords(filteredRefundsForKeywords, 60);
+
+        // Local Sentiment Tracking (Simplified for now, relying on aggregateRefundKeywords or custom logic if needed)
+        // Re-implementing sentiment stats locally as it was inside the hook previously
+        const sentimentStats = { negative: 0, neutral: 0, positive: 0 };
+        const negatives = ['broken', 'damage', 'defect', 'poor', 'bad', 'terrible', 'worst', 'awful', 'useless', 'dirty', 'rubbish', 'faulty', 'fake', 'counterfeit'];
+        const positives = ['great', 'good', 'love', 'excellent', 'perfect', 'nice'];
+
+        filteredRefundsForKeywords.forEach(r => {
+            const rawText = `${r.reason || ''} ${r.customerReason || ''} ${r.remarks || ''} ${r.comments || ''}`.toLowerCase();
+            let score = 0;
+            negatives.forEach(w => { if (rawText.includes(w)) score--; });
+            positives.forEach(w => { if (rawText.includes(w)) score++; });
+
+            if (score < 0) sentimentStats.negative++;
+            else if (score > 0) sentimentStats.positive++;
+            else sentimentStats.neutral++;
+        });
+
+        return {
+            overview,
+            topWords: topKeywords.map(w => ({ text: w.text, value: w.count })),
+            sentimentStats,
+            totalFreight,
+            resendCount,
+            refundCount
+        };
+    }, [refunds, kwMode, kwReason]);
 
     const diagnostics = useMemo(() => {
         // ... (Diagnostics logic unchanged, reusing existing code)
@@ -352,7 +394,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             signals.push({ id: 'DORMANT_NO_SALES', label: 'Dead Stock', severity: 'High', color: 'text-gray-700 bg-gray-50 border-gray-200', icon: Package, desc: `High value dormant stock (£${stockValue.toFixed(0)}) with 0 velocity detected.` });
         }
         return signals;
-    }, [product, periodSalesQty, txDays, thresholds]);
+    }, [product, periodSalesQty, thresholds]);
 
     const platforms = useMemo(() => Array.from(new Set(sortedTransactions.map(t => t.platform || 'Unknown'))).sort(), [sortedTransactions]);
 
@@ -417,8 +459,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             periodTx.forEach(t => {
                 const currentAdSpend = calcAdSpend(t);
                 totalAdSpend += currentAdSpend;
-                // @ts-ignore
-                const isSale = t._type !== 'REFUND_LOG' && t.price > 0 && t.velocity > 0;
+                const isSale = (t as any)._type !== 'REFUND_LOG' && t.price > 0 && t.velocity > 0;
                 if (isSale) {
                     totalRevenue += calcRevenue(t);
                 } else if (currentAdSpend > 0 && t.price === 0) {
@@ -437,26 +478,26 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
     const priceVolumeAnalysis = useMemo(() => {
         const validTx = sortedTransactions.filter(t => t.velocity > 0 && t.price > 0);
-        const refPrice = product.caPrice || (product.currentPrice * VAT_MULTIPLIER) || 1; 
-        const thresholdAmber = -(refPrice * 0.05); 
-        const thresholdRed = -(refPrice * 0.15);   
-        
+        const refPrice = product.caPrice || (product.currentPrice * VAT_MULTIPLIER) || 1;
+        const thresholdAmber = -(refPrice * 0.05);
+        const thresholdRed = -(refPrice * 0.15);
+
         // --- 1. Global Price Point Aggregation (All Time) ---
         const aggregatedPoints: Record<number, { qty: number, costBasedCount: number }> = {};
-        
-        validTx.forEach(t => {
-             const scaledPrice = t.price * VAT_MULTIPLIER;
-             const p = Number(scaledPrice.toFixed(2));
-             
-             const rule = pricingRules ? pricingRules[t.platform || ''] : undefined;
-             const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
 
-             if (!aggregatedPoints[p]) aggregatedPoints[p] = { qty: 0, costBasedCount: 0 };
-             aggregatedPoints[p].qty += t.velocity;
-             
-             if (isCostBased) {
-                  aggregatedPoints[p].costBasedCount += t.velocity;
-             }
+        validTx.forEach(t => {
+            const scaledPrice = t.price * VAT_MULTIPLIER;
+            const p = Number(scaledPrice.toFixed(2));
+
+            const rule = pricingRules ? pricingRules[t.platform || ''] : undefined;
+            const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
+
+            if (!aggregatedPoints[p]) aggregatedPoints[p] = { qty: 0, costBasedCount: 0 };
+            aggregatedPoints[p].qty += t.velocity;
+
+            if (isCostBased) {
+                aggregatedPoints[p].costBasedCount += t.velocity;
+            }
         });
 
         // --- 2. Chart Buckets ---
@@ -467,11 +508,11 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             { label: '90 Days', days: 90 },
             { label: 'All', days: 36500 }
         ];
-        
+
         const chartData: any[] = [];
-        const periodStats: any[] = []; 
+        const periodStats: any[] = [];
         const safeChanges = Array.isArray(priceChangeHistory) ? priceChangeHistory : [];
-        
+
         const getEffectiveCA = (dateStr: string) => {
             const txDate = new Date(dateStr).getTime();
             const changes = safeChanges
@@ -493,13 +534,13 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             const groups: Record<string, { totalQty: number, totalRev: number, sumDelta: number, sumPrice: number }> = {};
             let totalPeriodQty = 0;
             let totalPeriodDelta = 0;
-            
+
             bucketTx.forEach(t => {
                 const effectiveRef = getEffectiveCA(t.date);
                 const scaledPrice = t.price * VAT_MULTIPLIER;
                 const rawDelta = scaledPrice - effectiveRef;
                 const band = (Math.round(rawDelta / BAND_SIZE) * BAND_SIZE).toFixed(2);
-                
+
                 const rule = pricingRules ? pricingRules[t.platform || ''] : undefined;
                 const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
 
@@ -514,7 +555,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                     totalPeriodDelta += (rawDelta * t.velocity);
                 }
             });
-            
+
             Object.entries(groups).forEach(([b, stats]) => {
                 chartData.push({
                     period: bucket.label,
@@ -524,7 +565,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                     tooltipPrice: stats.totalQty > 0 ? (stats.sumPrice / stats.totalQty).toFixed(2) : 0
                 });
             });
-            
+
             if (totalPeriodQty > 0) {
                 periodStats.push({
                     period: bucket.label,
@@ -533,15 +574,15 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 });
             }
         });
-        
+
         const pointsTable = Object.entries(aggregatedPoints)
-            .map(([price, data]) => ({ 
-                price: parseFloat(price), 
+            .map(([price, data]) => ({
+                price: parseFloat(price),
                 qty: data.qty,
-                isCostBased: data.costBasedCount > 0 
+                isCostBased: data.costBasedCount > 0
             }))
             .sort((a, b) => b.qty - a.qty);
-            
+
         return { chartData, pointsTable, periodStats, thresholds: { amber: thresholdAmber, red: thresholdRed } };
     }, [sortedTransactions, priceChangeHistory, product, pricingRules]);
 
@@ -570,8 +611,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             platform: string;
             soldQty: number;
             adSpend: number;
-            revenue: number; 
-            profit: number; 
+            revenue: number;
+            profit: number;
         }> = {};
         let totalRevenueAllPlatforms = 0;
         filteredTransactions.forEach(tx => {
@@ -586,9 +627,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 };
             }
             const group = subtotals[platform];
-            // @ts-ignore
-            const isRefund = tx._type === 'REFUND_LOG' || tx.velocity < 0;
-            // @ts-ignore
+            const isRefund = (tx as any)._type === 'REFUND_LOG' || tx.velocity < 0;
             const isAdRow = tx.price === 0 && calcAdSpend(tx) > 0 && !isRefund;
             if (!isRefund && !isAdRow) {
                 const txRevenue = calcRevenue(tx) * VAT_MULTIPLIER;
@@ -624,7 +663,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                 adOnlySpend += ((t.adsSpend || 0) * VAT_MULTIPLIER);
             } else if (t.velocity < 0 || t.price < 0) {
                 refundCount++;
-                refundValue += Math.abs(calcProfit(t) * VAT_MULTIPLIER); 
+                refundValue += Math.abs(calcProfit(t) * VAT_MULTIPLIER);
             }
         });
         return { salesRows, totalUnits, adOnlySpend, refundCount, refundValue };
@@ -652,8 +691,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
             </div>
 
             <div ref={overviewRef}>
-                <SkuOverviewSection 
-                    product={product} 
+                <SkuOverviewSection
+                    product={product}
                     allTimeSales={allTimeSales}
                     allTimeQty={allTimeQty}
                     allTimeMarginStats={allTimeMarginStats}
@@ -666,10 +705,10 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
 
             {diagnostics.length > 0 && (
                 <div ref={signalsRef}>
-                    <DiagnosticSignalsSection 
-                        diagnostics={diagnostics} 
-                        focus={focus} 
-                        activeSignalRef={activeSignalRef} 
+                    <DiagnosticSignalsSection
+                        diagnostics={diagnostics}
+                        focus={focus}
+                        activeSignalRef={activeSignalRef}
                     />
                 </div>
             )}
@@ -684,13 +723,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         tooltip={tooltip}
                         setTooltip={setTooltip}
                         thresholds={thresholds}
+                        themeColor={themeColor}
                     />
                 </div>
             )}
 
             {sortedTransactions.length > 0 && (
                 <div ref={pricingRef}>
-                    <PricingHistorySection 
+                    <PricingHistorySection
                         priceVolumeAnalysis={priceVolumeAnalysis}
                         minPricePoint={minPricePoint}
                         maxPricePoint={maxPricePoint}
@@ -709,6 +749,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         // Ensure VAT scaling is applied as it is raw in source.
                         optimalPrice={(product.optimalPrice || product.maxVelocityPrice || 0) * VAT_MULTIPLIER}
                         currentPrice={product.currentPrice * VAT_MULTIPLIER}
+                        siblings={siblings}
+                        isInFamily={isInFamily}
+                        priceHistoryMap={priceHistoryMap}
                     />
                 </div>
             )}
@@ -741,12 +784,13 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({ data, themeColor, onB
                         calcAdSpend={calcAdSpend}
                         marginPct={marginPct}
                         product={product}
+                        adRedistributionSummary={adRedistributionSummary}
                     />
                 </div>
             )}
-            
+
             <div ref={refundsRef}>
-                <ReturnsAnalysisSection 
+                <ReturnsAnalysisSection
                     refundAnalysis={refundAnalysis}
                     refunds={refunds}
                     returnDateBasis={returnDateBasis}

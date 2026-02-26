@@ -83,7 +83,7 @@ export interface Product {
   subcategory?: string;
   lastUpdated?: string;
   brand?: string;
-  
+
   // Optional / Calculated
   oldPrice?: number;
   optimalPrice?: number;
@@ -132,13 +132,14 @@ export interface PriceLog {
   profit?: number;
   platform?: string;
   adsSpend?: number;
-  
+  rawAdsSpend?: number;
+
   // Order context
   orderId?: string;
   postcode?: string;
   logisticPartner?: string;
   logisticService?: string;
-  
+
   realPostage?: number;
   realExtraFreight?: number;
 }
@@ -159,12 +160,12 @@ export interface RefundLog {
   commentEn?: string;
   commentCn?: string;
   remarks?: string;
-  
+
   orderId?: string;
   orderType?: 'refund' | 'resend';
   resendBaseOrderId?: string;
   status?: string;
-  
+
   logisticPartner?: string;
 }
 
@@ -222,13 +223,13 @@ export interface PromotionItem {
   promoPrice: number;
   discountType?: 'PERCENT_OFF' | 'FIXED_OFF' | 'FIXED_PRICE';
   discountValue?: number;
-  
+
   // Derived/Display
   product?: Product;
   discountPercent?: number;
   isIncomplete?: boolean;
   projectedMargin?: number;
-  
+
   // Analytics
   baselineDailyUnits?: number;
   forecastUnits?: number;
@@ -371,6 +372,25 @@ export interface InventoryTemplate {
   exportFormat?: 'csv' | 'xlsx';
 }
 
+export interface AdGroup {
+  id: string;
+  name: string;
+  memberSkus: string[];
+  platform: string;
+  startDate: string;
+  endDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SkuFamily {
+  id: string;
+  name: string;
+  memberSkus: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UserProfile {
   name?: string;
   themeColor: string;
@@ -391,18 +411,18 @@ export type VelocityLookback = string;
 export type ReturnDateBasis = 'refundDate' | 'orderDate';
 
 export interface HistoryPayload {
-    sku: string;
-    date: string;
-    price: number;
-    velocity: number;
-    margin?: number;
-    profit?: number;
-    adsSpend?: number;
-    platform?: string;
-    orderId?: string;
-    postcode?: string;
-    logisticPartner?: string;
-    logisticService?: string;
-    realPostage?: number;
-    realExtraFreight?: number;
+  sku: string;
+  date: string;
+  price: number;
+  velocity: number;
+  margin?: number;
+  profit?: number;
+  adsSpend?: number;
+  platform?: string;
+  orderId?: string;
+  postcode?: string;
+  logisticPartner?: string;
+  logisticService?: string;
+  realPostage?: number;
+  realExtraFreight?: number;
 }

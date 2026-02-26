@@ -10,22 +10,26 @@ import { SearchResultPanels } from './parts/SearchResultPanels';
 import { RotateCcw } from 'lucide-react';
 
 interface SearchResultsPageContainerProps {
-  data: { results: any[], query: string, params: SearchIntent, id?: string };
-  products: Product[];
-  pricingRules: PricingRules;
-  themeColor: string;
-  headerStyle: React.CSSProperties;
-  timeLabel?: string;
-  onRefine: (sessionId: string, newIntent: SearchIntent) => void;
-  searchConfig: SearchConfig;
-  priceChangeHistory?: PriceChangeRecord[];
-  thresholds: ThresholdConfig;
+    data: { results: any[], query: string, params: SearchIntent, id?: string };
+    products: Product[];
+    pricingRules: PricingRules;
+    themeColor: string;
+    headerStyle: React.CSSProperties;
+    timeLabel?: string;
+    onRefine: (sessionId: string, newIntent: SearchIntent) => void;
+    searchConfig: SearchConfig;
+    priceChangeHistory?: PriceChangeRecord[];
+    thresholds: ThresholdConfig;
+    skuFamilies: any[];
+    adGroups: any[];
+    priceHistoryMap: Map<string, any[]>;
 }
 
 type GroupBy = 'platform' | 'sku';
 
-export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProps> = ({ 
-    data, products, pricingRules, themeColor, headerStyle, timeLabel, onRefine, searchConfig, priceChangeHistory, thresholds 
+export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProps> = ({
+    data, products, pricingRules, themeColor, headerStyle, timeLabel, onRefine, searchConfig, priceChangeHistory, thresholds,
+    skuFamilies, adGroups, priceHistoryMap
 }) => {
     const [groupBy, setGroupBy] = useState<GroupBy>('platform');
     const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
@@ -62,47 +66,47 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
     };
 
     const isVolumeContext = useMemo(() => checkContext(
-        ['qty', 'quantity', 'unit', 'sold', 'volume', 'velocity', 'count', 'traffic', 'winning', 'scale'], 
+        ['qty', 'quantity', 'unit', 'sold', 'volume', 'velocity', 'count', 'traffic', 'winning', 'scale'],
         ['velocity', 'qty']
     ), [data]);
 
     const isAdContext = useMemo(() => checkContext(
-        ['ad', 'tacos', 'ppc', 'marketing', 'spend', 'cost'], 
+        ['ad', 'tacos', 'ppc', 'marketing', 'spend', 'cost'],
         ['tacos', 'adsSpend']
     ), [data]);
 
     const isMarginContext = useMemo(() => checkContext(
-        ['margin', 'profit', 'loss', 'negative', 'net', 'winning', 'scale'], 
+        ['margin', 'profit', 'loss', 'negative', 'net', 'winning', 'scale'],
         ['margin', 'profit', 'netPmPercent', 'MARGIN_CHANGE_PCT']
     ), [data]);
 
     const isInventoryContext = useMemo(() => checkContext(
-        ['stock', 'inventory', 'runway', 'cover', 'days remaining', 'days cover', 'overstock', 'out of stock', 'level'], 
+        ['stock', 'inventory', 'runway', 'cover', 'days remaining', 'days cover', 'overstock', 'out of stock', 'level'],
         ['stockLevel', 'daysRemaining']
     ), [data]);
 
     const isTrendContext = useMemo(() => checkContext(
-        ['drop', 'decline', 'growth', 'change', 'trend', 'wow', 'spike'], 
+        ['drop', 'decline', 'growth', 'change', 'trend', 'wow', 'spike'],
         ['velocityChange', 'MARGIN_CHANGE_PCT']
     ), [data]);
 
     const isReturnContext = useMemo(() => checkContext(
-        ['return', 'refund', 'rate', 'rr'], 
+        ['return', 'refund', 'rate', 'rr'],
         ['returnRate', 'periodReturnRate']
     ), [data]);
 
     const isOrganicContext = useMemo(() => checkContext(
-        ['organic', 'natural'], 
+        ['organic', 'natural'],
         ['organicShare', 'ORGANIC_SHARE_PCT']
     ), [data]);
 
     const isAgedContext = useMemo(() => checkContext(
-        ['aged', 'old', 'long term', 'stale'], 
+        ['aged', 'old', 'long term', 'stale'],
         ['agedStockPct', 'AGED_STOCK_PCT']
     ), [data]);
 
     const isPostcodeContext = useMemo(() => checkContext(
-        ['postcode', 'area', 'region'], 
+        ['postcode', 'area', 'region'],
         ['postcode']
     ), [data]);
 
@@ -115,20 +119,20 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
     // Hierarchical Data Calculation moved here
     const hierarchicalData = useMemo(() => {
         if (!data.results || isDeepDive) return [];
-        
+
         const groups: Record<string, any> = {};
 
         data.results.forEach(item => {
             const mainKey = groupBy === 'platform' ? (item.platform || 'Unknown') : item.sku;
-            
+
             const liveProduct = liveProductMap.get(item.sku);
             if (liveProduct && item.type === 'INVENTORY') {
                 item.averageDailySales = liveProduct.averageDailySales;
                 item.daysRemaining = liveProduct.averageDailySales > 0 ? liveProduct.stockLevel / liveProduct.averageDailySales : 999;
-                item.stockLevel = liveProduct.stockLevel; 
+                item.stockLevel = liveProduct.stockLevel;
                 item.agedStockPct = liveProduct.stockLevel > 0 && liveProduct.agedStockQty ? (liveProduct.agedStockQty / liveProduct.stockLevel) * 100 : 0;
             }
-            
+
             if (!groups[mainKey]) {
                 groups[mainKey] = {
                     key: mainKey,
@@ -162,14 +166,14 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
 
             const topGroup = groups[mainKey];
             topGroup.count++;
-            
+
             if (item.type !== 'REFUND') {
                 topGroup.totalRevenue += (item.revenue || 0);
                 topGroup.totalProfit += (item.profit || 0);
-                topGroup.totalQty += (item.velocity || 0); 
+                topGroup.totalQty += (item.velocity || 0);
                 topGroup.totalAdSpend += (item.adsSpend || 0);
                 topGroup.contribution += (item.contribution || 0);
-                
+
                 if (isAdsEnabled(item.platform || '')) {
                     topGroup.adEnabledRevenue += (item.revenue || 0);
                 }
@@ -186,7 +190,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                 topGroup.globalVelocity = gVel;
                 topGroup.totalQty = item.stockLevel;
                 topGroup.globalCover = gVel > 0 ? (item.stockLevel / gVel) : 999;
-                
+
                 if (item.agedStockQty) {
                     topGroup.agedStockPct = item.agedStockPct || 0;
                 }
@@ -228,17 +232,17 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                             date: item.date,
                             price: ch.price || item.price,
                             velocity: ch.velocity,
-                            revenue: estRevenue, 
-                            stockLevel: item.stockLevel, 
+                            revenue: estRevenue,
+                            stockLevel: item.stockLevel,
                             type: 'INVENTORY_CHANNEL',
-                            postcode: item.postcode 
+                            postcode: item.postcode
                         });
                     });
                 }
-            } 
+            }
             else {
                 const subKey = groupBy === 'platform' ? item.sku : (item.platform || 'Unknown');
-                
+
                 if (!topGroup.subGroups[subKey]) {
                     topGroup.subGroups[subKey] = {
                         key: subKey,
@@ -276,7 +280,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                     subGroup.totalQty += (item.velocity || 0);
                     subGroup.totalAdSpend += (item.adsSpend || 0);
                     subGroup.contribution += (item.contribution || 0);
-                    
+
                     if (isAdsEnabled(item.platform || '')) {
                         subGroup.adEnabledRevenue += (item.revenue || 0);
                     }
@@ -305,9 +309,9 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
         Object.keys(groups).forEach(key => {
             const g = groups[key];
             g.weightedMargin = g.totalRevenue > 0 ? (g.totalProfit / g.totalRevenue) * 100 : null;
-            
+
             const skuSet = new Set<string>();
-            
+
             Object.values(g.subGroups).forEach((sg: any) => {
                 if (groupBy === 'sku') {
                     if (sg.items.length > 0 && !skuSet.has(g.key)) {
@@ -323,21 +327,21 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                             g.totalPrevRevenue += (item.prevRevenue || 0);
                             g.totalPrevQty += (item.prevQty || 0);
                             g.totalPrevProfit += (item.prevProfit || 0);
-                            
+
                             sg.totalPrevRevenue = item.prevRevenue || 0;
                             sg.totalPrevQty = item.prevQty || 0;
                             sg.totalPrevProfit = item.prevProfit || 0;
-                            
+
                             skuSet.add(sg.key);
                         }
                     }
                 }
 
-                if (!sg.platformVelocity) { 
+                if (!sg.platformVelocity) {
                     sg.weightedMargin = sg.totalRevenue > 0 ? (sg.totalProfit / sg.totalRevenue) * 100 : null;
                     const sgPrevMargin = sg.totalPrevRevenue > 0 ? (sg.totalPrevProfit / sg.totalPrevRevenue) * 100 : 0;
                     sg.weightedMarginChange = (sg.weightedMargin || 0) - sgPrevMargin;
-                    
+
                     if (sg.adEnabledRevenue > 0) {
                         sg.tacos = (sg.totalAdSpend / sg.adEnabledRevenue) * 100;
                         sg.organicShare = Math.max(0, 100 - sg.tacos);
@@ -349,7 +353,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                     sg.periodReturnRate = sg.totalQty > 0 ? (sg.totalRefundQty / sg.totalQty) * 100 : null;
                 }
             });
-            
+
             const prevGroupMargin = g.totalPrevRevenue > 0 ? (g.totalPrevProfit / g.totalPrevRevenue) * 100 : 0;
             g.weightedMarginChange = (g.weightedMargin || 0) - prevGroupMargin;
 
@@ -360,9 +364,9 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                 g.tacos = null;
                 g.organicShare = null;
             }
-            
+
             g.periodReturnRate = g.totalQty > 0 ? (g.totalRefundQty / g.totalQty) * 100 : null;
-            
+
             if (groupBy === 'sku') {
                 const firstSub: any = Object.values(g.subGroups)[0];
                 g.allTimeReturnRate = firstSub?.allTimeReturnRate || 0;
@@ -378,7 +382,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
             if (data.params && data.params.sort) {
                 const { field, direction } = data.params.sort;
                 const dirMult = direction === 'asc' ? 1 : -1;
-                
+
                 if (field === 'MARGIN_CHANGE_PCT') {
                     return (a.weightedMarginChange - b.weightedMarginChange) * dirMult;
                 }
@@ -458,9 +462,9 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
     };
 
     const handleSortUpdate = (field: string, direction: 'asc' | 'desc') => {
-        const newIntent: SearchIntent = { 
-            ...data.params, 
-            sort: { field, direction } 
+        const newIntent: SearchIntent = {
+            ...data.params,
+            sort: { field, direction }
         };
         if (data.id) onRefine(data.id, newIntent);
     };
@@ -469,17 +473,27 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
         const resultSnapshot = data.results[0];
         const liveProduct = liveProductMap.get(resultSnapshot.product.sku);
         const hydratedData = liveProduct ? { ...resultSnapshot, product: liveProduct } : resultSnapshot;
-        return <SkuDeepDivePage data={hydratedData} themeColor={themeColor} priceChangeHistory={priceChangeHistory} thresholds={thresholds} pricingRules={pricingRules} />;
+        return <SkuDeepDivePage
+            data={hydratedData}
+            themeColor={themeColor}
+            priceChangeHistory={priceChangeHistory}
+            thresholds={thresholds}
+            pricingRules={pricingRules}
+            skuFamilies={skuFamilies}
+            products={products}
+            adGroups={adGroups}
+            priceHistoryMap={priceHistoryMap}
+        />;
     }
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 space-y-4">
             <div className="flex justify-end pr-2">
                 <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-                    <input 
-                        type="checkbox" 
-                        checked={deductRefunds} 
-                        onChange={e => setDeductRefunds(e.target.checked)} 
+                    <input
+                        type="checkbox"
+                        checked={deductRefunds}
+                        onChange={e => setDeductRefunds(e.target.checked)}
                         className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
                     />
                     <div className="flex items-center gap-1.5">
@@ -489,7 +503,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                 </label>
             </div>
 
-            <SearchHeader 
+            <SearchHeader
                 data={data}
                 themeColor={themeColor}
                 timeLabel={timeLabel}
@@ -509,7 +523,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                 setGroupBy={setGroupBy}
             />
 
-            <SearchResultPanels 
+            <SearchResultPanels
                 data={data}
                 hierarchicalData={hierarchicalData}
                 groupBy={groupBy}

@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, RefundLog, SearchChip } from '../../types';
-import { ThresholdConfig } from '../../services/thresholdsConfig';
-import { List, Ship, RotateCcw, DollarSign, Activity, Calendar, ChevronDown, Columns } from 'lucide-react';
+import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog } from '../../types';
+
+import { List, Ship, RotateCcw, DollarSign, Activity, Calendar, Columns, Layers } from 'lucide-react';
 
 import { MasterCatalogueTab } from './tabs/MasterCatalogueTab';
 import { ShipmentsTab } from './tabs/ShipmentsTab';
@@ -10,12 +10,14 @@ import { ReturnsAndRefundsTab } from './tabs/ReturnsAndRefundsTab';
 import { PriceMatrixTab } from './tabs/PriceMatrixTab';
 import { ProductPerformanceTrendTab } from './tabs/ProductPerformanceTrendTab';
 import { PlatformComparisonTab } from './tabs/PlatformComparisonTab';
+import { FamilyGroupsTab } from './tabs/FamilyGroupsTab';
 
 import { AliasDrawer } from './parts/AliasDrawer';
 import { TagsDrawer } from './parts/TagsDrawer';
 import { buildWindow } from '../../services/dateWindow';
 import { getTodayKeyMelbourne } from '../../services/dateUtils';
 import { createPortal } from 'react-dom';
+import { SkuFamily } from '../../types';
 
 interface ProductManagementPageContainerProps {
     products: Product[];
@@ -23,44 +25,42 @@ interface ProductManagementPageContainerProps {
     promotions?: PromotionEvent[];
     priceHistoryMap?: Map<string, PriceLog[]>;
     refundHistory?: RefundLog[];
-    priceChangeHistory?: PriceChangeRecord[];
-    onOpenMappingModal: () => void;
-    onAnalyze: (product: Product, context?: string) => void;
+
     dateLabels: { current: string, last: string };
     onUpdateProduct?: (product: Product) => void;
     onViewElasticity?: (product: Product) => void;
     onDeepDive: (sku: string) => void;
-    onSearch?: (query: string | SearchChip[]) => void;
     themeColor: string;
-    headerStyle: React.CSSProperties;
-    thresholds?: ThresholdConfig;
     deductRefunds: boolean;
     setDeductRefunds: (v: boolean) => void;
     onAnalyzeCarrier: (carrier: string) => void;
+    skuFamilies: SkuFamily[];
+    setSkuFamilies: (families: SkuFamily[]) => void;
+    pendingFamilySuggestions: SkuFamily[];
+    setPendingFamilySuggestions: (suggestions: SkuFamily[]) => void;
 }
 
-type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison';
+type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison' | 'family-groups';
 
 export const ProductManagementPageContainer: React.FC<ProductManagementPageContainerProps> = ({
     products,
     pricingRules,
-    promotions = [],
     priceHistoryMap = new Map(),
     refundHistory = [],
-    priceChangeHistory = [],
-    onOpenMappingModal,
-    onAnalyze,
+
     dateLabels,
     onUpdateProduct,
     onViewElasticity,
     onDeepDive,
-    onSearch,
     themeColor,
-    headerStyle,
-    thresholds,
     deductRefunds,
     setDeductRefunds,
-    onAnalyzeCarrier
+    onAnalyzeCarrier,
+    skuFamilies,
+    setSkuFamilies,
+    pendingFamilySuggestions,
+    setPendingFamilySuggestions,
+    promotions = []
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
@@ -78,6 +78,45 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
         setActiveTab('shipments');
     };
 
+    // Family Group Handlers
+    const handleConfirmSuggestion = (suggestion: SkuFamily) => {
+        const newFamily: SkuFamily = {
+            ...suggestion,
+            id: `family-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        setSkuFamilies([...skuFamilies, newFamily]);
+        setPendingFamilySuggestions(pendingFamilySuggestions.filter(s => s.id !== suggestion.id));
+    };
+
+    const handleDismissSuggestion = (id: string) => {
+        setPendingFamilySuggestions(pendingFamilySuggestions.filter(s => s.id !== id));
+    };
+
+    const handleConfirmAllSuggestions = () => {
+        const newFamilies = pendingFamilySuggestions.map(s => ({
+            ...s,
+            id: `family-${Date.now()}-${Math.random().toString(36).substr(2, 5)}-${s.name}`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        }));
+        setSkuFamilies([...skuFamilies, ...newFamilies]);
+        setPendingFamilySuggestions([]);
+    };
+
+    const handleAddFamily = (family: SkuFamily) => {
+        setSkuFamilies([...skuFamilies, family]);
+    };
+
+    const handleEditFamily = (updatedFamily: SkuFamily) => {
+        setSkuFamilies(skuFamilies.map(f => f.id === updatedFamily.id ? updatedFamily : f));
+    };
+
+    const handleRemoveFamily = (id: string) => {
+        setSkuFamilies(skuFamilies.filter(f => f.id !== id));
+    };
+
     const dateWindow = useMemo(() => {
         let mode: 'days' | 'custom' | 'all' = 'days';
         let days = 30;
@@ -90,7 +129,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
             days,
             startKey: customStart,
             endKey: customEnd,
-            excludeToday: true 
+            excludeToday: true
         });
     }, [timeWindow, customStart, customEnd]);
 
@@ -138,7 +177,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         <RotateCcw className="w-4 h-4" />
                         Returns Management
                     </button>
-                    
+
                     <button
                         onClick={() => setActiveTab('pricing')}
                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'pricing' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
@@ -154,14 +193,22 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         <Columns className="w-4 h-4" />
                         Platform Comparison
                     </button>
+
+                    <button
+                        onClick={() => setActiveTab('family-groups')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'family-groups' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Layers className="w-4 h-4" />
+                        Family Groups
+                    </button>
                 </div>
 
                 <div className="flex items-center gap-3">
                     <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-                        <input 
-                            type="checkbox" 
-                            checked={deductRefunds} 
-                            onChange={e => setDeductRefunds(e.target.checked)} 
+                        <input
+                            type="checkbox"
+                            checked={deductRefunds}
+                            onChange={e => setDeductRefunds(e.target.checked)}
                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
                         />
                         <div className="flex items-center gap-1.5">
@@ -192,7 +239,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
 
             <div className="flex-1 min-h-0 relative">
                 {activeTab === 'performance' && (
-                    <ProductPerformanceTrendTab 
+                    <ProductPerformanceTrendTab
                         products={products}
                         priceHistoryMap={priceHistoryMap}
                         refundHistory={refundHistory}
@@ -206,6 +253,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                 {activeTab === 'catalog' && (
                     <MasterCatalogueTab
                         products={products}
+                        skuFamilies={skuFamilies}
                         onEditAliases={setSelectedProductForDrawer}
                         onEditTags={setProductForTags}
                         onViewShipments={handleViewShipments}
@@ -214,9 +262,10 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         dateLabels={dateLabels}
                         pricingRules={pricingRules}
                         themeColor={themeColor}
+                        priceHistoryMap={priceHistoryMap}
                     />
                 )}
-                
+
                 {activeTab === 'returns' && (
                     <ReturnsAndRefundsTab
                         refundHistory={refundHistory}
@@ -232,9 +281,9 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                 )}
 
                 {activeTab === 'shipments' && (
-                    <ShipmentsTab 
-                        products={products} 
-                        themeColor={themeColor} 
+                    <ShipmentsTab
+                        products={products}
+                        themeColor={themeColor}
                         initialTags={shipmentSearchTags}
                         onTagsChange={setShipmentSearchTags}
                     />
@@ -250,7 +299,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                 )}
 
                 {activeTab === 'comparison' && (
-                    <PlatformComparisonTab 
+                    <PlatformComparisonTab
                         products={products}
                         priceHistoryMap={priceHistoryMap}
                         pricingRules={pricingRules}
@@ -258,6 +307,21 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         themeColor={themeColor}
                         deductRefunds={deductRefunds}
                         refundHistory={refundHistory}
+                    />
+                )}
+
+                {activeTab === 'family-groups' && (
+                    <FamilyGroupsTab
+                        skuFamilies={skuFamilies}
+                        pendingFamilySuggestions={pendingFamilySuggestions}
+                        products={products}
+                        onConfirmSuggestion={handleConfirmSuggestion}
+                        onDismissSuggestion={handleDismissSuggestion}
+                        onConfirmAllSuggestions={handleConfirmAllSuggestions}
+                        onAddFamily={handleAddFamily}
+                        onEditFamily={handleEditFamily}
+                        onRemoveFamily={handleRemoveFamily}
+                        themeColor={themeColor}
                     />
                 )}
             </div>

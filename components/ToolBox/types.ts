@@ -37,4 +37,5 @@ export interface InventorySyncToolProps {
     onSaveTemplates: (t: InventoryTemplate[]) => void;
     themeColor: string;
     pricingRules: PricingRules;
+    products?: Product[];
 }

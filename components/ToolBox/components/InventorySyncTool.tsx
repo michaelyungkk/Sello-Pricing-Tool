@@ -46,7 +46,8 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
     templates, 
     onSaveTemplates, 
     themeColor,
-    pricingRules 
+    pricingRules,
+    products = []
 }) => {
     const [masterFile, setMasterFile] = useState<File | null>(null);
     const [platformFile, setPlatformFile] = useState<File | null>(null);
@@ -120,6 +121,24 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
         if (!masterInventory) return [];
         return Array.from(masterInventory.keys()).sort();
     }, [masterInventory]);
+
+    // New: Global Alias Map from Product Management
+    const globalAliasMap = useMemo(() => {
+        const map = new Map<string, string>();
+        products.forEach(p => {
+            const master = p.sku.toUpperCase();
+            map.set(master, master);
+            p.channels.forEach(c => {
+                if (c.skuAlias) {
+                    c.skuAlias.split(',').forEach(a => {
+                        const alias = a.trim().toUpperCase();
+                        if (alias) map.set(alias, master);
+                    });
+                }
+            });
+        });
+        return map;
+    }, [products]);
 
     // --- UTILS ---
     const normalizeBufferRules = (br?: BufferRules): SingleBufferRule[] => {
@@ -483,24 +502,42 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
 
         platformRows.forEach(row => {
             const pSku = String(row[platSkuKey]).trim();
+            const pSkuUpper = pSku.toUpperCase();
             
             const normalized = normalizeSku(pSku);
-            const isAutoMatched = masterInventory.has(normalized);
-
-            if (!isAutoMatched) {
-                allMismatchesSet.add(pSku);
-            }
-
+            
             // Resolve using manual matches first
             let masterKey = manualMatches.get(pSku);
+            
             if (!masterKey) {
-                masterKey = normalized;
+                // Try Global Alias Map first (from Product Management)
+                if (globalAliasMap.has(pSkuUpper)) {
+                    masterKey = normalizeSku(globalAliasMap.get(pSkuUpper)!);
+                } 
+                // Then try normalized match against Master Inventory
+                else if (masterInventory.has(normalized)) {
+                    masterKey = normalized;
+                }
+            }
+
+            const isMatched = !!masterKey && masterInventory.has(masterKey);
+
+            if (!isMatched) {
+                allMismatchesSet.add(pSku);
             }
             
-            if (!groupedMap.has(masterKey)) {
-                groupedMap.set(masterKey, []);
+            if (masterKey) {
+                if (!groupedMap.has(masterKey)) {
+                    groupedMap.set(masterKey, []);
+                }
+                groupedMap.get(masterKey)!.push(row);
+            } else {
+                // Still unmatched
+                if (!groupedMap.has(pSku)) {
+                    groupedMap.set(pSku, []);
+                }
+                groupedMap.get(pSku)!.push(row);
             }
-            groupedMap.get(masterKey)!.push(row);
         });
 
         setDetectedMismatches(Array.from(allMismatchesSet));
@@ -518,7 +555,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
 
         setSyncStats({ matched: matchedCount, unmatched: unmatchedCount, totalStock: totalDistributed });
         setUnmatchedItems(remainingUnmatched);
-    }, [masterInventory, platformRows, manualMatches]);
+    }, [masterInventory, platformRows, manualMatches, globalAliasMap]);
 
     const downloadUnmatched = () => {
         if (unmatchedItems.length === 0) return;
@@ -549,18 +586,36 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
         const aliasCounts = new Map<string, number>();
         platformRows.forEach(row => {
             const pSku = String(row[platSkuKey]).trim();
-            // Resolve manual or normalize
-            let masterKey = manualMatches.get(pSku);
-            if (!masterKey) masterKey = normalizeSku(pSku);
+            const pSkuUpper = pSku.toUpperCase();
 
-            aliasCounts.set(masterKey, (aliasCounts.get(masterKey) || 0) + 1);
+            // Resolve manual or global alias or normalize
+            let masterKey = manualMatches.get(pSku);
+            if (!masterKey) {
+                if (globalAliasMap.has(pSkuUpper)) {
+                    masterKey = normalizeSku(globalAliasMap.get(pSkuUpper)!);
+                } else {
+                    masterKey = normalizeSku(pSku);
+                }
+            }
+
+            if (masterKey) {
+                aliasCounts.set(masterKey, (aliasCounts.get(masterKey) || 0) + 1);
+            }
         });
 
         // Pass 2: Generate output rows
         const outputRows = platformRows.map(row => {
             const pSku = String(row[platSkuKey]).trim();
+            const pSkuUpper = pSku.toUpperCase();
+
             let masterKey = manualMatches.get(pSku);
-            if (!masterKey) masterKey = normalizeSku(pSku);
+            if (!masterKey) {
+                if (globalAliasMap.has(pSkuUpper)) {
+                    masterKey = normalizeSku(globalAliasMap.get(pSkuUpper)!);
+                } else {
+                    masterKey = normalizeSku(pSku);
+                }
+            }
             
             let stockToDistribute = 0;
             let isMatched = false;
@@ -571,7 +626,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                 isMatched = true;
             } 
             // FALLBACK: Use Master Normalized Logic (Divided by aliases)
-            else if (masterInventory.has(masterKey)) {
+            else if (masterKey && masterInventory.has(masterKey)) {
                 const total = masterInventory.get(masterKey)!;
                 const count = aliasCounts.get(masterKey) || 1;
                 stockToDistribute = Math.floor(total / count); 

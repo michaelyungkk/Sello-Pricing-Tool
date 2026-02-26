@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Product, PricingRules, PriceLog, RefundLog } from '../../types';
+import { Product, PricingRules, PriceLog, RefundLog, AdGroup, SkuFamily } from '../../types';
 
 export interface PlatformManagementPageProps {
   products: Product[];
@@ -11,6 +11,16 @@ export interface PlatformManagementPageProps {
   pricingRules: PricingRules;
   themeColor: string;
   headerStyle: React.CSSProperties;
+
+  // Ad Groups
+  adGroups: AdGroup[];
+  skuFamilies: SkuFamily[];
+  onSyncFromFamilies: (platform: string) => void;
+  onAddAdGroup: (group: AdGroup) => void;
+  onEditAdGroup: (group: AdGroup) => void;
+  onRemoveAdGroup: (id: string) => void;
+  onSaveAdGroups: (groups: AdGroup[]) => { affectedTransactions: number; totalSpreadAmount: number; daysProcessed: number };
+  lastRecalculationSummary: { affectedTransactions: number; totalSpreadAmount: number; daysProcessed: number } | null;
 }
 
 export type PlatformKey = string;
@@ -51,10 +61,10 @@ export interface PlatformFeesRoi {
 
 export type PlatformSortKey = keyof PlatformSummary | keyof PlatformFeesRoi | 'manager' | 'name' | 'skus' | 'margin' | 'velocity';
 
-export type Tab = 'overview' | 'roi' | 'performance';
+export type Tab = 'overview' | 'roi' | 'performance' | 'ad-groups';
 
 export interface Flag {
-    label: string;
-    style: string;
-    tooltip: string;
+  label: string;
+  style: string;
+  tooltip: string;
 }

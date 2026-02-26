@@ -52,6 +52,7 @@ const ToolboxPage: React.FC<ToolboxPageProps> = ({
                     onSaveTemplates={onSaveTemplates} 
                     themeColor={themeColor}
                     pricingRules={pricingRules}
+                    products={products}
                 />
             )}
         </div>

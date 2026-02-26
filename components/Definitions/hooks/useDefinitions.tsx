@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import { DefinitionTabId, StatusCardData, ManualSectionData } from '../types';
 import { 
-    Globe, Zap, Database, Package, Info, DollarSign, Calendar, TrendingUp, 
-    Megaphone, Scale, Cpu, Search, ShieldCheck, Tag, Wrench, Link, ShieldAlert, 
-    Save, Layout, Check
+    Globe, Zap, Database, Package, Info, DollarSign, TrendingUp, 
+    ShieldCheck, Tag, Wrench, Link, ShieldAlert, 
+    Save, Layout, Cpu, Search
 } from 'lucide-react';
 
 export const useDefinitions = () => {
@@ -100,7 +100,7 @@ export const useDefinitions = () => {
                         <div>
                             <h5 className="font-bold text-amber-900 text-sm">Aged Stock & Inventory Status</h5>
                             <p className="text-xs text-amber-800 leading-relaxed mt-1">
-                                The Hub tracks <strong>Aged Stock Qty</strong> from your ERP to identify slow-moving capital. Products can also inherit statuses like "Clearance" or "New Product", which override standard pricing recommendations.
+                                The Hub tracks <strong>Aged Stock Qty</strong> from your ERP to identify slow-moving capital. Products can also inherit statuses like &quot;Clearance&quot; or &quot;New Product&quot;, which override standard pricing recommendations.
                             </p>
                         </div>
                     </div>

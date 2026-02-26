@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ViewMode, CostSummarySectionProps } from '../types';
 
 export const CostSummarySection: React.FC<CostSummarySectionProps> = ({
-    themeColor, headerStyle,
+    themeColor,
     includeVat, setIncludeVat,
     showPercentPrimary, setShowPercentPrimary,
     viewMode, setViewMode,

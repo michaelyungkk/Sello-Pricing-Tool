@@ -114,7 +114,7 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
             <div className="flex justify-between items-start">
                 <div>
                     <h2 className="text-xl font-bold text-gray-900">Alert & Diagnostic Thresholds</h2>
-                    <p className="text-sm text-gray-500 mt-1">Fine-tune the sensitivity of the Decision Engine's detection logic.</p>
+                    <p className="text-sm text-gray-500 mt-1">Fine-tune the sensitivity of the Decision Engine&apos;s detection logic.</p>
                 </div>
                 <div className="flex gap-2">
                     <button 

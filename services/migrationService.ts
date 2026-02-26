@@ -6,8 +6,14 @@ import { getCanonicalSku, isMergeVariant } from './skuNormalization';
  * Centralized migration pipeline for restored database objects.
  * Handles schema versioning and legacy field mapping for Promotions.
  */
-export const migrateRestoredDatabase = (data: any): any => {
-    if (!data) return data;
+export const migrateRestoredDatabase = (input: any): any => {
+    if (!input) return input;
+
+    // Handle v2 backup wrapper if the whole file was passed
+    let data = input;
+    if (input.version === "2.0" && input.shared) {
+        data = input.shared;
+    }
 
     // --- STEP 1: NORMALIZATION ---
     data = normalizeRestoredState(data);
@@ -20,8 +26,8 @@ export const migrateRestoredDatabase = (data: any): any => {
         data.promotions = data.promotions.map((p: any) => {
             const items = p.items?.map((item: any) => {
                 const legacyPrice = Number(item.promoPrice || item.discountPrice || 0);
-                const isLegacy = !item.discountType || 
-                               (item.discountType === 'FIXED' && (item.discountValue === 0 || item.discountValue === undefined));
+                const isLegacy = !item.discountType ||
+                    (item.discountType === 'FIXED' && (item.discountValue === 0 || item.discountValue === undefined));
 
                 if (isLegacy && legacyPrice > 0) {
                     return {
@@ -32,7 +38,7 @@ export const migrateRestoredDatabase = (data: any): any => {
                         basePrice: item.basePrice || 0
                     };
                 }
-                
+
                 if (legacyPrice > 0 && (item.promoPrice === 0 || item.promoPrice === undefined)) {
                     return { ...item, promoPrice: legacyPrice };
                 }
@@ -50,6 +56,30 @@ export const migrateRestoredDatabase = (data: any): any => {
         });
     }
 
+    data.skuFamilies = Array.isArray(data.skuFamilies) ? data.skuFamilies : [];
+
+    // --- STEP 4: MIGRATION: AdGroups Schema ---
+    if (data.adGroups && Array.isArray(data.adGroups)) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+        data.adGroups = data.adGroups.map((g: any) => {
+            if (Object.prototype.hasOwnProperty.call(g, 'isActive')) {
+                const migrated = {
+                    ...g,
+                    startDate: g.startDate || '2020-01-01',
+                    endDate: g.isActive ? g.endDate : (g.endDate || yesterdayStr)
+                };
+                delete migrated.isActive;
+                return migrated;
+            }
+            return g;
+        });
+    } else {
+        data.adGroups = [];
+    }
+
     return data;
 };
 
@@ -58,7 +88,7 @@ export const migrateRestoredDatabase = (data: any): any => {
  */
 function mergeSpecificSkusMigration(data: any): any {
     const products = Array.isArray(data.products) ? [...data.products] : [];
-    
+
     // 1. Identify and consolidate product entries
     const mergedProductsMap = new Map<string, any>();
     const variantsToRemove = new Set<string>();
@@ -74,11 +104,11 @@ function mergeSpecificSkusMigration(data: any): any {
         } else {
             // MERGE LOGIC
             const existing = mergedProductsMap.get(canonical);
-            
+
             // Sum stock and incoming
             existing.stockLevel = (Number(existing.stockLevel) || 0) + (Number(p.stockLevel) || 0);
             existing.incomingStock = (Number(existing.incomingStock) || 0) + (Number(p.incomingStock) || 0);
-            
+
             // Combine shipments
             if (p.shipments) {
                 existing.shipments = [...(existing.shipments || []), ...p.shipments];
@@ -182,6 +212,8 @@ export const auditRestoredDatabase = (data: any): { hasFatal: boolean; issues: a
     checkArray('priceChangeHistory', data.priceChangeHistory);
     checkArray('costChangeHistory', data.costChangeHistory);
     checkArray('inventoryChangeHistory', data.inventoryChangeHistory);
-    
+    checkArray('skuFamilies', data.skuFamilies);
+    checkArray('adGroups', data.adGroups);
+
     return { hasFatal: issues.length > 0, issues };
 };

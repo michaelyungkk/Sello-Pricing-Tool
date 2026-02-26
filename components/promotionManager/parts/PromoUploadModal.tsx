@@ -104,7 +104,7 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                                 onChange={() => setUploadMode('PERCENT_OFF')}
                                 className="text-indigo-600 focus:ring-indigo-500"
                             />
-                            <span className="text-sm text-gray-700">Column 2 is <strong>Percentage Off (%)</strong> <span className="text-gray-400 text-xs ml-1">(e.g. "25" = 25%)</span></span>
+                            <span className="text-sm text-gray-700">Column 2 is <strong>Percentage Off (%)</strong> <span className="text-gray-400 text-xs ml-1">(e.g. &quot;25&quot; = 25%)</span></span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input 

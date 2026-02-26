@@ -11,6 +11,7 @@ interface DistributionAnalysisSectionProps {
     tooltip: any;
     setTooltip: (t: any) => void;
     thresholds: any;
+    themeColor: string;
 }
 
 export const DistributionAnalysisSection: React.FC<DistributionAnalysisSectionProps> = ({
@@ -31,13 +32,13 @@ export const DistributionAnalysisSection: React.FC<DistributionAnalysisSectionPr
                     <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">Performance Distributions</span>
                 </h3>
                 <div className="flex bg-gray-100 p-1 rounded-lg">
-                    <button 
+                    <button
                         onClick={() => setChartLayout('horizontal')}
                         className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'horizontal' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
                     >
                         <Rows className="w-3 h-3" /> Horizontal
                     </button>
-                    <button 
+                    <button
                         onClick={() => setChartLayout('vertical')}
                         className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'vertical' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
                     >
@@ -47,10 +48,10 @@ export const DistributionAnalysisSection: React.FC<DistributionAnalysisSectionPr
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
-                    <BoxPlot 
-                        title="Revenue per Order" 
-                        stats7={analytics.revenue.d7} 
-                        stats30={analytics.revenue.d30} 
+                    <BoxPlot
+                        title="Revenue per Order"
+                        stats7={analytics.revenue.d7}
+                        stats30={analytics.revenue.d30}
                         stats90={analytics.revenue.d90}
                         format={(v: number) => `£${v.toFixed(0)}`}
                         color="#3b82f6"
@@ -60,10 +61,10 @@ export const DistributionAnalysisSection: React.FC<DistributionAnalysisSectionPr
                     />
                 </div>
                 <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
-                    <BoxPlot 
-                        title="Net Profit Margin" 
-                        stats7={analytics.margin.d7} 
-                        stats30={analytics.margin.d30} 
+                    <BoxPlot
+                        title="Net Profit Margin"
+                        stats7={analytics.margin.d7}
+                        stats30={analytics.margin.d30}
                         stats90={analytics.margin.d90}
                         format={(v: number) => `${v.toFixed(1)}%`}
                         color="#10b981"
@@ -73,10 +74,10 @@ export const DistributionAnalysisSection: React.FC<DistributionAnalysisSectionPr
                     />
                 </div>
                 <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
-                    <BoxPlot 
-                        title="Daily Units Sold" 
-                        stats7={analytics.qty.d7} 
-                        stats30={analytics.qty.d30} 
+                    <BoxPlot
+                        title="Daily Units Sold"
+                        stats7={analytics.qty.d7}
+                        stats30={analytics.qty.d30}
                         stats90={analytics.qty.d90}
                         format={(v: number) => v.toFixed(0)}
                         color="#8b5cf6"
@@ -86,10 +87,10 @@ export const DistributionAnalysisSection: React.FC<DistributionAnalysisSectionPr
                     />
                 </div>
                 <div className={chartLayout === 'vertical' ? 'h-96' : ''}>
-                   <BoxPlot
+                    <BoxPlot
                         title="Ad Spend / TACoS"
                         stats7={analytics.tacos.d7}
-                        stats30={analytics.tacos.d30} 
+                        stats30={analytics.tacos.d30}
                         stats90={analytics.tacos.d90}
                         format={(v: number) => `${v.toFixed(1)}%`}
                         color="#f97316"

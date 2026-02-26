@@ -16,10 +16,13 @@ interface SearchResultsPageProps {
   searchConfig: SearchConfig;
   priceChangeHistory?: PriceChangeRecord[];
   thresholds: ThresholdConfig;
+  skuFamilies: any[];
+  adGroups: any[];
+  priceHistoryMap: Map<string, any[]>;
 }
 
 const SearchResultsPage: React.FC<SearchResultsPageProps> = (props) => {
-    return <SearchResultsPageContainer {...props} />;
+  return <SearchResultsPageContainer {...props} />;
 };
 
 export default SearchResultsPage;

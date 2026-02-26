@@ -143,7 +143,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             p.endDate < today // Only look at ended promos
         );
 
-        let elasticities: number[] = [];
+        const elasticities: number[] = [];
         let campaignsUsed = 0;
 
         if (pastPromos.length > 0) {

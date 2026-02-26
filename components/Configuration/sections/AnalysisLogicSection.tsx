@@ -97,7 +97,7 @@ export const AnalysisLogicSection: React.FC<AnalysisLogicSectionProps> = ({
                                 <span className="text-sm text-gray-600">units</span>
                             </div>
                             <p className="text-xs text-gray-400 mt-2">
-                                Prevents misleading "Top Performer" badges on low-volume data sets (e.g. daily views).
+                                Prevents misleading &quot;Top Performer&quot; badges on low-volume data sets (e.g. daily views).
                             </p>
                         </div>
                     </div>

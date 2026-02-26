@@ -62,7 +62,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
             <Info className="w-3 h-3 flex-shrink-0" />
             <span>
                 <strong>Data Basis:</strong> Some metrics are proxies (from Product Master), others are exact (from Transactions). 
-                Hover over values for calculation details. "—" indicates insufficient data.
+                Hover over values for calculation details. &quot;—&quot; indicates insufficient data.
             </span>
         </div>
         {hierarchicalData.map(group => {

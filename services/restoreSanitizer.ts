@@ -9,7 +9,7 @@ import { DEFAULT_THRESHOLDS } from './thresholdsConfig';
 
 const toArray = (x: any): any[] => (Array.isArray(x) ? x : []);
 
-const toObject = (x: any, fallback: any = {}): any => 
+const toObject = (x: any, fallback: any = {}): any =>
   (x && typeof x === 'object' && !Array.isArray(x) ? x : fallback);
 
 const toNumber = (x: any, fallback: number = 0): number => {
@@ -18,7 +18,7 @@ const toNumber = (x: any, fallback: number = 0): number => {
   return isNaN(n) ? fallback : n;
 };
 
-const toString = (x: any, fallback: string = ''): string => 
+const toString = (x: any, fallback: string = ''): string =>
   (typeof x === 'string' ? x : fallback);
 
 /**
@@ -55,13 +55,13 @@ export const normalizeRestoredState = (db: any): any => {
   return {
     // Standardize all data lists
     products: toArray(d.products).map(sanitizeProduct).filter(Boolean),
-    priceHistory: toArray(d.priceHistory),
+    priceHistory: toArray(d.priceHistory || d.salesHistory),
     refundHistory: toArray(d.refundHistory),
     shipmentHistory: toArray(d.shipmentHistory),
     priceChangeHistory: toArray(d.priceChangeHistory),
     costChangeHistory: toArray(d.costChangeHistory),
     inventoryChangeHistory: toArray(d.inventoryChangeHistory),
-    
+
     // Standarize Promotions
     promotions: toArray(d.promotions).map((promo: any) => {
       if (!promo || typeof promo !== 'object') return null;
@@ -90,10 +90,12 @@ export const normalizeRestoredState = (db: any): any => {
     thresholds: toObject(d.thresholds, DEFAULT_THRESHOLDS),
     brandMap: toObject(d.brandMap),
     categoryMap: toObject(d.categoryMap),
-    
+
     // Standardize user context
     userProfile: toObject(d.userProfile),
     velocityLookback: toString(d.velocityLookback, '30'),
     uploadTimestamps: toObject(d.uploadTimestamps),
+    skuFamilies: toArray(d.skuFamilies),
+    adGroups: toArray(d.adGroups),
   };
 };

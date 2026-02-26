@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Activity, Calculator, BookOpen, ShieldAlert, Clock, Ship, RotateCcw, CornerDownLeft, AlertTriangle, TrendingUp, Megaphone, Scale, DollarSign, ShieldCheck, Info, Layers, Package, Eye, Calendar } from 'lucide-react';
+import { Activity, Calculator, BookOpen, ShieldAlert, Clock, Ship, RotateCcw, CornerDownLeft, AlertTriangle, TrendingUp, Megaphone, Scale, DollarSign, Layers, Package, Eye, Calendar, Info, ShieldCheck } from 'lucide-react';
 import { useDefinitions } from './hooks/useDefinitions';
 import { DefinitionCard } from './components/DefinitionCard';
 import { DefinitionSection } from './components/DefinitionSection';
@@ -119,7 +119,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                             <AlertTriangle className="w-3 h-3 text-amber-500" /> High Return Alert
                                         </h4>
                                         <p className="text-xs text-gray-600">
-                                            If a product's return rate exceeds <strong>5%</strong>, a warning badge is displayed in the Product List tooltip.
+                                            If a product&apos;s return rate exceeds <strong>5%</strong>, a warning badge is displayed in the Product List tooltip.
                                             High returns may indicate quality issues or misleading listing descriptions.
                                         </p>
                                     </div>
@@ -179,7 +179,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                         <p className="text-xs text-gray-500 mt-1">
                                             The system revolves around the <strong>Master SKU</strong> (from your Inventory Report).
                                             Platform listings (e.g., Amazon FBA, eBay) are linked via <strong>Aliases</strong>.
-                                            Sales from all aliases are aggregated into the Master SKU's velocity.
+                                            Sales from all aliases are aggregated into the Master SKU&apos;s velocity.
                                         </p>
                                     </div>
                                 </div>

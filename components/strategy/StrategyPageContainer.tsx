@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog } from '../../types';
+import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog, SkuFamily } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../../constants';
 import { Activity, History, Coins, Database, Ship, Settings, Download, X, ArrowRight, Calendar, RotateCcw, TrendingUp, TrendingDown, Save, Edit2, CheckCircle, Info, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -26,7 +26,6 @@ interface StrategyPageContainerProps {
     currentConfig: StrategyConfig;
     onSaveConfig: (config: StrategyConfig) => void;
     themeColor: string;
-    headerStyle: React.CSSProperties;
     priceHistoryMap: Map<string, PriceLog[]>;
     refundHistory?: RefundLog[];
     deductRefunds: boolean;
@@ -35,21 +34,27 @@ interface StrategyPageContainerProps {
     priceChangeHistory: PriceChangeRecord[];
     costChangeHistory: CostChangeRecord[];
     inventoryChangeHistory: InventoryChangeRecord[];
+    velocityLookback: VelocityLookback;
+    thresholds?: ThresholdConfig;
+    skuFamilies: SkuFamily[];
     onUpdatePriceChangeRecord?: (record: PriceChangeRecord) => void;
     onUpdateCostChangeRecord?: (record: CostChangeRecord) => void;
     onUpdateInventoryChangeRecord?: (record: InventoryChangeRecord) => void;
     onManualPriceChange?: (data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
     onManualCostChange?: (data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
-    velocityLookback: VelocityLookback;
-    thresholds?: ThresholdConfig;
 }
 
-export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({ 
-    products, pricingRules, currentConfig, onSaveConfig, themeColor, headerStyle, 
-    priceHistoryMap, refundHistory = [], deductRefunds, setDeductRefunds, promotions, priceChangeHistory = [], costChangeHistory = [], 
-    inventoryChangeHistory = [], onUpdatePriceChangeRecord, onUpdateCostChangeRecord, 
-    onUpdateInventoryChangeRecord, onManualPriceChange, onManualCostChange, 
-    velocityLookback, thresholds 
+export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
+    products, pricingRules, currentConfig, onSaveConfig, themeColor,
+    priceHistoryMap, refundHistory = [], deductRefunds, setDeductRefunds, promotions, priceChangeHistory = [], costChangeHistory = [],
+    inventoryChangeHistory = [],
+    velocityLookback, thresholds,
+    skuFamilies = [],
+    onUpdatePriceChangeRecord,
+    onUpdateCostChangeRecord,
+    onUpdateInventoryChangeRecord,
+    onManualPriceChange,
+    onManualCostChange
 }) => {
     // --- STATE ---
     const [config, setConfig] = useState<StrategyConfig>(() => {
@@ -136,9 +141,9 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             const diff = new Date(endKey).getTime() - new Date(startKey).getTime();
             days = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1);
         } else if (setting === 'ALL') {
-            startKey = '1970-01-01'; 
+            startKey = '1970-01-01';
             endKey = yesterdayKey;
-            days = 30; 
+            days = 30;
         } else {
             days = parseInt(setting) || 30;
             endKey = yesterdayKey;
@@ -169,14 +174,14 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
 
         let effectiveDays = fixedDays;
         if (setting === 'ALL') {
-             if (history.length > 0) {
+            if (history.length > 0) {
                 const dates = history.map(l => new Date(l.date).getTime());
                 const min = Math.min(...dates);
-                const max = new Date(endKey).getTime(); 
+                const max = new Date(endKey).getTime();
                 effectiveDays = Math.max(1, Math.ceil((max - min) / (1000 * 60 * 60 * 24)));
-             } else {
-                 effectiveDays = 30;
-             }
+            } else {
+                effectiveDays = 30;
+            }
         }
 
         let totalSales = 0;
@@ -235,7 +240,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
 
         const guardDays = safeNum(config.decrease.freshStockGuardDays ?? 0);
         const guardStartKey = addDaysToDateKey(todayKey, -(guardDays - 1));
-        
+
         const recentStrategicRestock = guardDays > 0 ? inventoryChangeHistory.find(log => {
             const lKey = asDateKey(log.date);
             return lKey && lKey >= guardStartKey && lKey <= todayKey && log.sku === product.sku && log.isStrategic;
@@ -243,10 +248,10 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
 
         const inFreshStockGuard = !!recentStrategicRestock;
 
-        const activePromos = promotions.filter(p => 
-            p.status === 'ACTIVE' && 
-            p.startDate <= todayKey && 
-            p.endDate >= todayKey && 
+        const activePromos = promotions.filter(p =>
+            p.status === 'ACTIVE' &&
+            p.startDate <= todayKey &&
+            p.endDate >= todayKey &&
             p.items.some(i => i.sku === product.sku)
         );
 
@@ -275,9 +280,9 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
 
         const minMarginBuffer = safeNum(config.safety.minMarginPercent) / 100;
         const floorDivisor = 1 - minMarginBuffer;
-        const floorPrice = floorDivisor > 0 
-            ? (safeNum(product.costPrice) + safeNum(product.postage)) / floorDivisor 
-            : (safeNum(product.costPrice) + safeNum(product.postage)) * 1.5; 
+        const floorPrice = floorDivisor > 0
+            ? (safeNum(product.costPrice) + safeNum(product.postage)) / floorDivisor
+            : (safeNum(product.costPrice) + safeNum(product.postage)) * 1.5;
 
         const isNew = product.inventoryStatus === 'New Product';
 
@@ -289,7 +294,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                 isOffSeasonSeasonalItem = true;
             }
         }
-        
+
         const minRunwayDays = safeNum(config.increase.minRunwayWeeks) * 7;
         const highStockDays = safeNum(config.decrease.highStockWeeks) * 7;
         const medStockDays = safeNum(config.decrease.medStockWeeks) * 7;
@@ -317,9 +322,9 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                     basePrice * (safeNum(config.decrease.adjustmentPercent) / 100),
                     safeNum(config.decrease.adjustmentFixed || 0)
                 );
-                
+
                 adjustedPrice = applyPsychologicalPricing(basePrice - decreaseAmount);
-                
+
                 reasoning = highStock
                     ? `Runway > ${config.decrease.highStockWeeks} wks (${runwayDays.toFixed(0)}d)`
                     : `Runway > ${config.decrease.medStockWeeks} wks & Net PM > ${config.decrease.minMarginPercent}%`;
@@ -335,7 +340,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             reasoning = 'Stable';
         }
 
-        return { 
+        return {
             action, adjustedPrice, reasoning, safetyViolation, runwayDays, effectiveStock, floorPrice, isNew, inPromotion, promoPlatforms,
             inFreshStockGuard, excludedReason: action === 'MAINTAIN' && inFreshStockGuard ? 'FRESH_STOCK_GUARD' : ''
         };
@@ -352,9 +357,9 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             .filter(p => {
                 const matchesTerm = (term: string) => {
                     const t = term.toLowerCase();
-                    return p.sku.toLowerCase().includes(t) || 
-                           p.name.toLowerCase().includes(t) ||
-                           p.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
+                    return p.sku.toLowerCase().includes(t) ||
+                        p.name.toLowerCase().includes(t) ||
+                        p.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
                 };
 
                 if (searchTags.length > 0) {
@@ -365,41 +370,41 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             .map(p => {
                 const local = calculateMetrics(p, selectedWindow, true);
                 const global = calculateMetrics(p, velocityLookback, false);
-                
+
                 // CONSISTENCY FIX: Prioritize ERP velocity, otherwise use fallback weighted formula
                 const effectiveDailySales = resolveEffectiveVelocity(p, priceHistoryMap.get(p.sku));
-                
+
                 const rec = getRecommendation(p, effectiveDailySales, global.netPmPercent, thresholds);
-                
+
                 // --- Recent Changes Bucketing (30D Timeline) ---
                 // Changes sorted by date ascending
                 const changes30d = priceChangeHistory
                     .filter(c => c.sku.toUpperCase() === p.sku.toUpperCase() && c.date >= limitDate30d)
                     .sort((a, b) => a.date.localeCompare(b.date));
-                
+
                 // Buckets: [22-30 days ago, 15-21 days ago, 8-14 days ago, 0-7 days ago]
                 // Index 3 is most recent (rightmost)
-                const weeklyChanges: (string | null)[] = [null, null, null, null]; 
-                
+                const weeklyChanges: (string | null)[] = [null, null, null, null];
+
                 changes30d.forEach(change => {
-                     const cDate = new Date(change.date);
-                     const diffTime = Math.abs(today.getTime() - cDate.getTime());
-                     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                     
-                     let bucketIdx = -1;
-                     if (diffDays <= 7) bucketIdx = 3;
-                     else if (diffDays <= 14) bucketIdx = 2;
-                     else if (diffDays <= 21) bucketIdx = 1;
-                     else if (diffDays <= 30) bucketIdx = 0;
-                     
-                     if (bucketIdx !== -1) {
-                         // Overwrite if multiple changes in same week - assumes latest change defines the week's state
-                         weeklyChanges[bucketIdx] = change.changeType;
-                     }
+                    const cDate = new Date(change.date);
+                    const diffTime = Math.abs(today.getTime() - cDate.getTime());
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+                    let bucketIdx = -1;
+                    if (diffDays <= 7) bucketIdx = 3;
+                    else if (diffDays <= 14) bucketIdx = 2;
+                    else if (diffDays <= 21) bucketIdx = 1;
+                    else if (diffDays <= 30) bucketIdx = 0;
+
+                    if (bucketIdx !== -1) {
+                        // Overwrite if multiple changes in same week - assumes latest change defines the week's state
+                        weeklyChanges[bucketIdx] = change.changeType;
+                    }
                 });
 
-                return { 
-                    ...p, 
+                return {
+                    ...p,
                     recentTotalSales: local.totalSales,
                     recentTotalQty: local.totalQty,
                     averagePrice: local.averagePrice,
@@ -407,7 +412,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                     totalProfit: local.totalProfit,
                     dailyVelocity: effectiveDailySales,
                     recentChanges: weeklyChanges,
-                    ...rec 
+                    ...rec
                 };
             })
             .filter(row => {
@@ -421,10 +426,10 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
 
     const filteredAndSortedData = useMemo(() => {
         let data = tableData.filter(row => filterTab === 'All' || row.action === filterTab);
-    
+
         if (sort) {
             const getValue = (row: any, key: string) => {
-                switch(key) {
+                switch (key) {
                     case 'sku': return row.sku;
                     case 'runway': return row.runwayDays;
                     case 'velocity': return row.dailyVelocity;
@@ -463,20 +468,20 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
     // Audit Stats
     const auditStats = useMemo(() => {
         if (!isAuditPanelVisible || filteredAndSortedData.length === 0) return null;
-        
+
         const localWindow = getCalculationWindow(selectedWindow, customStart, customEnd);
         const distinctDays = new Set<string>();
-        
+
         filteredAndSortedData.forEach(product => {
-             const logs = priceHistoryMap.get(product.sku) || [];
-             logs.forEach(log => {
-                 const dKey = asDateKey(log.date);
-                 if (dKey && isDateKeyBetween(dKey, localWindow.startKey, localWindow.endKey)) {
-                     distinctDays.add(dKey);
-                 }
-             });
+            const logs = priceHistoryMap.get(product.sku) || [];
+            logs.forEach(log => {
+                const dKey = asDateKey(log.date);
+                if (dKey && isDateKeyBetween(dKey, localWindow.startKey, localWindow.endKey)) {
+                    distinctDays.add(dKey);
+                }
+            });
         });
-        
+
         return {
             productCount: filteredAndSortedData.length,
             local: { distinctDaysCount: distinctDays.size }
@@ -605,13 +610,13 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
     const handleExport = (platform: string = 'All') => {
         const clean = (val: any) => `"${String(val || '').replace(/[\r\n]+/g, ' ').replace(/"/g, '""')}"`;
         const headers = [
-            'SKU', 'Master SKU', 'Name', 'CA Price', 'New Price', 
-            'Runway (Days)', 'Inventory', 'Recent Avg Price', 'Recent Sales $', 
-            'Recent Qty', 'Net PM%', 'Is New', 'Action', 'Floor Price', 
+            'SKU', 'Master SKU', 'Name', 'CA Price', 'New Price',
+            'Runway (Days)', 'Inventory', 'Recent Avg Price', 'Recent Sales $',
+            'Recent Qty', 'Net PM%', 'Is New', 'Action', 'Floor Price',
             'Safety Alert', 'Reason', 'On Promotion', 'Promo Platforms',
             'In Fresh Stock Guard', 'Exclusion Reason'
         ];
-        
+
         const rows: string[][] = [];
         tableData.forEach((r: any) => {
             const finalReasoning = r.inPromotion ? `[PROMOTION WARNING] ${r.reasoning}` : r.reasoning;
@@ -658,19 +663,19 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             ]);
             filename = `price_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
         } else if (type === 'cost') {
-             headers = ['Date', 'SKU', 'Product Name', 'Change Type', 'Change %', 'Old Cost', 'New Cost'];
-             rows = costHistoryTableData.map(row => [
+            headers = ['Date', 'SKU', 'Product Name', 'Change Type', 'Change %', 'Old Cost', 'New Cost'];
+            rows = costHistoryTableData.map(row => [
                 row.date, clean(row.sku), clean(row.productName), row.changeType,
                 row.percentChange.toFixed(2) + '%', row.oldCost.toFixed(2), row.newCost.toFixed(2),
-             ]);
-             filename = `cost_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
+            ]);
+            filename = `cost_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
         } else if (type === 'inventory') {
-             headers = ['Date', 'SKU', 'Product Name', 'Stock Before', 'Stock After', '+Delta', 'Source', 'Is Strategic', 'Reason'];
-             rows = inventoryHistoryTableData.map(row => [
+            headers = ['Date', 'SKU', 'Product Name', 'Stock Before', 'Stock After', '+Delta', 'Source', 'Is Strategic', 'Reason'];
+            rows = inventoryHistoryTableData.map(row => [
                 row.date, clean(row.sku), clean(row.productName), row.prevStock, row.newStock,
                 row.deltaStock, row.source, row.isStrategic ? 'YES' : 'NO', clean(row.reason)
-             ]);
-             filename = `inventory_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
+            ]);
+            filename = `inventory_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
         }
 
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -697,10 +702,10 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
 
                 <div className="flex items-center gap-3">
                     <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-                        <input 
-                            type="checkbox" 
-                            checked={deductRefunds} 
-                            onChange={e => setDeductRefunds(e.target.checked)} 
+                        <input
+                            type="checkbox"
+                            checked={deductRefunds}
+                            onChange={e => setDeductRefunds(e.target.checked)}
                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
                         />
                         <div className="flex items-center gap-1.5">
@@ -713,12 +718,12 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
 
             {activeTab === 'ENGINE' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative z-20 backdrop-blur-custom">
+                    <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative z-20 backdrop-blur-custom">
                         <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
                             <div className="flex items-center gap-3">
                                 <div className="flex bg-gray-100 p-1 rounded-lg">
-                                    {['7', '14', '30', '60'].map(d => (
-                                        <button key={d} onClick={() => { setSelectedWindow(d); setCurrentPage(1); }} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${selectedWindow === d ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>{d}D</button>
+                                    {['7', '14', '30', '60'].map(w => (
+                                        <button key={w} onClick={() => { setSelectedWindow(w); setCurrentPage(1); }} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${selectedWindow === w ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>{w}D</button>
                                     ))}
                                     <button onClick={() => setIsCustomDateModalOpen(true)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${selectedWindow === 'Custom' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}><Calendar className="w-3 h-3" />Custom</button>
                                 </div>
@@ -726,7 +731,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                             </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 justify-end w-full xl:w-auto">
-                             <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title="Toggle Reconciliation Panel"><Activity className="w-4 h-4" />Audit: {isAuditPanelVisible ? 'On' : 'Off'}</button>
+                            <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title="Toggle Reconciliation Panel"><Activity className="w-4 h-4" />Audit: {isAuditPanelVisible ? 'On' : 'Off'}</button>
                             <button onClick={() => setIncludeIncoming(!includeIncoming)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title={includeIncoming ? "Including Incoming Stock in Runway Calc" : "Excluding Incoming Stock (Conservative Mode)"}><Ship className="w-4 h-4" />{includeIncoming ? 'Incoming Included' : 'Incoming Excluded'}</button>
                             <button onClick={() => setIsConfigOpen(!isConfigOpen)} className={`px-4 py-2 rounded-lg font-medium border flex items-center gap-2 transition-all text-sm ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Settings className="w-4 h-4" />{isConfigOpen ? 'Hide Rules' : 'Edit Rules'}</button>
                             <div className="relative">
@@ -738,23 +743,23 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                         </div>
                     </div>
 
-                    <AuditReconciliationPanel 
-                        isVisible={isAuditPanelVisible} 
-                        auditStats={auditStats} 
-                        startKey={getCalculationWindow(selectedWindow, customStart, customEnd).startKey} 
-                        endKey={getCalculationWindow(selectedWindow, customStart, customEnd).endKey} 
-                        rows={filteredAndSortedData} 
+                    <AuditReconciliationPanel
+                        isVisible={isAuditPanelVisible}
+                        auditStats={auditStats}
+                        startKey={getCalculationWindow(selectedWindow, customStart, customEnd).startKey}
+                        endKey={getCalculationWindow(selectedWindow, customStart, customEnd).endKey}
+                        rows={filteredAndSortedData}
                     />
 
-                    <ConfigParametersPanel 
-                        config={config} 
-                        setConfig={setConfig} 
-                        onSave={onSaveConfig} 
-                        isConfigOpen={isConfigOpen} 
+                    <ConfigParametersPanel
+                        config={config}
+                        setConfig={setConfig}
+                        onSave={onSaveConfig}
+                        isConfigOpen={isConfigOpen}
                         setIsConfigOpen={setIsConfigOpen}
                     />
 
-                    <RecommendationsTable 
+                    <RecommendationsTable
                         paginatedData={paginatedData}
                         totalCount={filteredAndSortedData.length}
                         currentPage={currentPage}
@@ -772,18 +777,20 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                         setSearchTags={setSearchTags}
                         setSearchQuery={setSearchQuery}
                         themeColor={themeColor}
+                        skuFamilies={skuFamilies}
+                        products={products}
                     />
                 </div>
             )}
 
             {/* History Tabs (Table logic kept here as per plan) */}
             {activeTab === 'HISTORY' && (
-                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start gap-4">
                         <div className="p-2 bg-blue-50 text-blue-700 rounded-lg"><Info className="w-5 h-5" /></div>
                         <div>
                             <h3 className="text-sm font-bold text-gray-900">Price Change Ledger</h3>
-                            <p className="text-xs text-gray-500 mt-1">This log is automatically populated when you upload a daily CA Report. The system compares your new upload against the previous prices to detect changes.<br/><span className="font-semibold text-blue-600">Impact Analysis:</span> We compare average daily velocity for the 7 days <em>before</em> the change vs. 7 days <em>after</em>.</p>
+                            <p className="text-xs text-gray-500 mt-1">This log is automatically populated when you upload a daily CA Report. The system compares your new upload against the previous prices to detect changes.<br /><span className="font-semibold text-blue-600">Impact Analysis:</span> We compare average daily velocity for the 7 days <em>before</em> the change vs. 7 days <em>after</em>.</p>
                         </div>
                     </div>
                     <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
@@ -800,54 +807,55 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                             </div>
                         </div>
                         <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
-                                <tr>
-                                    <th className="p-4">Date</th>
-                                    <th className="p-4">SKU</th>
-                                    <th className="p-4 text-center">Change</th>
-                                    <th className="p-4 text-right">Old Price</th>
-                                    <th className="p-4 text-center"></th>
-                                    <th className="p-4 text-left">New Price</th>
-                                    <th className="p-4 text-center">Impact (7-Day Avg)</th>
-                                    <th className="p-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100/50">
-                                {paginatedHistoryData.map((row: any) => {
-                                    const isEditing = editingHistoryId === row.id;
-                                    return (
-                                    <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
-                                        <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingDate} onChange={(e) => setEditingDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus/> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                                        <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
-                                        <td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
-                                        <td className="p-4 text-right text-gray-400 line-through">£{row.oldPrice.toFixed(2)}</td>
-                                        <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
-                                        <td className="p-4 font-bold text-gray-900">£{row.newPrice.toFixed(2)}</td>
-                                        <td className="p-4"><div className="flex items-center justify-center gap-2 text-xs"><span className="text-gray-500 font-medium">{row.preVel.toFixed(1)}/d</span><ArrowRight className="w-3 h-3 text-gray-300" /><span className={`font-bold ${row.postVel > row.preVel ? 'text-green-600' : row.postVel < row.preVel ? 'text-red-600' : 'text-gray-600'}`}>{row.postVel.toFixed(1)}/d</span></div></td>
-                                        <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => {if (onUpdatePriceChangeRecord && editingDate) { onUpdatePriceChangeRecord({ ...row, date: editingDate }); setRecentlySavedId(row.id); setTimeout(() => setRecentlySavedId(null), 2500); } setEditingHistoryId(null);}} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingHistoryId(row.id); setEditingDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
+                            <table className="w-full text-left text-sm whitespace-nowrap">
+                                <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
+                                    <tr>
+                                        <th className="p-4">Date</th>
+                                        <th className="p-4">SKU</th>
+                                        <th className="p-4 text-center">Change</th>
+                                        <th className="p-4 text-right">Old Price</th>
+                                        <th className="p-4 text-center"></th>
+                                        <th className="p-4 text-left">New Price</th>
+                                        <th className="p-4 text-center">Impact (7-Day Avg)</th>
+                                        <th className="p-4 text-right">Actions</th>
                                     </tr>
-                                )})}
-                                {paginatedHistoryData.length === 0 && (<tr><td colSpan={8} className="p-12 text-center text-gray-400">No price changes found.</td></tr>)}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100/50">
+                                    {paginatedHistoryData.map((row: any) => {
+                                        const isEditing = editingHistoryId === row.id;
+                                        return (
+                                            <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
+                                                <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingDate} onChange={(e) => setEditingDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                                <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
+                                                <td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
+                                                <td className="p-4 text-right text-gray-400 line-through">£{row.oldPrice.toFixed(2)}</td>
+                                                <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
+                                                <td className="p-4 font-bold text-gray-900">£{row.newPrice.toFixed(2)}</td>
+                                                <td className="p-4"><div className="flex items-center justify-center gap-2 text-xs"><span className="text-gray-500 font-medium">{row.preVel.toFixed(1)}/d</span><ArrowRight className="w-3 h-3 text-gray-300" /><span className={`font-bold ${row.postVel > row.preVel ? 'text-green-600' : row.postVel < row.preVel ? 'text-red-600' : 'text-gray-600'}`}>{row.postVel.toFixed(1)}/d</span></div></td>
+                                                <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdatePriceChangeRecord && editingDate) { onUpdatePriceChangeRecord({ ...row, date: editingDate }); setRecentlySavedId(row.id); setTimeout(() => setRecentlySavedId(null), 2500); } setEditingHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingHistoryId(row.id); setEditingDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
+                                            </tr>
+                                        )
+                                    })}
+                                    {paginatedHistoryData.length === 0 && (<tr><td colSpan={8} className="p-12 text-center text-gray-400">No price changes found.</td></tr>)}
+                                </tbody>
+                            </table>
                         </div>
                         {/* Pagination Footer */}
                         {historyTableData.length > 0 && (
-                          <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
-                            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                              <div className="flex items-center gap-4">
-                                <p className="text-sm text-gray-700">Showing <span className="font-medium">{(historyCurrentPage - 1) * historyItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(historyCurrentPage * historyItemsPerPage, historyTableData.length)}</span> of <span className="font-medium">{historyTableData.length}</span> results</p>
-                                <select value={historyItemsPerPage} onChange={(e) => { setHistoryItemsPerPage(Number(e.target.value)); setHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
-                              </div>
-                              <div>{totalHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setHistoryCurrentPage(prev => Math.max(prev - 1, 1))} disabled={historyCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {historyCurrentPage} of {totalHistoryPages}</span><button onClick={() => setHistoryCurrentPage(prev => Math.min(totalHistoryPages, prev + 1))} disabled={historyCurrentPage === totalHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div>
+                            <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <p className="text-sm text-gray-700">Showing <span className="font-medium">{(historyCurrentPage - 1) * historyItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(historyCurrentPage * historyItemsPerPage, historyTableData.length)}</span> of <span className="font-medium">{historyTableData.length}</span> results</p>
+                                        <select value={historyItemsPerPage} onChange={(e) => { setHistoryItemsPerPage(Number(e.target.value)); setHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
+                                    </div>
+                                    <div>{totalHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setHistoryCurrentPage(prev => Math.max(prev - 1, 1))} disabled={historyCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {historyCurrentPage} of {totalHistoryPages}</span><button onClick={() => setHistoryCurrentPage(prev => Math.min(totalHistoryPages, prev + 1))} disabled={historyCurrentPage === totalHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div>
+                                </div>
                             </div>
-                          </div>
                         )}
                     </div>
                 </div>
             )}
-            
+
             {activeTab === 'COST_HISTORY' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start gap-4">
@@ -859,7 +867,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                     </div>
                     <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
                         <div className="p-4 border-b border-custom-glass bg-gray-50/50">
-                             <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                            <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                                 <div className="w-full max-w-lg">
                                     <TagSearchInput tags={searchTags} onTagsChange={(tags) => { setSearchTags(tags); setCostHistoryCurrentPage(1); }} onInputChange={(val) => { setSearchQuery(val); setCostHistoryCurrentPage(1); }} placeholder="Search History (SKU or Name)..." themeColor={themeColor} />
                                 </div>
@@ -871,48 +879,48 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                             </div>
                         </div>
                         <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
-                                <tr>
-                                    <th className="p-4">Date</th>
-                                    <th className="p-4">SKU</th>
-                                    <th className="p-4 text-center">Change</th>
-                                    <th className="p-4 text-right">Old Cost</th>
-                                    <th className="p-4 text-center"></th>
-                                    <th className="p-4 text-left">New Cost</th>
-                                    <th className="p-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100/50">
-                                {paginatedCostHistoryData.map((row: any) => {
-                                    const isEditing = editingCostHistoryId === row.id;
-                                    return (
-                                        <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
-                                            <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingCostDate} onChange={(e) => setEditingCostDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus/> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                                            <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
-                                            <td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
-                                            <td className="p-4 text-right text-gray-400 line-through">£{row.oldCost.toFixed(2)}</td>
-                                            <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
-                                            <td className="p-4 font-bold text-gray-900">£{row.newCost.toFixed(2)}</td>
-                                            <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => {if (onUpdateCostChangeRecord && editingCostDate) { onUpdateCostChangeRecord({ ...row, date: editingCostDate }); setRecentlySavedCostId(row.id); setTimeout(() => setRecentlySavedCostId(null), 2500); } setEditingCostHistoryId(null);}} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingCostHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedCostId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingCostHistoryId(row.id); setEditingCostDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
-                                        </tr>
-                                    );
-                                })}
-                                {paginatedCostHistoryData.length === 0 && (<tr><td colSpan={7} className="p-12 text-center text-gray-400">No cost changes found.</td></tr>)}
-                            </tbody>
-                        </table>
+                            <table className="w-full text-left text-sm whitespace-nowrap">
+                                <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
+                                    <tr>
+                                        <th className="p-4">Date</th>
+                                        <th className="p-4">SKU</th>
+                                        <th className="p-4 text-center">Change</th>
+                                        <th className="p-4 text-right">Old Cost</th>
+                                        <th className="p-4 text-center"></th>
+                                        <th className="p-4 text-left">New Cost</th>
+                                        <th className="p-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100/50">
+                                    {paginatedCostHistoryData.map((row: any) => {
+                                        const isEditing = editingCostHistoryId === row.id;
+                                        return (
+                                            <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
+                                                <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingCostDate} onChange={(e) => setEditingCostDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                                <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
+                                                <td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
+                                                <td className="p-4 text-right text-gray-400 line-through">£{row.oldCost.toFixed(2)}</td>
+                                                <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
+                                                <td className="p-4 font-bold text-gray-900">£{row.newCost.toFixed(2)}</td>
+                                                <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdateCostChangeRecord && editingCostDate) { onUpdateCostChangeRecord({ ...row, date: editingCostDate }); setRecentlySavedCostId(row.id); setTimeout(() => setRecentlySavedCostId(null), 2500); } setEditingCostHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingCostHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedCostId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingCostHistoryId(row.id); setEditingCostDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {paginatedCostHistoryData.length === 0 && (<tr><td colSpan={7} className="p-12 text-center text-gray-400">No cost changes found.</td></tr>)}
+                                </tbody>
+                            </table>
                         </div>
                         {/* Pagination */}
                         {costHistoryTableData.length > 0 && (
-                          <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
-                            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                              <div className="flex items-center gap-4">
-                                <p className="text-sm text-gray-700">Showing <span className="font-medium">{(costHistoryCurrentPage - 1) * costHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(costHistoryCurrentPage * costHistoryItemsPerPage, costHistoryTableData.length)}</span> of <span className="font-medium">{costHistoryTableData.length}</span> results</p>
-                                <select value={costHistoryItemsPerPage} onChange={(e) => { setCostHistoryItemsPerPage(Number(e.target.value)); setCostHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
-                              </div>
-                              <div>{totalCostHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setCostHistoryCurrentPage(prev => Math.max(1, prev - 1))} disabled={costHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {costHistoryCurrentPage} of {totalCostHistoryPages}</span><button onClick={() => setCostHistoryCurrentPage(prev => Math.min(totalCostHistoryPages, prev + 1))} disabled={costHistoryCurrentPage === totalCostHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div>
+                            <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <p className="text-sm text-gray-700">Showing <span className="font-medium">{(costHistoryCurrentPage - 1) * costHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(costHistoryCurrentPage * costHistoryItemsPerPage, costHistoryTableData.length)}</span> of <span className="font-medium">{costHistoryTableData.length}</span> results</p>
+                                        <select value={costHistoryItemsPerPage} onChange={(e) => { setCostHistoryItemsPerPage(Number(e.target.value)); setCostHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
+                                    </div>
+                                    <div>{totalCostHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setCostHistoryCurrentPage(prev => Math.max(1, prev - 1))} disabled={costHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {costHistoryCurrentPage} of {totalCostHistoryPages}</span><button onClick={() => setCostHistoryCurrentPage(prev => Math.min(totalCostHistoryPages, prev + 1))} disabled={costHistoryCurrentPage === totalCostHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div>
+                                </div>
                             </div>
-                          </div>
                         )}
                     </div>
                 </div>
@@ -929,7 +937,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                     </div>
                     <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
                         <div className="p-4 border-b border-custom-glass bg-gray-50/50">
-                             <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                            <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                                 <div className="w-full max-w-lg">
                                     <TagSearchInput tags={searchTags} onTagsChange={(tags) => { setSearchTags(tags); setInventoryHistoryCurrentPage(1); }} onInputChange={(val) => { setSearchQuery(val); setInventoryHistoryCurrentPage(1); }} placeholder="Search Inventory History (SKU or Name)..." themeColor={themeColor} />
                                 </div>
@@ -940,59 +948,59 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                             </div>
                         </div>
                         <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
-                                <tr>
-                                    <th className="p-4">Date</th>
-                                    <th className="p-4">SKU</th>
-                                    <th className="p-4 text-center">Stock Before</th>
-                                    <th className="p-4 text-center">Stock After</th>
-                                    <th className="p-4 text-center">+Delta</th>
-                                    <th className="p-4 text-center">Strategic?</th>
-                                    <th className="p-4">Source / Reason</th>
-                                    <th className="p-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100/50">
-                                {paginatedInventoryHistoryData.map((row: InventoryChangeRecord) => {
-                                    const isEditing = editingInventoryHistoryId === row.id;
-                                    return (
-                                        <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
-                                            <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingInventoryDate} onChange={(e) => setEditingInventoryDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus/> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                                            <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
-                                            <td className="p-4 text-center text-gray-400">{row.prevStock}</td>
-                                            <td className="p-4 text-center font-bold text-gray-900">{row.newStock}</td>
-                                            <td className="p-4 text-center"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">+{row.deltaStock}</span></td>
-                                            <td className="p-4 text-center">
-                                                {row.isStrategic ? (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">YES</span>
-                                                ) : (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">NO</span>
-                                                )}
-                                            </td>
-                                            <td className="p-4 text-xs text-gray-500">
-                                                <div className="font-medium text-gray-700">{row.source}</div>
-                                                {row.reason && <div className="text-gray-400 mt-0.5 italic">{row.reason}</div>}
-                                            </td>
-                                            <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => {if (onUpdateInventoryChangeRecord && editingInventoryDate) { onUpdateInventoryChangeRecord({ ...row, date: editingInventoryDate }); setRecentlySavedInventoryId(row.id); setTimeout(() => setRecentlySavedInventoryId(null), 2500); } setEditingInventoryHistoryId(null);}} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingInventoryHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedInventoryId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingInventoryHistoryId(row.id); setEditingInventoryDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
-                                        </tr>
-                                    );
-                                })}
-                                {paginatedInventoryHistoryData.length === 0 && (<tr><td colSpan={8} className="p-12 text-center text-gray-400">No inventory increases found for the selected range.</td></tr>)}
-                            </tbody>
-                        </table>
+                            <table className="w-full text-left text-sm whitespace-nowrap">
+                                <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
+                                    <tr>
+                                        <th className="p-4">Date</th>
+                                        <th className="p-4">SKU</th>
+                                        <th className="p-4 text-center">Stock Before</th>
+                                        <th className="p-4 text-center">Stock After</th>
+                                        <th className="p-4 text-center">+Delta</th>
+                                        <th className="p-4 text-center">Strategic?</th>
+                                        <th className="p-4">Source / Reason</th>
+                                        <th className="p-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100/50">
+                                    {paginatedInventoryHistoryData.map((row: InventoryChangeRecord) => {
+                                        const isEditing = editingInventoryHistoryId === row.id;
+                                        return (
+                                            <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
+                                                <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingInventoryDate} onChange={(e) => setEditingInventoryDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                                <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
+                                                <td className="p-4 text-center text-gray-400">{row.prevStock}</td>
+                                                <td className="p-4 text-center font-bold text-gray-900">{row.newStock}</td>
+                                                <td className="p-4 text-center"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">+{row.deltaStock}</span></td>
+                                                <td className="p-4 text-center">
+                                                    {row.isStrategic ? (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">YES</span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">NO</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-4 text-xs text-gray-500">
+                                                    <div className="font-medium text-gray-700">{row.source}</div>
+                                                    {row.reason && <div className="text-gray-400 mt-0.5 italic">{row.reason}</div>}
+                                                </td>
+                                                <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdateInventoryChangeRecord && editingInventoryDate) { onUpdateInventoryChangeRecord({ ...row, date: editingInventoryDate }); setRecentlySavedInventoryId(row.id); setTimeout(() => setRecentlySavedInventoryId(null), 2500); } setEditingInventoryHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingInventoryHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedInventoryId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingInventoryHistoryId(row.id); setEditingInventoryDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {paginatedInventoryHistoryData.length === 0 && (<tr><td colSpan={8} className="p-12 text-center text-gray-400">No inventory increases found for the selected range.</td></tr>)}
+                                </tbody>
+                            </table>
                         </div>
-                         {/* Pagination */}
+                        {/* Pagination */}
                         {inventoryHistoryTableData.length > 0 && (
-                          <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
-                            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                              <div className="flex items-center gap-4">
-                                <p className="text-sm text-gray-700">Showing <span className="font-medium">{(inventoryHistoryCurrentPage - 1) * inventoryHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(inventoryHistoryCurrentPage * inventoryHistoryItemsPerPage, inventoryHistoryTableData.length)}</span> of <span className="font-medium">{inventoryHistoryTableData.length}</span> results</p>
-                                <select value={inventoryHistoryItemsPerPage} onChange={(e) => { setInventoryHistoryItemsPerPage(Number(e.target.value)); setInventoryHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
-                              </div>
-                              <div>{totalInventoryHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setInventoryHistoryCurrentPage(prev => Math.max(1, prev - 1))} disabled={inventoryHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {inventoryHistoryCurrentPage} of {totalInventoryHistoryPages}</span><button onClick={() => setInventoryHistoryCurrentPage(prev => Math.min(totalInventoryHistoryPages, prev + 1))} disabled={inventoryHistoryCurrentPage === totalInventoryHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div>
+                            <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <p className="text-sm text-gray-700">Showing <span className="font-medium">{(inventoryHistoryCurrentPage - 1) * inventoryHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(inventoryHistoryCurrentPage * inventoryHistoryItemsPerPage, inventoryHistoryTableData.length)}</span> of <span className="font-medium">{inventoryHistoryTableData.length}</span> results</p>
+                                        <select value={inventoryHistoryItemsPerPage} onChange={(e) => { setInventoryHistoryItemsPerPage(Number(e.target.value)); setInventoryHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
+                                    </div>
+                                    <div>{totalInventoryHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setInventoryHistoryCurrentPage(prev => Math.max(1, prev - 1))} disabled={inventoryHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {inventoryHistoryCurrentPage} of {totalInventoryHistoryPages}</span><button onClick={() => setInventoryHistoryCurrentPage(prev => Math.min(totalInventoryHistoryPages, prev + 1))} disabled={inventoryHistoryCurrentPage === totalInventoryHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div>
+                                </div>
                             </div>
-                          </div>
                         )}
                     </div>
                 </div>

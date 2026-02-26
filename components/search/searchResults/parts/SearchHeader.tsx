@@ -69,7 +69,7 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
                 <div>
                     <p className="text-sm text-gray-500 flex items-center gap-1">Search results for:</p>
                     <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold text-gray-800">"{data.query}"</h2>
+                        <h2 className="text-xl font-bold text-gray-800">&quot;{data.query}&quot;</h2>
                         {data.results.length > 0 && (
                             <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
                                 {data.results.length} hits

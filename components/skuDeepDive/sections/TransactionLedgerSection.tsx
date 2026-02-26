@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Activity, Calendar, Filter, Search, Info } from 'lucide-react';
+import { Layers, Activity, Calendar, Filter, Search, Info, Rows, Settings2 } from 'lucide-react';
 import AuditPanel from '../../AuditPanel';
 import { GradeBadge } from '../../GradeBadge';
 import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
@@ -33,7 +33,13 @@ interface TransactionLedgerSectionProps {
     calcProfit: (row: any) => number;
     calcAdSpend: (row: any) => number;
     marginPct: (profit: number, revenue: number) => number | null;
-    product: Product; // Keeping product prop for potential future context, but not using for calc
+    product: Product;
+    adRedistributionSummary: {
+        active: boolean;
+        groupName: string;
+        rawSpend: number;
+        adjustedSpend: number;
+    } | null;
 }
 
 export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> = ({
@@ -61,29 +67,49 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     calcProfit,
     calcAdSpend,
     marginPct,
-    product
+    product,
+    adRedistributionSummary
 }) => {
     return (
-        <div className="space-y-6">
-            <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                            <Layers className="w-5 h-5 text-indigo-600" />
-                            Transaction Ledger
-                        </h3>
-                        <button
-                            onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                            title="Show Data Audit"
-                        >
-                            <Activity className="w-3 h-3" />
-                            Audit
-                        </button>
-                    </div>
-                    <div className="flex gap-2">
+        <div className="space-y-4">
+            <div className="flex justify-between items-start">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                        <Rows className="w-5 h-5 text-indigo-600" />
+                        Transaction Ledger
+                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">Recent Logs</span>
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1">
+                        Viewing {Math.min(txLimit, filteredTransactionsLength)} of {filteredTransactionsLength} records for the selected period.
+                    </p>
+                    {adRedistributionSummary?.active && (
+                        <p className="text-[11px] text-gray-400 flex items-center gap-1.5 mt-1.5 opacity-80">
+                            <Info className="w-3 h-3 flex-shrink-0" />
+                            Ad spend redistributed across family members
+                            &nbsp;·&nbsp;
+                            Raw: £{adRedistributionSummary.rawSpend.toFixed(2)}
+                            &nbsp;→&nbsp;
+                            Adjusted: £{adRedistributionSummary.adjustedSpend.toFixed(2)}
+                        </p>
+                    )}
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border flex items-center gap-2 ${isAuditPanelVisible ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <Activity className="w-4 h-4" />
+                        {isAuditPanelVisible ? 'Hide Audit' : 'Audit Reconciliation'}
+                    </button>
+                </div>
+            </div>
+
+
+            {isAuditPanelVisible && (
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex flex-wrap gap-4 items-center">
                         <div className="relative">
-                            <select 
+                            <select
                                 value={txDays}
                                 onChange={e => setTxDays(Number(e.target.value))}
                                 className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
@@ -96,7 +122,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                             <Calendar className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                         </div>
                         <div className="relative">
-                            <select 
+                            <select
                                 value={txFilterPlatform}
                                 onChange={e => setTxFilterPlatform(e.target.value)}
                                 className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
@@ -107,7 +133,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                             <Filter className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                         </div>
                         <div className="relative">
-                            <select 
+                            <select
                                 value={txFilterType}
                                 onChange={e => setTxFilterType(e.target.value)}
                                 className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
@@ -120,23 +146,23 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                             <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                         </div>
                     </div>
-                </div>
 
-                {isAuditPanelVisible && (
-                    <AuditPanel
-                        title="Ledger Reconciliation"
-                        startKey={startKey}
-                        endKey={endKey}
-                        rows={filteredTransactions}
-                        getDateKey={(row: any) => asDateKey(row.date)}
-                        getRevenue={(row: any) => calcRevenue(row)}
-                        getQty={(row: any) => calcUnits(row)}
-                        getProfit={(row: any) => calcProfit(row)}
-                        getAdSpend={(row: any) => calcAdSpend(row)}
-                    />
-                )}
-            </div>
-            
+                    <div className="pt-4 border-t border-gray-100">
+                        <AuditPanel
+                            title="Ledger Reconciliation"
+                            startKey={startKey}
+                            endKey={endKey}
+                            rows={filteredTransactions}
+                            getDateKey={(row: any) => asDateKey(row.date)}
+                            getRevenue={(row: any) => calcRevenue(row)}
+                            getQty={(row: any) => calcUnits(row)}
+                            getProfit={(row: any) => calcProfit(row)}
+                            getAdSpend={(row: any) => calcAdSpend(row)}
+                        />
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm text-sm">
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium">Sales Rows</span>
@@ -148,7 +174,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 </div>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium flex items-center gap-1">
-                        Ad-Only Spend 
+                        Ad-Only Spend
                         <span title="Includes daily PPC costs not attributed to specific orders. Pooled into total TACoS.">
                             <Info className="w-3 h-3 text-gray-400" />
                         </span>
@@ -234,17 +260,16 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
                                 const isZeroRev = Math.abs(tx.price * tx.velocity) < 0.01 && !isAdRow && !isRefund;
                                 const margin = marginPct(calcProfit(tx), calcRevenue(tx));
-                                
+
                                 // USE REAL DATA FROM IMPORT (WITH VAT SCALING)
                                 const totalExtraFreight = !isRefund && !isAdRow ? (tx.realExtraFreight || 0) * VAT_MULTIPLIER : 0;
                                 const totalPostage = !isRefund && !isAdRow ? (tx.realPostage || 0) * VAT_MULTIPLIER : 0;
 
                                 return (
-                                    <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${
-                                        isAdRow ? 'bg-orange-50/40 text-orange-900' : 
-                                        isRefund ? 'bg-red-50/40 text-red-900' : 
-                                        isZeroRev ? 'opacity-60 bg-gray-50/30' : ''
-                                    }`}>
+                                    <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${isAdRow ? 'bg-orange-50/40 text-orange-900' :
+                                        isRefund ? 'bg-red-50/40 text-red-900' :
+                                            isZeroRev ? 'opacity-60 bg-gray-50/30' : ''
+                                        }`}>
                                         <td className="p-3 font-mono text-xs opacity-80">{new Date(tx.date).toLocaleDateString('en-GB')}</td>
                                         <td className="p-3">
                                             <div className="flex flex-col">
