@@ -56,6 +56,12 @@ const SETTING_META: Record<keyof Omit<ThresholdConfig, 'currentSeason'>, { label
         unit: '%',
         usedBy: 'Deep Dive: High Ad Dependency',
         description: 'Maximum healthy TACoS. Exceeding this triggers dependency alerts.'
+    },
+    minAbsoluteFloor: {
+        label: 'min_absolute_floor',
+        unit: 'Units',
+        usedBy: 'Dashboard: Low Stock Indicator',
+        description: 'Absolute minimum stock level before the value is highlighted in orange.'
     }
 };
 
@@ -117,13 +123,13 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                     <p className="text-sm text-gray-500 mt-1">Fine-tune the sensitivity of the Decision Engine&apos;s detection logic.</p>
                 </div>
                 <div className="flex gap-2">
-                    <button 
+                    <button
                         onClick={handleReset}
                         className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
                     >
                         <RefreshCw className="w-4 h-4" /> Reset Defaults
                     </button>
-                    <button 
+                    <button
                         onClick={handleSave}
                         disabled={!isDirty || !allValid}
                         className="px-6 py-2 text-sm font-bold text-white rounded-lg shadow-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
@@ -154,8 +160,8 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                                         {!valid && <AlertTriangle className="w-4 h-4 text-red-500" />}
                                     </label>
                                     <div className="flex items-center gap-2">
-                                        <input 
-                                            type="number" 
+                                        <input
+                                            type="number"
                                             value={value}
                                             onChange={(e) => handleChange(key as keyof ThresholdConfig, e.target.value)}
                                             className={`w-20 text-right font-mono font-bold text-sm border rounded-md py-1 px-2 focus:ring-2 focus:ring-indigo-500 ${!valid ? 'border-red-500 text-red-600 bg-red-50' : 'border-gray-300'}`}
@@ -163,9 +169,9 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                                         <span className="text-xs font-bold text-gray-400 w-8">{meta.unit}</span>
                                     </div>
                                 </div>
-                                
+
                                 <p className="text-xs text-gray-500 mb-3 min-h-[1.5em]">{meta.description}</p>
-                                
+
                                 <div className="pt-3 border-t border-gray-100 flex items-center gap-1.5">
                                     <Info className="w-3 h-3 text-indigo-400" />
                                     <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wide">Used by:</span>
@@ -177,15 +183,15 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                         );
                     })}
                 </div>
-                 <div className="bg-white p-6 border-t border-gray-200/50">
+                <div className="bg-white p-6 border-t border-gray-200/50">
                     <div className="flex justify-between items-start">
                         <div>
                             <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-indigo-500"/>
+                                <Calendar className="w-4 h-4 text-indigo-500" />
                                 {t('current_season_label')}
                             </label>
                             <p className="text-xs text-gray-500 mt-2 mb-3 max-w-sm">Sets the current season for the Strategy Engine. This will affect recommendations for products with seasonal tags in future updates.</p>
-                             <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5">
                                 <Info className="w-3 h-3 text-indigo-400" />
                                 <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wide">Used by:</span>
                                 <span className="text-[10px] text-gray-600 font-medium">Strategy Engine</span>

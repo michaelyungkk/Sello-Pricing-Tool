@@ -34,7 +34,7 @@ export default {
   nav_config: "Configuration",
   nav_definitions: "Definitions",
   active_searches: "Active Searches",
-  
+
   // Footer
   backup_db: "Backup Database",
   restore_db: "Restore Database",
@@ -89,7 +89,7 @@ export default {
   empty_state_sales_desc: "Once products are loaded, upload sales history to calculate Velocity, Fees, and Margins.",
   upload_sales: "Upload Sales",
   search_empty_state: "Select a search from the sidebar or start a new one.",
-  
+
   // AnalysisModal
   analysis_consulting_ai: "Consulting Gemini AI...",
   analysis_current_status: "Current Status",
@@ -205,6 +205,7 @@ export default {
   high_return_rate: "High Return Rate",
   high_ad_dependency: "High Ad Dependency",
   current_season_label: "Current Season",
+  min_absolute_floor: "Low Stock Floor (Absolute)",
 
   // CostManagementPage
   cost_management_title: "SKU Profitability Analysis",

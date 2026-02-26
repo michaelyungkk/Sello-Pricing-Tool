@@ -7,6 +7,7 @@ export interface ThresholdConfig {
   deadStockMinValueGBP: number;
   returnRatePct: number;
   highAdDependencyPct: number;
+  minAbsoluteFloor: number;
   currentSeason?: 'Summer' | 'Autumn' | 'Winter' | 'Spring' | 'None';
 }
 
@@ -19,6 +20,7 @@ export const DEFAULT_THRESHOLDS: ThresholdConfig = {
   deadStockMinValueGBP: 200,
   returnRatePct: 5,
   highAdDependencyPct: 15,
+  minAbsoluteFloor: 2,
   currentSeason: 'None'
 };
 

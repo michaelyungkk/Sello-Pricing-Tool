@@ -46,6 +46,25 @@ const sanitizeProduct = (p: any): any => {
 };
 
 /**
+ * Sanitizes a single price history log entry.
+ */
+const sanitizePriceLog = (l: any): any => {
+  if (!l || typeof l !== 'object') return null;
+  return {
+    ...l,
+    id: l.id || `l-${Math.random().toString(36).substr(2, 9)}`,
+    sku: String(l.sku || ''),
+    date: String(l.date || ''),
+    price: toNumber(l.price),
+    velocity: toNumber(l.velocity),
+    platform: l.platform || 'Unknown',
+    margin: toNumber(l.margin),
+    profit: l.profit !== undefined ? toNumber(l.profit) : undefined,
+    adsSpend: l.adsSpend !== undefined ? toNumber(l.adsSpend) : undefined,
+  };
+};
+
+/**
  * Normalizes a restored database object by ensuring all mandatory slices exist 
  * and critical fields are correctly typed. This makes the restore flow idempotent.
  */
@@ -55,7 +74,7 @@ export const normalizeRestoredState = (db: any): any => {
   return {
     // Standardize all data lists
     products: toArray(d.products).map(sanitizeProduct).filter(Boolean),
-    priceHistory: toArray(d.priceHistory || d.salesHistory),
+    priceHistory: toArray(d.priceHistory || d.salesHistory).map(sanitizePriceLog).filter(Boolean),
     refundHistory: toArray(d.refundHistory),
     shipmentHistory: toArray(d.shipmentHistory),
     priceChangeHistory: toArray(d.priceChangeHistory),

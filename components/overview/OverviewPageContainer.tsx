@@ -14,7 +14,7 @@ import { SortableHeader } from '../common/SortableHeader';
 import UkSalesMap from '../UkSalesMap';
 import { CategoryPerformanceSlide } from '../CategoryPerformanceSlide';
 import AuditPanel from '../AuditPanel';
-import { Calendar, ChevronDown, Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingUp, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator } from 'lucide-react';
+import { Calendar, ChevronDown, Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingUp, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
 import { formatMoney, formatNumber, formatPct } from '../../utils/format';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, Bar, Line, BarChart, Cell } from 'recharts';
 import { resolveEffectiveVelocity } from '../../services/metrics';
@@ -113,11 +113,11 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     const { processedData, periodLabel, dateRange, startKey, endKey, distinctDaysFound, expectedDays } = useMemo(() => {
         const { startKey, endKey, expectedDays } = buildWindow({
             mode: range === 'custom' ? 'custom' : 'days',
-            days: range === 'yesterday' ? 1 : 
-                  range === '7d' ? 7 : 
-                  range === '14d' ? 14 :
-                  range === '30d' ? 30 : 
-                  range === '90d' ? 90 : 30,
+            days: range === 'yesterday' ? 1 :
+                range === '7d' ? 7 :
+                    range === '14d' ? 14 :
+                        range === '30d' ? 30 :
+                            range === '90d' ? 90 : 30,
             startKey: customStart,
             endKey: customEnd,
             excludeToday: true
@@ -128,7 +128,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
         const formatLabel = (d: Date, withYear: boolean) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: withYear ? 'numeric' : undefined, timeZone: 'UTC' });
         const sameYear = startDate.getUTCFullYear() === endDate.getUTCFullYear();
         const label = `${formatLabel(startDate, !sameYear)} – ${formatLabel(endDate, true)}`;
-        
+
         const prevEndKey = addDaysToDateKey(startKey, -1);
         const prevStartKey = addDaysToDateKey(prevEndKey, -(expectedDays - 1));
 
@@ -138,7 +138,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
 
         const data = products.map(p => {
             const logs = priceHistoryMap.get(p.sku) || [];
-            
+
             // Scope Filter: Respect platform selection only. 
             // Exclusion shield ONLY affects strategy, not dashboard metrics.
             const scopeLogs = logs.filter(l => {
@@ -161,7 +161,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                     const dailyAds = l.adsSpend !== undefined ? l.adsSpend : (p.adsFee || 0) * l.velocity;
                     curAdSpend += dailyAds;
                     if (l.profit !== undefined) curProfit += l.profit;
-                    else curProfit += (l.velocity * l.price * (l.margin / 100));
+                    else curProfit += (l.velocity * l.price * ((l.margin || 0) / 100));
                 } else if (isDateKeyBetween(d, prevStartKey, prevEndKey)) {
                     prevUnits += l.velocity;
                 }
@@ -179,15 +179,15 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             });
             const histDailyUnits = allSkuLogs.map(l => l.velocity);
             const histDailyPrices = allSkuLogs.map(l => l.price);
-            
+
             const medDailyUnits = getMedianVal(histDailyUnits);
             const medPrice = getMedianVal(histDailyPrices);
             const historicalMedianUnits = medDailyUnits * expectedDays;
             const historicalMedianPrice = medPrice;
-            const volumeDropPct = historicalMedianUnits > 0 
-                ? ((curUnits - historicalMedianUnits) / historicalMedianUnits) * 100 
+            const volumeDropPct = historicalMedianUnits > 0
+                ? ((curUnits - historicalMedianUnits) / historicalMedianUnits) * 100
                 : 0;
-            
+
             const volumeDropAbs = curUnits - historicalMedianUnits;
 
             // DYNAMIC LEAD TIME LOGIC (Arrival ETA)
@@ -197,7 +197,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                     .filter(s => s.eta && s.status !== 'Delivered')
                     .map(s => new Date(s.eta!).getTime())
                     .filter(t => !isNaN(t) && t >= todayTs);
-                
+
                 if (upcomingShipments.length > 0) {
                     const earliestArrival = Math.min(...upcomingShipments);
                     daysToArrival = Math.ceil((earliestArrival - todayTs) / (1000 * 60 * 60 * 24));
@@ -205,14 +205,14 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             }
 
             // REFINED PROMOTION CHECK: Use date range strictly for current validity
-            const inPromotion = promotions.some(promo => 
-                promo.startDate <= todayKey && 
-                promo.endDate >= todayKey && 
+            const inPromotion = promotions.some(promo =>
+                promo.startDate <= todayKey &&
+                promo.endDate >= todayKey &&
                 promo.items.some(item => item.sku.toUpperCase() === p.sku.toUpperCase())
             );
 
             // Fetch price changes in the selected period
-            const changesInPeriod = priceChangeHistory.filter(c => 
+            const changesInPeriod = priceChangeHistory.filter(c =>
                 c.sku.toUpperCase() === p.sku.toUpperCase() &&
                 isDateKeyBetween(asDateKey(c.date) || '', startKey, endKey)
             ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -234,7 +234,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
 
             const netMargin = curRev > 0 ? (curProfit / curRev) * 100 : 0;
             const velocityChange = prevUnits > 0 ? ((curUnits - prevUnits) / prevUnits) * 100 : (curUnits > 0 ? 100 : 0);
-            
+
             let displayPrice = p.currentPrice;
             if (platformScope !== 'All') {
                 const channel = p.channels.find(c => c.platform === platformScope);
@@ -254,7 +254,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                     primaryDrag = "Ad Spend Heavy";
                     suggestedAction = "Optimize Ad Spend";
                     dragSeverity = 'high';
-                } 
+                }
                 else if (refundRateValue > 10) {
                     primaryDrag = "Heavy Returns";
                     suggestedAction = "Investigate Quality";
@@ -280,7 +280,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             }
 
             const signals: CanonicalDiagnosisId[] = [];
-            
+
             // CONSISTENCY FIX: Prioritize ERP velocity for health signals
             const globalDailyVelocity = resolveEffectiveVelocity(p, logs);
 
@@ -301,7 +301,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             // Stockout Action Logic - Updated to use effective lead time
             let stockoutAction = "Safe";
             const effectiveAlertLeadTime = daysToArrival < 999 ? daysToArrival : 999;
-            
+
             if (effectiveAlertLeadTime < 999 && globalRunway < effectiveAlertLeadTime * 1.2) {
                 if (inPromotion) stockoutAction = "End Promo & Raise Price";
                 else if (tacos > 10) stockoutAction = "Stop Ad & Raise Price";
@@ -327,7 +327,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                 tacos,
                 refundRateValue,
                 volumeDropPct,
-                volumeDropAbs, 
+                volumeDropAbs,
                 historicalMedianUnits,
                 historicalMedianPrice,
                 historicalMedianDemand: medDailyUnits,
@@ -335,16 +335,16 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                 changesInPeriod,
                 priceChangeCount: changesInPeriod.length,
                 stockoutAction,
-                daysToArrival, 
+                daysToArrival,
                 effectiveAlertLeadTime,
                 daysSinceLastSale,
                 inventoryValue: stockValue,
                 causeTags: []
             };
         });
-        
+
         return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, startKey, endKey, distinctDaysFound: distinctDaysSet.size, expectedDays };
-    }, [products, priceHistoryMap, refundHistory, deductRefunds, range, customStart, customEnd, platformScope, thresholds, pricingRules, promotions, priceChangeHistory]); 
+    }, [products, priceHistoryMap, refundHistory, deductRefunds, range, customStart, customEnd, platformScope, thresholds, pricingRules, promotions, priceChangeHistory]);
 
     const alerts = useMemo(() => ({
         margin: processedData.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
@@ -358,7 +358,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     const workbenchData = useMemo(() => {
         const data = !selectedAlert ? processedData.filter(p => p.periodRevenue > 0) : alerts[selectedAlert];
         const getValue = (row: any, key: string) => {
-            switch(key) {
+            switch (key) {
                 case 'sku': return row.sku;
                 case 'price': return row.displayPrice;
                 case 'caPrice': return row.caPrice;
@@ -372,19 +372,19 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                 case 'runway': return row.periodRunway;
                 case 'leadTime': return row.effectiveAlertLeadTime;
                 case 'velocity': return row.periodDailyVelocity;
-                case 'volumeDrop': return row.volumeDropAbs; 
+                case 'volumeDrop': return row.volumeDropAbs;
                 case 'priceChanges': return row.priceChangeCount;
                 case 'inventoryValue': return row.inventoryValue;
                 case 'daysSinceLastSale': return row.daysSinceLastSale;
                 default: return 0;
             }
         };
-        
+
         if (sort) {
             return sortRows(data, sort, getValue);
         }
-        
-        return [...data].sort((a, b) => b.periodRevenue - a.revenue);
+
+        return [...data].sort((a, b) => (b.periodRevenue || 0) - (a.periodRevenue || 0));
     }, [selectedAlert, alerts, processedData, sort]);
 
     const paginatedData = workbenchData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -395,29 +395,55 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
         const totalProfit = processedData.reduce((acc, p) => acc + p.periodProfit, 0);
         const totalAdSpend = processedData.reduce((acc, p) => acc + p.periodAdSpend, 0);
         const tacos = totalRevenue > 0 ? (totalAdSpend / totalRevenue) * 100 : 0;
+
         const days = [];
         for (let d = new Date(dateRange.start); d <= dateRange.end; d.setDate(d.getDate() + 1)) {
             days.push(new Date(d).toISOString().split('T')[0]);
         }
-        const chartData = days.map(day => {
-            let dayRev = 0; let dayAds = 0; let dayProfit = 0;
-            products.forEach(p => {
-                const logs = priceHistoryMap.get(p.sku) || [];
-                logs.filter(l => l.date.startsWith(day)).forEach(l => {
-                    dayRev += (l.price * l.velocity);
-                    dayAds += (l.adsSpend !== undefined ? l.adsSpend : (p.adsFee || 0) * l.velocity);
-                    if (l.profit !== undefined) dayProfit += l.profit;
-                    else dayProfit += (l.velocity * l.price * (l.margin / 100));
-                });
-                if (deductRefunds) {
-                    refundHistory.filter(r => r.sku === p.sku && r.date.startsWith(day)).forEach(r => {
-                        dayProfit -= (Number(r.amount) + Number(r.freightAmount || 0));
-                    });
+
+        // Optimized Daily Aggregation to avoid O(days * products * logs) complexity
+        const dailyAggs = new Map<string, { rev: number, ads: number, profit: number }>();
+        days.forEach(day => dailyAggs.set(day, { rev: 0, ads: 0, profit: 0 }));
+
+        products.forEach(p => {
+            const logs = priceHistoryMap.get(p.sku) || [];
+            logs.forEach(l => {
+                if (!l.date) return;
+                const dKey = l.date.split('T')[0];
+                const agg = dailyAggs.get(dKey);
+                if (agg) {
+                    agg.rev += (l.price * l.velocity);
+                    agg.ads += (l.adsSpend !== undefined ? l.adsSpend : (p.adsFee || 0) * l.velocity);
+                    if (l.profit !== undefined) agg.profit += l.profit;
+                    else agg.profit += (l.velocity * l.price * ((l.margin || 0) / 100));
                 }
             });
-            const displayDate = new Date(day).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-            return { day: displayDate, revenue: dayRev * VAT_MULTIPLIER, ads: dayAds * VAT_MULTIPLIER, profit: dayProfit * VAT_MULTIPLIER };
         });
+
+        if (deductRefunds) {
+            const validSkus = new Set(products.map(p => p.sku));
+            refundHistory.forEach(r => {
+                if (r.sku && validSkus.has(r.sku) && r.date) {
+                    const dKey = r.date.split('T')[0];
+                    const agg = dailyAggs.get(dKey);
+                    if (agg) {
+                        agg.profit -= (Number(r.amount) + Number(r.freightAmount || 0));
+                    }
+                }
+            });
+        }
+
+        const chartData = days.map(day => {
+            const agg = dailyAggs.get(day) || { rev: 0, ads: 0, profit: 0 };
+            const displayDate = new Date(day).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            return {
+                day: displayDate,
+                revenue: agg.rev * VAT_MULTIPLIER,
+                ads: agg.ads * VAT_MULTIPLIER,
+                profit: agg.profit * VAT_MULTIPLIER
+            };
+        });
+
         return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
     }, [processedData, dateRange, priceHistoryMap, refundHistory, deductRefunds, products, pricingRules, platformScope]);
 
@@ -433,8 +459,8 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             <div className="flex flex-col md:flex-row justify-between items-center bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm gap-4 relative z-30 backdrop-blur-custom">
                 <div className="flex items-center gap-2">
                     <div className="relative">
-                        <select 
-                            value={platformScope} 
+                        <select
+                            value={platformScope}
                             onChange={(e) => setPlatformScope(e.target.value)}
                             className="appearance-none bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold py-2 pl-4 pr-10 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
@@ -505,15 +531,15 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                             <><Ship className="w-4 h-4 text-purple-600" /> Prevent Stockout Workbench</>
                                         ) : selectedAlert === 'dead' ? (
                                             <><Package className="w-4 h-4 text-gray-600" /> Clear Dead Stock Workbench</>
-                                        ) : selectedAlert ? (
-                                            <><Activity className="w-4 h-4 text-indigo-500" /> Decision Panel: {selectedAlert.charAt(0).toUpperCase() + selectedAlert.slice(1)}</>
+                                        ) : selectedAlert && typeof selectedAlert === 'string' ? (
+                                            <><Activity className="w-4 h-4 text-indigo-500" /> Decision Panel: {(selectedAlert as string).charAt(0).toUpperCase() + (selectedAlert as string).slice(1)}</>
                                         ) : (
                                             <><Activity className="w-4 h-4 text-indigo-500" /> Executive Workbench</>
                                         )}
                                     </h3>
                                     <span className="text-xs text-gray-500">{workbenchData.length} items requiring action</span>
                                 </div>
-                                <button onClick={() => {}} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"><Download className="w-4 h-4" /></button>
+                                <button onClick={() => { }} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"><Download className="w-4 h-4" /></button>
                             </div>
                             <div className="flex-1 overflow-auto">
                                 <table className="w-full text-left text-sm whitespace-nowrap relative">
@@ -609,12 +635,12 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                             if (selectedAlert === 'velocity') {
                                                 const priceDiff = p.displayPrice - p.historicalMedianPrice;
                                                 const isPriceHigh = priceDiff > 0.05;
-                                                
+
                                                 const hasRecentPriceIncrease = p.changesInPeriod.some(c => c.changeType === 'INCREASE');
-                                                
+
                                                 // CTA and Justification
                                                 let ctaText = isPriceHigh ? "Review Price Positioning" : "Consider Promotion";
-                                                let justification = isPriceHigh 
+                                                let justification = isPriceHigh
                                                     ? `Price is currently £${formatMoney(Math.abs(priceDiff), 2, '')} above historical median (£${formatMoney(p.historicalMedianPrice, 2, '')})`
                                                     : `Velocity is down ${Math.abs(p.volumeDropPct).toFixed(0)}% despite baseline pricing`;
 
@@ -657,7 +683,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                         <td className={`p-4 text-right font-bold ${isPriceHigh ? 'text-amber-600' : 'text-gray-900'}`}>£{formatMoney(p.displayPrice, 2, '')}</td>
                                                         <td className="p-4 text-right text-gray-400 font-medium">£{formatMoney(p.historicalMedianPrice, 2, '')}</td>
                                                         <td className={`p-4 text-right font-bold ${p.stockLevel < thresholds.minAbsoluteFloor ? 'text-orange-600' : 'text-gray-800'}`}>{formatNumber(p.stockLevel)}</td>
-                                                        
+
                                                         {/* Price Changes Column - Tooltip restricted to hover on this badge only */}
                                                         <td className="p-4 text-center">
                                                             <div className="group/tooltip relative inline-block">
@@ -675,7 +701,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                                             {p.changesInPeriod.slice(0, 5).map(c => (
                                                                                 <div key={c.id} className="flex justify-between items-center gap-3">
                                                                                     <div className="flex flex-col">
-                                                                                        <span className="text-[10px] text-slate-400 font-medium uppercase">{new Date(c.date).toLocaleDateString('en-GB', {day:'numeric', month:'short'})}</span>
+                                                                                        <span className="text-[10px] text-slate-400 font-medium uppercase">{new Date(c.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
                                                                                     </div>
                                                                                     <div className="flex items-center gap-2 flex-1 justify-end">
                                                                                         <span className="text-[10px] text-white font-mono italic">£{c.oldPrice.toFixed(2)} → £{c.newPrice.toFixed(2)}</span>
@@ -792,7 +818,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                     </tr>
                                                 );
                                             }
-                                            
+
                                             return (
                                                 <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
                                                     {selectedAlert === 'margin' ? (
@@ -824,14 +850,13 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                             <td className={`p-4 text-right font-bold ${p.periodProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatMoney(p.periodProfit, 2)}</td>
                                                             <td className="p-4">
                                                                 <div className="flex items-center gap-2 group relative inline-block">
-                                                                    <span className={`text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded border shadow-sm ${
-                                                                        p.primaryDrag === "Ad Spend Heavy" ? 'text-purple-700 bg-purple-50 border-purple-100' :
+                                                                    <span className={`text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded border shadow-sm ${p.primaryDrag === "Ad Spend Heavy" ? 'text-purple-700 bg-purple-50 border-purple-100' :
                                                                         p.primaryDrag === "Heavy Returns" ? 'text-red-700 bg-red-50 border-red-100' :
-                                                                        p.primaryDrag === "Selling at a Loss" ? 'text-rose-700 bg-rose-50 border-rose-100' :
-                                                                        p.primaryDrag === "Price Below Master" ? 'text-indigo-700 bg-indigo-50 border-indigo-100' :
-                                                                        p.primaryDrag === "High Returns" ? 'text-amber-700 bg-amber-50 border-amber-100' :
-                                                                        'text-gray-700 bg-gray-50 border-gray-100'
-                                                                    }`}>
+                                                                            p.primaryDrag === "Selling at a Loss" ? 'text-rose-700 bg-rose-50 border-rose-100' :
+                                                                                p.primaryDrag === "Price Below Master" ? 'text-indigo-700 bg-indigo-50 border-indigo-100' :
+                                                                                    p.primaryDrag === "High Returns" ? 'text-amber-700 bg-amber-50 border-amber-100' :
+                                                                                        'text-gray-700 bg-gray-50 border-gray-100'
+                                                                        }`}>
                                                                         {p.primaryDrag}
                                                                     </span>
                                                                     <div className="absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-[10px] p-2 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none border border-gray-700">
@@ -857,7 +882,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                         <>
                                                             <td className="p-4 text-center"><button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Search className="w-4 h-4" /></button></td>
                                                             <td className="p-4"><div className="font-medium text-gray-900 group-hover:text-indigo-600 transition-colors flex items-center">{p.sku}<GradeBadge gradeLevel={p.gradeLevel} /></div><div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div></td>
-                                                            <td className="p-4"><div className="flex flex-wrap gap-1 max-w-[140px]">{p.signals.slice(0, 2).map((id:string) => { const meta = getDiagnosisMeta(id as CanonicalDiagnosisId); return <span key={id} onClick={() => onDeepDive(p.sku)} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${meta.priority === 'High' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`} title={meta.description}>{meta.shortLabel}</span>})}</div></td>
+                                                            <td className="p-4"><div className="flex flex-wrap gap-1 max-w-[140px]">{p.signals.slice(0, 2).map((id: string) => { const meta = getDiagnosisMeta(id as CanonicalDiagnosisId); return <span key={id} onClick={() => onDeepDive(p.sku)} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${meta.priority === 'High' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`} title={meta.description}>{meta.shortLabel}</span> })}</div></td>
                                                             <td className="p-4 text-right">£{(p.displayPrice * VAT_MULTIPLIER).toFixed(2)}</td>
                                                             <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
                                                             <td className="p-4 text-right"><span className={`font-medium ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span></td>
@@ -876,21 +901,21 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                 {activeTab === 'financials' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <MetricCard title="Total Revenue" value={`£${financialStats.totalRevenue.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={DollarSign} color="blue" />
-                            <MetricCard title="True Net Profit" value={`£${financialStats.totalProfit.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Coins} color="green" />
-                            <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, {maximumFractionDigits:0})}`} icon={Megaphone} color="purple" desc="Includes Ad-Only Transactions" />
+                            <MetricCard title="Total Revenue" value={`£${financialStats.totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={DollarSign} color="blue" />
+                            <MetricCard title="True Net Profit" value={`£${financialStats.totalProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={Coins} color="green" />
+                            <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={Megaphone} color="purple" desc="Includes Ad-Only Transactions" />
                             <MetricCard title="TACoS %" value={`${financialStats.tacos.toFixed(1)}%`} icon={BarChart2} color="orange" desc="Total Advertising Cost of Sales" />
                         </div>
                         <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[500px]">
                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-600" /> Financial Performance</h3>
-                            <div className="flex-1 min-0"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={financialStats.chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" /><XAxis dataKey="day" tick={{fontSize: 10}} /><YAxis yAxisId="left" tick={{fontSize: 10, fill: '#6b7280'}} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Revenue', angle: -90, position: 'insideLeft', style: { fill: '#93c5fd', fontWeight: 'bold', fontSize: 12 } }} /><YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fill: '#6b7280'}} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Profit & Ads', angle: 90, position: 'insideRight', style: { fill: '#8b5cf6', fontWeight: 'bold', fontSize: 12 } }} /><RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(value: number) => '£' + value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} /><Legend wrapperStyle={{ fontSize: '12px' }} /><Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#93c5fd" barSize={20} radius={[4, 4, 0, 0]} /><Line yAxisId="right" type="monotone" dataKey="ads" name="Ad Spend" stroke="#8b5cf6" strokeWidth={2} dot={false} /><Line yAxisId="right" type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={2} dot={false} /></ComposedChart></ResponsiveContainer></div>
+                            <div className="flex-1 min-0"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={financialStats.chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" /><XAxis dataKey="day" tick={{ fontSize: 10 }} /><YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Revenue', angle: -90, position: 'insideLeft', style: { fill: '#93c5fd', fontWeight: 'bold', fontSize: 12 } }} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Profit & Ads', angle: 90, position: 'insideRight', style: { fill: '#8b5cf6', fontWeight: 'bold', fontSize: 12 } }} /><RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(value: number) => '£' + value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /><Legend wrapperStyle={{ fontSize: '12px' }} /><Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#93c5fd" barSize={20} radius={[4, 4, 0, 0]} /><Line yAxisId="right" type="monotone" dataKey="ads" name="Ad Spend" stroke="#8b5cf6" strokeWidth={2} dot={false} /><Line yAxisId="right" type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={2} dot={false} /></ComposedChart></ResponsiveContainer></div>
                         </div>
                     </div>
                 )}
                 {activeTab === 'map' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope} themeColor={themeColor} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
                 {activeTab === 'categories' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto pb-24"><CategoryPerformanceSlide products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} themeColor={themeColor} refundHistory={refundHistory} deductRefunds={deductRefunds} /></div>)}
             </div>
-            
+
             {totalPages > 1 && activeTab === 'actions' && (
                 <div className="bg-white/50 px-4 py-3 border-t border-gray-100 flex items-center justify-between mt-auto">
                     <p className="text-xs text-gray-500">Showing page {currentPage} of {totalPages}</p>
