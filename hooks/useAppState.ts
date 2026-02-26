@@ -526,8 +526,41 @@ export const useAppState = () => {
     const handleSalesImportConfirm = useCallback((updatedProducts: Product[], _labels?: { current: string; last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: ShipmentLog[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>) => {
         let updatedPriceHistory = [...salesHistory];
         if (historyPayload && historyPayload.length > 0) {
-            const newLogs: PriceLog[] = historyPayload.map(h => ({ ...h, id: `l-${Date.now()}-${Math.random()}` }));
-            updatedPriceHistory = [...newLogs, ...salesHistory];
+            const newLogs: PriceLog[] = historyPayload.map(h => ({
+                ...h,
+                id: `l-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+            }));
+
+            // Build deduplication key sets from incoming new logs
+            const transactionKeys = new Set<string>();
+            const dailyActivityKeys = new Set<string>();
+
+            newLogs.forEach(l => {
+                const d = l.date.split('T')[0];
+                const p = l.platform || 'General';
+                if (l.orderId) {
+                    transactionKeys.add(`${l.sku}|${l.orderId}`);
+                }
+                dailyActivityKeys.add(`${l.sku}|${d}|${p}`);
+            });
+
+            // Filter existing history to remove any records that 
+            // overlap with the incoming data
+            const keptHistory = (salesHistory || []).filter(l => {
+                const d = l.date.split('T')[0];
+                const p = l.platform || 'General';
+                if (l.orderId) {
+                    const txKey = `${l.sku}|${l.orderId}`;
+                    if (transactionKeys.has(txKey)) return false;
+                    return true;
+                }
+                const dailyKey = `${l.sku}|${d}|${p}`;
+                if (dailyActivityKeys.has(dailyKey)) return false;
+                return true;
+            });
+
+            // Combine: new records first, then non-overlapping history
+            updatedPriceHistory = [...newLogs, ...keptHistory];
         }
         const redistributed = redistributeAdSpend(updatedPriceHistory, adGroups);
         const finalProducts = recalculateProductMetrics(updatedProducts, redistributed, velocityLookback, thresholds, pricingRules, brandMap, categoryMap);

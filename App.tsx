@@ -170,6 +170,8 @@ const App: React.FC = () => {
         handleAdminPush
     } = useAppState();
 
+    const isBusy = syncStatus === 'syncing' || syncStatus === 'pushing';
+
     const quickUploadActions = [
         { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-indigo-600' },
         { label: t('quick_upload_sales'), icon: FileBarChart, action: () => setIsSalesImportModalOpen(true), color: 'text-blue-600' },
@@ -284,10 +286,18 @@ const App: React.FC = () => {
                     </nav>
                     <div className="p-3 border-t border-custom-glass space-y-2">
                         <div className="px-1 flex gap-1">
-                            <button onClick={handleBackup} className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-custom-glass">
+                            <button
+                                onClick={handleBackup}
+                                disabled={isBusy}
+                                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 transition-colors border border-custom-glass ${isBusy ? 'opacity-40 cursor-not-allowed pointer-events-none' : 'hover:bg-gray-100/50'}`}
+                            >
                                 <Download className="w-3 h-3" /> {t('backup_db')}
                             </button>
-                            <button onClick={() => fileRestoreRef.current?.click()} className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-custom-glass">
+                            <button
+                                onClick={() => fileRestoreRef.current?.click()}
+                                disabled={isBusy}
+                                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 transition-colors border border-custom-glass ${isBusy ? 'opacity-40 cursor-not-allowed pointer-events-none' : 'hover:bg-gray-100/50'}`}
+                            >
                                 <Upload className="w-3 h-3" /> {t('restore_db')}
                             </button>
                             <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />
@@ -303,13 +313,13 @@ const App: React.FC = () => {
                                         handleSync();
                                     }
                                 }}
-                                disabled={syncStatus === 'syncing' || syncStatus === 'pushing'}
+                                disabled={isBusy}
                                 className={`w-full flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all border ${syncStatus === 'error'
                                     ? 'bg-red-50 border-red-200 text-red-600'
                                     : (isAdminMode && isDirty)
                                         ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
                                         : 'bg-white border-custom-glass text-gray-700 hover:bg-gray-50'
-                                    } shadow-sm group relative overflow-hidden`}
+                                    } shadow-sm group relative overflow-hidden ${isBusy ? 'opacity-40 cursor-not-allowed' : ''}`}
                             >
                                 <div className="flex items-center gap-2">
                                     {syncStatus === 'pushing' ? (
@@ -395,13 +405,13 @@ const App: React.FC = () => {
                                         {isAdminMode && (
                                             <button
                                                 onClick={handleAdminPush}
-                                                disabled={(!isDirty && syncStatus === 'idle') || syncStatus === 'pushing'}
+                                                disabled={(!isDirty && syncStatus === 'idle') || isBusy}
                                                 className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase transition-all shadow-sm border relative ${syncStatus === 'error'
                                                     ? 'bg-red-500 text-white border-red-600'
                                                     : (isDirty && syncStatus === 'idle')
                                                         ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 shadow-indigo-200'
                                                         : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                    }`}
+                                                    } ${isBusy ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                 title={!isDirty && syncStatus === 'idle' ? "No changes to push" : ""}
                                             >
                                                 {syncStatus === 'pushing' ? (
@@ -425,7 +435,7 @@ const App: React.FC = () => {
                                     )}
                                 </div>
 
-                                {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />}
+                                {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} disabled={isBusy} />}
                                 <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button>
                                 <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
                                 <UserProfile profile={userProfile} onUpdate={setUserProfile} />

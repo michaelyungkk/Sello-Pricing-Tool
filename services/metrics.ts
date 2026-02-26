@@ -9,9 +9,9 @@ import { asDateKey, isDateKeyBetween, addDaysToDateKey, getYesterdayKeyMelbourne
  * @returns A number.
  */
 export const toNumber = (x: any, defaultValue: number = 0): number => {
-  if (x === null || x === undefined) return defaultValue;
-  const num = Number(x);
-  return isNaN(num) ? defaultValue : num;
+    if (x === null || x === undefined) return defaultValue;
+    const num = Number(x);
+    return isNaN(num) ? defaultValue : num;
 };
 
 /**
@@ -22,7 +22,7 @@ export const toNumber = (x: any, defaultValue: number = 0): number => {
  * @returns The clamped number.
  */
 export const clamp = (x: number, min: number, max: number): number => {
-  return Math.max(min, Math.min(x, max));
+    return Math.max(min, Math.min(x, max));
 };
 
 /**
@@ -33,9 +33,9 @@ export const clamp = (x: number, min: number, max: number): number => {
  * @returns The result of the division or the fallback value.
  */
 export const safeDiv = (numerator: number, denominator: number, fallback: number = 0): number => {
-  if (denominator === 0) return fallback;
-  const result = numerator / denominator;
-  return isNaN(result) ? fallback : result;
+    if (denominator === 0) return fallback;
+    const result = numerator / denominator;
+    return isNaN(result) ? fallback : result;
 };
 
 
@@ -45,7 +45,7 @@ export const safeDiv = (numerator: number, denominator: number, fallback: number
  * @returns The calculated revenue.
  */
 export const calcRevenue = (log: PriceLog): number => {
-  return toNumber(log.price) * toNumber(log.velocity);
+    return toNumber(log.price) * toNumber(log.velocity);
 };
 
 
@@ -55,7 +55,7 @@ export const calcRevenue = (log: PriceLog): number => {
  * @returns The number of units.
  */
 export const calcUnits = (log: PriceLog): number => {
-  return toNumber(log.velocity);
+    return toNumber(log.velocity);
 };
 
 
@@ -66,7 +66,7 @@ export const calcUnits = (log: PriceLog): number => {
  * @returns The ad spend amount.
  */
 export const calcAdSpend = (log: PriceLog): number => {
-  return toNumber(log.adsSpend);
+    return toNumber(log.adsSpend);
 };
 
 /**
@@ -167,7 +167,7 @@ export const coverageCount = (rows: any[], fieldName: string): { present: number
     const total = rows.length;
     const missing = total - present;
     const pct = (present / total) * 100;
-    
+
     return { present, missing, pct };
 }
 
@@ -181,7 +181,7 @@ export const calculateWeightedVelocity = (skuLogs: PriceLog[]): number => {
     if (!skuLogs || skuLogs.length === 0) return 0;
 
     const yesterdayKey = getYesterdayKeyMelbourne();
-    
+
     const calculatePeriodVelocity = (days: number): number => {
         const startKey = addDaysToDateKey(yesterdayKey, -(days - 1));
         const periodLogs = skuLogs.filter(l => {
@@ -211,7 +211,7 @@ export const resolveEffectiveVelocity = (product: Product, skuLogs?: PriceLog[])
     // 1. Mandatory Primary: ERP Daily Average Sales
     // Check both potential field mappings from the inventory report
     const erpVal = toNumber(product.dailyAverageSales || (product as any).Daily_Average_Sales);
-    
+
     if (erpVal > 0) {
         return erpVal;
     }
