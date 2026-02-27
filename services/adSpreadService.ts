@@ -29,56 +29,53 @@ export function redistributeAdSpend(salesHistory: PriceLog[], adGroups: AdGroup[
         const targetPlatform = group.platform;
         const memberCount = group.memberSkus.length;
 
-        // Skip groups with no members to avoid division by zero
         if (memberCount === 0) return;
 
-        // Group indices of matching logs by date string
+        // Parse group date range ONCE outside the loop
+        // Compare as plain date strings (YYYY-MM-DD) to avoid
+        // creating thousands of Date objects inside the loop
+        const groupStart = group.startDate
+            ? group.startDate.split('T')[0]
+            : null;
+        const groupEnd = group.endDate
+            ? group.endDate.split('T')[0]
+            : null;
+
         const indicesByDate: Record<string, number[]> = {};
 
         results.forEach((log, index) => {
-            // Check if log belongs to this group's platform and SKUs
-            if (log.platform === targetPlatform && groupSkus.has(log.sku)) {
-                // Check if log date falls within the ad group's date range
-                const txDate = new Date(log.date.split('T')[0]);
-                const startDate = group.startDate ? new Date(group.startDate) : null;
-                const endDate = group.endDate ? new Date(group.endDate) : null;
+            if (log.platform !== targetPlatform) return;
+            if (!groupSkus.has(log.sku)) return;
 
-                if (startDate && txDate < startDate) return; // Skip redistribution
-                if (endDate && txDate > endDate) return; // Skip redistribution
+            // Compare date strings directly — no Date objects needed
+            const txDate = log.date.split('T')[0];
+            if (groupStart && txDate < groupStart) return;
+            if (groupEnd && txDate > groupEnd) return;
 
-                const dateKey = log.date;
-                if (!indicesByDate[dateKey]) {
-                    indicesByDate[dateKey] = [];
-                }
-                indicesByDate[dateKey].push(index);
+            if (!indicesByDate[txDate]) {
+                indicesByDate[txDate] = [];
             }
+            indicesByDate[txDate].push(index);
         });
 
-        // Process each date cluster for this ad group
-        Object.entries(indicesByDate).forEach(([date, indices]) => {
+        // Process each date cluster
+        Object.values(indicesByDate).forEach(indices => {
             if (indices.length === 0) return;
 
-            // Pool the total ad spend across all matched entries for that day
             let totalPooledSpend = 0;
             indices.forEach(idx => {
                 totalPooledSpend += results[idx].adsSpend || 0;
             });
 
-            // Skip if no spend to redistribute
             if (totalPooledSpend <= 0) return;
 
-            // Apply equal split redistribution
-            // Share is based on total member count, not just those with transactions
             const equalShare = totalPooledSpend / memberCount;
 
             indices.forEach(idx => {
                 const log = results[idx];
-
-                // Preserve the true original spend for audit purposes
                 if (log.rawAdsSpend === undefined || log.rawAdsSpend === null) {
                     log.rawAdsSpend = log.adsSpend || 0;
                 }
-
                 log.adsSpend = equalShare;
             });
         });

@@ -172,20 +172,29 @@ export interface RefundLog {
 export interface ShipmentLog {
   id: string;
   sku: string;
-  service: string;
-  cost: number;
+  productName?: string;
+  timestamp?: number;
   date: string;
+  quantity: number;
+  source: string;
+  service?: string;
+  cost?: number;
 }
 
 export interface PriceChangeRecord {
   id: string;
   sku: string;
   productName?: string;
+  timestamp?: number;
   date: string;
+  platform: string;
   oldPrice: number;
   newPrice: number;
-  changeType: 'INCREASE' | 'DECREASE';
-  percentChange: number;
+  delta?: number;
+  source?: string;
+  appliedBy?: string;
+  changeType?: 'INCREASE' | 'DECREASE';
+  percentChange?: number;
   preVel?: number;
   postVel?: number;
   velocityChange?: number;
@@ -195,11 +204,14 @@ export interface CostChangeRecord {
   id: string;
   sku: string;
   productName?: string;
+  timestamp?: number;
   date: string;
   oldCost: number;
   newCost: number;
-  changeType: 'INCREASE' | 'DECREASE';
-  percentChange: number;
+  delta?: number;
+  source?: string;
+  changeType?: 'INCREASE' | 'DECREASE';
+  percentChange?: number;
 }
 
 export interface InventoryChangeRecord {

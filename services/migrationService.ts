@@ -6,14 +6,8 @@ import { getCanonicalSku, isMergeVariant } from './skuNormalization';
  * Centralized migration pipeline for restored database objects.
  * Handles schema versioning and legacy field mapping for Promotions.
  */
-export const migrateRestoredDatabase = (input: any): any => {
-    if (!input) return input;
-
-    // Handle v2 backup wrapper if the whole file was passed
-    let data = input;
-    if (input.version === "2.0" && input.shared) {
-        data = input.shared;
-    }
+export const migrateRestoredDatabase = (data: any): any => {
+    if (!data) return data;
 
     // --- STEP 1: NORMALIZATION ---
     data = normalizeRestoredState(data);

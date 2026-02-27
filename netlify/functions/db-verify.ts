@@ -1,69 +1,38 @@
-
-import { neon } from '@netlify/neon';
 import bcrypt from 'bcryptjs';
 
-/**
- * Netlify Function: db-verify
- * Simple credential verification for entering Admin Mode.
- * Does not perform any database operations.
- */
+const CORS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json'
+};
+
 export default async (req: Request) => {
-    const corsHeaders = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Content-Type': 'application/json'
-    };
-
-    if (req.method === 'OPTIONS') {
-        return new Response(null, { status: 204, headers: corsHeaders });
-    }
-
-    if (req.method !== 'POST') {
-        return new Response(JSON.stringify({ valid: false, error: 'Method Not Allowed' }), {
-            status: 405,
-            headers: corsHeaders
-        });
-    }
-
+    if (req.method === 'OPTIONS')
+        return new Response(null, { status: 204, headers: CORS });
+    if (req.method !== 'POST')
+        return new Response(
+            JSON.stringify({ valid: false, error: 'Method not allowed' }),
+            { status: 405, headers: CORS }
+        );
     try {
-        const body = await req.json();
-        const { password } = body;
-
-        if (!password) {
-            return new Response(JSON.stringify({ valid: false, error: 'Password required' }), {
-                status: 400,
-                headers: corsHeaders
-            });
-        }
-
-        const adminHash = process.env.ADMIN_PASSWORD_HASH;
-        if (!adminHash) {
-            throw new Error('ADMIN_PASSWORD_HASH not configured on server');
-        }
-
-        const isValid = await bcrypt.compare(password, adminHash);
-
-        if (!isValid) {
-            return new Response(JSON.stringify({ valid: false, error: 'Invalid credentials' }), {
-                status: 401,
-                headers: corsHeaders
-            });
-        }
-
-        return new Response(JSON.stringify({ valid: true }), {
-            status: 200,
-            headers: corsHeaders
-        });
-
+        const { password } = await req.json();
+        if (!password)
+            return new Response(
+                JSON.stringify({ valid: false, error: 'Password required' }),
+                { status: 400, headers: CORS }
+            );
+        const hash = process.env.ADMIN_PASSWORD_HASH;
+        if (!hash) throw new Error('ADMIN_PASSWORD_HASH not set');
+        const valid = await bcrypt.compare(password, hash);
+        return new Response(
+            JSON.stringify({ valid }),
+            { status: valid ? 200 : 401, headers: CORS }
+        );
     } catch (error: any) {
-        console.error('db-verify error:', error);
-        return new Response(JSON.stringify({
-            valid: false,
-            error: error.message || 'Internal Server Error'
-        }), {
-            status: 500,
-            headers: corsHeaders
-        });
+        return new Response(
+            JSON.stringify({ valid: false, error: error.message }),
+            { status: 500, headers: CORS }
+        );
     }
 };

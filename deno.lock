@@ -11,8 +11,8 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:@netlify/neon@latest",
-        "npm:@types/bcryptjs@latest",
+        "npm:@netlify/neon@~0.1.2",
+        "npm:@types/bcryptjs@^2.4.6",
         "npm:@types/d3-geo@^3.1.0",
         "npm:@types/d3-scale@^4.0.8",
         "npm:@types/node@22",
@@ -23,7 +23,7 @@
         "npm:@typescript-eslint/eslint-plugin@^6.21.0",
         "npm:@typescript-eslint/parser@^6.21.0",
         "npm:@vitejs/plugin-react@^4.2.1",
-        "npm:bcryptjs@latest",
+        "npm:bcryptjs@^2.4.3",
         "npm:d3-geo@^3.1.0",
         "npm:d3-scale@^4.0.2",
         "npm:eslint-plugin-react-hooks@^4.6.2",

@@ -69,6 +69,15 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     setDeductRefunds,
     mapJumpState
 }) => {
+    const [debouncedProducts, setDebouncedProducts] = useState(products);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedProducts(products);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [products]);
+
     const [activeTab, setActiveTab] = useState<OverviewTab>('actions');
     const [range, setRange] = useState<DateRange>('30d');
     const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
@@ -132,11 +141,10 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
         const prevEndKey = addDaysToDateKey(startKey, -1);
         const prevStartKey = addDaysToDateKey(prevEndKey, -(expectedDays - 1));
 
-        const distinctDaysSet = new Set<string>();
-        const todayKey = getTodayKeyMelbourne();
-        const todayTs = new Date(todayKey).getTime();
+        const todayStr = getTodayKeyMelbourne();
+        const todayTs = new Date(todayStr).getTime();
 
-        const data = products.map(p => {
+        const data = debouncedProducts.map(p => {
             const logs = priceHistoryMap.get(p.sku) || [];
 
             // Scope Filter: Respect platform selection only. 
@@ -155,7 +163,6 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                 if (!d) return;
 
                 if (isDateKeyBetween(d, startKey, endKey)) {
-                    distinctDaysSet.add(d);
                     curUnits += l.velocity;
                     curRev += (l.velocity * l.price);
                     const dailyAds = l.adsSpend !== undefined ? l.adsSpend : (p.adsFee || 0) * l.velocity;
@@ -206,8 +213,8 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
 
             // REFINED PROMOTION CHECK: Use date range strictly for current validity
             const inPromotion = promotions.some(promo =>
-                promo.startDate <= todayKey &&
-                promo.endDate >= todayKey &&
+                promo.startDate <= todayStr &&
+                promo.endDate >= todayStr &&
                 promo.items.some(item => item.sku.toUpperCase() === p.sku.toUpperCase())
             );
 
@@ -343,8 +350,21 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             };
         });
 
+        const distinctDaysSet = new Set<string>();
+        // Re-calculate distinctDaysFound since it was inside the map before (inefficient but that's how it was)
+        // Wait, I should do it properly.
+        debouncedProducts.forEach(p => {
+            const logs = priceHistoryMap.get(p.sku) || [];
+            logs.forEach(l => {
+                const d = asDateKey(l.date);
+                if (d && isDateKeyBetween(d, startKey, endKey)) {
+                    distinctDaysSet.add(d);
+                }
+            });
+        });
+
         return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, startKey, endKey, distinctDaysFound: distinctDaysSet.size, expectedDays };
-    }, [products, priceHistoryMap, refundHistory, deductRefunds, range, customStart, customEnd, platformScope, thresholds, pricingRules, promotions, priceChangeHistory]);
+    }, [debouncedProducts, priceHistoryMap, refundHistory, deductRefunds, range, customStart, customEnd, platformScope, thresholds, pricingRules, promotions, priceChangeHistory]);
 
     const alerts = useMemo(() => ({
         margin: processedData.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
@@ -705,8 +725,8 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                                                     </div>
                                                                                     <div className="flex items-center gap-2 flex-1 justify-end">
                                                                                         <span className="text-[10px] text-white font-mono italic">£{c.oldPrice.toFixed(2)} → £{c.newPrice.toFixed(2)}</span>
-                                                                                        <span className={`font-black text-xs min-w-[50px] text-right ${c.changeType === 'INCREASE' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                                                            {c.changeType === 'INCREASE' ? '↑' : '↓'} {Math.abs(c.percentChange).toFixed(1)}%
+                                                                                        <span className={`font-black text-xs min-w-[50px] text-right ${(c.changeType || (c.newPrice > c.oldPrice ? 'INCREASE' : 'DECREASE')) === 'INCREASE' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                                            {(c.changeType || (c.newPrice > c.oldPrice ? 'INCREASE' : 'DECREASE')) === 'INCREASE' ? '↑' : '↓'} {(c.percentChange ?? (c.oldPrice > 0 ? ((c.newPrice - c.oldPrice) / c.oldPrice) * 100 : 0)).toFixed(1)}%
                                                                                         </span>
                                                                                     </div>
                                                                                 </div>

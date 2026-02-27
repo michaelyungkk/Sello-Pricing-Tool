@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { QuickUploadMenu } from './components/QuickUploadMenu';
 
@@ -11,10 +11,10 @@ import StrategyPage from './components/StrategyPage';
 import PlatformManagementPage from './components/PlatformManagementPage';
 
 import {
-    LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X, Lock, AlertTriangle, RefreshCw,
+    LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X,
     Download, Upload, Database, CheckCircle, FileBarChart, Bell, History,
     ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Globe,
-    ArrowUp, Package, Table, UploadCloud
+    ArrowUp, Package, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2
 } from 'lucide-react';
 
 import GlobalSearch from './components/GlobalSearch';
@@ -40,11 +40,6 @@ import { TAX_NOTE_SHORT } from './services/taxPolicy';
 import { StrategyConfig } from './types';
 
 const App: React.FC = () => {
-    const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false);
-    const [adminPassword, setAdminPassword] = React.useState('');
-    const [adminError, setAdminError] = React.useState<string | null>(null);
-    const [showAdminExitConfirmation, setShowAdminExitConfirmation] = React.useState(false);
-
     const {
         t,
         products,
@@ -156,21 +151,23 @@ const App: React.FC = () => {
         handleReturnsImport,
         handleCAImport,
         handleShipmentImport,
+        // DB Sync
         isAdminMode,
-        adminSessionActive,
+        isDirty,
+        syncStatus,
+        lastSyncedAt,
+        showSaveToast,
         handleAdminToggle,
         handleAdminExit,
-        lastSyncedAt,
-        syncStatus,
-        handleSync,
-        pendingFamilyConflicts,
-        resolveConflicts,
-        showSaveToast,
-        isDirty,
-        handleAdminPush
+        handleAdminPush,
+        handleSync
     } = useAppState();
 
-    const isBusy = syncStatus === 'syncing' || syncStatus === 'pushing';
+    // Admin mode local UI state
+    const [showAdminModal, setShowAdminModal] = useState(false);
+    const [adminPasswordInput, setAdminPasswordInput] = useState('');
+    const [adminLoginError, setAdminLoginError] = useState('');
+    const [showExitConfirm, setShowExitConfirm] = useState(false);
 
     const quickUploadActions = [
         { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-indigo-600' },
@@ -288,59 +285,44 @@ const App: React.FC = () => {
                         <div className="px-1 flex gap-1">
                             <button
                                 onClick={handleBackup}
-                                disabled={isBusy}
-                                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 transition-colors border border-custom-glass ${isBusy ? 'opacity-40 cursor-not-allowed pointer-events-none' : 'hover:bg-gray-100/50'}`}
+                                disabled={syncStatus === 'syncing' || syncStatus === 'pushing'}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-custom-glass disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 <Download className="w-3 h-3" /> {t('backup_db')}
                             </button>
                             <button
                                 onClick={() => fileRestoreRef.current?.click()}
-                                disabled={isBusy}
-                                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 transition-colors border border-custom-glass ${isBusy ? 'opacity-40 cursor-not-allowed pointer-events-none' : 'hover:bg-gray-100/50'}`}
+                                disabled={syncStatus === 'syncing' || syncStatus === 'pushing'}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-600 hover:bg-gray-100/50 transition-colors border border-custom-glass disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 <Upload className="w-3 h-3" /> {t('restore_db')}
                             </button>
                             <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />
                         </div>
-
-                        {/* Sync Button Section */}
-                        <div className="px-1 pt-1">
-                            <button
-                                onClick={() => {
-                                    if (isAdminMode && isDirty) {
-                                        handleAdminPush();
-                                    } else {
-                                        handleSync();
-                                    }
-                                }}
-                                disabled={isBusy}
-                                className={`w-full flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all border ${syncStatus === 'error'
-                                    ? 'bg-red-50 border-red-200 text-red-600'
-                                    : (isAdminMode && isDirty)
-                                        ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
-                                        : 'bg-white border-custom-glass text-gray-700 hover:bg-gray-50'
-                                    } shadow-sm group relative overflow-hidden ${isBusy ? 'opacity-40 cursor-not-allowed' : ''}`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    {syncStatus === 'pushing' ? (
-                                        <UploadCloud className="w-3.5 h-3.5 animate-bounce" />
-                                    ) : (
-                                        <RotateCcw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-                                    )}
-                                    <span className="text-[10px] font-bold tracking-wider uppercase">
-                                        {syncStatus === 'syncing' ? t('syncing...') : syncStatus === 'pushing' ? 'Pushing...' : syncStatus === 'error' ? t('sync_failed_retry') : (isAdminMode && isDirty) ? 'Push Changes' : t('sync_data')}
-                                    </span>
-                                    {isAdminMode && isDirty && syncStatus === 'idle' && (
-                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                                    )}
-                                </div>
-                                <div className="text-[9px] text-gray-500 font-medium">
-                                    {lastSyncedAt ? `${t('last_synced')}: ${new Date(lastSyncedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : t('never_synced')}
-                                </div>
-                                {(syncStatus === 'syncing' || syncStatus === 'pushing') && <div className="absolute bottom-0 left-0 h-0.5 bg-indigo-500 animate-progress-fast shadow-[0_0_8px_rgba(79,70,229,0.5)] w-full"></div>}
-                            </button>
-                        </div>
-
+                        {/* Sync Button */}
+                        <button
+                            onClick={handleSync}
+                            disabled={syncStatus === 'pushing'}
+                            className={`w-full flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg text-[10px] font-bold transition-all border ${syncStatus === 'error'
+                                ? 'text-red-600 border-red-200 bg-red-50/50 hover:bg-red-50'
+                                : 'text-indigo-600 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50'
+                                } disabled:opacity-40 disabled:cursor-not-allowed`}
+                        >
+                            <div className="flex items-center gap-1.5">
+                                {syncStatus === 'syncing' ? (
+                                    <><Loader2 className="w-3 h-3 animate-spin" /> Syncing...</>
+                                ) : syncStatus === 'error' ? (
+                                    <><RefreshCw className="w-3 h-3" /> Sync Failed — Retry</>
+                                ) : (
+                                    <><RefreshCw className="w-3 h-3" /> SYNC DATA</>
+                                )}
+                            </div>
+                            {lastSyncedAt && syncStatus === 'idle' && (
+                                <span className="text-[8px] text-gray-400 font-normal">
+                                    {new Date(lastSyncedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            )}
+                        </button>
                         <div className="bg-gray-50/50 rounded-lg border border-custom-glass overflow-hidden transition-all duration-300">
                             <button onClick={() => setIsFreshnessExpanded(!isFreshnessExpanded)} className="w-full flex justify-between items-center p-2 hover:bg-gray-100/50 transition-colors">
                                 <div className="flex items-center gap-2">
@@ -386,58 +368,57 @@ const App: React.FC = () => {
                         <div className="flex flex-col items-end gap-1">
                             <div className="flex items-center gap-4">
                                 {userProfile.name && <span className="text-sm font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>}
-
-                                {/* Admin Mode Indicator */}
-                                <div className="flex flex-col items-center">
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => setIsAdminModalOpen(true)}
-                                            className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase transition-all flex items-center gap-1.5 shadow-sm border ${isAdminMode
-                                                ? 'bg-green-500/10 text-green-500 border-green-500/30'
-                                                : 'bg-gray-500/10 text-gray-400 border-gray-500/30'
-                                                }`}
-                                        >
-                                            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isAdminMode ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                                            {isAdminMode && <Lock className="w-3 h-3" />}
-                                            {isAdminMode ? 'Admin Mode' : 'User Mode'}
-                                        </button>
-
-                                        {isAdminMode && (
-                                            <button
-                                                onClick={handleAdminPush}
-                                                disabled={(!isDirty && syncStatus === 'idle') || isBusy}
-                                                className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase transition-all shadow-sm border relative ${syncStatus === 'error'
-                                                    ? 'bg-red-500 text-white border-red-600'
-                                                    : (isDirty && syncStatus === 'idle')
-                                                        ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 shadow-indigo-200'
-                                                        : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                    } ${isBusy ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                title={!isDirty && syncStatus === 'idle' ? "No changes to push" : ""}
-                                            >
-                                                {syncStatus === 'pushing' ? (
-                                                    <RotateCcw className="w-3 h-3 animate-spin" />
-                                                ) : (
-                                                    <UploadCloud className="w-3 h-3" />
-                                                )}
-                                                <span>
-                                                    {syncStatus === 'pushing' ? 'Pushing...' : syncStatus === 'error' ? 'Push Failed — Retry' : 'Push to Database'}
-                                                </span>
-                                                {isDirty && syncStatus === 'idle' && (
-                                                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full animate-pulse border-2 border-white"></span>
-                                                )}
-                                            </button>
-                                        )}
-                                    </div>
-                                    {isAdminMode && syncStatus === 'pushing' && (
-                                        <span className="text-[8px] text-indigo-500 font-bold mt-0.5 animate-pulse">
-                                            Uploading master data and transactions...
-                                        </span>
-                                    )}
-                                </div>
-
-                                {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} disabled={isBusy} />}
+                                {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />}
                                 <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button>
                                 <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
+
+                                {/* Admin Mode Controls */}
+                                {isAdminMode ? (
+                                    <div className="flex items-center gap-2">
+                                        {/* Push to Database Button */}
+                                        <button
+                                            onClick={handleAdminPush}
+                                            disabled={(!isDirty && syncStatus === 'idle') || syncStatus === 'pushing'}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${syncStatus === 'pushing'
+                                                ? 'bg-indigo-100 text-indigo-500 border-indigo-200 cursor-wait'
+                                                : syncStatus === 'error'
+                                                    ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-pointer'
+                                                    : !isDirty
+                                                        ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                        : 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 cursor-pointer shadow-indigo-200'
+                                                }`}
+                                        >
+                                            {syncStatus === 'pushing' ? (
+                                                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Pushing...</>
+                                            ) : syncStatus === 'error' ? (
+                                                <><RefreshCw className="w-3.5 h-3.5" /> Push Failed — Retry</>
+                                            ) : (
+                                                <><UploadCloud className="w-3.5 h-3.5" /> Push to Database</>
+                                            )}
+                                        </button>
+                                        {/* Admin Mode Pill */}
+                                        <button
+                                            onClick={() => {
+                                                const result = handleAdminExit();
+                                                if (result.needsConfirmation) setShowExitConfirm(true);
+                                            }}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100 transition-all shadow-sm"
+                                        >
+                                            <Lock className="w-3 h-3" />
+                                            ADMIN MODE
+                                            <LogOut className="w-3 h-3 opacity-60" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => { setShowAdminModal(true); setAdminPasswordInput(''); setAdminLoginError(''); }}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100/60 text-gray-500 border border-gray-200 rounded-lg text-[10px] font-bold hover:bg-gray-200/60 transition-all"
+                                    >
+                                        <Lock className="w-3 h-3" />
+                                        USER MODE
+                                    </button>
+                                )}
+
                                 <UserProfile profile={userProfile} onUpdate={setUserProfile} />
                             </div>
                             <span className="text-[10px]" style={{ ...headerStyle, opacity: 0.6 }}>{TAX_NOTE_SHORT}</span>
@@ -470,50 +451,97 @@ const App: React.FC = () => {
                         </div>
                         <div style={{ display: currentView === 'overview' ? 'block' : 'none' }}>
                             {products.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full">
-                                    <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm" style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}>
-                                        <Database className="w-10 h-10" />
-                                    </div>
-                                    <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3>
-                                    <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative">
-                                        <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}>
-                                            <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`} style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
-                                                {hasInventory ? t('step_completed') : t('step_1')}
-                                            </div>
-                                            <div className="p-4 bg-white rounded-full shadow-sm mb-4">
-                                                {hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}
-                                            </div>
-                                            <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4>
-                                            <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p>
-                                            <button
-                                                onClick={() => setIsUploadModalOpen(true)}
-                                                className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300'}`}
-                                                style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}
-                                            >
-                                                {hasInventory ? t('reupload_inventory') : t('upload_inventory')}
-                                            </button>
+                                syncStatus === 'syncing' ? (
+                                    <div className="flex flex-col items-center justify-center min-h-[500px]">
+                                        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-6"
+                                            style={{ backgroundColor: `${userProfile.themeColor}15` }}>
+                                            <Loader2 className="w-8 h-8 animate-spin"
+                                                style={{ color: userProfile.themeColor }} />
                                         </div>
-                                        <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}>
-                                            <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`} style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
-                                                {t('step_2')}
+                                        <h3 className="text-xl font-bold text-gray-900">Loading your data...</h3>
+                                        <p className="text-gray-500 mt-2">Syncing from database, please wait.</p>
+                                    </div>
+                                ) : syncStatus === 'error' ? (
+                                    <div className="flex flex-col items-center justify-center min-h-[500px]">
+                                        <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-6">
+                                            <Database className="w-8 h-8 text-red-400" />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-gray-900">Could not load data</h3>
+                                        <p className="text-gray-500 mt-2 mb-6">Failed to sync from database.</p>
+                                        <button
+                                            onClick={handleSync}
+                                            className="px-6 py-2 rounded-lg text-white font-medium"
+                                            style={{ backgroundColor: userProfile.themeColor }}
+                                        >
+                                            Try Again
+                                        </button>
+                                    </div>
+                                ) : isAdminMode ? (
+                                    <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full">
+                                        <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
+                                            style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}>
+                                            <Database className="w-10 h-10" />
+                                        </div>
+                                        <h3 className="text-2xl font-bold text-gray-900">{t('welcome_title')}</h3>
+                                        <p className="text-gray-500 max-w-lg mt-3 mb-10 text-lg">{t('welcome_desc')}</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative">
+                                            <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative group ${hasInventory ? 'bg-green-50/50 border-green-200' : 'bg-gray-50/50 border-gray-200 hover:border-indigo-300'}`}>
+                                                <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${hasInventory ? 'bg-green-600 text-white' : 'text-white'}`}
+                                                    style={!hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                                    {hasInventory ? t('step_completed') : t('step_1')}
+                                                </div>
+                                                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                                    {hasInventory ? <CheckCircle className="w-8 h-8 text-green-600" /> : <Database className="w-8 h-8" style={{ color: userProfile.themeColor }} />}
+                                                </div>
+                                                <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_erp_title')}</h4>
+                                                <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_erp_desc')}</p>
+                                                <button
+                                                    onClick={() => setIsUploadModalOpen(true)}
+                                                    className={`mt-6 w-full py-3 bg-white border text-gray-700 font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${hasInventory ? 'border-green-300 text-green-700' : 'border-gray-300'}`}
+                                                    style={!hasInventory ? { borderColor: userProfile.themeColor, color: userProfile.themeColor } : {}}
+                                                >
+                                                    {hasInventory ? t('reupload_inventory') : t('upload_inventory')}
+                                                </button>
                                             </div>
-                                            <div className="p-4 bg-white rounded-full shadow-sm mb-4">
-                                                <FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`} style={hasInventory ? { color: userProfile.themeColor } : {}} />
+                                            <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}>
+                                                <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`}
+                                                    style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
+                                                    {t('step_2')}
+                                                </div>
+                                                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+                                                    <FileBarChart className={`w-8 h-8 ${!hasInventory ? 'text-gray-400' : ''}`}
+                                                        style={hasInventory ? { color: userProfile.themeColor } : {}} />
+                                                </div>
+                                                <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4>
+                                                <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p>
+                                                <button
+                                                    onClick={() => hasInventory && setIsSalesImportModalOpen(true)}
+                                                    disabled={!hasInventory}
+                                                    style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}
+                                                    className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}
+                                                >
+                                                    <Upload className="w-5 h-5" /> {t('upload_sales')}
+                                                </button>
                                             </div>
-                                            <h4 className="font-bold text-gray-900 text-lg">{t('empty_state_sales_title')}</h4>
-                                            <p className="text-sm text-gray-500 mt-2 text-center">{t('empty_state_sales_desc')}</p>
-                                            <button
-                                                onClick={() => hasInventory && setIsSalesImportModalOpen(true)}
-                                                disabled={!hasInventory}
-                                                style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}
-                                                className={`mt-6 w-full py-3 font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all ${!hasInventory ? 'bg-gray-300' : 'hover:opacity-90 shadow-lg'}`}
-                                            >
-                                                <Upload className="w-5 h-5" /> {t('upload_sales')}
-                                            </button>
                                         </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center min-h-[500px]">
+                                        <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-6">
+                                            <Database className="w-8 h-8 text-gray-400" />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-gray-900">No data available</h3>
+                                        <p className="text-gray-500 mt-2 mb-6 text-center max-w-sm">
+                                            Waiting for admin to upload data. Try syncing again later.
+                                        </p>
+                                        <button
+                                            onClick={handleSync}
+                                            className="px-6 py-2 rounded-lg border border-gray-300 text-gray-600 font-medium hover:bg-gray-50"
+                                        >
+                                            Sync Again
+                                        </button>
+                                    </div>
+                                )
                             ) : (
                                 <OverviewPageContainer
                                     products={products}
@@ -651,7 +679,7 @@ const App: React.FC = () => {
                                     setVelocityLookback(newVelocity);
                                     if (newSearchConfig) setSearchConfig(newSearchConfig);
                                     localStorage.setItem('sello_velocity_setting', newVelocity);
-                                    handleRecalculateVelocity(newVelocity);
+                                    handleRecalculateVelocity(newVelocity, salesHistory);
                                 }}
                                 logisticsRules={logisticsRules || []}
                                 onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }}
@@ -671,157 +699,6 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 </main>
-                {/* Admin Password Modal */}
-                {isAdminModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                        <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border border-gray-100">
-                            <div className="flex flex-col items-center gap-4 text-center mb-6">
-                                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${isAdminMode ? 'bg-green-100 text-green-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                                    <Lock className="w-8 h-8" />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-bold text-gray-900">
-                                        {isAdminMode ? 'Elevated Access Active' : 'Restricted Access'}
-                                    </h3>
-                                    <p className="text-sm text-gray-500 mt-1">
-                                        {isAdminMode
-                                            ? 'Manually synchronize your changes to the global cloud database.'
-                                            : 'Please enter your administrator credentials to enable global persistence.'}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {!isAdminMode ? (
-                                <div className="space-y-4">
-                                    <input
-                                        type="password"
-                                        placeholder="Admin Password"
-                                        value={adminPassword}
-                                        onChange={(e) => setAdminPassword(e.target.value)}
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                        autoFocus
-                                        onKeyDown={(e) => e.key === 'Enter' && (async () => {
-                                            const res = await handleAdminToggle(adminPassword);
-                                            if (res.success) {
-                                                setIsAdminModalOpen(false);
-                                                setAdminPassword('');
-                                                setAdminError(null);
-                                            } else {
-                                                setAdminError(res.error || 'Login failed');
-                                            }
-                                        })()}
-                                    />
-                                    {adminError && <p className="text-xs text-red-500 font-medium px-1">{adminError}</p>}
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={() => { setIsAdminModalOpen(false); setAdminPassword(''); setAdminError(null); }}
-                                            className="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                const res = await handleAdminToggle(adminPassword);
-                                                if (res.success) {
-                                                    setIsAdminModalOpen(false);
-                                                    setAdminPassword('');
-                                                    setAdminError(null);
-                                                } else {
-                                                    setAdminError(res.error || 'Login failed');
-                                                }
-                                            }}
-                                            className="flex-1 py-3 text-sm font-bold text-white rounded-xl transition-all shadow-md active:scale-95"
-                                            style={{ backgroundColor: userProfile.themeColor }}
-                                        >
-                                            Login
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <button
-                                        onClick={async () => {
-                                            const res = await handleAdminExit();
-                                            if (res.needsConfirmation) {
-                                                setShowAdminExitConfirmation(true);
-                                                setIsAdminModalOpen(false);
-                                            } else {
-                                                setIsAdminModalOpen(false);
-                                            }
-                                        }}
-                                        className="w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl border border-red-100 hover:bg-red-100 transition-colors shadow-sm"
-                                    >
-                                        Exit Admin Mode
-                                    </button>
-                                    <button
-                                        onClick={() => setIsAdminModalOpen(false)}
-                                        className="w-full py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl transition-colors"
-                                    >
-                                        Keep Active
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Save Toast */}
-                {showSaveToast && (
-                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <div className="bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-green-500/50">
-                            <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-                                <RefreshCw className="w-3 h-3 animate-spin" />
-                            </div>
-                            <span className="font-bold text-sm">Saved to database ✓</span>
-                        </div>
-                    </div>
-                )}
-
-                {/* Family Conflict Modal */}
-                {pendingFamilyConflicts.length > 0 && (
-                    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-                        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
-                            <div className="flex flex-col items-center gap-4 text-center mb-8">
-                                <div className="w-20 h-20 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shadow-inner">
-                                    <AlertTriangle className="w-10 h-10" />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-bold text-gray-900">Sync Conflicts Detected</h3>
-                                    <p className="text-sm text-gray-500 mt-2">
-                                        The following {pendingFamilyConflicts.length} family groups exist locally but are missing from the master database:
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="max-h-48 overflow-y-auto mb-8 pr-2 space-y-2">
-                                {pendingFamilyConflicts.map(fam => (
-                                    <div key={fam.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                        <span className="font-bold text-gray-700">{fam.name}</span>
-                                        <span className="text-[10px] text-gray-400 bg-white px-2 py-1 rounded-md border border-gray-100">
-                                            {fam.memberSkus.length} SKUs
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <button
-                                    onClick={() => resolveConflicts(false)}
-                                    className="py-4 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-2xl transition-all active:scale-95"
-                                >
-                                    Discard Local
-                                </button>
-                                <button
-                                    onClick={() => resolveConflicts(true)}
-                                    className="py-4 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-2xl transition-all shadow-lg shadow-amber-600/20 active:scale-95 flex items-center justify-center gap-2"
-                                >
-                                    Keep Local
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {isUploadModalOpen && (
                     <BatchUploadModal
                         products={products}
@@ -842,7 +719,7 @@ const App: React.FC = () => {
                 {isSkuDetailModalOpen && (
                     <SkuDetailUploadModal
                         products={products}
-                        onClose={() => setIsSkuDetailModalOpen(false)}
+                        onClose={() => setIsUploadModalOpen(false)}
                         onConfirm={handleSkuDetailImport}
                     />
                 )}
@@ -908,60 +785,94 @@ const App: React.FC = () => {
                 >
                     <ArrowUp className="w-5 h-5" />
                 </button>
-                {/* Admin Exit Confirmation Modal */}
-                {showAdminExitConfirmation && (
-                    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                        <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
-                            <div className="flex flex-col items-center gap-4 text-center mb-6">
-                                <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
-                                    <AlertTriangle className="w-8 h-8" />
-                                </div>
-                                <div className="space-y-2">
-                                    <h3 className="text-xl font-bold text-gray-900">Unsaved Changes</h3>
-                                    <p className="text-sm text-gray-500">
-                                        You have changes that haven't been pushed to the database yet. Your team won't see these updates until you push.
-                                    </p>
-                                </div>
-                            </div>
+            </div>
 
-                            <div className="flex flex-col gap-3">
-                                <button
-                                    onClick={async () => {
-                                        const success = await handleAdminPush();
-                                        if (success) {
-                                            await handleAdminExit(true);
-                                            setShowAdminExitConfirmation(false);
-                                        }
-                                    }}
-                                    disabled={syncStatus === 'pushing'}
-                                    className="w-full py-4 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
-                                >
-                                    {syncStatus === 'pushing' ? <RotateCcw className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                                    Push Now
-                                </button>
-                                <button
-                                    onClick={async () => {
-                                        await handleAdminExit(true);
-                                        setShowAdminExitConfirmation(false);
-                                    }}
-                                    className="w-full py-4 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl transition-colors"
-                                >
-                                    Exit Without Pushing
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setShowAdminExitConfirmation(false);
-                                        setIsAdminModalOpen(true);
-                                    }}
-                                    className="w-full py-2 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
+            {/* Admin Password Modal */}
+            {showAdminModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                <Lock className="w-5 h-5 text-indigo-600" />
+                                Enter Admin Mode
+                            </h3>
+                            <button onClick={() => setShowAdminModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400"><X className="w-4 h-4" /></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-gray-500">Enter the admin password to unlock push-to-database controls.</p>
+                            <input
+                                type="password"
+                                value={adminPasswordInput}
+                                onChange={e => { setAdminPasswordInput(e.target.value); setAdminLoginError(''); }}
+                                onKeyDown={async e => {
+                                    if (e.key === 'Enter') {
+                                        const r = await handleAdminToggle(adminPasswordInput);
+                                        if (r.success) { setShowAdminModal(false); } else { setAdminLoginError(r.error || 'Invalid password'); }
+                                    }
+                                }}
+                                placeholder="Admin password..."
+                                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                                autoFocus
+                            />
+                            {adminLoginError && <p className="text-xs text-red-600 font-medium">{adminLoginError}</p>}
+                        </div>
+                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+                            <button onClick={() => setShowAdminModal(false)} className="px-5 py-2 text-gray-500 font-bold text-sm hover:text-gray-700">Cancel</button>
+                            <button
+                                onClick={async () => {
+                                    const r = await handleAdminToggle(adminPasswordInput);
+                                    if (r.success) { setShowAdminModal(false); } else { setAdminLoginError(r.error || 'Invalid password'); }
+                                }}
+                                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all"
+                            >
+                                Unlock
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+
+            {/* Exit Confirmation Dialog */}
+            {showExitConfirm && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <h3 className="text-base font-bold text-gray-900 mb-2">Unsaved Changes</h3>
+                            <p className="text-sm text-gray-600">You have changes that haven't been pushed to the database. What would you like to do?</p>
+                        </div>
+                        <div className="px-6 pb-6 flex flex-col gap-2">
+                            <button
+                                onClick={async () => { setShowExitConfirm(false); await handleAdminPush(); handleAdminExit(true); }}
+                                className="w-full px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
+                            >
+                                Push Now
+                            </button>
+                            <button
+                                onClick={() => { setShowExitConfirm(false); handleAdminExit(true); }}
+                                className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
+                            >
+                                Exit Anyway
+                            </button>
+                            <button
+                                onClick={() => setShowExitConfirm(false)}
+                                className="w-full px-4 py-2 text-gray-400 text-sm font-medium hover:text-gray-600 transition-all"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Save Toast */}
+            {showSaveToast && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-4 duration-300">
+                    <div className="flex items-center gap-2.5 px-5 py-3 bg-green-600 text-white rounded-xl shadow-xl font-bold text-sm">
+                        <CheckCircle className="w-4 h-4" />
+                        Pushed to database
+                    </div>
+                </div>
+            )}
         </>
     );
 };

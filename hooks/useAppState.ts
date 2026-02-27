@@ -43,7 +43,10 @@ import { resolveEffectiveVelocity, toNumber } from '../services/metrics';
 import { asDateKey } from '../services/dateUtils';
 import { resolveAttribute } from '../services/mappingService';
 import { redistributeAdSpend } from '../services/adSpreadService';
-import { verifyPassword, pushSnapshot, pullSnapshot, pushTransactions, pullTransactions, clearTransactions } from '../services/dbService';
+import {
+    verifyPassword, pushSnapshot, pullSnapshot,
+    pushTransactions, pullTransactions
+} from '../services/dbService';
 
 // Helper for recalculation
 const recalculateProductMetrics = (
@@ -190,14 +193,13 @@ const getFridayThursdayRanges = () => {
     };
 };
 
-const formatDateShort = (date: Date) => {
+const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 };
 
 export const useAppState = () => {
     const { t } = useTranslation();
 
-    // --- SHARED STATE ---
     const [isDataLoaded, setIsDataLoaded] = useState(false);
     const [products, setProducts] = useState<Product[]>([]);
     const [salesHistory, setSalesHistory] = useState<PriceLog[]>([]);
@@ -215,407 +217,1021 @@ export const useAppState = () => {
     const [searchConfig, setSearchConfig] = useState<SearchConfig>(DEFAULT_SEARCH_CONFIG);
     const [skuFamilies, setSkuFamilies] = useState<SkuFamily[]>([]);
     const [adGroups, setAdGroups] = useState<AdGroup[]>([]);
-    const [brandMap, setBrandMap] = useState<AttributeMap>({});
-    const [categoryMap, setCategoryMap] = useState<AttributeMap>({});
-    const [thresholds, setThresholds] = useState<ThresholdConfig>(getThresholdConfig());
+    const [lastRecalculationSummary, setLastRecalculationSummary] = useState<{ affectedTransactions: number; totalSpreadAmount: number; daysProcessed: number } | null>(null);
     const [pendingFamilySuggestions, setPendingFamilySuggestions] = useState<SkuFamily[]>([]);
 
-    // --- PERSONAL STATE (localStorage) ---
+    // --- DB SYNC STATE ---
+    const [isAdminMode, setIsAdminMode] = useState<boolean>(
+        () => sessionStorage.getItem('sello_admin_mode') === 'true'
+    );
+    const [adminSessionActive, setAdminSessionActive] = useState<boolean>(false);
+    const [storedAdminPassword, setStoredAdminPassword] = useState<string>(
+        () => sessionStorage.getItem('sello_admin_pw') || ''
+    );
+    const [isDirty, setIsDirty] = useState<boolean>(false);
+    const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'pushing' | 'error'>('idle');
+    const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(
+        () => localStorage.getItem('sello_last_synced_at')
+    );
+    const [showSaveToast, setShowSaveToast] = useState<boolean>(false);
+    const [pendingFamilyConflicts, setPendingFamilyConflicts] = useState<SkuFamily[]>([]);
+
+    const [brandMap, setBrandMap] = useState<AttributeMap>({});
+    const [categoryMap, setCategoryMap] = useState<AttributeMap>({});
+
     const [deductRefunds, setDeductRefunds] = useState<boolean>(() => {
         const saved = localStorage.getItem('sello_global_deduct_refunds');
         return saved === null ? true : saved === 'true';
     });
+
+    useEffect(() => {
+        localStorage.setItem('sello_global_deduct_refunds', deductRefunds.toString());
+    }, [deductRefunds]);
+
     const [uploadTimestamps, setUploadTimestamps] = useState<Record<string, string>>(() => {
         try {
             return JSON.parse(localStorage.getItem('sello_upload_timestamps') || '{}') || {};
         } catch { return {}; }
     });
+
+    const updateTimestamp = useCallback((key: string) => {
+        const now = new Date().toISOString();
+        setUploadTimestamps(prev => {
+            const next = { ...(prev || {}), [key]: now };
+            localStorage.setItem('sello_upload_timestamps', JSON.stringify(next));
+            return next;
+        });
+    }, []);
+
+    const [thresholds, setThresholds] = useState<ThresholdConfig>(getThresholdConfig());
+
     const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(() => {
         return (localStorage.getItem('sello_velocity_setting') as VelocityLookback) || '30';
     });
-    const [userProfile, setUserProfile] = useState<UserProfileType>(() => {
-        try {
-            const saved = localStorage.getItem('sello_user_profile');
-            if (saved) return JSON.parse(saved);
-        } catch (e) { console.error('Error loading user profile', e); }
-        return {
-            name: '', themeColor: '#4f46e5', backgroundImage: '', backgroundColor: '#f3f4f6',
-            glassMode: 'light', glassOpacity: 90, glassBlur: 10, ambientGlass: true, ambientGlassOpacity: 15
-        };
+
+    const [userProfile, setUserProfile] = useState<UserProfileType>({
+        name: '', themeColor: '#4f46e5', backgroundImage: '', backgroundColor: '#f3f4f6', glassMode: 'light', glassOpacity: 90, glassBlur: 10, ambientGlass: true, ambientGlassOpacity: 15
     });
 
-    // --- UI & SESSION STATE ---
-    const [isAdminMode, setIsAdminMode] = useState<boolean>(() => sessionStorage.getItem('sello_admin_mode') === 'true');
-    const [adminSessionActive, setAdminSessionActive] = useState<boolean>(false);
-    const [storedAdminPassword, setStoredAdminPassword] = useState<string>('');
-    const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'pushing' | 'error'>('idle');
-    const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => localStorage.getItem('sello_last_synced_at'));
-    const [pendingFamilyConflicts, setPendingFamilyConflicts] = useState<SkuFamily[]>([]);
-    const [showSaveToast, setShowSaveToast] = useState(false);
-    const [isDirty, setIsDirty] = useState<boolean>(false);
+    const [showBackToTop, setShowBackToTop] = useState(false);
+    const mainContentRef = useRef<HTMLDivElement>(null);
+    const fileRestoreRef = useRef<HTMLInputElement>(null);
 
-    // UI state for App.tsx
+    useEffect(() => {
+        const loadDatabase = async () => {
+            setIsDataLoaded(true);
+        };
+        loadDatabase();
+
+        const handleScroll = () => {
+            if (mainContentRef.current) {
+                setShowBackToTop(mainContentRef.current.scrollTop > 400);
+            }
+        };
+
+        const scrollContainer = mainContentRef.current;
+        if (scrollContainer) {
+            scrollContainer.addEventListener('scroll', handleScroll);
+        }
+
+        return () => {
+            if (scrollContainer) scrollContainer.removeEventListener('scroll', handleScroll);
+        };
+    }, []);
+
     const [selectedElasticityProduct, setSelectedElasticityProduct] = useState<Product | null>(null);
-    const [selectedAnalysisProduct, setSelectedAnalysisProduct] = useState<Product | null>(null);
-    const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-    const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isSalesImportModalOpen, setIsSalesImportModalOpen] = useState(false);
+    const [isCostUploadModalOpen, setIsCostUploadModalOpen] = useState(false);
     const [isSkuDetailModalOpen, setIsSkuDetailModalOpen] = useState(false);
     const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
     const [isReturnsModalOpen, setIsReturnsModalOpen] = useState(false);
     const [isCAUploadModalOpen, setIsCAUploadModalOpen] = useState(false);
     const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
-    const [currentView, setCurrentView] = useState<'overview' | 'strategy' | 'products' | 'platforms' | 'settings' | 'costs' | 'definitions' | 'promotions' | 'tools' | 'search' | 'custom-report' | 'family-groups'>('overview');
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
-    const [isFreshnessExpanded, setIsFreshnessExpanded] = useState(false);
+    const [selectedAnalysisProduct, setSelectedAnalysisProduct] = useState<Product | null>(null);
+    const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+    const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
     const [isSearchLoading, setIsSearchLoading] = useState(false);
     const [searchSessions, setSearchSessions] = useState<SearchSession[]>([]);
     const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
-    const [lastRecalculationSummary, setLastRecalculationSummary] = useState<{ affectedTransactions: number; totalSpreadAmount: number; daysProcessed: number } | null>(null);
-    const [mapJumpState, setMapJumpState] = useState<{ carrier: string, metric: any } | null>(null);
-    const [showBackToTop, setShowBackToTop] = useState(false);
+    const [currentView, setCurrentView] = useState<'overview' | 'strategy' | 'products' | 'platforms' | 'settings' | 'costs' | 'definitions' | 'promotions' | 'tools' | 'search' | 'custom-report' | 'family-groups'>('overview');
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [isFreshnessExpanded, setIsFreshnessExpanded] = useState(false);
+    const [mapJumpState, setMapJumpState] = useState<{ carrier: string, metric: 'RETURN_RATE' | 'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS' } | null>(null);
 
-    const mainContentRef = useRef<HTMLDivElement>(null);
-    const fileRestoreRef = useRef<HTMLInputElement>(null);
+    const priceHistoryMap = useMemo(() => {
+        const map = new Map<string, PriceLog[]>();
+        (salesHistory || []).forEach(h => {
+            if (!h || !h.sku) return;
+            if (!map.has(h.sku)) map.set(h.sku, []);
+            map.get(h.sku)!.push(h);
+        });
+        return map;
+    }, [salesHistory]);
 
-    // --- SYNC & PERSISTENCE HELPERS ---
-    const getSharedSnapshot = useCallback(() => {
+    const existingOrders = useMemo(() => {
+        const map = new Map<string, string>();
+        (salesHistory || []).forEach(p => {
+            if (p && p.orderId) map.set(p.orderId, p.platform || 'Unknown');
+        });
+        return map;
+    }, [salesHistory]);
+
+    const dynamicDateLabels = useMemo(() => {
+        const ranges = getFridayThursdayRanges();
         return {
-            products, priceChangeHistory, costChangeHistory,
-            inventoryChangeHistory, promotions, learnedAliases,
-            pricingRules, logisticsRules, strategyRules,
-            searchConfig, thresholds, brandMap, categoryMap,
-            skuFamilies, adGroups, inventoryTemplates
+            current: `${formatDate(ranges.current.start)} - ${formatDate(ranges.current.end)}`,
+            last: `${formatDate(ranges.last.start)} - ${formatDate(ranges.last.end)}`
         };
-    }, [products, priceChangeHistory, costChangeHistory, inventoryChangeHistory, promotions, learnedAliases, pricingRules, logisticsRules, strategyRules, searchConfig, thresholds, brandMap, categoryMap, skuFamilies, adGroups, inventoryTemplates]);
+    }, []);
+
+    const ambientRgb = useMemo(() => {
+        let hex = userProfile.themeColor;
+        const bgImageHex = (userProfile.backgroundImage && userProfile.backgroundImage !== 'none')
+            ? extractFirstHex(userProfile.backgroundImage)
+            : null;
+
+        if (bgImageHex) {
+            hex = bgImageHex;
+        } else if (userProfile.backgroundColor && userProfile.backgroundColor !== 'none') {
+            hex = userProfile.backgroundColor;
+        }
+
+        const rgb = hexToRgb(hex);
+        return rgb || (userProfile.glassMode === 'dark' ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 });
+    }, [userProfile.backgroundImage, userProfile.backgroundColor, userProfile.themeColor, userProfile.glassMode]);
+
+    const handleRefreshProductStatuses = useCallback((config: ThresholdConfig) => {
+        const recalculated = recalculateProductMetrics(products, salesHistory, velocityLookback, config, pricingRules, brandMap, categoryMap);
+        setProducts(recalculated);
+    }, [products, salesHistory, velocityLookback, pricingRules, brandMap, categoryMap]);
+
+    const handleRefreshThresholds = useCallback(() => {
+        const newConfig = getThresholdConfig();
+        setThresholds(newConfig);
+        handleRefreshProductStatuses(newConfig);
+    }, [handleRefreshProductStatuses]);
+
+    const handleRecalculateVelocity = useCallback((newLookback: VelocityLookback, currentPriceHistory: PriceLog[]) => {
+        const currentThresholds = getThresholdConfig();
+        const recalculated = recalculateProductMetrics(products, currentPriceHistory, newLookback, currentThresholds, pricingRules, brandMap, categoryMap);
+        setProducts(recalculated);
+    }, [products, pricingRules, brandMap, categoryMap]);
+
+    const handleSearch = useCallback(async (queryOrChips: string | SearchChip[]) => {
+        let rawText = "";
+        if (typeof queryOrChips === 'string') { rawText = queryOrChips; }
+        else { const chips = queryOrChips; const metrics = chips.filter(c => c.type === 'METRIC').map(c => c.label).join(' '); const conditions = chips.filter(c => c.type === 'CONDITION').map(c => c.label).join(' '); const platforms = chips.filter(c => c.type === 'PLATFORM').map(c => `on ${c.label}`).join(' '); const text = chips.filter(c => c.type === 'TEXT').map(c => c.value).join(' '); const time = chips.filter(c => c.type === 'TIME').map(c => c.label).join(' '); rawText = `${time} ${conditions} ${metrics} ${platforms} ${text}`.trim(); }
+
+        const cleanQuery = rawText.replace(/^SKU:\s*/i, '').trim();
+        const normalizedQuery = cleanQuery.toLowerCase();
+
+        const directMatch = products.find(p => {
+            if (!p) return false;
+            if (p.sku.toLowerCase() === normalizedQuery) return true;
+            return (p.channels || []).some(c => c.skuAlias && c.skuAlias.split(',').some(a => a.trim().toLowerCase() === normalizedQuery));
+        });
+
+        if (directMatch) {
+            setIsSearchLoading(true);
+            setTimeout(() => {
+                const deepDiveIntent: SearchIntent = {
+                    targetData: 'inventory',
+                    filters: [{ field: 'sku', operator: '=', value: directMatch.sku }],
+                    primaryMetric: 'DEEP_DIVE',
+                    limit: 1,
+                    explanation: `Deep Dive: ${directMatch.sku}`
+                };
+                const { results, timeLabel } = processDataForSearch(deepDiveIntent, products, salesHistory, pricingRules, refundHistory);
+                const newSession: SearchSession = { id: `search-${Date.now()}`, query: `SKU: ${directMatch.sku}`, results: results || [], params: deepDiveIntent, explanation: deepDiveIntent.explanation, timeLabel: timeLabel, timestamp: Date.now() };
+                setSearchSessions(prev => [newSession, ...(prev || [])]); setActiveSearchId(newSession.id); setCurrentView('search'); setIsSearchLoading(false);
+            }, 150);
+            return;
+        }
+
+        setIsSearchLoading(true);
+        try {
+            const intent = await parseSearchQuery(rawText);
+            const { results, timeLabel } = processDataForSearch(intent, products, salesHistory, pricingRules, refundHistory);
+            const newSession: SearchSession = { id: `search-${Date.now()}`, query: rawText, results: results || [], params: intent, explanation: intent.explanation, timeLabel: timeLabel, timestamp: Date.now() };
+            setSearchSessions(prev => [newSession, ...(prev || [])]); setActiveSearchId(newSession.id); setCurrentView('search');
+        } catch (e) { console.error("Search failed", e); } finally { setIsSearchLoading(false); }
+    }, [products, salesHistory, pricingRules, refundHistory]);
+
+    const handleDeepDiveRequest = useCallback((sku: string) => { handleSearch(`SKU: ${sku}`); }, [handleSearch]);
+
+    const handleManualPriceChange = useCallback((data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => {
+        const { sku, productName, date, oldPrice, newPrice } = data;
+        const changeType = newPrice > oldPrice ? 'INCREASE' : 'DECREASE';
+        const percentChange = oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : (newPrice > 0 ? 100 : 0);
+        const newRecord: PriceChangeRecord = { id: `manual-${Date.now()}-${sku}`, sku, productName, date, oldPrice, newPrice, changeType, percentChange };
+        setPriceChangeHistory(prev => [newRecord, ...(prev || [])]);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const handleManualCostChange = useCallback((data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => {
+        const { sku, productName, date, oldCost, newCost } = data;
+        const changeType = newCost > oldCost ? 'INCREASE' : 'DECREASE';
+        const percentChange = oldCost > 0 ? ((newCost - oldCost) / oldCost) * 100 : (newCost > 0 ? 100 : 0);
+        const newRecord: CostChangeRecord = { id: `manual-cost-${Date.now()}-${sku}`, sku, productName, date, oldCost, newCost, changeType, percentChange };
+        setCostChangeHistory(prev => [...(prev || []), newRecord].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const handleAnalyzeCarrier = useCallback((carrier: string) => {
+        setMapJumpState({ carrier, metric: 'RETURN_RATE' });
+        setCurrentView('overview');
+    }, []);
+
+    const handleRefineSearch = useCallback((sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, salesHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel }; } return s; })); setIsSearchLoading(false); }, 150); }, [products, salesHistory, pricingRules, refundHistory]);
+    const deleteSearchSession = useCallback((id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } }, [activeSearchId]);
+    const handleViewElasticity = useCallback((product: Product) => { setSelectedElasticityProduct(product); }, []);
+    const handleAnalyze = useCallback(async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } }, [pricingRules, thresholds]);
+    const handleApplyPrice = useCallback((productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = (prev || []).find(p => p.id === productId); if (!productToUpdate) return prev; const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...(prevHistory || []), change]); return prev.map(p => { if (p.id !== productId) return p; return { ...p, caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }; }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); }, []);
+
+    const handleAdGroupSave = useCallback((
+        updatedAdGroups: AdGroup[],
+        customHistory?: PriceLog[],
+        customProducts?: Product[],
+        customLookback?: VelocityLookback,
+        customRules?: PricingRules,
+        customBrandMap?: AttributeMap,
+        customCategoryMap?: AttributeMap
+    ) => {
+        setAdGroups(updatedAdGroups);
+        const historyToUse = customHistory || salesHistory;
+        const redistributed = redistributeAdSpend(historyToUse, updatedAdGroups);
+
+        let affected = 0;
+        let totalSpread = 0;
+        const processedDates = new Set<string>();
+
+        redistributed.forEach((log, i) => {
+            const original = historyToUse[i];
+            if (log.adsSpend !== (original?.adsSpend || 0)) {
+                affected++;
+                totalSpread += Math.abs((log.adsSpend || 0) - (original?.adsSpend || 0));
+                processedDates.add(log.date.split('T')[0]);
+            }
+        });
+
+        const summary = {
+            affectedTransactions: affected,
+            totalSpreadAmount: totalSpread,
+            daysProcessed: processedDates.size
+        };
+
+        setSalesHistory(redistributed);
+        const currentThresholds = getThresholdConfig();
+        const finalProducts = recalculateProductMetrics(
+            customProducts || products,
+            redistributed,
+            customLookback || velocityLookback,
+            currentThresholds,
+            customRules || pricingRules,
+            customBrandMap || brandMap,
+            customCategoryMap || categoryMap
+        );
+        setProducts(finalProducts);
+        setLastRecalculationSummary(summary);
+
+        if (isAdminMode) setIsDirty(true);
+        return summary;
+    }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, isAdminMode]);
+
+    const getSharedSnapshot = useCallback(() => ({
+        products,
+        priceChangeHistory,
+        costChangeHistory,
+        inventoryChangeHistory,
+        promotions,
+        learnedAliases,
+        pricingRules,
+        logisticsRules,
+        strategyRules,
+        searchConfig,
+        thresholds,
+        brandMap,
+        categoryMap,
+        skuFamilies,
+        adGroups,
+        inventoryTemplates
+    }), [products, priceChangeHistory, costChangeHistory,
+        inventoryChangeHistory, promotions, learnedAliases,
+        pricingRules, logisticsRules, strategyRules, searchConfig,
+        thresholds, brandMap, categoryMap, skuFamilies, adGroups,
+        inventoryTemplates]);
+
+    const handleBackup = useCallback(() => {
+        const data = {
+            ...getSharedSnapshot(),
+            priceHistory: salesHistory,
+            refundHistory,
+            shipmentHistory,
+            velocityLookback,
+            userProfile,
+            uploadTimestamps,
+            exportDate: new Date().toISOString()
+        };
+        const blob = new Blob(
+            [JSON.stringify(data, null, 2)],
+            { type: 'application/json' }
+        );
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `sello_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }, [getSharedSnapshot, salesHistory, refundHistory,
+        shipmentHistory, velocityLookback, userProfile,
+        uploadTimestamps]);
+
+    const handleRestore = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const rawJson = JSON.parse(event.target?.result as string);
+                const safeJson = normalizeRestoredState(rawJson);
+                const migrated = migrateRestoredDatabase(safeJson);
+                const report = auditRestoredDatabase(migrated);
+                if (report.hasFatal) {
+                    console.error('[RESTORE AUDIT FAIL]', report);
+                    alert("Restore file contains invalid structure. Check console for details.");
+                    if (fileRestoreRef.current) fileRestoreRef.current.value = '';
+                    return;
+                }
+                const hasThresholds = rawJson && typeof rawJson === 'object' && 'thresholds' in rawJson;
+                const hasVelocity = rawJson && typeof rawJson === 'object' && 'velocityLookback' in rawJson;
+
+                const restored = {
+                    products: Array.isArray(migrated.products) ? migrated.products : [],
+                    priceHistory: Array.isArray(migrated.priceHistory) ? migrated.priceHistory : [],
+                    refundHistory: Array.isArray(migrated.refundHistory) ? migrated.refundHistory : [],
+                    shipmentHistory: Array.isArray(migrated.shipmentHistory) ? migrated.shipmentHistory : [],
+                    priceChangeHistory: Array.isArray(migrated.priceChangeHistory) ? migrated.priceChangeHistory : [],
+                    costChangeHistory: Array.isArray(migrated.costChangeHistory) ? migrated.costChangeHistory : [],
+                    inventoryChangeHistory: Array.isArray(migrated.inventoryChangeHistory) ? migrated.inventoryChangeHistory : [],
+                    promotions: Array.isArray(migrated.promotions) ? migrated.promotions : [],
+                    learnedAliases: migrated.learnedAliases && typeof migrated.learnedAliases === 'object' ? migrated.learnedAliases : {},
+                    pricingRules: migrated.pricingRules || DEFAULT_PRICING_RULES,
+                    logisticsRules: Array.isArray(migrated.logisticsRules) ? migrated.logisticsRules : DEFAULT_LOGISTICS_RULES,
+                    strategyRules: migrated.strategyRules || DEFAULT_STRATEGY_RULES,
+                    searchConfig: migrated.searchConfig || DEFAULT_SEARCH_CONFIG,
+                    userProfile: migrated.userProfile && typeof migrated.userProfile === 'object' ? migrated.userProfile : {},
+                    inventoryTemplates: Array.isArray(migrated.inventoryTemplates) ? migrated.inventoryTemplates : [],
+                    uploadTimestamps: migrated.uploadTimestamps && typeof migrated.uploadTimestamps === 'object' ? migrated.uploadTimestamps : {},
+                    thresholds: hasThresholds ? migrated.thresholds : null,
+                    velocityLookback: hasVelocity ? migrated.velocityLookback : null,
+                    brandMap: migrated.brandMap && typeof migrated.brandMap === 'object' ? migrated.brandMap : {},
+                    categoryMap: migrated.categoryMap && typeof migrated.categoryMap === 'object' ? migrated.categoryMap : {},
+                    skuFamilies: Array.isArray(migrated.skuFamilies) ? migrated.skuFamilies : [],
+                    adGroups: Array.isArray(migrated.adGroups) ? migrated.adGroups : []
+                };
+
+                // Apply restored state
+                setRefundHistory(restored.refundHistory);
+                setShipmentHistory(restored.shipmentHistory);
+                setPriceChangeHistory(restored.priceChangeHistory);
+                setCostChangeHistory(restored.costChangeHistory);
+                setInventoryChangeHistory(restored.inventoryChangeHistory);
+                setPromotions(restored.promotions);
+                setLearnedAliases(restored.learnedAliases);
+                setPricingRules(restored.pricingRules);
+                setLogisticsRules(restored.logisticsRules);
+                setStrategyRules(restored.strategyRules);
+                setSearchConfig(restored.searchConfig);
+                setInventoryTemplates(restored.inventoryTemplates);
+                setUploadTimestamps(restored.uploadTimestamps);
+                setBrandMap(restored.brandMap);
+                setCategoryMap(restored.categoryMap);
+                setSkuFamilies(restored.skuFamilies);
+
+                localStorage.setItem('sello_upload_timestamps', JSON.stringify(restored.uploadTimestamps));
+                setUserProfile(prev => ({ ...prev, ...restored.userProfile }));
+
+                let currentThresholds = thresholds;
+                if (restored.thresholds) {
+                    setThresholds(restored.thresholds);
+                    saveThresholdConfig(restored.thresholds);
+                    currentThresholds = restored.thresholds;
+                }
+
+                let currentVelocity = velocityLookback;
+                if (restored.velocityLookback) {
+                    setVelocityLookback(restored.velocityLookback);
+                    localStorage.setItem('sello_velocity_setting', restored.velocityLookback);
+                    currentVelocity = restored.velocityLookback;
+                }
+
+                // Recalculate everything including Ad redistribution, using freshly restored state
+                handleAdGroupSave(
+                    restored.adGroups,
+                    restored.priceHistory,
+                    restored.products,
+                    restored.velocityLookback,
+                    restored.pricingRules,
+                    restored.brandMap,
+                    restored.categoryMap
+                );
+
+                if (isAdminMode) setIsDirty(true);
+                alert(t('alert_db_restore_success'));
+            } catch (err) {
+                console.error("Restore failed", err);
+                alert(t('alert_db_restore_fail'));
+            }
+        };
+        reader.readAsText(file);
+        if (fileRestoreRef.current) fileRestoreRef.current.value = '';
+    }, [t, thresholds, velocityLookback, handleAdGroupSave, isAdminMode]);
+
+    const handleResetRefunds = useCallback(() => { setRefundHistory([]); setProducts(prev => (prev || []).map(p => ({ ...p, returnRate: 0 }))); setIsReturnsModalOpen(false); }, []);
+
+    const handleUpdatePriceChangeRecord = useCallback((recordToUpdate: PriceChangeRecord) => { setPriceChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
+    const handleUpdateCostChangeRecord = useCallback((recordToUpdate: CostChangeRecord) => { setCostChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
+    const handleUpdateInventoryChangeRecord = useCallback((recordToUpdate: InventoryChangeRecord) => { setInventoryChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
+
+    const handleSalesImportConfirm = useCallback((updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: ShipmentLog[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>) => {
+        if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
+        let updatedPriceHistory = [...(salesHistory || [])];
+        if (historyPayload && historyPayload.length > 0) {
+            const newLogs: PriceLog[] = historyPayload.map(h => ({
+                id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                sku: h.sku,
+                date: h.date,
+                price: h.price,
+                velocity: h.velocity,
+                margin: h.margin || 0,
+                profit: h.profit,
+                adsSpend: h.adsSpend,
+                platform: h.platform,
+                orderId: h.orderId,
+                postcode: h.postcode,
+                logisticPartner: h.logisticPartner,
+                logisticService: h.logisticService,
+                realPostage: h.realPostage,
+                realExtraFreight: h.realExtraFreight
+            }));
+            const transactionKeys = new Set<string>(); const dailyActivityKeys = new Set<string>(); newLogs.forEach(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { transactionKeys.add(`${l.sku}|${l.orderId}`); } dailyActivityKeys.add(`${l.sku}|${d}|${p}`); });
+            const keptHistory = (salesHistory || []).filter(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { const txKey = `${l.sku}|${l.orderId}`; if (transactionKeys.has(txKey)) return false; return true; } const dailyKey = `${l.sku}|${d}|${p}`; if (dailyActivityKeys.has(dailyKey)) return false; return true; });
+            updatedPriceHistory = [...newLogs, ...keptHistory]; setSalesHistory(updatedPriceHistory);
+        }
+        const mergedProducts = (products || []).map(p => { const update = (updatedProductsFromImport || []).find(u => u.id === p.id); return update ? update : p; });
+        const redistributed = redistributeAdSpend(updatedPriceHistory, adGroups);
+        const finalProducts = recalculateProductMetrics(mergedProducts, redistributed, velocityLookback, getThresholdConfig(), pricingRules, brandMap, categoryMap);
+        setSalesHistory(redistributed);
+        setProducts(finalProducts);
+        if (newShipmentLogs && newShipmentLogs.length > 0) setShipmentHistory(prev => [...newShipmentLogs, ...(prev || [])]);
+        if (discoveredPlatforms && discoveredPlatforms.length > 0) { setPricingRules(prev => { const newRules = { ...(prev || {}) }; let changed = false; discoveredPlatforms.forEach(p => { if (!newRules[p]) { newRules[p] = { markup: 0, commission: 15, manager: 'Unassigned', color: '#6b7280', pricingControl: 'MERCHANT', feeModel: 'COMMISSION_PCT', adsEnabled: false }; changed = true; } }); return changed ? newRules : prev; }); }
+        updateTimestamp('Sales'); setIsSalesImportModalOpen(false);
+        if (isAdminMode) setIsDirty(true);
+    }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, isAdminMode]);
+
+    const handleInventoryImport = useCallback((data: any[]) => {
+        const costChanges: CostChangeRecord[] = [];
+        const inventoryLogs: InventoryChangeRecord[] = [];
+        const reportDate = new Date().toISOString().split('T')[0];
+        const timestamp = Date.now();
+        const uploadBatchId = `batch-${timestamp}`;
+        const aggregatedDataMap = new Map<string, any>();
+        data.forEach(item => {
+            const rawSku = String(item.sku || '').trim();
+            if (!rawSku) return;
+            const canonicalSku = getCanonicalSku(rawSku);
+            const existing = aggregatedDataMap.get(canonicalSku) || {};
+            Object.entries(item).forEach(([k, v]) => {
+                if (v !== undefined) {
+                    if (k === 'stock') existing[k] = (Number(existing.k) || 0) + Number(v);
+                    else if (k === 'sku') existing[k] = canonicalSku;
+                    else existing[k] = v;
+                }
+            });
+            aggregatedDataMap.set(canonicalSku, existing);
+        });
+        const finalData = Array.from(aggregatedDataMap.values());
+        setProducts(prev => {
+            const currentThresholds = getThresholdConfig();
+            const newProducts = [...(prev || [])];
+            finalData.forEach(item => {
+                const existingIndex = newProducts.findIndex(p => p.sku === item.sku);
+                const existingProduct = existingIndex !== -1 ? newProducts[existingIndex] : null;
+                if (existingProduct) {
+                    const existing = { ...existingProduct };
+                    if (item.stock !== undefined) {
+                        const prevStock = existing.stockLevel || 0; const newStock = Number(item.stock);
+                        if (newStock > prevStock) {
+                            const deltaStock = newStock - prevStock; const pctIncrease = prevStock === 0 ? 1 : deltaStock / prevStock; const isSignificant = pctIncrease >= 0.05;
+                            const hasMatchingShipment = (existing.shipments || []).some(s => { if (!s.eta) return false; const shipmentDate = new Date(s.eta).getTime(); const reportTime = new Date(reportDate).getTime(); return Math.abs((shipmentDate - reportTime) / (1000 * 60 * 60 * 24)) <= 7; });
+                            const isStrategic = isSignificant && hasMatchingShipment;
+                            inventoryLogs.push({ id: `inv-chg-${timestamp}-${item.sku}`, sku: item.sku, productName: existing.name, timestamp, date: reportDate, prevStock, newStock, deltaStock, source: "ERP_UPLOAD", uploadBatchId, isStrategic, reason: isStrategic ? "Strategic Restock" : "Routine Adjustment" });
+                        }
+                        existing.stockLevel = newStock;
+                    }
+                    if (item.cost !== undefined) {
+                        const oldCost = existing.costPrice || 0; const newCost = Number(item.cost);
+                        if (oldCost > 0 && Math.abs(oldCost - newCost) > 0.02) { costChanges.push({ id: `cost-chg-${Date.now()}-${item.sku}`, sku: item.sku, productName: existing.name, date: reportDate, oldCost, newCost, changeType: newCost > oldCost ? 'INCREASE' : 'DECREASE', percentChange: ((newCost - oldCost) / oldCost) * 100 }); }
+                        existing.costPrice = newCost;
+                    }
+                    if (item.dailyAverageSales !== undefined) {
+                        existing.dailyAverageSales = toNumber(item.dailyAverageSales);
+                    }
+                    if (item.name) existing.name = item.name;
+                    if (item.brand) existing.brand = item.brand;
+                    if (item.category) existing.category = item.category;
+                    existing.lastUpdated = reportDate;
+                    newProducts[existingIndex] = existing;
+                } else {
+                    newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: toNumber(item.dailyAverageSales), leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, category: item.category || 'Uncategorized', brand: item.brand, dailyAverageSales: toNumber(item.dailyAverageSales) });
+                }
+            });
+            return recalculateProductMetrics(newProducts, salesHistory, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
+        });
+
+        // Family Group Suggestion Step
+        const prefixGroups = new Map<string, string[]>();
+        data.forEach(item => {
+            const sku = String(item.sku || '').trim();
+            if (!sku) return;
+            const parts = sku.split('-');
+            if (parts.length >= 3) {
+                // Strip the variant segment between the first and last hyphen groups
+                const prefix = `${parts[0]}-${parts[parts.length - 1]}`;
+                if (!prefixGroups.has(prefix)) prefixGroups.set(prefix, []);
+                prefixGroups.get(prefix)!.push(sku);
+            }
+        });
+
+        const newSuggestions: SkuFamily[] = [];
+        prefixGroups.forEach((memberSkus, prefix) => {
+            if (memberSkus.length >= 2) {
+                // Check if a SkuFamily already exists that contains all these SKUs
+                const alreadyExists = skuFamilies.some(f =>
+                    memberSkus.every(sku => f.memberSkus.includes(sku))
+                );
+
+                if (!alreadyExists) {
+                    newSuggestions.push({
+                        id: `suggest-${Date.now()}-${prefix}`,
+                        name: prefix,
+                        memberSkus,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    });
+                }
+            }
+        });
+
+        if (newSuggestions.length > 0) {
+            setPendingFamilySuggestions(prev => [...prev, ...newSuggestions]);
+            alert(`${newSuggestions.length} new SKU family groups detected. Review them in Family Groups.`);
+        }
+
+        if (costChanges.length > 0) setCostChangeHistory(prev => [...costChanges, ...(prev || [])]);
+        if (inventoryLogs.length > 0) setInventoryChangeHistory(prev => [...inventoryLogs, ...(prev || [])]);
+        updateTimestamp('Inventory'); setIsUploadModalOpen(false);
+        if (isAdminMode) setIsDirty(true);
+    }, [priceHistoryMap, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, skuFamilies, isAdminMode]);
+
+    const handleResetSalesData = useCallback(() => {
+        setSalesHistory([]);
+        setShipmentHistory([]);
+        const currentThresholds = getThresholdConfig();
+        const recalculated = recalculateProductMetrics(products, [], velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
+        setProducts(recalculated);
+        setIsSalesImportModalOpen(false);
+    }, [products, velocityLookback, pricingRules, brandMap, categoryMap]);
+
+    const handleSkuDetailImport = useCallback((data: { masterSku: string; detail: SkuCostDetail }[]) => {
+        setProducts(prev => (prev || []).map(p => {
+            const update = data.find(d => d.masterSku === p.sku);
+            return update ? { ...p, costDetail: update.detail } : p;
+        }));
+        updateTimestamp('SKU Details');
+        setIsSkuDetailModalOpen(false);
+        if (isAdminMode) setIsDirty(true);
+    }, [updateTimestamp, isAdminMode]);
+
+    const handleMappingImport = useCallback((mappings: any[], mode: 'merge' | 'replace', platform: string) => {
+        setProducts(prev => (prev || []).map(p => {
+            const platformMappings = mappings.filter(m => m.masterSku === p.sku && m.platform === platform);
+            if (platformMappings.length === 0 && mode === 'merge') return p;
+            const updatedChannels = [...p.channels];
+            const channelIdx = updatedChannels.findIndex(c => c.platform === platform);
+            const newAliases = platformMappings.map(m => m.alias).join(', ');
+            if (channelIdx >= 0) {
+                const existingAliases = updatedChannels[channelIdx].skuAlias?.split(',').map(s => s.trim()).filter(Boolean) || [];
+                const importedAliases = newAliases.split(',').map(s => s.trim()).filter(Boolean);
+                updatedChannels[channelIdx] = { ...updatedChannels[channelIdx], skuAlias: mode === 'replace' ? newAliases : [...new Set([...existingAliases, ...importedAliases])].join(', ') };
+            } else if (newAliases) {
+                updatedChannels.push({ platform, manager: pricingRules[platform]?.manager || 'Unassigned', velocity: 0, skuAlias: newAliases });
+            }
+            return { ...p, channels: updatedChannels };
+        }));
+        setIsMappingModalOpen(false);
+        if (isAdminMode) setIsDirty(true);
+    }, [pricingRules, isAdminMode]);
+
+    const handleReturnsImport = useCallback((newRefunds: RefundLog[]) => {
+        const existingIds = new Set((refundHistory || []).map(r => r.id));
+        const uniqueInNew = new Map<string, RefundLog>();
+        newRefunds.forEach(r => {
+            if (!uniqueInNew.has(r.id)) {
+                uniqueInNew.set(r.id, r);
+            }
+        });
+
+        const uniqueNew = Array.from(uniqueInNew.values()).filter(r => !existingIds.has(r.id));
+        const mergedRefunds = [...(refundHistory || []), ...uniqueNew];
+
+        setRefundHistory(mergedRefunds);
+        setProducts(prev => (prev || []).map(p => {
+            const productRefunds = mergedRefunds.filter(r => r.sku === p.sku);
+            const totalRefundQty = productRefunds.reduce((sum, r) => sum + r.quantity, 0);
+            const returnRate = p.averageDailySales > 0 ? (totalRefundQty / (p.averageDailySales * 30)) * 100 : 0;
+            return { ...p, returnRate };
+        }));
+        updateTimestamp('Refunds');
+        setIsReturnsModalOpen(false);
+        if (isAdminMode) setIsDirty(true);
+    }, [refundHistory, updateTimestamp, isAdminMode]);
+
+    const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string }[], reportDate: string) => {
+        const changes: PriceChangeRecord[] = [];
+        setProducts(prev => (prev || []).map(p => {
+            const update = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
+            if (update) {
+                const oldPrice = p.caPrice || (p.currentPrice * VAT_MULTIPLIER);
+                if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
+                    changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
+                }
+                return {
+                    ...p,
+                    caPrice: update.caPrice,
+                    lastUpdated: reportDate,
+                    imageUrl: update.imageUrl || p.imageUrl
+                };
+            }
+            return p;
+        }));
+        if (changes.length > 0) setPriceChangeHistory(prev => [...changes, ...(prev || [])]);
+        updateTimestamp('CA Prices');
+        setIsCAUploadModalOpen(false);
+    }, [updateTimestamp]);
+
+    const handleShipmentImport = useCallback((updates: any[]) => {
+        setProducts(prev => (prev || []).map(p => {
+            const update = updates.find(u => u.sku === p.sku);
+            if (update) {
+                const incomingStock = update.shipments.reduce((sum: number, s: any) => sum + s.quantity, 0);
+                return { ...p, shipments: update.shipments, incomingStock };
+            }
+            return p;
+        }));
+        updateTimestamp('Shipments');
+        setIsShipmentModalOpen(false);
+    }, [updateTimestamp]);
+
+
+    const onSyncFromFamilies = useCallback((platform: string) => {
+        const nextGroups = [...(adGroups || [])];
+        let hasChanges = false;
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        skuFamilies.forEach(family => {
+            const syncName = `${family.name} (${platform})`;
+            if (!nextGroups.some(g => g.name === syncName && g.platform === platform)) {
+                nextGroups.push({
+                    id: `ag-sync-${Date.now()}-${family.id}-${platform}`,
+                    name: syncName,
+                    memberSkus: [...family.memberSkus],
+                    platform: platform,
+                    startDate: todayStr,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                });
+                hasChanges = true;
+            }
+        });
+        if (hasChanges) handleAdGroupSave(nextGroups);
+    }, [skuFamilies, adGroups, handleAdGroupSave]);
+
+    const onAddAdGroup = useCallback((group: AdGroup) => {
+        handleAdGroupSave([...(adGroups || []), group]);
+    }, [adGroups, handleAdGroupSave]);
+
+    const onEditAdGroup = useCallback((group: AdGroup) => {
+        handleAdGroupSave((adGroups || []).map(g => g.id === group.id ? group : g));
+    }, [adGroups, handleAdGroupSave]);
+
+    const onRemoveAdGroup = useCallback((id: string) => {
+        handleAdGroupSave((adGroups || []).filter(g => g.id !== id));
+    }, [adGroups, handleAdGroupSave]);
+
+    // --- ADMIN TOGGLE ---
+    const handleAdminToggle = useCallback(async (password: string) => {
+        const res = await verifyPassword(password);
+        if (res.valid) {
+            setIsAdminMode(true);
+            setAdminSessionActive(true);
+            setStoredAdminPassword(password);
+            sessionStorage.setItem('sello_admin_mode', 'true');
+            sessionStorage.setItem('sello_admin_pw', password);
+            return { success: true };
+        }
+        return { success: false, error: 'Invalid credentials' };
+    }, []);
+
+    const handleAdminExit = useCallback((force = false) => {
+        if (isDirty && !force) return { needsConfirmation: true };
+        setIsAdminMode(false);
+        setAdminSessionActive(false);
+        setStoredAdminPassword('');
+        setIsDirty(false);
+        setSyncStatus('idle');
+        sessionStorage.removeItem('sello_admin_mode');
+        sessionStorage.removeItem('sello_admin_pw');
+        return { needsConfirmation: false };
+    }, [isDirty]);
 
     const handleAdminPush = useCallback(async () => {
         if (!isAdminMode || !storedAdminPassword) return;
         setSyncStatus('pushing');
         try {
-            // Push master data first
-            const snapshot = getSharedSnapshot();
-            const masterRes = await pushSnapshot(storedAdminPassword, snapshot);
-            if (!masterRes.success) {
-                setSyncStatus('error');
-                return false;
-            }
+            const masterRes = await pushSnapshot(
+                storedAdminPassword,
+                getSharedSnapshot()
+            );
+            if (!masterRes.success) { setSyncStatus('error'); return; }
 
-            // Push transaction history in chunks
-            const txRes = await pushTransactions(storedAdminPassword, salesHistory || []);
-            if (!txRes.success) {
-                setSyncStatus('error');
-                return false;
-            }
+            const txRes = await pushTransactions(
+                storedAdminPassword,
+                salesHistory || []
+            );
+            if (!txRes.success) { setSyncStatus('error'); return; }
 
             setIsDirty(false);
             setShowSaveToast(true);
             setTimeout(() => setShowSaveToast(false), 3000);
             setSyncStatus('idle');
-            return true;
-        } catch (e) {
-            console.error('Push error', e);
-            setSyncStatus('error');
-            return false;
-        }
+        } catch { setSyncStatus('error'); }
     }, [isAdminMode, storedAdminPassword, getSharedSnapshot, salesHistory]);
 
-    const applySharedSnapshot = useCallback((snapshot: any, transactionsOverride?: PriceLog[]) => {
-        if (!snapshot) return;
-        const safe = normalizeRestoredState(snapshot);
-        const m = migrateRestoredDatabase(safe);
-        setRefundHistory(Array.isArray(m.refundHistory) ? m.refundHistory : []);
-        setShipmentHistory(Array.isArray(m.shipmentHistory) ? m.shipmentHistory : []);
-        setPriceChangeHistory(Array.isArray(m.priceChangeHistory) ? m.priceChangeHistory : []);
-        setCostChangeHistory(Array.isArray(m.costChangeHistory) ? m.costChangeHistory : []);
-        setInventoryChangeHistory(Array.isArray(m.inventoryChangeHistory) ? m.inventoryChangeHistory : []);
-        setPromotions(Array.isArray(m.promotions) ? m.promotions : []);
-        setLearnedAliases(m.learnedAliases || {});
-        setPricingRules(m.pricingRules || DEFAULT_PRICING_RULES);
-        setLogisticsRules(m.logisticsRules || DEFAULT_LOGISTICS_RULES);
-        setStrategyRules(m.strategyRules || DEFAULT_STRATEGY_RULES);
-        setSearchConfig(m.searchConfig || DEFAULT_SEARCH_CONFIG);
-        setInventoryTemplates(Array.isArray(m.inventoryTemplates) ? m.inventoryTemplates : []);
-        setBrandMap(m.brandMap || {});
-        setCategoryMap(m.categoryMap || {});
-        setSkuFamilies(Array.isArray(m.skuFamilies) ? m.skuFamilies : []);
-        if (m.thresholds) { setThresholds(m.thresholds); saveThresholdConfig(m.thresholds); }
-
-        const adGroupsToUse = Array.isArray(m.adGroups) ? m.adGroups : [];
-
-        // Use override transactions if provided (from db-pull-transactions)
-        // Fall back to m.priceHistory (normalizeRestoredState maps salesHistory -> priceHistory)
-        const priceHistoryToUse = transactionsOverride
-            ? transactionsOverride
-            : Array.isArray(m.priceHistory) ? m.priceHistory : [];
-
-        const redistributed = redistributeAdSpend(priceHistoryToUse, adGroupsToUse);
-        setSalesHistory(redistributed);
-        const finalProducts = recalculateProductMetrics(Array.isArray(m.products) ? m.products : [], redistributed, velocityLookback, m.thresholds || thresholds, m.pricingRules, m.brandMap, m.categoryMap);
-        setProducts(finalProducts);
-        setAdGroups(adGroupsToUse);
-    }, [velocityLookback, thresholds]);
-
-    const handleSync = useCallback(async (incomingSnapshotOverride?: any) => {
+    const handleSync = useCallback(async () => {
         setSyncStatus('syncing');
         try {
-            const res = incomingSnapshotOverride ? { success: true, snapshot: incomingSnapshotOverride, lastUpdatedAt: new Date().toISOString() } : await pullSnapshot();
-
-            if (!res.success || !res.snapshot) {
+            const masterRes = await pullSnapshot();
+            if (!masterRes.success || !masterRes.snapshot) {
                 setSyncStatus('error');
                 return;
             }
 
-            // Check family conflicts
-            const incomingFamilies = Array.isArray(res.snapshot.skuFamilies) ? res.snapshot.skuFamilies : [];
+            const incoming = masterRes.snapshot;
+            const incomingFamilies: SkuFamily[] =
+                Array.isArray(incoming.skuFamilies)
+                    ? incoming.skuFamilies : [];
             const localFamilies = skuFamilies || [];
-            const conflicts = localFamilies.filter(lf => !incomingFamilies.some((ifam: SkuFamily) => ifam.id === lf.id));
-            if (conflicts.length > 0 && !incomingSnapshotOverride) {
+            const conflicts = localFamilies.filter((lf: SkuFamily) =>
+                !incomingFamilies.some((ifam: SkuFamily) => ifam.id === lf.id)
+            );
+            if (conflicts.length > 0) {
                 setPendingFamilyConflicts(conflicts);
                 setSyncStatus('idle');
                 return;
             }
 
-            // Pull transactions separately
             const txRes = await pullTransactions();
-            const transactions = (txRes.success && txRes.transactions) ? txRes.transactions : [];
+            const transactions = txRes.success && txRes.transactions
+                ? txRes.transactions : [];
 
-            applySharedSnapshot(res.snapshot, transactions);
+            const safe = normalizeRestoredState(incoming);
+            const m = migrateRestoredDatabase(safe);
 
-            const time = res.lastUpdatedAt || new Date().toISOString();
+            setRefundHistory([]);
+            setShipmentHistory([]);
+            setPriceChangeHistory(
+                Array.isArray(m.priceChangeHistory)
+                    ? m.priceChangeHistory : []
+            );
+            setCostChangeHistory(
+                Array.isArray(m.costChangeHistory)
+                    ? m.costChangeHistory : []
+            );
+            setInventoryChangeHistory(
+                Array.isArray(m.inventoryChangeHistory)
+                    ? m.inventoryChangeHistory : []
+            );
+            setPromotions(
+                Array.isArray(m.promotions) ? m.promotions : []
+            );
+            setLearnedAliases(m.learnedAliases || {});
+            setPricingRules(m.pricingRules || DEFAULT_PRICING_RULES);
+            setLogisticsRules(
+                Array.isArray(m.logisticsRules) && m.logisticsRules.length > 0
+                    ? m.logisticsRules : DEFAULT_LOGISTICS_RULES
+            );
+            setStrategyRules(m.strategyRules || DEFAULT_STRATEGY_RULES);
+            setSearchConfig(m.searchConfig || DEFAULT_SEARCH_CONFIG);
+            setInventoryTemplates(
+                Array.isArray(m.inventoryTemplates)
+                    ? m.inventoryTemplates : []
+            );
+            setBrandMap(m.brandMap || {});
+            setCategoryMap(m.categoryMap || {});
+            setSkuFamilies(
+                Array.isArray(m.skuFamilies) ? m.skuFamilies : []
+            );
+            if (m.thresholds) {
+                setThresholds(m.thresholds);
+                saveThresholdConfig(m.thresholds);
+            }
+
+            const adGroupsToUse = Array.isArray(m.adGroups)
+                ? m.adGroups : [];
+            const redistributed = redistributeAdSpend(
+                transactions, adGroupsToUse
+            );
+            setSalesHistory(redistributed);
+            const finalProducts = recalculateProductMetrics(
+                Array.isArray(m.products) ? m.products : [],
+                redistributed,
+                velocityLookback,
+                m.thresholds || thresholds,
+                m.pricingRules,
+                m.brandMap,
+                m.categoryMap
+            );
+            setProducts(finalProducts);
+            setAdGroups(adGroupsToUse);
+
+            const time = masterRes.lastUpdatedAt || new Date().toISOString();
             setLastSyncedAt(time);
             localStorage.setItem('sello_last_synced_at', time);
             setSyncStatus('idle');
-        } catch (e) {
-            console.error('Sync error', e);
-            setSyncStatus('error');
+        } catch { setSyncStatus('error'); }
+    }, [skuFamilies, velocityLookback, thresholds]);
+
+    const resolveConflicts = useCallback(async (keepLocal: boolean) => {
+        const res = await pullSnapshot();
+        if (!res.success || !res.snapshot) return;
+        const snap = { ...res.snapshot };
+        if (keepLocal) {
+            snap.skuFamilies = [
+                ...(Array.isArray(snap.skuFamilies) ? snap.skuFamilies : []),
+                ...pendingFamilyConflicts
+            ];
         }
-    }, [skuFamilies, applySharedSnapshot]);
+        setPendingFamilyConflicts([]);
+        await handleSync();
+    }, [pendingFamilyConflicts, handleSync]);
 
-    const resolveConflicts = useCallback((keepLocal: boolean) => {
-        const run = async () => {
-            const res = await pullSnapshot();
-            if (res.success && res.snapshot) {
-                let snap = { ...res.snapshot };
-                if (keepLocal) snap.skuFamilies = [...(Array.isArray(snap.skuFamilies) ? snap.skuFamilies : []), ...pendingFamilyConflicts];
-                applySharedSnapshot(snap);
-                const time = res.lastUpdatedAt || new Date().toISOString();
-                setLastSyncedAt(time);
-                localStorage.setItem('sello_last_synced_at', time);
-            }
-            setPendingFamilyConflicts([]);
-            setSyncStatus('idle');
-        };
-        run();
-    }, [pendingFamilyConflicts, applySharedSnapshot]);
-
-    // --- EFFECTS ---
-    useEffect(() => { localStorage.setItem('sello_global_deduct_refunds', deductRefunds.toString()); }, [deductRefunds]);
-    useEffect(() => { localStorage.setItem('sello_upload_timestamps', JSON.stringify(uploadTimestamps)); }, [uploadTimestamps]);
-    useEffect(() => { localStorage.setItem('sello_velocity_setting', velocityLookback); }, [velocityLookback]);
-    useEffect(() => { localStorage.setItem('sello_user_profile', JSON.stringify(userProfile)); }, [userProfile]);
-
+    // Auto-load: pull from DB on first mount if no local data
     useEffect(() => {
-        setIsDataLoaded(true);
-        const handleScroll = () => { if (mainContentRef.current) setShowBackToTop(mainContentRef.current.scrollTop > 400); };
-        const sc = mainContentRef.current;
-        if (sc) sc.addEventListener('scroll', handleScroll);
-        return () => { if (sc) sc.removeEventListener('scroll', handleScroll); };
-    }, []);
-
-    useEffect(() => {
-        // Auto-pull from database on first load if no local data exists yet
         if (!products || products.length === 0) {
             handleSync();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    useEffect(() => {
-        if (isAdminMode && isDataLoaded && skuFamilies.length > 0) setIsDirty(true);
-    }, [skuFamilies, isAdminMode, isDataLoaded]);
-
-    // --- APP HANDLERS ---
-    const updateTimestamp = useCallback((key: string) => { setUploadTimestamps(prev => ({ ...prev, [key]: new Date().toISOString() })); }, []);
-    const handleRefreshThresholds = useCallback(() => { const newThresholds = getThresholdConfig(); setThresholds(newThresholds); setProducts(prev => recalculateProductMetrics(prev, salesHistory, velocityLookback, newThresholds, pricingRules, brandMap, categoryMap)); }, [salesHistory, velocityLookback, pricingRules, brandMap, categoryMap]);
-    const handleRecalculateVelocity = useCallback((newLookback: VelocityLookback) => { setVelocityLookback(newLookback); setProducts(prev => recalculateProductMetrics(prev, salesHistory, newLookback, thresholds, pricingRules, brandMap, categoryMap)); }, [salesHistory, thresholds, pricingRules, brandMap, categoryMap]);
-    const handleSearch = useCallback(async (query: string | SearchChip[]) => { setIsSearchLoading(true); try { const intent = await parseSearchQuery(typeof query === 'string' ? query : query.map(c => c.label).join(' ')); const { results, timeLabel } = processDataForSearch(intent, products, salesHistory, pricingRules, refundHistory); const session: SearchSession = { id: `s-${Date.now()}`, query: typeof query === 'string' ? query : 'Chip Search', results, params: intent, timeLabel, timestamp: Date.now() }; setSearchSessions(prev => [session, ...prev]); setActiveSearchId(session.id); setCurrentView('search'); } finally { setIsSearchLoading(false); } }, [products, salesHistory, pricingRules, refundHistory]);
-    const handleDeepDiveRequest = useCallback((sku: string) => handleSearch(`SKU: ${sku}`), [handleSearch]);
-    const handleManualPriceChange = useCallback((record: any) => { setPriceChangeHistory(prev => [record, ...(prev || [])]); }, []);
-    const handleManualCostChange = useCallback((record: any) => { setCostChangeHistory(prev => [record, ...(prev || [])]); }, []);
-    const handleAnalyzeCarrier = useCallback((carrier: string) => { setMapJumpState({ carrier, metric: 'RETURN_RATE' }); setCurrentView('overview'); }, []);
-    const handleRefineSearch = useCallback((id: string, intent: any) => { const { results, timeLabel } = processDataForSearch(intent, products, salesHistory, pricingRules, refundHistory); setSearchSessions(prev => prev.map(s => s.id === id ? { ...s, results, params: intent, timeLabel } : s)); }, [products, salesHistory, pricingRules, refundHistory]);
-    const deleteSearchSession = useCallback((id: string, e: any) => { e.stopPropagation(); setSearchSessions(prev => prev.filter(s => s.id !== id)); if (activeSearchId === id) setActiveSearchId(null); }, [activeSearchId]);
-    const handleViewElasticity = useCallback((p: Product) => setSelectedElasticityProduct(p), []);
-    const handleAnalyze = useCallback(async (p: Product) => { setIsAnalysisLoading(true); try { setSelectedAnalysisProduct(p); const res = await analyzePriceAdjustment(p, pricingRules[p.platform || 'General'] || DEFAULT_PRICING_RULES['Amazon'], '', thresholds); setAnalysisResult(res); } finally { setIsAnalysisLoading(false); } }, [pricingRules, thresholds]);
-    const handleApplyPrice = useCallback((id: string, price: number) => { setProducts(prev => prev.map(p => p.id === id ? { ...p, caPrice: price } : p)); setSelectedAnalysisProduct(null); if (isAdminMode) setIsDirty(true); }, [isAdminMode]);
-    const handleBackup = useCallback(() => {
-        const backupData = {
-            version: "2.0",
-            exportDate: new Date().toISOString(),
-            shared: {
-                ...getSharedSnapshot(),
-                // Include full transaction history in JSON backups so restores are complete.
-                // This is intentionally NOT part of getSharedSnapshot() to avoid bloating
-                // the DB app_snapshot table (transactions go to transaction_history separately).
-                priceHistory: salesHistory
-            },
-            personal: {
-                userProfile,
-                velocityLookback,
-                uploadTimestamps
-            }
-        };
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `sello-backup-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-    }, [getSharedSnapshot, salesHistory, userProfile, velocityLookback, uploadTimestamps]);
-
-    const handleRestore = useCallback((e: any) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            try {
-                const data = JSON.parse(ev.target?.result as string);
-                if (data.version === "2.0") {
-                    if (data.shared) applySharedSnapshot(data.shared);
-                    if (data.personal) {
-                        const { userProfile: p, velocityLookback: v, uploadTimestamps: t } = data.personal;
-                        if (p) { setUserProfile(p); localStorage.setItem('sello_user_profile', JSON.stringify(p)); }
-                        if (v) { setVelocityLookback(v); localStorage.setItem('sello_velocity_setting', v); }
-                        if (t) { setUploadTimestamps(t); localStorage.setItem('sello_upload_timestamps', JSON.stringify(t)); }
-                    }
-                    if (isAdminMode) setIsDirty(true);
-                } else {
-                    applySharedSnapshot(data);
-                    alert("Legacy backup restored. Some personal settings may not have been restored.");
-                    if (isAdminMode) setIsDirty(true);
-                }
-            } catch (err) {
-                console.error('Restore error', err);
-                alert('Invalid backup file');
-            }
-        };
-        reader.readAsText(file);
-    }, [applySharedSnapshot, isAdminMode]);
-    const handleResetRefunds = useCallback(() => setRefundHistory([]), []);
-    const handleUpdatePriceChangeRecord = useCallback((r: any) => setPriceChangeHistory(prev => prev.map(old => old.id === r.id ? r : old)), []);
-    const handleUpdateCostChangeRecord = useCallback((r: any) => setCostChangeHistory(prev => prev.map(old => old.id === r.id ? r : old)), []);
-    const handleUpdateInventoryChangeRecord = useCallback((r: any) => setInventoryChangeHistory(prev => prev.map(old => old.id === r.id ? r : old)), []);
-
-    const handleAdminToggle = useCallback(async (password: string) => { const res = await verifyPassword(password); if (res.valid) { setIsAdminMode(true); setAdminSessionActive(true); setStoredAdminPassword(password); sessionStorage.setItem('sello_admin_mode', 'true'); return { success: true }; } return { success: false, error: 'Invalid credentials' }; }, []);
-    const handleAdminExit = useCallback(async (force?: boolean) => {
-        if (isDirty && !force) {
-            return { needsConfirmation: true };
-        }
-        setIsAdminMode(false);
-        setAdminSessionActive(false);
-        setStoredAdminPassword('');
-        setSyncStatus('idle');
-        setIsDirty(false);
-        sessionStorage.removeItem('sello_admin_mode');
-        return { needsConfirmation: false };
-    }, [isDirty]);
-
-    const handleAdGroupSave = useCallback((updated: AdGroup[]) => { setAdGroups(updated); const redistributed = redistributeAdSpend(salesHistory, updated); setSalesHistory(redistributed); const summary = { affectedTransactions: redistributed.length, totalSpreadAmount: 0, daysProcessed: 30 }; setProducts(prev => recalculateProductMetrics(prev, redistributed, velocityLookback, thresholds, pricingRules, brandMap, categoryMap)); setLastRecalculationSummary(summary); if (isAdminMode) setIsDirty(true); return summary; }, [salesHistory, velocityLookback, thresholds, pricingRules, brandMap, categoryMap, isAdminMode]);
-    const handleSalesImportConfirm = useCallback((updatedProducts: Product[], _labels?: { current: string; last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: ShipmentLog[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>) => {
-        let updatedPriceHistory = [...salesHistory];
-        if (historyPayload && historyPayload.length > 0) {
-            const newLogs: PriceLog[] = historyPayload.map(h => ({
-                ...h,
-                id: `l-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-            }));
-
-            // Build deduplication key sets from incoming new logs
-            const transactionKeys = new Set<string>();
-            const dailyActivityKeys = new Set<string>();
-
-            newLogs.forEach(l => {
-                const d = l.date.split('T')[0];
-                const p = l.platform || 'General';
-                if (l.orderId) {
-                    transactionKeys.add(`${l.sku}|${l.orderId}`);
-                }
-                dailyActivityKeys.add(`${l.sku}|${d}|${p}`);
-            });
-
-            // Filter existing history to remove any records that 
-            // overlap with the incoming data
-            const keptHistory = (salesHistory || []).filter(l => {
-                const d = l.date.split('T')[0];
-                const p = l.platform || 'General';
-                if (l.orderId) {
-                    const txKey = `${l.sku}|${l.orderId}`;
-                    if (transactionKeys.has(txKey)) return false;
-                    return true;
-                }
-                const dailyKey = `${l.sku}|${d}|${p}`;
-                if (dailyActivityKeys.has(dailyKey)) return false;
-                return true;
-            });
-
-            // Combine: new records first, then non-overlapping history
-            updatedPriceHistory = [...newLogs, ...keptHistory];
-        }
-        const redistributed = redistributeAdSpend(updatedPriceHistory, adGroups);
-        const finalProducts = recalculateProductMetrics(updatedProducts, redistributed, velocityLookback, thresholds, pricingRules, brandMap, categoryMap);
-        setSalesHistory(redistributed);
-        setProducts(finalProducts);
-        if (newShipmentLogs) setShipmentHistory(prev => [...newShipmentLogs, ...prev]);
-        if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...prev, ...newlyLearnedAliases }));
-        updateTimestamp('Sales');
-        setIsSalesImportModalOpen(false);
-        if (isAdminMode) setIsDirty(true);
-    }, [salesHistory, adGroups, velocityLookback, thresholds, pricingRules, brandMap, categoryMap, updateTimestamp, isAdminMode]);
-    const handleInventoryImport = useCallback((data: any[]) => { const costChg: any[] = []; const invChg: any[] = []; setProducts(prev => (prev || []).map(p => { const u = data.find(d => getCanonicalSku(d.sku) === getCanonicalSku(p.sku)); if (!u) return p; const oldStock = p.stockLevel || 0; const newStock = toNumber(u.stockLevel); if (newStock !== oldStock) invChg.push({ id: `i-${Date.now()}`, sku: p.sku, productName: p.name, timestamp: Date.now(), date: new Date().toISOString(), prevStock: oldStock, newStock, deltaStock: newStock - oldStock, source: 'Import', isStrategic: false }); return { ...p, stockLevel: newStock, costPrice: toNumber(u.costPrice) || p.costPrice }; })); if (invChg.length > 0) setInventoryChangeHistory(prev => [...invChg, ...(prev || [])]); updateTimestamp('Inventory'); setIsUploadModalOpen(false); if (isAdminMode) setIsDirty(true); }, [updateTimestamp, isAdminMode]);
-    const handleSkuDetailImport = useCallback((data: any[]) => { setProducts(prev => prev.map(p => { const u = data.find(d => getCanonicalSku(d.sku) === getCanonicalSku(p.sku)); return u ? { ...p, name: u.name || p.name, brand: u.brand || p.brand, category: u.category || p.category } : p; })); updateTimestamp('SKU Details'); setIsSkuDetailModalOpen(false); if (isAdminMode) setIsDirty(true); }, [updateTimestamp, isAdminMode]);
-    const handleMappingImport = useCallback((m: any[]) => { setProducts(prev => prev.map(p => { const u = m.find(mx => getCanonicalSku(mx.sku) === getCanonicalSku(p.sku)); return u ? { ...p, channels: u.channels || p.channels } : p; })); if (isAdminMode) setIsDirty(true); }, [isAdminMode]);
-    const handleReturnsImport = useCallback((r: any[]) => { setRefundHistory(prev => [...r.map(rx => ({ ...rx, id: `r-${Date.now()}` })), ...(prev || [])]); updateTimestamp('Refunds'); setIsReturnsModalOpen(false); if (isAdminMode) setIsDirty(true); }, [updateTimestamp, isAdminMode]);
-    const handleCAImport = useCallback((d: any[]) => { setProducts(prev => prev.map(p => { const u = d.find(ux => getCanonicalSku(ux.sku) === getCanonicalSku(p.sku)); return u ? { ...p, caPrice: toNumber(u.caPrice) } : p; })); updateTimestamp('CA Prices'); setIsCAUploadModalOpen(false); if (isAdminMode) setIsDirty(true); }, [updateTimestamp, isAdminMode]);
-    const handleShipmentImport = useCallback((s: any[]) => { setProducts(prev => prev.map(p => { const u = s.find(ux => getCanonicalSku(ux.sku) === getCanonicalSku(p.sku)); return u ? { ...p, incomingStock: (p.incomingStock || 0) + toNumber(u.quantity) } : p; })); updateTimestamp('Shipments'); setIsShipmentModalOpen(false); if (isAdminMode) setIsDirty(true); }, [updateTimestamp, isAdminMode]);
-    const handleResetSalesData = useCallback(() => {
-        setSalesHistory([]);
-        if (isAdminMode) {
-            setIsDirty(true);
-            clearTransactions(storedAdminPassword);
-        }
-    }, [isAdminMode, storedAdminPassword]);
-
-    const priceHistoryMap = useMemo(() => { const map = new Map<string, PriceLog[]>(); salesHistory.forEach(h => { if (!map.has(h.sku)) map.set(h.sku, []); map.get(h.sku)!.push(h); }); return map; }, [salesHistory]);
-    const existingOrders = useMemo(() => { const map = new Map<string, string>(); salesHistory.forEach(h => { if (h.orderId) map.set(h.orderId, h.platform || 'Amazon'); }); return map; }, [salesHistory]);
-    const dynamicDateLabels = useMemo(() => { const r = getFridayThursdayRanges(); return { current: `${formatDateShort(r.current.start)} - ${formatDateShort(r.current.end)}`, last: `${formatDateShort(r.last.start)} - ${formatDateShort(r.last.end)}` }; }, []);
-    const ambientRgb = useMemo(() => { const r = hexToRgb(userProfile.themeColor); return r || { r: 79, g: 70, b: 229 }; }, [userProfile.themeColor]);
-
     return {
-        t, products, setProducts, salesHistory, refundHistory, shipmentHistory, priceChangeHistory,
-        costChangeHistory, inventoryChangeHistory, promotions, setPromotions, learnedAliases,
-        inventoryTemplates, setInventoryTemplates, pricingRules, setPricingRules, logisticsRules, setLogisticsRules,
-        strategyRules, setStrategyRules, searchConfig, setSearchConfig, skuFamilies, setSkuFamilies,
-        pendingFamilySuggestions, setPendingFamilySuggestions, adGroups, setAdGroups,
-        onSyncFromFamilies: (p: string) => { }, onAddAdGroup: (g: any) => { }, onEditAdGroup: (g: any) => { }, onRemoveAdGroup: (id: string) => { },
-        handleAdGroupSave, lastRecalculationSummary, brandMap, setBrandMap, categoryMap, setCategoryMap,
-        deductRefunds, setDeductRefunds, uploadTimestamps, thresholds, velocityLookback, setVelocityLookback,
-        userProfile, setUserProfile, showBackToTop, mainContentRef, fileRestoreRef,
-        selectedElasticityProduct, setSelectedElasticityProduct, isUploadModalOpen, setIsUploadModalOpen,
-        isSalesImportModalOpen, setIsSalesImportModalOpen, isSkuDetailModalOpen, setIsSkuDetailModalOpen,
-        isMappingModalOpen, setIsMappingModalOpen, isReturnsModalOpen, setIsReturnsModalOpen,
-        isCAUploadModalOpen, setIsCAUploadModalOpen, isShipmentModalOpen, setIsShipmentModalOpen,
-        selectedAnalysisProduct, setSelectedAnalysisProduct, analysisResult, setAnalysisResult,
-        isAnalysisLoading, isSearchLoading, searchSessions, activeSearchId, setActiveSearchId,
-        currentView, setCurrentView, isOnline, isFreshnessExpanded, setIsFreshnessExpanded,
-        mapJumpState, priceHistoryMap, existingOrders, dynamicDateLabels, ambientRgb,
-        handleRefreshThresholds, handleRecalculateVelocity, handleSearch, handleDeepDiveRequest,
-        handleManualPriceChange, handleManualCostChange, handleAnalyzeCarrier, handleRefineSearch,
-        deleteSearchSession, handleViewElasticity, handleAnalyze, handleApplyPrice, handleBackup,
-        handleRestore, handleResetRefunds, handleUpdatePriceChangeRecord, handleUpdateCostChangeRecord,
-        handleUpdateInventoryChangeRecord, handleSalesImportConfirm, handleInventoryImport, handleResetSalesData,
-        handleSkuDetailImport, handleMappingImport, handleReturnsImport, handleCAImport, handleShipmentImport,
-        isAdminMode, adminSessionActive, handleAdminToggle, handleAdminExit, lastSyncedAt, syncStatus,
-        handleSync, pendingFamilyConflicts, resolveConflicts, showSaveToast, getSharedSnapshot, applySharedSnapshot, isDirty, handleAdminPush
+        t,
+        products,
+        setProducts,
+        salesHistory,
+        setSalesHistory,
+        refundHistory,
+        setRefundHistory,
+        shipmentHistory,
+        setShipmentHistory,
+        priceChangeHistory,
+        setPriceChangeHistory,
+        costChangeHistory,
+        setCostChangeHistory,
+        inventoryChangeHistory,
+        setInventoryChangeHistory,
+        promotions,
+        setPromotions,
+        learnedAliases,
+        setLearnedAliases,
+        inventoryTemplates,
+        setInventoryTemplates,
+        pricingRules,
+        setPricingRules,
+        logisticsRules,
+        setLogisticsRules,
+        strategyRules,
+        setStrategyRules,
+        searchConfig,
+        setSearchConfig,
+        skuFamilies,
+        setSkuFamilies,
+        adGroups,
+        setAdGroups,
+        onSyncFromFamilies,
+        onAddAdGroup,
+        onEditAdGroup,
+        onRemoveAdGroup,
+        handleAdGroupSave,
+        lastRecalculationSummary,
+        pendingFamilySuggestions,
+        setPendingFamilySuggestions,
+        brandMap,
+        setBrandMap,
+        categoryMap,
+        setCategoryMap,
+        deductRefunds,
+        setDeductRefunds,
+        uploadTimestamps,
+        thresholds,
+        velocityLookback,
+        setVelocityLookback,
+        userProfile,
+        setUserProfile,
+        showBackToTop,
+        mainContentRef,
+        fileRestoreRef,
+        selectedElasticityProduct,
+        setSelectedElasticityProduct,
+        isUploadModalOpen,
+        setIsUploadModalOpen,
+        isSalesImportModalOpen,
+        setIsSalesImportModalOpen,
+        isCostUploadModalOpen,
+        setIsCostUploadModalOpen,
+        isSkuDetailModalOpen,
+        setIsSkuDetailModalOpen,
+        isMappingModalOpen,
+        setIsMappingModalOpen,
+        isReturnsModalOpen,
+        setIsReturnsModalOpen,
+        isCAUploadModalOpen,
+        setIsCAUploadModalOpen,
+        isShipmentModalOpen,
+        setIsShipmentModalOpen,
+        selectedAnalysisProduct,
+        setSelectedAnalysisProduct,
+        analysisResult,
+        setAnalysisResult,
+        isAnalysisLoading,
+        isSearchLoading,
+        searchSessions,
+        setSearchSessions,
+        activeSearchId,
+        setActiveSearchId,
+        currentView,
+        setCurrentView,
+        isOnline,
+        isFreshnessExpanded,
+        setIsFreshnessExpanded,
+        mapJumpState,
+        setMapJumpState,
+        priceHistoryMap,
+        existingOrders,
+        dynamicDateLabels,
+        ambientRgb,
+        handleRefreshThresholds,
+        handleRecalculateVelocity,
+        handleSearch,
+        handleDeepDiveRequest,
+        handleManualPriceChange,
+        handleManualCostChange,
+        handleAnalyzeCarrier,
+        handleRefineSearch,
+        deleteSearchSession,
+        handleViewElasticity,
+        handleAnalyze,
+        handleApplyPrice,
+        handleBackup,
+        handleRestore,
+        handleResetRefunds,
+        handleUpdatePriceChangeRecord,
+        handleUpdateCostChangeRecord,
+        handleUpdateInventoryChangeRecord,
+        handleSalesImportConfirm,
+        handleInventoryImport,
+        handleResetSalesData,
+        handleSkuDetailImport,
+        handleMappingImport,
+        handleReturnsImport,
+        handleCAImport,
+        handleShipmentImport,
+        // DB Sync
+        isAdminMode,
+        adminSessionActive,
+        isDirty,
+        syncStatus,
+        lastSyncedAt,
+        showSaveToast,
+        pendingFamilyConflicts,
+        handleAdminToggle,
+        handleAdminExit,
+        handleAdminPush,
+        handleSync,
+        resolveConflicts,
+        getSharedSnapshot
     };
 };

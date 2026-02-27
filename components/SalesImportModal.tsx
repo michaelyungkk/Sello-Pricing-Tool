@@ -172,9 +172,45 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 setMapping(detectedMapping);
 
                 // ** AUTO-SKIP LOGIC **
-                // If we found the big 3 (SKU, Qty, Revenue), skip the mapping screen!
                 if (detectedMapping.sku && detectedMapping.qty && detectedMapping.revenue) {
-                    analyzeData(headers, rows.slice(1), detectedMapping);
+                    const worker = new Worker(
+                        new URL('../workers/salesImportWorker.ts', import.meta.url),
+                        { type: 'module' }
+                    );
+
+                    setIsProcessing(true);
+
+                    worker.onmessage = (e) => {
+                        worker.terminate();
+                        if (e.data.success) {
+                            setPreviewData(e.data);
+                            if (Object.keys(e.data.unknownSkus || {}).length > 0) {
+                                setUnknownSkus(e.data.unknownSkus);
+                                setStep('resolution');
+                            } else {
+                                setStep('preview');
+                            }
+                        } else {
+                            setError(e.data.error || 'Processing failed');
+                        }
+                        setIsProcessing(false);
+                    };
+
+                    worker.onerror = (err) => {
+                        worker.terminate();
+                        setError('Processing error: ' + err.message);
+                        setIsProcessing(false);
+                    };
+
+                    worker.postMessage({
+                        headers,
+                        rows: rows.slice(1),
+                        mapping: detectedMapping,
+                        products,
+                        pricingRules,
+                        learnedAliases,
+                        extraAliases: {}
+                    });
                 } else {
                     setStep('mapping');
                 }
@@ -191,514 +227,52 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         else reader.readAsText(file);
     };
 
-    const analyzeData = (headers: string[], rows: any[][], map: ColumnMapping, extraAliases: Record<string, string> = {}) => {
-        try {
-            const getIdx = (col?: string) => col ? headers.indexOf(col) : -1;
 
-            const skuIdx = getIdx(map.sku);
-            const qtyIdx = getIdx(map.qty);
-            const revIdx = getIdx(map.revenue);
-            const dateIdx = getIdx(map.date);
-            const platIdx = getIdx(map.platform);
-            const plat2Idx = getIdx(map.platformLevel2);
-
-            // Fee Indices
-            const cogsIdx = getIdx(map.cogs);
-            const catIdx = getIdx(map.category);
-            const sellingIdx = getIdx(map.sellingFee);
-            const adsIdx = getIdx(map.adsFee);
-            const postIdx = getIdx(map.postage);
-            const logNameIdx = getIdx(map.logisticsService); // Logistics Name Index
-            const extraIdx = getIdx(map.extraFreight);
-            const otherIdx = getIdx(map.otherFee);
-            const subIdx = getIdx(map.subscriptionFee);
-            const wmsIdx = getIdx(map.wmsFee);
-            const profitIdx = getIdx(map.profitExclRn);
-            const netPmIdx = getIdx(map.profitExclRnPercent);
-            const orderIdIdx = getIdx(map.outerOrderId); // Index for Order ID
-            const postcodeIdx = getIdx(map.receivePostcode); // Index for Postcode
-            const partnerIdx = getIdx(map.logisticPartner); // Index for Logistic Partner
-
-            // 1. Overall Aggregation (For Product Updates - Snapshot)
-            const aggregated: Record<string, {
-                qty: number,
-                revenue: number,
-                count: number,
-                dates: Set<string>,
-                fees: { selling: number, ads: number, postage: number, extra: number, other: number, sub: number, wms: number, cogs: number },
-                netPmSum: number,
-                profitSum: number, // Absolute profit
-                category: string,
-                platformStats: Record<string, { qty: number, revenue: number }>
-            }> = {};
-
-            // 2. Daily Aggregation (For History Payload)
-            // Key: SKU + Date + Platform
-            const dailyAggregated: Record<string, {
-                sku: string,
-                date: string,
-                totalQty: number,
-                totalRevenue: number,
-                netPmSum: number,
-                totalProfit: number, // Absolute profit for this daily bucket
-                totalAds: number, // New: Aggregate daily ad spend
-                platform: string,
-                orderId?: string; // New: optional orderId
-                postcode?: string; // New: Receive Postcode
-                logisticPartner?: string; // New: Logistic Partner
-                logisticService?: string; // New: Logistic Service
-                totalPostage: number; // Capture aggregated postage
-                totalExtraFreight: number; // Capture aggregated extra freight
-            }> = {};
-
-            const discoveredPlatforms = new Set<string>();
-            let orderIdsDetectedCount = 0;
-
-            let minDate = new Date();
-            let maxDate = new Date(0);
-            let hasDates = false;
-
-            // Collections for Logs
-            const shipmentLogs: ShipmentLog[] = [];
-
-            // Alias Map
-            const aliasMap: Record<string, string> = {};
-            products.forEach(p => {
-                aliasMap[p.sku.toUpperCase()] = p.sku;
-                p.channels.forEach(c => {
-                    if (c.skuAlias) {
-                        c.skuAlias.split(',').forEach(a => aliasMap[a.trim().toUpperCase()] = p.sku);
-                    }
-                });
-            });
-
-            // Add Learned Aliases to lookup
-            (Object.entries(learnedAliases) as [string, string][]).forEach(([alias, master]) => {
-                const aliasUpper = alias.toUpperCase();
-                if (!aliasMap[aliasUpper]) aliasMap[aliasUpper] = master;
-            });
-
-            // Add newly resolved aliases for this session
-            (Object.entries(extraAliases) as [string, string][]).forEach(([alias, master]) => {
-                const aliasUpper = alias.toUpperCase();
-                if (!aliasMap[aliasUpper]) aliasMap[aliasUpper] = master;
-            });
-
-
-            const currentUnknownSkus: Record<string, { count: number, revenue: number, masterSku: string | null }> = {};
-            let matchCount = 0;
-            let skipCount = 0;
-
-            rows.forEach(row => {
-                if (!row[skuIdx]) return;
-
-                const parseVal = (idx: number) => {
-                    if (idx === -1 || row[idx] === undefined || row[idx] === null || row[idx] === '') return 0;
-                    const val = row[idx];
-                    if (typeof val === 'number') return val;
-                    // Robust numeric parsing
-                    const str = String(val).replace(/[^\d.-]/g, '').trim();
-                    const v = parseFloat(str);
-                    return isNaN(v) ? 0 : v;
-                };
-
-                const rev = parseVal(revIdx);
-                const adsCost = parseVal(adsIdx);
-                const qty = parseVal(qtyIdx);
-
-                // --- CRITICAL FIX: ENSURE ZERO-REVENUE UNITS (RESENDS) ARE COUNTED ---
-                // We skip rows only if there is zero revenue, zero ad spend, AND zero units.
-                if (rev <= 0.001 && adsCost <= 0.001 && qty <= 0) return;
-
-                const rawSku = String(row[skuIdx]).trim();
-                
-                // --- SKU NORMALIZATION ---
-                const canonicalRawSku = getCanonicalSku(rawSku);
-                const rawSkuUpper = canonicalRawSku.toUpperCase();
-
-                // Robust Alias Matching: Try exact, then alias, then handle potential suffixes
-                let masterSku = aliasMap[rawSkuUpper];
-                if (!masterSku) {
-                    // Try case-insensitive exact match in products
-                    const directMatch = products.find(p => p.sku.toUpperCase() === rawSkuUpper);
-                    if (directMatch) masterSku = directMatch.sku;
-                }
-
-                if (!masterSku) {
-                    if (!currentUnknownSkus[rawSku]) {
-                        currentUnknownSkus[rawSku] = { count: 0, revenue: 0, masterSku: null };
-                    }
-                    currentUnknownSkus[rawSku].count++;
-                    currentUnknownSkus[rawSku].revenue += rev;
-                    skipCount++;
-                    return;
-                }
-
-                matchCount++;
-
-                // Helper for Percentage Parsing (handles "31.45%", "-1.88%", 0.05)
-                const parsePercent = (idx: number) => {
-                    if (idx === -1 || row[idx] === undefined || row[idx] === null || row[idx] === '') return 0;
-                    const val = row[idx];
-                    if (typeof val === 'number') {
-                        // If it's in the range (-1, 1] and not 0, it's likely a decimal fraction (e.g. 0.317 -> 31.7%)
-                        if (Math.abs(val) > 0 && Math.abs(val) <= 1.0) {
-                            return val * 100;
-                        }
-                        return val;
-                    }
-                    const str = String(val).replace('%', '').replace(/[^\d.-]/g, '').trim();
-                    const v = parseFloat(str);
-                    return isNaN(v) ? 0 : v;
-                };
-
-                const profit = parseVal(profitIdx);
-                const netPm = parsePercent(netPmIdx);
-
-                // Capture Platform Logic (Prioritize Level 2, but provide context if needed)
-                let platformName = 'Unknown';
-
-                const p1 = (platIdx !== -1 && row[platIdx]) ? String(row[platIdx]).trim() : '';
-                const p2 = (plat2Idx !== -1 && row[plat2Idx]) ? String(row[plat2Idx]).trim() : '';
-
-                if (p2 && p2 !== '-' && p2.toLowerCase() !== 'unknown') {
-                    if (p1 && !p2.toLowerCase().includes(p1.toLowerCase()) && p2.length < 5) {
-                        platformName = `${p1} ${p2}`;
-                    } else {
-                        platformName = p2;
-                    }
-                } else if (p1) {
-                    platformName = p1;
-                }
-
-                // Capture Order ID if available
-                const orderId = (orderIdIdx !== -1 && row[orderIdIdx])
-                    ? String(row[orderIdIdx]).trim()
-                    : '';
-                
-                // Capture Postcode if available
-                const postcode = (postcodeIdx !== -1 && row[postcodeIdx])
-                    ? String(row[postcodeIdx]).trim()
-                    : undefined;
-                
-                // Capture Logistic Partner
-                const partner = (partnerIdx !== -1 && row[partnerIdx])
-                    ? String(row[partnerIdx]).trim()
-                    : undefined;
-                
-                // Capture Logistics Service Name (e.g. Yodel 24, Evri Next Day)
-                const serviceName = (logNameIdx !== -1 && row[logNameIdx]) ? String(row[logNameIdx]).trim() : undefined;
-
-                if (orderId) orderIdsDetectedCount++;
-
-                discoveredPlatforms.add(platformName);
-
-                // Check Exclusion Rules (Robust & Case-Insensitive)
-                let isExcluded = false;
-                if (pricingRules[platformName]?.isExcluded) {
-                    isExcluded = true;
-                } else {
-                    const normPlat = platformName.toLowerCase().trim();
-                    const matchedKey = Object.keys(pricingRules).find(k => k.toLowerCase().trim() === normPlat);
-                    if (matchedKey && pricingRules[matchedKey].isExcluded) {
-                        isExcluded = true;
-                    }
-                }
-
-                // --- Overall Aggregation ---
-                if (!aggregated[masterSku]) aggregated[masterSku] = {
-                    qty: 0, revenue: 0, count: 0, dates: new Set(),
-                    fees: { selling: 0, ads: 0, postage: 0, extra: 0, other: 0, sub: 0, wms: 0, cogs: 0 },
-                    netPmSum: 0,
-                    profitSum: 0,
-                    category: '',
-                    platformStats: {}
-                };
-
-                const item = aggregated[masterSku];
-
-                // Global totals for metrics update.
-                // NOTE: Dashboard now ignores 'isExcluded' for lifetime counters based on user feedback.
-                item.qty += qty;
-                item.revenue += rev;
-                item.count++;
-
-                const weight = Math.abs(qty) || 1;
-                item.netPmSum += (netPm * weight);
-                item.profitSum += profit;
-
-                // Aggregating Fees
-                const postageCost = parseVal(postIdx);
-                const extraFreightInc = parseVal(extraIdx);
-
-                item.fees.selling += parseVal(sellingIdx);
-                item.fees.ads += adsCost;
-                item.fees.postage += postageCost;
-                item.fees.extra += extraFreightInc;
-                item.fees.other += parseVal(otherIdx);
-                item.fees.sub += parseVal(subIdx);
-                item.fees.wms += parseVal(wmsIdx);
-                item.fees.cogs += parseVal(cogsIdx);
-                
-                if (catIdx !== -1 && row[catIdx]) item.category = String(row[catIdx]).trim();
-
-                // --- LOGISTICS CALIBRATION ---
-                const dLog = (dateIdx !== -1 && row[dateIdx]) ? new Date(row[dateIdx]) : new Date();
-                if (qty === 1 && serviceName && postageCost > 0) {
-                    shipmentLogs.push({
-                        id: Math.random().toString(36).substr(2, 9),
-                        sku: masterSku,
-                        service: serviceName,
-                        cost: postageCost,
-                        date: dLog.toISOString()
-                    });
-                }
-
-                // ALWAYS Aggregate Platform Stats for Channel update
-                if (!item.platformStats[platformName]) {
-                    item.platformStats[platformName] = { qty: 0, revenue: 0 };
-                }
-                item.platformStats[platformName].qty += qty;
-                item.platformStats[platformName].revenue += rev;
-
-                // --- NAIVE DATE PARSING ---
-                const rawDateVal = (dateIdx !== -1) ? row[dateIdx] : undefined;
-                const dateKey = asDateKeyNaive(rawDateVal);
-
-                if (dateKey) {
-                    hasDates = true;
-                    const d = new Date(dateKey); 
-                    if (d < minDate) minDate = d;
-                    if (d > maxDate) maxDate = d;
-
-                    const dateStr = dateKey;
-
-                    // --- Daily Aggregation for History ---
-                    // NOTE: Adding serviceName to key might split rows if multiple services used on same day for same SKU.
-                    // But if orderId is present, key is unique anyway.
-                    const dailyKey = orderId
-                        ? `${masterSku}|${dateStr}|${platformName}|${orderId}`
-                        : `${masterSku}|${dateStr}|${platformName}`; // Keep it simple if no order ID to avoid fragmentation
-
-                    if (!dailyAggregated[dailyKey]) {
-                        dailyAggregated[dailyKey] = {
-                            sku: masterSku,
-                            date: dateStr,
-                            totalQty: 0,
-                            totalRevenue: 0,
-                            netPmSum: 0,
-                            totalProfit: 0,
-                            totalAds: 0,
-                            platform: platformName,
-                            orderId: orderId || undefined, 
-                            postcode: postcode || undefined,
-                            logisticPartner: partner || undefined,
-                            logisticService: serviceName || undefined,
-                            totalPostage: 0,
-                            totalExtraFreight: 0
-                        };
-                    }
-                    dailyAggregated[dailyKey].totalQty += qty;
-                    dailyAggregated[dailyKey].totalRevenue += rev;
-                    dailyAggregated[dailyKey].totalAds += adsCost;
-                    dailyAggregated[dailyKey].totalPostage += postageCost;
-                    dailyAggregated[dailyKey].totalExtraFreight += extraFreightInc;
-                    
-                    const dailyWeight = Math.abs(qty) || 0;
-                    dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);
-
-                    if (profit === 0 && netPm !== 0 && rev !== 0) {
-                        dailyAggregated[dailyKey].totalProfit += rev * (netPm / 100);
-                    } else {
-                        dailyAggregated[dailyKey].totalProfit += profit;
-                    }
-
-                    item.dates.add(dateStr);
-                }
-            });
-
-            // Calculate Period
-            let calculatedPeriod = periodDays;
-            let dateLabel = "Manual Period";
-
-            if (hasDates && maxDate > minDate) {
-                const diffTime = Math.abs(maxDate.getTime() - minDate.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
-                calculatedPeriod = diffDays;
-                
-                const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-                dateLabel = `${formatDate(minDate)} – ${formatDate(maxDate)}`;
-            }
-
-            // Build Updates & History
-            const updates: Product[] = [];
-            const history: HistoryPayload[] = [];
-            const todayStr = new Date().toISOString().split('T')[0];
-
-            // Create History Logs
-            Object.values(dailyAggregated).forEach(bucket => {
-                const weight = bucket.totalQty;
-                const avgPrice = weight > 0 ? bucket.totalRevenue / weight : 0;
-
-                let finalMargin = 0;
-                if (profitIdx !== -1 && bucket.totalRevenue > 0) {
-                    finalMargin = (bucket.totalProfit / bucket.totalRevenue) * 100;
-                } else {
-                    finalMargin = weight > 0 ? bucket.netPmSum / weight : 0;
-                }
-
-                if (bucket.totalQty !== 0 || bucket.totalAds > 0) {
-                    const payload: HistoryPayload = {
-                        sku: bucket.sku,
-                        date: bucket.date,
-                        price: isNaN(avgPrice) ? 0 : avgPrice,
-                        velocity: isNaN(bucket.totalQty) ? 0 : bucket.totalQty,
-                        platform: bucket.platform,
-                        orderId: bucket.orderId,
-                        postcode: bucket.postcode,
-                        logisticPartner: bucket.logisticPartner,
-                        logisticService: bucket.logisticService,
-                        adsSpend: Number(bucket.totalAds.toFixed(4)),
-                        realPostage: Number(bucket.totalPostage.toFixed(4)),
-                        realExtraFreight: Number(bucket.totalExtraFreight.toFixed(4))
-                    };
-
-                    if (!isNaN(finalMargin)) {
-                        payload.margin = Number(finalMargin.toFixed(4));
-                    }
-
-                    if (profitIdx !== -1) {
-                        payload.profit = Number(bucket.totalProfit.toFixed(4));
-                    }
-
-                    history.push(payload);
-                }
-            });
-
-            // 2. Generate Product Updates
-            Object.entries(aggregated).forEach(([sku, data]) => {
-                const product = products.find(p => p.sku === sku);
-                if (!product) return;
-
-                const validQty = data.qty > 0 ? data.qty : 1;
-                const newVelocity = data.qty / calculatedPeriod;
-                const currentPrice = product.currentPrice || 0;
-                const rawAvg = data.qty > 0 ? data.revenue / data.qty : currentPrice;
-                const avgPrice = Number((rawAvg || 0).toFixed(2));
-
-                const unitFees = {
-                    selling: (Number(data.fees.selling) || 0) / validQty,
-                    ads: (Number(data.fees.ads) || 0) / validQty,
-                    postage: (Number(data.fees.postage) || 0) / validQty,
-                    extra: (Number(data.fees.extra) || 0) / validQty,
-                    other: (Number(data.fees.other) || 0) / validQty,
-                    sub: (Number(data.fees.sub) || 0) / validQty,
-                    wms: (Number(data.fees.wms) || 0) / validQty,
-                };
-
-                const updatedChannels = [...product.channels];
-                Object.entries(data.platformStats).forEach(([platform, stats]) => {
-                    const channelIdx = updatedChannels.findIndex(c => c.platform === platform);
-                    const channelVelocity = stats.qty / calculatedPeriod;
-                    const channelPrice = stats.qty > 0 ? stats.revenue / stats.qty : 0;
-
-                    if (channelIdx >= 0) {
-                        updatedChannels[channelIdx] = {
-                            ...updatedChannels[channelIdx],
-                            velocity: channelVelocity,
-                            price: channelPrice
-                        };
-                    } else {
-                        const defaultManager = pricingRules[platform]?.manager || 'Unassigned';
-                        updatedChannels.push({
-                            platform,
-                            manager: defaultManager,
-                            velocity: channelVelocity,
-                            price: channelPrice,
-                            skuAlias: '' 
-                        });
-                    }
-                });
-
-                updates.push({
-                    ...product,
-                    averageDailySales: newVelocity,
-                    previousDailySales: product.averageDailySales,
-                    currentPrice: avgPrice,
-                    oldPrice: currentPrice,
-                    lastUpdated: todayStr,
-                    sellingFee: unitFees.selling || product.sellingFee,
-                    adsFee: unitFees.ads || product.adsFee,
-                    postage: unitFees.postage || product.postage,
-                    extraFreight: unitFees.extra || product.extraFreight,
-                    otherFee: unitFees.other || product.otherFee,
-                    subscriptionFee: unitFees.sub || product.subscriptionFee,
-                    wmsFee: unitFees.wms || product.wmsFee,
-                    category: data.category || product.category,
-                    channels: updatedChannels
-                });
-
-                if (!hasDates && newVelocity > 0) {
-                    const primaryPlatform = Object.keys(data.platformStats)[0] || 'General';
-                    history.push({
-                        sku,
-                        date: todayStr,
-                        price: avgPrice,
-                        velocity: newVelocity,
-                        margin: 0,
-                        platform: primaryPlatform,
-                        adsSpend: data.fees.ads
-                    });
-                }
-            });
-
-            const features = {
-                ads: map.adsFee && updates.some(u => u.adsFee && u.adsFee > 0),
-                fees: map.sellingFee && updates.some(u => u.sellingFee && u.sellingFee > 0),
-                logistics: (map.postage || map.wmsFee) && updates.some(u => (u.postage || 0) + (u.wmsFee || 0) > 0),
-                category: map.category && updates.some(u => u.category !== products.find(p => p.sku === u.sku)?.category)
-            };
-
-            setPreviewData({
-                updates,
-                history,
-                shipmentLogs,
-                features,
-                stats: {
-                    matchedSkus: updates.length,
-                    totalRevenue: Object.values(aggregated).reduce((a, b) => a + b.revenue, 0),
-                    period: calculatedPeriod,
-                    dateLabel,
-                    shipmentCount: shipmentLogs.length,
-                    discoveredPlatforms: Array.from(discoveredPlatforms),
-                    orderIdsCount: orderIdsDetectedCount 
-                }
-            });
-
-            if (Object.keys(currentUnknownSkus).length > 0 && step !== 'resolution') {
-                setUnknownSkus(currentUnknownSkus);
-                setStep('resolution');
-                return;
-            }
-
-            setStep('preview');
-
-        } catch (err) {
-            console.error(err);
-            setError("Analysis failed. Please check column mappings.");
-        }
-    };
 
     const handleManualAnalyze = () => {
         if (!mapping.sku || !mapping.qty || !mapping.revenue) {
             setError("Please map at least SKU, Quantity, and Revenue.");
             return;
         }
+
+        const worker = new Worker(
+            new URL('../workers/salesImportWorker.ts', import.meta.url),
+            { type: 'module' }
+        );
+
         setIsProcessing(true);
-        setTimeout(() => {
-            analyzeData(rawHeaders, rawRows, mapping);
+
+        worker.onmessage = (e) => {
+            worker.terminate();
+            if (e.data.success) {
+                setPreviewData(e.data);
+                if (Object.keys(e.data.unknownSkus || {}).length > 0) {
+                    setUnknownSkus(e.data.unknownSkus);
+                    setStep('resolution');
+                } else {
+                    setStep('preview');
+                }
+            } else {
+                setError(e.data.error || 'Processing failed');
+            }
             setIsProcessing(false);
-        }, 500);
+        };
+
+        worker.onerror = (err) => {
+            worker.terminate();
+            setError('Processing error: ' + err.message);
+            setIsProcessing(false);
+        };
+
+        worker.postMessage({
+            headers: rawHeaders,
+            rows: rawRows,
+            mapping,
+            products,
+            pricingRules,
+            learnedAliases,
+            extraAliases: {}
+        });
     };
 
     const mapField = (field: keyof ColumnMapping, value: string) => {
@@ -706,20 +280,47 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
     };
 
     const analyzeWithResolutions = () => {
+        const newAliases: Record<string, string> = {};
+        (Object.entries(unknownSkus) as [string, { count: number, revenue: number, masterSku: string | null }][]).forEach(([fileSku, data]) => {
+            if (data.masterSku && products.some(p => p.sku === data.masterSku)) {
+                newAliases[fileSku] = data.masterSku;
+            }
+        });
+
+        const worker = new Worker(
+            new URL('../workers/salesImportWorker.ts', import.meta.url),
+            { type: 'module' }
+        );
+
         setIsProcessing(true);
-        setTimeout(() => {
-            const newAliases: Record<string, string> = {};
-            (Object.entries(unknownSkus) as [string, { count: number, revenue: number, masterSku: string | null }][]).forEach(([fileSku, data]) => {
-                if (data.masterSku && products.some(p => p.sku === data.masterSku)) {
-                    newAliases[fileSku] = data.masterSku;
-                }
-            });
 
-            setResolvedAliases(newAliases);
-
-            analyzeData(rawHeaders, rawRows, mapping, newAliases);
+        worker.onmessage = (e) => {
+            worker.terminate();
+            if (e.data.success) {
+                setPreviewData(e.data);
+                setResolvedAliases(e.data.resolvedAliases);
+                setStep('preview');
+            } else {
+                setError(e.data.error || 'Processing failed');
+            }
             setIsProcessing(false);
-        }, 500);
+        };
+
+        worker.onerror = (err) => {
+            worker.terminate();
+            setError('Processing error: ' + err.message);
+            setIsProcessing(false);
+        };
+
+        worker.postMessage({
+            headers: rawHeaders,
+            rows: rawRows,
+            mapping,
+            products,
+            pricingRules,
+            learnedAliases,
+            extraAliases: newAliases
+        });
     };
 
     return (
@@ -736,6 +337,16 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto relative">
+                    {isProcessing && step !== 'preview' && (
+                        <div className="absolute inset-0 z-20 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
+                            <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
+                            <h3 className="text-xl font-bold text-gray-900">Processing Data</h3>
+                            <p className="text-gray-500 text-center mt-2">
+                                Processing {rawRows.length} rows... this may take a moment
+                            </p>
+                        </div>
+                    )}
+
                     {isResetConfirmOpen && (
                         <div className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                             <div className="bg-red-50 p-4 rounded-full mb-6">
