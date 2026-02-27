@@ -16,15 +16,32 @@ export default async (req: Request) => {
             { status: 405, headers: CORS }
         );
     try {
+        const url = new URL(req.url);
+        const page = parseInt(url.searchParams.get('page') || '0');
+        const pageSize = parseInt(url.searchParams.get('pageSize') || '2000');
+        const offset = page * pageSize;
+
         const sql = neon(process.env.NETLIFY_DATABASE_URL!);
+
+        // Get total count on first page only
+        let totalRows = 0;
+        if (page === 0) {
+            const countRes = await sql`
+                SELECT COUNT(*) as total FROM transaction_history
+            `;
+            totalRows = Number(countRes[0]?.total || 0);
+        }
+
         const rows = await sql`
             SELECT id, sku, date, price, velocity, margin, profit,
                    ads_spend, raw_ads_spend, platform, order_id,
                    postcode, logistic_partner, logistic_service,
                    real_postage, real_extra_freight
             FROM transaction_history
-            ORDER BY date DESC
+            ORDER BY date DESC, id DESC
+            LIMIT ${pageSize} OFFSET ${offset}
         `;
+
         const transactions = rows.map(r => ({
             id: r.id,
             sku: r.sku,
@@ -41,10 +58,19 @@ export default async (req: Request) => {
             logisticPartner: r.logistic_partner ?? undefined,
             logisticService: r.logistic_service ?? undefined,
             realPostage: r.real_postage != null ? Number(r.real_postage) : undefined,
-            realExtraFreight: r.real_extra_freight != null ? Number(r.real_extra_freight) : undefined
+            realExtraFreight: r.real_extra_freight != null
+                ? Number(r.real_extra_freight) : undefined
         }));
+
         return new Response(
-            JSON.stringify({ success: true, transactions, count: transactions.length }),
+            JSON.stringify({
+                success: true,
+                transactions,
+                page,
+                pageSize,
+                totalRows,
+                hasMore: rows.length === pageSize
+            }),
             { status: 200, headers: CORS }
         );
     } catch (error: any) {

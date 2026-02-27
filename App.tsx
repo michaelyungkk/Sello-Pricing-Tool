@@ -157,6 +157,11 @@ const App: React.FC = () => {
         syncStatus,
         lastSyncedAt,
         showSaveToast,
+        pushProgress,
+        pushTotal,
+        syncStep,
+        syncProgress,
+        syncTotal,
         handleAdminToggle,
         handleAdminExit,
         handleAdminPush,
@@ -299,18 +304,39 @@ const App: React.FC = () => {
                             </button>
                             <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />
                         </div>
-                        {/* Sync Button */}
                         <button
                             onClick={handleSync}
-                            disabled={syncStatus === 'pushing'}
+                            disabled={syncStatus === 'pushing' || syncStatus === 'syncing'}
                             className={`w-full flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg text-[10px] font-bold transition-all border ${syncStatus === 'error'
                                 ? 'text-red-600 border-red-200 bg-red-50/50 hover:bg-red-50'
                                 : 'text-indigo-600 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50'
                                 } disabled:opacity-40 disabled:cursor-not-allowed`}
                         >
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 w-full">
                                 {syncStatus === 'syncing' ? (
-                                    <><Loader2 className="w-3 h-3 animate-spin" /> Syncing...</>
+                                    <div className="flex flex-col items-center gap-1 w-full">
+                                        <div className="flex items-center gap-1.5">
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                            <span>
+                                                {syncTotal > 0
+                                                    ? `Syncing ${Math.round((syncProgress / syncTotal) * 100)}%`
+                                                    : 'Syncing...'}
+                                            </span>
+                                        </div>
+                                        {syncTotal > 0 && (
+                                            <div className="w-full bg-gray-200 rounded-full h-1">
+                                                <div
+                                                    className="bg-indigo-500 rounded-full h-1 transition-all duration-300"
+                                                    style={{ width: `${Math.round((syncProgress / syncTotal) * 100)}%` }}
+                                                />
+                                            </div>
+                                        )}
+                                        {syncStep ? (
+                                            <span className="text-[9px] font-normal opacity-75 text-center leading-tight">
+                                                {syncStep}
+                                            </span>
+                                        ) : null}
+                                    </div>
                                 ) : syncStatus === 'error' ? (
                                     <><RefreshCw className="w-3 h-3" /> Sync Failed — Retry</>
                                 ) : (
@@ -389,7 +415,22 @@ const App: React.FC = () => {
                                                 }`}
                                         >
                                             {syncStatus === 'pushing' ? (
-                                                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Pushing...</>
+                                                <div className="flex flex-col items-center gap-1 w-full min-w-[120px]">
+                                                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                        {pushTotal > 0
+                                                            ? `Pushing... ${Math.round((pushProgress / pushTotal) * 100)}%`
+                                                            : 'Pushing...'}
+                                                    </div>
+                                                    {pushTotal > 0 && (
+                                                        <div className="w-full bg-white/30 rounded-full h-1">
+                                                            <div
+                                                                className="bg-white rounded-full h-1 transition-all duration-300"
+                                                                style={{ width: `${Math.round((pushProgress / pushTotal) * 100)}%` }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             ) : syncStatus === 'error' ? (
                                                 <><RefreshCw className="w-3.5 h-3.5" /> Push Failed — Retry</>
                                             ) : (
@@ -458,8 +499,29 @@ const App: React.FC = () => {
                                             <Loader2 className="w-8 h-8 animate-spin"
                                                 style={{ color: userProfile.themeColor }} />
                                         </div>
-                                        <h3 className="text-xl font-bold text-gray-900">Loading your data...</h3>
-                                        <p className="text-gray-500 mt-2">Syncing from database, please wait.</p>
+                                        <h3 className="text-xl font-bold text-gray-900">
+                                            Loading your data...
+                                        </h3>
+                                        <p className="text-gray-500 mt-2">
+                                            Syncing from database, please wait.
+                                        </p>
+                                        {syncTotal > 0 && (
+                                            <div className="w-64 mt-6">
+                                                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                                    <span>{syncStep}</span>
+                                                    <span>{Math.round((syncProgress / syncTotal) * 100)}%</span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div
+                                                        className="rounded-full h-2 transition-all duration-300"
+                                                        style={{
+                                                            width: `${Math.round((syncProgress / syncTotal) * 100)}%`,
+                                                            backgroundColor: userProfile.themeColor
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : syncStatus === 'error' ? (
                                     <div className="flex flex-col items-center justify-center min-h-[500px]">
@@ -705,73 +767,90 @@ const App: React.FC = () => {
                         onClose={() => setIsUploadModalOpen(false)}
                         onConfirm={handleInventoryImport}
                     />
-                )}
-                {isSalesImportModalOpen && (
-                    <SalesImportModal
-                        products={products}
-                        pricingRules={pricingRules}
-                        learnedAliases={learnedAliases}
-                        onClose={() => setIsSalesImportModalOpen(false)}
-                        onResetData={handleResetSalesData}
-                        onConfirm={handleSalesImportConfirm}
-                    />
-                )}
-                {isSkuDetailModalOpen && (
-                    <SkuDetailUploadModal
-                        products={products}
-                        onClose={() => setIsUploadModalOpen(false)}
-                        onConfirm={handleSkuDetailImport}
-                    />
-                )}
-                {isMappingModalOpen && (
-                    <MappingUploadModal
-                        products={products}
-                        platforms={Object.keys(pricingRules)}
-                        learnedAliases={learnedAliases}
-                        onClose={() => setIsMappingModalOpen(false)}
-                        onConfirm={handleMappingImport}
-                    />
-                )}
-                {isReturnsModalOpen && (
-                    <ReturnsUploadModal
-                        onClose={() => setIsReturnsModalOpen(false)}
-                        onConfirm={handleReturnsImport}
-                        onReset={handleResetRefunds}
-                        existingOrders={existingOrders}
-                    />
-                )}
-                {isCAUploadModalOpen && (
-                    <CAUploadModal
-                        products={products}
-                        onClose={() => setIsCAUploadModalOpen(false)}
-                        onConfirm={handleCAImport}
-                    />
-                )}
-                {isShipmentModalOpen && (
-                    <ShipmentUploadModal
-                        products={products}
-                        onClose={() => setIsShipmentModalOpen(false)}
-                        onConfirm={handleShipmentImport}
-                    />
-                )}
-                {selectedElasticityProduct && (
-                    <PriceElasticityModal
-                        product={selectedElasticityProduct}
-                        priceHistory={salesHistory}
-                        priceChangeHistory={priceChangeHistory || []}
-                        onClose={() => setSelectedElasticityProduct(null)}
-                    />
-                )}
-                {selectedAnalysisProduct && (
-                    <AnalysisModal
-                        product={selectedAnalysisProduct}
-                        analysis={analysisResult}
-                        isLoading={isAnalysisLoading}
-                        onClose={() => { setSelectedAnalysisProduct(null); setAnalysisResult(null); }}
-                        onApplyPrice={handleApplyPrice}
-                        themeColor={userProfile.themeColor}
-                    />
-                )}
+                )
+                }
+                {
+                    isSalesImportModalOpen && (
+                        <SalesImportModal
+                            products={products}
+                            pricingRules={pricingRules}
+                            learnedAliases={learnedAliases}
+                            onClose={() => setIsSalesImportModalOpen(false)}
+                            onResetData={handleResetSalesData}
+                            onConfirm={handleSalesImportConfirm}
+                        />
+                    )
+                }
+                {
+                    isSkuDetailModalOpen && (
+                        <SkuDetailUploadModal
+                            products={products}
+                            onClose={() => setIsUploadModalOpen(false)}
+                            onConfirm={handleSkuDetailImport}
+                        />
+                    )
+                }
+                {
+                    isMappingModalOpen && (
+                        <MappingUploadModal
+                            products={products}
+                            platforms={Object.keys(pricingRules)}
+                            learnedAliases={learnedAliases}
+                            onClose={() => setIsMappingModalOpen(false)}
+                            onConfirm={handleMappingImport}
+                        />
+                    )
+                }
+                {
+                    isReturnsModalOpen && (
+                        <ReturnsUploadModal
+                            onClose={() => setIsReturnsModalOpen(false)}
+                            onConfirm={handleReturnsImport}
+                            onReset={handleResetRefunds}
+                            existingOrders={existingOrders}
+                        />
+                    )
+                }
+                {
+                    isCAUploadModalOpen && (
+                        <CAUploadModal
+                            products={products}
+                            onClose={() => setIsCAUploadModalOpen(false)}
+                            onConfirm={handleCAImport}
+                        />
+                    )
+                }
+                {
+                    isShipmentModalOpen && (
+                        <ShipmentUploadModal
+                            products={products}
+                            onClose={() => setIsShipmentModalOpen(false)}
+                            onConfirm={handleShipmentImport}
+                        />
+                    )
+                }
+                {
+                    selectedElasticityProduct && (
+                        <PriceElasticityModal
+                            product={selectedElasticityProduct}
+                            priceHistory={salesHistory}
+                            priceChangeHistory={priceChangeHistory || []}
+                            onClose={() => setSelectedElasticityProduct(null)}
+                        />
+                    )
+                }
+                {
+                    selectedAnalysisProduct && (
+                        <AnalysisModal
+                            product={selectedAnalysisProduct}
+                            analysis={analysisResult}
+                            isLoading={isAnalysisLoading}
+                            onClose={() => { setSelectedAnalysisProduct(null); setAnalysisResult(null); }}
+                            onApplyPrice={handleApplyPrice}
+                            themeColor={userProfile.themeColor}
+                        />
+                    )
+                }
 
                 <button
                     onClick={() => {
@@ -788,91 +867,97 @@ const App: React.FC = () => {
             </div>
 
             {/* Admin Password Modal */}
-            {showAdminModal && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                <Lock className="w-5 h-5 text-indigo-600" />
-                                Enter Admin Mode
-                            </h3>
-                            <button onClick={() => setShowAdminModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400"><X className="w-4 h-4" /></button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <p className="text-sm text-gray-500">Enter the admin password to unlock push-to-database controls.</p>
-                            <input
-                                type="password"
-                                value={adminPasswordInput}
-                                onChange={e => { setAdminPasswordInput(e.target.value); setAdminLoginError(''); }}
-                                onKeyDown={async e => {
-                                    if (e.key === 'Enter') {
+            {
+                showAdminModal && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                    <Lock className="w-5 h-5 text-indigo-600" />
+                                    Enter Admin Mode
+                                </h3>
+                                <button onClick={() => setShowAdminModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400"><X className="w-4 h-4" /></button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-gray-500">Enter the admin password to unlock push-to-database controls.</p>
+                                <input
+                                    type="password"
+                                    value={adminPasswordInput}
+                                    onChange={e => { setAdminPasswordInput(e.target.value); setAdminLoginError(''); }}
+                                    onKeyDown={async e => {
+                                        if (e.key === 'Enter') {
+                                            const r = await handleAdminToggle(adminPasswordInput);
+                                            if (r.success) { setShowAdminModal(false); } else { setAdminLoginError(r.error || 'Invalid password'); }
+                                        }
+                                    }}
+                                    placeholder="Admin password..."
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                                    autoFocus
+                                />
+                                {adminLoginError && <p className="text-xs text-red-600 font-medium">{adminLoginError}</p>}
+                            </div>
+                            <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+                                <button onClick={() => setShowAdminModal(false)} className="px-5 py-2 text-gray-500 font-bold text-sm hover:text-gray-700">Cancel</button>
+                                <button
+                                    onClick={async () => {
                                         const r = await handleAdminToggle(adminPasswordInput);
                                         if (r.success) { setShowAdminModal(false); } else { setAdminLoginError(r.error || 'Invalid password'); }
-                                    }
-                                }}
-                                placeholder="Admin password..."
-                                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
-                                autoFocus
-                            />
-                            {adminLoginError && <p className="text-xs text-red-600 font-medium">{adminLoginError}</p>}
-                        </div>
-                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
-                            <button onClick={() => setShowAdminModal(false)} className="px-5 py-2 text-gray-500 font-bold text-sm hover:text-gray-700">Cancel</button>
-                            <button
-                                onClick={async () => {
-                                    const r = await handleAdminToggle(adminPasswordInput);
-                                    if (r.success) { setShowAdminModal(false); } else { setAdminLoginError(r.error || 'Invalid password'); }
-                                }}
-                                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all"
-                            >
-                                Unlock
-                            </button>
+                                    }}
+                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all"
+                                >
+                                    Unlock
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Exit Confirmation Dialog */}
-            {showExitConfirm && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6">
-                            <h3 className="text-base font-bold text-gray-900 mb-2">Unsaved Changes</h3>
-                            <p className="text-sm text-gray-600">You have changes that haven't been pushed to the database. What would you like to do?</p>
-                        </div>
-                        <div className="px-6 pb-6 flex flex-col gap-2">
-                            <button
-                                onClick={async () => { setShowExitConfirm(false); await handleAdminPush(); handleAdminExit(true); }}
-                                className="w-full px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
-                            >
-                                Push Now
-                            </button>
-                            <button
-                                onClick={() => { setShowExitConfirm(false); handleAdminExit(true); }}
-                                className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
-                            >
-                                Exit Anyway
-                            </button>
-                            <button
-                                onClick={() => setShowExitConfirm(false)}
-                                className="w-full px-4 py-2 text-gray-400 text-sm font-medium hover:text-gray-600 transition-all"
-                            >
-                                Cancel
-                            </button>
+            {
+                showExitConfirm && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="p-6">
+                                <h3 className="text-base font-bold text-gray-900 mb-2">Unsaved Changes</h3>
+                                <p className="text-sm text-gray-600">You have changes that haven't been pushed to the database. What would you like to do?</p>
+                            </div>
+                            <div className="px-6 pb-6 flex flex-col gap-2">
+                                <button
+                                    onClick={async () => { setShowExitConfirm(false); await handleAdminPush(); handleAdminExit(true); }}
+                                    className="w-full px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
+                                >
+                                    Push Now
+                                </button>
+                                <button
+                                    onClick={() => { setShowExitConfirm(false); handleAdminExit(true); }}
+                                    className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
+                                >
+                                    Exit Anyway
+                                </button>
+                                <button
+                                    onClick={() => setShowExitConfirm(false)}
+                                    className="w-full px-4 py-2 text-gray-400 text-sm font-medium hover:text-gray-600 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Save Toast */}
-            {showSaveToast && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-4 duration-300">
-                    <div className="flex items-center gap-2.5 px-5 py-3 bg-green-600 text-white rounded-xl shadow-xl font-bold text-sm">
-                        <CheckCircle className="w-4 h-4" />
-                        Pushed to database
+            {
+                showSaveToast && (
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex items-center gap-2.5 px-5 py-3 bg-green-600 text-white rounded-xl shadow-xl font-bold text-sm">
+                            <CheckCircle className="w-4 h-4" />
+                            Pushed to database
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </>
     );
 };

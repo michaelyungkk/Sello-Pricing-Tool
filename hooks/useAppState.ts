@@ -45,7 +45,8 @@ import { resolveAttribute } from '../services/mappingService';
 import { redistributeAdSpend } from '../services/adSpreadService';
 import {
     verifyPassword, pushSnapshot, pullSnapshot,
-    pushTransactions, pullTransactions
+    pushTransactions, pullTransactions, getLatestTransactionDate,
+    pullTransactionPage
 } from '../services/dbService';
 
 // Helper for recalculation
@@ -235,6 +236,11 @@ export const useAppState = () => {
     );
     const [showSaveToast, setShowSaveToast] = useState<boolean>(false);
     const [pendingFamilyConflicts, setPendingFamilyConflicts] = useState<SkuFamily[]>([]);
+    const [pushProgress, setPushProgress] = useState<number>(0);
+    const [pushTotal, setPushTotal] = useState<number>(0);
+    const [syncStep, setSyncStep] = useState<string>('');
+    const [syncProgress, setSyncProgress] = useState<number>(0);
+    const [syncTotal, setSyncTotal] = useState<number>(0);
 
     const [brandMap, setBrandMap] = useState<AttributeMap>({});
     const [categoryMap, setCategoryMap] = useState<AttributeMap>({});
@@ -961,53 +967,157 @@ export const useAppState = () => {
     const handleAdminPush = useCallback(async () => {
         if (!isAdminMode || !storedAdminPassword) return;
         setSyncStatus('pushing');
+        setPushProgress(0);
+        setPushTotal(0);
         try {
+            // Step 1: Get latest date in DB
+            const latestRes = await getLatestTransactionDate();
+            if (!latestRes.success) {
+                console.error('[push] failed to get latest date:', latestRes.error);
+                setSyncStatus('error');
+                return;
+            }
+            const latestDateInDb = latestRes.latestDate;
+            const totalInDb = latestRes.totalRows;
+
+            // Step 2: Filter to only new transactions
+            const allTransactions = salesHistory || [];
+            const newTransactions = latestDateInDb
+                ? allTransactions.filter(tx => {
+                    const txDate = (tx.date || '').split('T')[0];
+                    return txDate >= latestDateInDb;
+                })
+                : allTransactions;
+
+            console.log(`[push] DB has ${totalInDb} rows up to ${latestDateInDb || 'none'}`);
+            console.log(`[push] local total: ${allTransactions.length}, sending: ${newTransactions.length}`);
+
+            // Step 3: Calculate total chunks for progress
+            const CHUNK_SIZE = 50;
+            const txChunks: typeof newTransactions[] = [];
+            for (let i = 0; i < newTransactions.length; i += CHUNK_SIZE) {
+                txChunks.push(newTransactions.slice(i, i + CHUNK_SIZE));
+            }
+            const totalSteps = txChunks.length + 1; // +1 for master snapshot
+            setPushTotal(totalSteps);
+            setPushProgress(0);
+
+            // Step 4: Push master snapshot
             const masterRes = await pushSnapshot(
                 storedAdminPassword,
                 getSharedSnapshot()
             );
             if (!masterRes.success) { setSyncStatus('error'); return; }
+            setPushProgress(1);
 
-            const txRes = await pushTransactions(
-                storedAdminPassword,
-                salesHistory || []
-            );
-            if (!txRes.success) { setSyncStatus('error'); return; }
+            // Step 5: Push transaction chunks with progress
+            for (let i = 0; i < txChunks.length; i++) {
+                const res = await fetch('/.netlify/functions/db-push-transactions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        password: storedAdminPassword,
+                        transactions: txChunks[i],
+                        chunkIndex: i,
+                        totalChunks: txChunks.length
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    console.error('[push] chunk error:', data.error);
+                    setSyncStatus('error');
+                    return;
+                }
+                setPushProgress(i + 2); // +2 because snapshot = step 1
+            }
 
+            console.log(`[push] complete — pushed ${newTransactions.length} transactions`);
+
+            setPushProgress(0);
+            setPushTotal(0);
             setIsDirty(false);
             setShowSaveToast(true);
             setTimeout(() => setShowSaveToast(false), 3000);
             setSyncStatus('idle');
-        } catch { setSyncStatus('error'); }
+        } catch (e) {
+            console.error('[push] error:', e);
+            setSyncStatus('error');
+            setPushProgress(0);
+            setPushTotal(0);
+        }
     }, [isAdminMode, storedAdminPassword, getSharedSnapshot, salesHistory]);
 
     const handleSync = useCallback(async () => {
         setSyncStatus('syncing');
+        setSyncStep('Connecting...');
+        setSyncProgress(0);
+        setSyncTotal(0);
         try {
+            // Step 1: Pull master snapshot
             const masterRes = await pullSnapshot();
             if (!masterRes.success || !masterRes.snapshot) {
                 setSyncStatus('error');
+                setSyncStep('');
                 return;
             }
+            setSyncStep('Loading settings...');
 
+            // Check for family conflicts
             const incoming = masterRes.snapshot;
             const incomingFamilies: SkuFamily[] =
                 Array.isArray(incoming.skuFamilies)
                     ? incoming.skuFamilies : [];
             const localFamilies = skuFamilies || [];
-            const conflicts = localFamilies.filter((lf: SkuFamily) =>
-                !incomingFamilies.some((ifam: SkuFamily) => ifam.id === lf.id)
+            const conflicts = localFamilies.filter(lf =>
+                !incomingFamilies.some(ifam => ifam.id === lf.id)
             );
             if (conflicts.length > 0) {
                 setPendingFamilyConflicts(conflicts);
                 setSyncStatus('idle');
+                setSyncStep('');
                 return;
             }
 
-            const txRes = await pullTransactions();
-            const transactions = txRes.success && txRes.transactions
-                ? txRes.transactions : [];
+            // Step 2: Pull transactions page by page
+            setSyncStep('Loading transactions...');
+            const PAGE_SIZE = 2000;
+            let page = 0;
+            let allTransactions: PriceLog[] = [];
+            let totalRows = 0;
 
+            // First page also returns totalRows
+            const firstPage = await pullTransactionPage(0, PAGE_SIZE);
+            if (!firstPage.success) {
+                setSyncStatus('error');
+                setSyncStep('');
+                return;
+            }
+            totalRows = firstPage.totalRows || 0;
+            allTransactions = firstPage.transactions || [];
+            const totalPages = Math.ceil(totalRows / PAGE_SIZE);
+            setSyncTotal(totalPages);
+            setSyncProgress(1);
+            setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
+
+            // Remaining pages
+            page = 1;
+            let hasMore = firstPage.hasMore;
+            while (hasMore && page < totalPages) {
+                const pageRes = await pullTransactionPage(page, PAGE_SIZE);
+                if (!pageRes.success) {
+                    setSyncStatus('error');
+                    setSyncStep('');
+                    return;
+                }
+                allTransactions = [...allTransactions, ...(pageRes.transactions || [])];
+                hasMore = !!pageRes.hasMore;
+                setSyncProgress(page + 1);
+                setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
+                page++;
+            }
+
+            // Step 3: Apply snapshot and transactions
+            setSyncStep('Applying data...');
             const safe = normalizeRestoredState(incoming);
             const m = migrateRestoredDatabase(safe);
 
@@ -1053,7 +1163,7 @@ export const useAppState = () => {
             const adGroupsToUse = Array.isArray(m.adGroups)
                 ? m.adGroups : [];
             const redistributed = redistributeAdSpend(
-                transactions, adGroupsToUse
+                allTransactions, adGroupsToUse
             );
             setSalesHistory(redistributed);
             const finalProducts = recalculateProductMetrics(
@@ -1071,8 +1181,18 @@ export const useAppState = () => {
             const time = masterRes.lastUpdatedAt || new Date().toISOString();
             setLastSyncedAt(time);
             localStorage.setItem('sello_last_synced_at', time);
+
+            setSyncProgress(0);
+            setSyncTotal(0);
+            setSyncStep('');
             setSyncStatus('idle');
-        } catch { setSyncStatus('error'); }
+        } catch (e) {
+            console.error('[sync] error:', e);
+            setSyncStatus('error');
+            setSyncStep('');
+            setSyncProgress(0);
+            setSyncTotal(0);
+        }
     }, [skuFamilies, velocityLookback, thresholds]);
 
     const resolveConflicts = useCallback(async (keepLocal: boolean) => {
@@ -1227,6 +1347,11 @@ export const useAppState = () => {
         lastSyncedAt,
         showSaveToast,
         pendingFamilyConflicts,
+        pushProgress,
+        pushTotal,
+        syncStep,
+        syncProgress,
+        syncTotal,
         handleAdminToggle,
         handleAdminExit,
         handleAdminPush,

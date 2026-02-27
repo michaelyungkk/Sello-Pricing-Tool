@@ -47,68 +47,75 @@ export default async (req: Request) => {
                 { status: 400, headers: CORS }
             );
 
-        const BATCH_SIZE = 50;
         let upsertedCount = 0;
 
-        for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
-            const batch = transactions.slice(i, i + BATCH_SIZE);
-
-            try {
-                // Build rows with dedup keys
-                const rows = batch.map(tx => ({
-                    id: tx.id || (tx.orderId
-                        ? `${tx.sku}|${tx.orderId}`
-                        : `${tx.sku}|${(tx.date || '').split('T')[0]}|${tx.platform || 'General'}`),
-                    sku: tx.sku,
-                    date: (tx.date || '').split('T')[0],
-                    price: tx.price ?? null,
-                    velocity: tx.velocity ?? null,
-                    margin: tx.margin ?? null,
-                    profit: tx.profit ?? null,
-                    ads_spend: tx.adsSpend ?? null,
-                    raw_ads_spend: tx.rawAdsSpend ?? null,
-                    platform: tx.platform ?? null,
-                    order_id: tx.orderId ?? null,
-                    postcode: tx.postcode ?? null,
-                    logistic_partner: tx.logisticPartner ?? null,
-                    logistic_service: tx.logisticService ?? null,
-                    real_postage: tx.realPostage ?? null,
-                    real_extra_freight: tx.realExtraFreight ?? null,
-                    dedup_key: tx.orderId
-                        ? `${tx.sku}|${tx.orderId}`
-                        : `${tx.sku}|${(tx.date || '').split('T')[0]}|${tx.platform || 'General'}`
-                }));
-
-                for (const row of rows) {
-                    await sql`
-                        INSERT INTO transaction_history (
-                            id, sku, date, price, velocity, margin, profit,
-                            ads_spend, raw_ads_spend, platform, order_id,
-                            postcode, logistic_partner, logistic_service,
-                            real_postage, real_extra_freight, dedup_key, updated_at
-                        ) VALUES (
-                            ${row.id}, ${row.sku}, ${row.date},
-                            ${row.price}, ${row.velocity}, ${row.margin}, ${row.profit},
-                            ${row.ads_spend}, ${row.raw_ads_spend}, ${row.platform},
-                            ${row.order_id}, ${row.postcode}, ${row.logistic_partner},
-                            ${row.logistic_service}, ${row.real_postage}, 
-                            ${row.real_extra_freight}, ${row.dedup_key}, NOW()
-                        )
-                        ON CONFLICT (dedup_key) DO UPDATE SET
-                            price = EXCLUDED.price,
-                            velocity = EXCLUDED.velocity,
-                            margin = EXCLUDED.margin,
-                            profit = EXCLUDED.profit,
-                            ads_spend = EXCLUDED.ads_spend,
-                            raw_ads_spend = EXCLUDED.raw_ads_spend,
-                            updated_at = NOW()
-                    `;
-                    upsertedCount++;
-                }
-            } catch (batchErr) {
-                console.error(`Batch ${i}-${i + BATCH_SIZE} error:`, batchErr);
-            }
+        if (transactions.length === 0) {
+            return new Response(
+                JSON.stringify({ success: true, chunkIndex, totalChunks, upsertedCount: 0 }),
+                { status: 200, headers: CORS }
+            );
         }
+
+        // Build all rows with dedup keys
+        const rows = transactions.map((tx: any) => {
+            const dedupKey = tx.orderId
+                ? `${tx.sku}|${tx.orderId}`
+                : `${tx.sku}|${(tx.date || '').split('T')[0]}|${tx.platform || 'General'}`;
+            return {
+                id: tx.id || dedupKey,
+                sku: tx.sku,
+                date: (tx.date || '').split('T')[0],
+                price: tx.price ?? null,
+                velocity: tx.velocity ?? null,
+                margin: tx.margin ?? null,
+                profit: tx.profit ?? null,
+                ads_spend: tx.adsSpend ?? null,
+                raw_ads_spend: tx.rawAdsSpend ?? null,
+                platform: tx.platform || 'General',
+                order_id: tx.orderId ?? null,
+                postcode: tx.postcode ?? null,
+                logistic_partner: tx.logisticPartner ?? null,
+                logistic_service: tx.logisticService ?? null,
+                real_postage: tx.realPostage ?? null,
+                real_extra_freight: tx.realExtraFreight ?? null,
+                dedup_key: dedupKey
+            };
+        });
+
+        // Single batch INSERT for the entire chunk
+        const valuePlaceholders = rows.map((_: any, i: number) => {
+            const b = i * 17;
+            return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15},$${b + 16},$${b + 17},NOW())`;
+        }).join(',');
+
+        const flatValues = rows.flatMap((r: any) => [
+            r.id, r.sku, r.date, r.price, r.velocity, r.margin, r.profit,
+            r.ads_spend, r.raw_ads_spend, r.platform, r.order_id,
+            r.postcode, r.logistic_partner, r.logistic_service,
+            r.real_postage, r.real_extra_freight, r.dedup_key
+        ]);
+
+        const query = `
+            INSERT INTO transaction_history (
+                id, sku, date, price, velocity, margin, profit,
+                ads_spend, raw_ads_spend, platform, order_id,
+                postcode, logistic_partner, logistic_service,
+                real_postage, real_extra_freight, dedup_key, updated_at
+            ) VALUES ${valuePlaceholders}
+            ON CONFLICT (dedup_key) DO UPDATE SET
+                price = EXCLUDED.price,
+                velocity = EXCLUDED.velocity,
+                margin = EXCLUDED.margin,
+                profit = EXCLUDED.profit,
+                ads_spend = EXCLUDED.ads_spend,
+                raw_ads_spend = EXCLUDED.raw_ads_spend,
+                updated_at = NOW()
+        `;
+
+        await (sql as any).unsafe(query, flatValues);
+        upsertedCount = rows.length;
+
+        console.log(`[db-push-transactions] chunk ${chunkIndex}/${totalChunks} — ${upsertedCount} rows upserted`);
 
         return new Response(
             JSON.stringify({

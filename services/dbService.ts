@@ -92,3 +92,30 @@ export async function initDatabase():
         return await res.json();
     } catch { return { success: false, error: 'Network error' }; }
 }
+export async function getLatestTransactionDate():
+    Promise<{ success: boolean; latestDate: string | null; totalRows: number; error?: string }> {
+    try {
+        const res = await fetch(`${BASE}/db-get-latest-date`);
+        return await res.json();
+    } catch { return { success: false, latestDate: null, totalRows: 0, error: 'Network error' }; }
+}
+
+export async function pullTransactionPage(
+    page: number,
+    pageSize: number = 2000
+): Promise<{
+    success: boolean;
+    transactions?: PriceLog[];
+    totalRows?: number;
+    hasMore?: boolean;
+    error?: string
+}> {
+    try {
+        const res = await fetch(
+            `${BASE}/db-pull-transactions?page=${page}&pageSize=${pageSize}`
+        );
+        return await res.json();
+    } catch {
+        return { success: false, error: 'Network error' };
+    }
+}
