@@ -46,8 +46,9 @@ import { redistributeAdSpend } from '../services/adSpreadService';
 import {
     verifyPassword, pushSnapshot, pullSnapshot,
     pushTransactions, pullTransactions, getLatestTransactionDate,
-    pullTransactionPage
+    pullTransactionPage, checkVersion
 } from '../services/dbService';
+import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
 
 // Helper for recalculation
 const recalculateProductMetrics = (
@@ -1039,6 +1040,10 @@ export const useAppState = () => {
             setShowSaveToast(true);
             setTimeout(() => setShowSaveToast(false), 3000);
             setSyncStatus('idle');
+
+            // Invalidate local cache after push so team members get fresh data
+            await clearCache();
+            console.log('[push] cache cleared — team members will sync on next load');
         } catch (e) {
             console.error('[push] error:', e);
             setSyncStatus('error');
@@ -1047,13 +1052,65 @@ export const useAppState = () => {
         }
     }, [isAdminMode, storedAdminPassword, getSharedSnapshot, salesHistory]);
 
+    const applyLoadedState = useCallback((
+        snapshot: any,
+        transactions: any[]
+    ) => {
+        const safe = normalizeRestoredState(snapshot);
+        const m = migrateRestoredDatabase(safe);
+
+        setRefundHistory([]);
+        setShipmentHistory([]);
+        setPriceChangeHistory(
+            Array.isArray(m.priceChangeHistory) ? m.priceChangeHistory : []
+        );
+        setCostChangeHistory(
+            Array.isArray(m.costChangeHistory) ? m.costChangeHistory : []
+        );
+        setInventoryChangeHistory(
+            Array.isArray(m.inventoryChangeHistory) ? m.inventoryChangeHistory : []
+        );
+        setPromotions(Array.isArray(m.promotions) ? m.promotions : []);
+        setLearnedAliases(m.learnedAliases || {});
+        setPricingRules(m.pricingRules || DEFAULT_PRICING_RULES);
+        setLogisticsRules(
+            Array.isArray(m.logisticsRules) && m.logisticsRules.length > 0
+                ? m.logisticsRules : DEFAULT_LOGISTICS_RULES
+        );
+        setStrategyRules(m.strategyRules || DEFAULT_STRATEGY_RULES);
+        setSearchConfig(m.searchConfig || DEFAULT_SEARCH_CONFIG);
+        setInventoryTemplates(
+            Array.isArray(m.inventoryTemplates) ? m.inventoryTemplates : []
+        );
+        setBrandMap(m.brandMap || {});
+        setCategoryMap(m.categoryMap || {});
+        setSkuFamilies(Array.isArray(m.skuFamilies) ? m.skuFamilies : []);
+        if (m.thresholds) {
+            setThresholds(m.thresholds);
+            saveThresholdConfig(m.thresholds);
+        }
+        const adGroupsToUse = Array.isArray(m.adGroups) ? m.adGroups : [];
+        const redistributed = redistributeAdSpend(transactions, adGroupsToUse);
+        setSalesHistory(redistributed);
+        const finalProducts = recalculateProductMetrics(
+            Array.isArray(m.products) ? m.products : [],
+            redistributed,
+            velocityLookback,
+            m.thresholds || thresholds,
+            m.pricingRules,
+            m.brandMap,
+            m.categoryMap
+        );
+        setProducts(finalProducts);
+        setAdGroups(adGroupsToUse);
+    }, [velocityLookback, thresholds]);
+
     const handleSync = useCallback(async () => {
         setSyncStatus('syncing');
         setSyncStep('Connecting...');
         setSyncProgress(0);
         setSyncTotal(0);
         try {
-            // Step 1: Pull master snapshot
             const masterRes = await pullSnapshot();
             if (!masterRes.success || !masterRes.snapshot) {
                 setSyncStatus('error');
@@ -1062,14 +1119,13 @@ export const useAppState = () => {
             }
             setSyncStep('Loading settings...');
 
-            // Check for family conflicts
             const incoming = masterRes.snapshot;
             const incomingFamilies: SkuFamily[] =
                 Array.isArray(incoming.skuFamilies)
                     ? incoming.skuFamilies : [];
             const localFamilies = skuFamilies || [];
-            const conflicts = localFamilies.filter(lf =>
-                !incomingFamilies.some(ifam => ifam.id === lf.id)
+            const conflicts = localFamilies.filter((lf: SkuFamily) =>
+                !incomingFamilies.some((ifam: SkuFamily) => ifam.id === lf.id)
             );
             if (conflicts.length > 0) {
                 setPendingFamilyConflicts(conflicts);
@@ -1078,14 +1134,13 @@ export const useAppState = () => {
                 return;
             }
 
-            // Step 2: Pull transactions page by page
+            // Paginated pull
             setSyncStep('Loading transactions...');
             const PAGE_SIZE = 2000;
             let page = 0;
             let allTransactions: PriceLog[] = [];
             let totalRows = 0;
 
-            // First page also returns totalRows
             const firstPage = await pullTransactionPage(0, PAGE_SIZE);
             if (!firstPage.success) {
                 setSyncStatus('error');
@@ -1099,9 +1154,8 @@ export const useAppState = () => {
             setSyncProgress(1);
             setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
 
-            // Remaining pages
             page = 1;
-            let hasMore = firstPage.hasMore;
+            let hasMore = !!firstPage.hasMore;
             while (hasMore && page < totalPages) {
                 const pageRes = await pullTransactionPage(page, PAGE_SIZE);
                 if (!pageRes.success) {
@@ -1116,72 +1170,19 @@ export const useAppState = () => {
                 page++;
             }
 
-            // Step 3: Apply snapshot and transactions
             setSyncStep('Applying data...');
-            const safe = normalizeRestoredState(incoming);
-            const m = migrateRestoredDatabase(safe);
-
-            setRefundHistory([]);
-            setShipmentHistory([]);
-            setPriceChangeHistory(
-                Array.isArray(m.priceChangeHistory)
-                    ? m.priceChangeHistory : []
-            );
-            setCostChangeHistory(
-                Array.isArray(m.costChangeHistory)
-                    ? m.costChangeHistory : []
-            );
-            setInventoryChangeHistory(
-                Array.isArray(m.inventoryChangeHistory)
-                    ? m.inventoryChangeHistory : []
-            );
-            setPromotions(
-                Array.isArray(m.promotions) ? m.promotions : []
-            );
-            setLearnedAliases(m.learnedAliases || {});
-            setPricingRules(m.pricingRules || DEFAULT_PRICING_RULES);
-            setLogisticsRules(
-                Array.isArray(m.logisticsRules) && m.logisticsRules.length > 0
-                    ? m.logisticsRules : DEFAULT_LOGISTICS_RULES
-            );
-            setStrategyRules(m.strategyRules || DEFAULT_STRATEGY_RULES);
-            setSearchConfig(m.searchConfig || DEFAULT_SEARCH_CONFIG);
-            setInventoryTemplates(
-                Array.isArray(m.inventoryTemplates)
-                    ? m.inventoryTemplates : []
-            );
-            setBrandMap(m.brandMap || {});
-            setCategoryMap(m.categoryMap || {});
-            setSkuFamilies(
-                Array.isArray(m.skuFamilies) ? m.skuFamilies : []
-            );
-            if (m.thresholds) {
-                setThresholds(m.thresholds);
-                saveThresholdConfig(m.thresholds);
-            }
-
-            const adGroupsToUse = Array.isArray(m.adGroups)
-                ? m.adGroups : [];
-            const redistributed = redistributeAdSpend(
-                allTransactions, adGroupsToUse
-            );
-            setSalesHistory(redistributed);
-            const finalProducts = recalculateProductMetrics(
-                Array.isArray(m.products) ? m.products : [],
-                redistributed,
-                velocityLookback,
-                m.thresholds || thresholds,
-                m.pricingRules,
-                m.brandMap,
-                m.categoryMap
-            );
-            setProducts(finalProducts);
-            setAdGroups(adGroupsToUse);
+            applyLoadedState(incoming, allTransactions);
 
             const time = masterRes.lastUpdatedAt || new Date().toISOString();
             setLastSyncedAt(time);
             localStorage.setItem('sello_last_synced_at', time);
 
+            // Save to local cache with current version
+            const versionRes = await checkVersion();
+            const version = versionRes.lastPushAt || time;
+            await saveToCache(incoming, allTransactions, version);
+
+            console.log(`[sync] complete — cached version: ${version}`);
             setSyncProgress(0);
             setSyncTotal(0);
             setSyncStep('');
@@ -1193,7 +1194,7 @@ export const useAppState = () => {
             setSyncProgress(0);
             setSyncTotal(0);
         }
-    }, [skuFamilies, velocityLookback, thresholds]);
+    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState]);
 
     const resolveConflicts = useCallback(async (keepLocal: boolean) => {
         const res = await pullSnapshot();
@@ -1209,11 +1210,42 @@ export const useAppState = () => {
         await handleSync();
     }, [pendingFamilyConflicts, handleSync]);
 
-    // Auto-load: pull from DB on first mount if no local data
+    const initRanRef = useRef(false);
+
     useEffect(() => {
-        if (!products || products.length === 0) {
+        if (initRanRef.current) return;
+        initRanRef.current = true;
+
+        const initApp = async () => {
+            // Step 1: Check what version the DB has (fast, tiny request)
+            const versionRes = await checkVersion();
+            const dbVersion = versionRes.success ? versionRes.lastPushAt : null;
+            const localVersion = getCachedVersion();
+
+            console.log(`[init] DB version: ${dbVersion}, local version: ${localVersion}`);
+
+            // Step 2: If versions match, load from local cache instantly
+            if (dbVersion && localVersion && dbVersion === localVersion) {
+                console.log('[init] versions match — loading from cache');
+                setSyncStatus('syncing');
+                const cache = await loadFromCache();
+                if (cache) {
+                    applyLoadedState(cache.snapshot, cache.transactions);
+                    const time = localStorage.getItem('sello_last_synced_at')
+                        || cache.cachedAt;
+                    setLastSyncedAt(time);
+                    setSyncStatus('idle');
+                    console.log('[init] loaded from cache instantly');
+                    return;
+                }
+            }
+
+            // Step 3: Versions don't match or no cache — full sync
+            console.log('[init] syncing from database');
             handleSync();
-        }
+        };
+
+        initApp();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

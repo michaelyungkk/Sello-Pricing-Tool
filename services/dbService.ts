@@ -119,3 +119,12 @@ export async function pullTransactionPage(
         return { success: false, error: 'Network error' };
     }
 }
+export async function checkVersion():
+    Promise<{ success: boolean; lastPushAt: string | null; error?: string }> {
+    try {
+        const res = await fetch(`${BASE}/db-check-version`);
+        return await res.json();
+    } catch {
+        return { success: false, lastPushAt: null, error: 'Network error' };
+    }
+}
