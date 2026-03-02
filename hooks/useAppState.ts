@@ -522,12 +522,14 @@ export const useAppState = () => {
         categoryMap,
         skuFamilies,
         adGroups,
-        inventoryTemplates
+        inventoryTemplates,
+        refundHistory,
+        shipmentHistory
     }), [products, priceChangeHistory, costChangeHistory,
         inventoryChangeHistory, promotions, learnedAliases,
         pricingRules, logisticsRules, strategyRules, searchConfig,
         thresholds, brandMap, categoryMap, skuFamilies, adGroups,
-        inventoryTemplates]);
+        inventoryTemplates, refundHistory, shipmentHistory]);
 
     const handleBackup = useCallback(() => {
         const data = {
@@ -994,7 +996,7 @@ export const useAppState = () => {
             console.log(`[push] local total: ${allTransactions.length}, sending: ${newTransactions.length}`);
 
             // Step 3: Calculate total chunks for progress
-            const CHUNK_SIZE = 50;
+            const CHUNK_SIZE = 500;
             const txChunks: typeof newTransactions[] = [];
             for (let i = 0; i < newTransactions.length; i += CHUNK_SIZE) {
                 txChunks.push(newTransactions.slice(i, i + CHUNK_SIZE));
@@ -1059,8 +1061,12 @@ export const useAppState = () => {
         const safe = normalizeRestoredState(snapshot);
         const m = migrateRestoredDatabase(safe);
 
-        setRefundHistory([]);
-        setShipmentHistory([]);
+        setRefundHistory(
+            Array.isArray(m.refundHistory) ? m.refundHistory : []
+        );
+        setShipmentHistory(
+            Array.isArray(m.shipmentHistory) ? m.shipmentHistory : []
+        );
         setPriceChangeHistory(
             Array.isArray(m.priceChangeHistory) ? m.priceChangeHistory : []
         );
