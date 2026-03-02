@@ -996,7 +996,7 @@ export const useAppState = () => {
             console.log(`[push] local total: ${allTransactions.length}, sending: ${newTransactions.length}`);
 
             // Step 3: Calculate total chunks for progress
-            const CHUNK_SIZE = 500;
+            const CHUNK_SIZE = 200;
             const txChunks: typeof newTransactions[] = [];
             for (let i = 0; i < newTransactions.length; i += CHUNK_SIZE) {
                 txChunks.push(newTransactions.slice(i, i + CHUNK_SIZE));
