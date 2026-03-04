@@ -11,12 +11,12 @@ import { PriceMatrixTab } from './tabs/PriceMatrixTab';
 import { ProductPerformanceTrendTab } from './tabs/ProductPerformanceTrendTab';
 import { PlatformComparisonTab } from './tabs/PlatformComparisonTab';
 import { FamilyGroupsTab } from './tabs/FamilyGroupsTab';
-
+import { TabSwitcher } from '../common/TabSwitcher';
 import { AliasDrawer } from './parts/AliasDrawer';
 import { TagsDrawer } from './parts/TagsDrawer';
 import { buildWindow } from '../../services/dateWindow';
 import { getTodayKeyMelbourne } from '../../services/dateUtils';
-import { createPortal } from 'react-dom';
+import { ContextBar } from '../common/ContextBar';
 import { SkuFamily } from '../../types';
 
 interface ProductManagementPageContainerProps {
@@ -71,7 +71,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
     const [timeWindow, setTimeWindow] = useState<'7D' | '14D' | '30D' | '60D' | 'ALL' | 'CUSTOM'>('30D');
     const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
     const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
-    const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+
 
     const handleViewShipments = (sku: string) => {
         setShipmentSearchTags([sku]);
@@ -145,97 +145,49 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
         <div className="max-w-full mx-auto space-y-6 pb-10 h-full flex flex-col">
             {/* Top Bar matching Marketplace View */}
             <div className="flex flex-wrap gap-4 items-center justify-between">
-                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
-                    <button
-                        onClick={() => setActiveTab('performance')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'performance' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <Activity className="w-4 h-4" />
-                        Performance Trend
-                    </button>
+                <TabSwitcher
+                    tabs={[
+                        { key: 'performance', label: 'Performance Trend', icon: Activity },
+                        { key: 'catalog', label: 'Master Catalogue', icon: List },
+                        { key: 'shipments', label: 'Shipments', icon: Ship },
+                        { key: 'returns', label: 'Returns Management', icon: RotateCcw },
+                        { key: 'pricing', label: 'Price Matrix', icon: DollarSign },
+                        { key: 'comparison', label: 'Platform Comparison', icon: Columns },
+                        { key: 'family-groups', label: 'Family Groups', icon: Layers },
+                    ]}
+                    activeTab={activeTab}
+                    onChange={(key) => setActiveTab(key as Tab)}
+                    size="sm"
+                />
 
-                    <button
-                        onClick={() => setActiveTab('catalog')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'catalog' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <List className="w-4 h-4" />
-                        Master Catalogue
-                    </button>
-
-                    <button
-                        onClick={() => setActiveTab('shipments')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'shipments' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <Ship className="w-4 h-4" />
-                        Shipments
-                    </button>
-
-                    <button
-                        onClick={() => setActiveTab('returns')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'returns' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <RotateCcw className="w-4 h-4" />
-                        Returns Management
-                    </button>
-
-                    <button
-                        onClick={() => setActiveTab('pricing')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'pricing' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <DollarSign className="w-4 h-4" />
-                        Price Matrix
-                    </button>
-
-                    <button
-                        onClick={() => setActiveTab('comparison')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'comparison' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <Columns className="w-4 h-4" />
-                        Platform Comparison
-                    </button>
-
-                    <button
-                        onClick={() => setActiveTab('family-groups')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'family-groups' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <Layers className="w-4 h-4" />
-                        Family Groups
-                    </button>
-                </div>
-
-                <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-                        <input
-                            type="checkbox"
-                            checked={deductRefunds}
-                            onChange={e => setDeductRefunds(e.target.checked)}
-                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
-                        />
-                        <div className="flex items-center gap-1.5">
-                            <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
-                            <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds/Resends</span>
-                        </div>
-                    </label>
-                </div>
             </div>
 
-            {/* Global Context Control (Time Window) - Reused from Platform Management */}
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 animate-in fade-in">
-                <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Time Window</span>
-                    <div className="flex bg-gray-100 p-1 rounded-lg">
-                        {(['7D', '14D', '30D', '60D'] as const).map(w => (
-                            <button key={w} onClick={() => setTimeWindow(w)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === w ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>{w}</button>
-                        ))}
-                        <button onClick={() => setTimeWindow('ALL')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === 'ALL' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>All Time</button>
-                        <button onClick={() => setIsCustomDateModalOpen(true)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeWindow === 'CUSTOM' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}><Calendar className="w-3 h-3" /> Custom</button>
+            {/* Global Context Control — only relevant for data-driven tabs */}
+            {(activeTab === 'performance' || activeTab === 'comparison') && <ContextBar
+                timeOptions={[
+                    { key: '7D', label: '7D' },
+                    { key: '14D', label: '14D' },
+                    { key: '30D', label: '30D' },
+                    { key: '60D', label: '60D' },
+                    { key: 'ALL', label: 'All Time' },
+                    { key: 'CUSTOM', label: 'Custom' }
+                ]}
+                activeWindow={timeWindow}
+                onWindowChange={(key) => setTimeWindow(key as any)}
+                periodLabel={periodLabel}
+                customStart={customStart}
+                customEnd={customEnd}
+                onCustomStartChange={setCustomStart}
+                onCustomEndChange={setCustomEnd}
+            >
+                <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                    <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300" />
+                    <div className="flex items-center gap-1.5">
+                        <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
+                        <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
                     </div>
-                </div>
-                <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
-                    <span className="text-xs text-gray-400 font-medium">Analyzing Period:</span>
-                    <span className="text-sm font-bold text-indigo-600">{periodLabel}</span>
-                </div>
-            </div>
+                </label>
+            </ContextBar>}
 
             <div className="flex-1 min-h-0 relative">
                 {activeTab === 'performance' && (
@@ -247,6 +199,8 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         deductRefunds={deductRefunds}
                         themeColor={themeColor}
                         onDeepDive={onDeepDive}
+                        startKey={dateWindow.startKey}
+                        endKey={dateWindow.endKey}
                     />
                 )}
 
@@ -307,6 +261,8 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         themeColor={themeColor}
                         deductRefunds={deductRefunds}
                         refundHistory={refundHistory}
+                        startKey={dateWindow.startKey}
+                        endKey={dateWindow.endKey}
                     />
                 )}
 
@@ -354,28 +310,6 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                 />
             )}
 
-            {/* Custom Date Modal */}
-            {isCustomDateModalOpen && createPortal(
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsCustomDateModalOpen(false)}>
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-gray-200 p-6" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Select Custom Range</h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Start Date</label>
-                                <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">End Date</label>
-                                <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
-                            </div>
-                        </div>
-                        <div className="mt-6 flex justify-end gap-3">
-                            <button onClick={() => setIsCustomDateModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
-                            <button onClick={() => { setTimeWindow('CUSTOM'); setIsCustomDateModalOpen(false); }} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700">Apply Range</button>
-                        </div>
-                    </div>
-                </div>, document.body
-            )}
         </div>
     );
 };

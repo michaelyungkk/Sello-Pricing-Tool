@@ -55,6 +55,62 @@ export default async (req: Request) => {
         `;
 
         await sql`
+            CREATE TABLE IF NOT EXISTS refund_history (
+                id TEXT PRIMARY KEY,
+                sku TEXT NOT NULL,
+                raw_sku TEXT,
+                date TEXT NOT NULL,
+                amount NUMERIC,
+                freight_amount NUMERIC,
+                quantity NUMERIC,
+                platform TEXT,
+                reason TEXT,
+                customer_reason TEXT,
+                platform_reason TEXT,
+                comments TEXT,
+                comment_en TEXT,
+                comment_cn TEXT,
+                remarks TEXT,
+                order_id TEXT,
+                order_type TEXT,
+                resend_base_order_id TEXT,
+                status TEXT,
+                logistic_partner TEXT,
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        `;
+
+        await sql`
+            CREATE TABLE IF NOT EXISTS shipment_history (
+                id TEXT PRIMARY KEY,
+                sku TEXT NOT NULL,
+                product_name TEXT,
+                timestamp BIGINT,
+                date TEXT NOT NULL,
+                quantity NUMERIC,
+                source TEXT,
+                service TEXT,
+                cost NUMERIC,
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        `;
+
+        await sql`
+            CREATE INDEX IF NOT EXISTS idx_refund_sku 
+            ON refund_history(sku)
+        `;
+
+        await sql`
+            CREATE INDEX IF NOT EXISTS idx_refund_date 
+            ON refund_history(date)
+        `;
+
+        await sql`
+            CREATE INDEX IF NOT EXISTS idx_shipment_sku 
+            ON shipment_history(sku)
+        `;
+
+        await sql`
             INSERT INTO app_snapshot (id, data, updated_at, updated_by)
             VALUES (1, '{}', NOW(), 'system')
             ON CONFLICT (id) DO NOTHING

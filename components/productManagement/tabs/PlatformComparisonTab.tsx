@@ -2,13 +2,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PriceLog, RefundLog } from '../../../types';
-import { TagSearchInput } from '../../TagSearchInput';
+import { FilterBar } from '../../common/FilterBar';
 import { Columns, ChevronDown, CheckSquare, Square, Download, X, GripVertical, Settings2, ArrowUp, ArrowDown, Plus, Trash2, ListFilter, Trophy } from 'lucide-react';
 import { asDateKey, isDateKeyBetween } from '../../../services/dateUtils';
 import { calcRevenue, calcProfit, calcUnits } from '../../../services/metrics';
 import { formatPct, formatNumber, formatMoney } from '../../../utils/format';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { GradeBadge } from '../../GradeBadge';
+import AuditPanel from '../../AuditPanel';
 import { hexToRgb } from '../../../utils/color';
 import * as XLSX from 'xlsx';
 
@@ -20,6 +21,8 @@ interface PlatformComparisonTabProps {
     themeColor: string;
     deductRefunds: boolean;
     refundHistory: RefundLog[];
+    startKey: string;
+    endKey: string;
 }
 
 interface SortRule {
@@ -62,8 +65,8 @@ const MultiSelectDropdown = ({ label, options, selected, onChange, themeColor, i
         return map[opt] || opt;
     };
 
-    const displayText = label === 'Columns' 
-        ? `${selected.length} Columns` 
+    const displayText = label === 'Columns'
+        ? `${selected.length} Columns`
         : (selected.length === options.length ? 'All Platforms' : `${selected.length} Platforms`);
 
     return (
@@ -145,7 +148,7 @@ const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platfor
 
     return (
         <div className="relative" ref={dropdownRef}>
-             <button
+            <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-indigo-300 transition-colors shadow-sm min-w-[160px]"
             >
@@ -178,15 +181,15 @@ const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platfor
                     </div>
 
                     <div className="flex gap-2 border-t border-gray-100 pt-3">
-                        <select 
-                            value={addKey} 
+                        <select
+                            value={addKey}
                             onChange={(e) => setAddKey(e.target.value)}
                             className="flex-1 text-xs border border-gray-300 rounded-lg p-1.5 focus:ring-2 focus:ring-indigo-500"
                         >
                             <option value="">Add Criteria...</option>
                             {allOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                         </select>
-                        <button 
+                        <button
                             onClick={handleAdd}
                             disabled={!addKey}
                             className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
@@ -200,40 +203,44 @@ const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platfor
     );
 };
 
-export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({ 
-    products, 
-    priceHistoryMap, 
-    pricingRules, 
-    dateWindow, 
-    themeColor, 
+export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
+    products,
+    themeColor,
     deductRefunds,
-    refundHistory
+    refundHistory,
+    startKey,
+    endKey,
+    pricingRules,
+    priceHistoryMap,
+    dateWindow
 }) => {
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
-    
+    const [isAuditVisible, setIsAuditVisible] = useState(false);
+
     // Updated Sort State to support hierarchy
     const [sortRules, setSortRules] = useState<SortRule[]>([{ key: 'totalQty', dir: 'desc' }]);
-    
+
     const [draggedPlatform, setDraggedPlatform] = useState<string | null>(null);
     const [visibleColumns, setVisibleColumns] = useState<string[]>(['qty', 'share', 'pm']);
     const availableColumns = ['qty', 'share', 'pm', 'avgPrice', 'revenue', 'profit'];
-    
+
     // Hover State
     const [hoveredRow, setHoveredRow] = useState<any | null>(null);
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
 
+    const platformOptions = useMemo(() => Object.keys(pricingRules).sort(), [pricingRules]);
+
     useEffect(() => {
-        const allPlatforms = Object.keys(pricingRules).sort();
-        if (selectedPlatforms.length === 0 && allPlatforms.length > 0) {
-            setSelectedPlatforms(allPlatforms);
+        if (selectedPlatforms.length === 0 && platformOptions.length > 0) {
+            setSelectedPlatforms(platformOptions);
         }
-    }, [pricingRules]);
+    }, [platformOptions]);
 
     const { processedData, totals } = useMemo(() => {
         const { startKey, endKey } = dateWindow;
-        
+
         // 1. Pre-process Refunds for lookup (Ex-VAT)
         const refundLookup = new Map<string, Map<string, number>>(); // SKU -> Platform -> TotalRefundAmount(ExVAT)
         if (deductRefunds) {
@@ -255,9 +262,9 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         products.forEach(product => {
             const matchesTerm = (term: string) => {
                 const t = term.toLowerCase();
-                return product.sku.toLowerCase().includes(t) || 
-                       product.name.toLowerCase().includes(t) ||
-                       product.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
+                return product.sku.toLowerCase().includes(t) ||
+                    product.name.toLowerCase().includes(t) ||
+                    product.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
             };
 
             if (searchTags.length > 0) {
@@ -268,7 +275,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
             }
 
             const skuLogs = priceHistoryMap.get(product.sku) || [];
-            
+
             const platformStats: Record<string, { qty: number, revenue: number, profit: number }> = {};
             let productTotalQty = 0;
 
@@ -281,26 +288,35 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                 if (!selectedPlatforms.includes(pKey)) return;
 
                 const dKey = asDateKey(log.date);
-                if (dKey && isDateKeyBetween(dKey, startKey, endKey)) {
+                if (dKey && isDateKeyBetween(dKey, (dateWindow as any).startKey, (dateWindow as any).endKey)) {
                     const stats = platformStats[pKey];
                     stats.qty += calcUnits(log);
-                    stats.revenue += calcRevenue(log); // Ex-VAT Revenue accumulator
-                    stats.profit += calcProfit(log); // Ex-VAT Profit accumulator
+                    stats.revenue += calcRevenue(log);
+                    stats.profit += calcProfit(log);
                     productTotalQty += calcUnits(log);
                 }
             });
-            
+
+
             // Deduct Refunds from Profit (Cost of Refund)
             if (deductRefunds && refundLookup.has(product.sku)) {
-                 const platMap = refundLookup.get(product.sku)!;
-                 selectedPlatforms.forEach(p => {
-                     if (platMap.has(p)) {
-                         const refundVal = platMap.get(p)!;
-                         platformStats[p].profit -= refundVal;
-                     }
-                 });
+                const platMap = refundLookup.get(product.sku)!;
+                selectedPlatforms.forEach(p => {
+                    if (platMap.has(p)) {
+                        const refundVal = platMap.get(p)!;
+                        platformStats[p].profit -= refundVal;
+                    }
+                });
             }
-            
+
+            let productTotalRevenue = 0;
+            let productTotalProfit = 0;
+            selectedPlatforms.forEach(p => {
+                const stats = platformStats[p];
+                productTotalRevenue += (stats.revenue * VAT_MULTIPLIER);
+                productTotalProfit += (stats.profit * VAT_MULTIPLIER);
+            });
+
             if (productTotalQty === 0 && searchQuery === '' && searchTags.length === 0) return;
 
             grandTotalQty += productTotalQty;
@@ -317,8 +333,8 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                 const stats = platformStats[p];
                 // Apply VAT multiplier for display values
                 const revenueInc = stats.revenue * VAT_MULTIPLIER;
-                const profitInc = stats.profit * VAT_MULTIPLIER; 
-                
+                const profitInc = stats.profit * VAT_MULTIPLIER;
+
                 const share = productTotalQty > 0 ? (stats.qty / productTotalQty) * 100 : 0;
                 const margin = revenueInc > 0 ? (profitInc / revenueInc) * 100 : 0;
                 const avgPrice = stats.qty > 0 ? revenueInc / stats.qty : 0;
@@ -331,6 +347,9 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                 row[`${p}_profit`] = profitInc;
             });
 
+            row.totalRevenue = productTotalRevenue;
+            row.totalProfit = productTotalProfit;
+
             rows.push(row);
         });
 
@@ -339,7 +358,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
             for (const rule of sortRules) {
                 const valA = a[rule.key];
                 const valB = b[rule.key];
-                
+
                 // Handle non-existent keys safely
                 if (valA === undefined && valB === undefined) continue;
                 if (valA === undefined) return 1;
@@ -389,7 +408,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
     const handleSort = (key: string, e?: React.MouseEvent) => {
         setSortRules(prev => {
             const existingIdx = prev.findIndex(r => r.key === key);
-            
+
             // If Shift key is held, we are modifying the hierarchy
             if (e && e.shiftKey) {
                 if (existingIdx >= 0) {
@@ -402,7 +421,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                     return [...prev, { key, dir: 'desc' }];
                 }
             }
-            
+
             // Single click: Clear others and sort by this
             if (prev.length === 1 && prev[0].key === key) {
                 return [{ key, dir: prev[0].dir === 'asc' ? 'desc' : 'asc' }];
@@ -417,7 +436,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
     };
 
     const handleDragOver = (e: React.DragEvent, platform: string) => {
-        e.preventDefault(); 
+        e.preventDefault();
         if (draggedPlatform === platform) return;
         e.dataTransfer.dropEffect = "move";
     };
@@ -439,11 +458,11 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
     // Row Hover Logic for Winner Calculation
     const getWinnerInfo = (row: any) => {
         if (!row || sortRules.length === 0) return null;
-        
+
         // Infer metric from primary sort key
         const primaryKey = sortRules[0].key;
         let metric = 'qty'; // Default
-        
+
         if (primaryKey.includes('_revenue')) metric = 'revenue';
         else if (primaryKey.includes('_profit')) metric = 'profit';
         else if (primaryKey.includes('_pm')) metric = 'pm';
@@ -482,7 +501,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         revenue: { label: 'Rev £', key: 'revenue', align: 'right' },
         profit: { label: 'Net £', key: 'profit', align: 'right' },
     };
-    
+
     // Sort Indicator Helper
     const getSortIndicator = (key: string) => {
         const index = sortRules.findIndex(r => r.key === key);
@@ -499,53 +518,72 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
     return (
         <div className="space-y-6 h-full flex flex-col">
             {/* Controls */}
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row items-center gap-4 z-40 relative">
-                <div className="flex-1 w-full">
-                    <TagSearchInput 
-                        tags={searchTags}
-                        onTagsChange={setSearchTags}
-                        onInputChange={setSearchQuery}
-                        placeholder="Search SKU or Product Name..."
-                        themeColor={themeColor}
+            <FilterBar
+                showAudit
+                auditActive={isAuditVisible}
+                onAuditToggle={() => setIsAuditVisible(v => !v)}
+                searchValue={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Search SKU or Product Name..."
+                multiSelects={[
+                    {
+                        key: 'platform',
+                        label: 'Platforms',
+                        options: platformOptions,
+                        selected: selectedPlatforms,
+                        onChange: setSelectedPlatforms
+                    }
+                ]}
+                rightSlot={
+                    <div className="flex items-center gap-4">
+                        <SortConfigDropdown
+                            sortRules={sortRules}
+                            setSortRules={setSortRules}
+                            availableColumns={visibleColumns}
+                            platforms={selectedPlatforms}
+                            themeColor={themeColor}
+                        />
+                        <MultiSelectDropdown
+                            label="Columns"
+                            options={availableColumns}
+                            selected={visibleColumns}
+                            onChange={setVisibleColumns}
+                            themeColor={themeColor}
+                            icon={Settings2}
+                        />
+                        <button
+                            onClick={handleExport}
+                            className="flex items-center gap-2 px-4 py-2 text-white rounded-lg shadow-md hover:brightness-110 transition-all font-bold text-sm"
+                            style={{ backgroundColor: themeColor }}
+                        >
+                            <Download className="w-4 h-4" /> Export
+                        </button>
+                    </div>
+                }
+            />
+
+            {isAuditVisible && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                    <AuditPanel
+                        title="Platform Comparison Audit"
+                        startKey={dateWindow.startKey}
+                        endKey={dateWindow.endKey}
+                        rows={processedData}
+                        getDateKey={() => null}
+                        getRevenue={(row: any) => row.totalRevenue}
+                        getQty={(row: any) => row.totalQty}
+                        getProfit={(row: any) => row.totalProfit}
+                        getAdSpend={() => 0}
                     />
                 </div>
-                <SortConfigDropdown 
-                    sortRules={sortRules} 
-                    setSortRules={setSortRules} 
-                    availableColumns={visibleColumns} 
-                    platforms={selectedPlatforms}
-                    themeColor={themeColor} 
-                />
-                <MultiSelectDropdown 
-                    label="Columns"
-                    options={availableColumns}
-                    selected={visibleColumns}
-                    onChange={setVisibleColumns}
-                    themeColor={themeColor}
-                    icon={Settings2}
-                />
-                <MultiSelectDropdown 
-                    label="Platforms"
-                    options={Object.keys(pricingRules).sort()}
-                    selected={selectedPlatforms}
-                    onChange={setSelectedPlatforms}
-                    themeColor={themeColor}
-                />
-                <button 
-                    onClick={handleExport}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition-colors font-bold text-sm"
-                    style={{ backgroundColor: themeColor }}
-                >
-                    <Download className="w-4 h-4" /> Export
-                </button>
-            </div>
+            )}
 
             {/* Tooltip Portal */}
             {hoveredWinner && createPortal(
-                <div 
+                <div
                     className="fixed pointer-events-none z-[9999] bg-gray-900/90 backdrop-blur text-white px-3 py-1.5 rounded-lg shadow-xl text-xs flex items-center gap-2 animate-in fade-in zoom-in duration-200 border border-gray-700/50"
-                    style={{ 
-                        left: cursorPos.x, 
+                    style={{
+                        left: cursorPos.x,
                         top: cursorPos.y,
                         transform: `translate(${cursorPos.x > window.innerWidth - 300 ? 'calc(-100% - 12px)' : '12px'}, ${cursorPos.y > window.innerHeight - 100 ? 'calc(-100% - 12px)' : '12px'})`
                     }}
@@ -581,8 +619,8 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                 {/* Platform Columns Grouped - Draggable */}
                                 {selectedPlatforms.map(p => (
                                     <React.Fragment key={p}>
-                                        <th 
-                                            className={`p-3 border-b border-gray-200 text-center bg-gray-50 border-r border-gray-200 cursor-move hover:bg-gray-100 transition-colors ${draggedPlatform === p ? 'opacity-50 border-dashed border-2 border-indigo-300' : ''}`} 
+                                        <th
+                                            className={`p-3 border-b border-gray-200 text-center bg-gray-50 border-r border-gray-200 cursor-move hover:bg-gray-100 transition-colors ${draggedPlatform === p ? 'opacity-50 border-dashed border-2 border-indigo-300' : ''}`}
                                             colSpan={visibleColumns.length}
                                             draggable
                                             onDragStart={(e) => handleDragStart(e, p)}
@@ -608,14 +646,14 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                             const headerBgStyle = rgb ? { backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)` } : {};
 
                                             return (
-                                            <th 
-                                                key={`${p}-${col}`}
-                                                className="px-2 py-1 text-right border-b border-gray-200 bg-gray-50/50 text-gray-500 cursor-pointer hover:bg-gray-100 min-w-[60px] border-r border-gray-100 last:border-gray-200" 
-                                                onClick={(e) => handleSort(`${p}_${colConfig[col].key}`, e)}
-                                                style={headerBgStyle}
-                                            >
-                                                {colConfig[col].label} {getSortIndicator(`${p}_${colConfig[col].key}`)}
-                                            </th>
+                                                <th
+                                                    key={`${p}-${col}`}
+                                                    className="px-2 py-1 text-right border-b border-gray-200 bg-gray-50/50 text-gray-500 cursor-pointer hover:bg-gray-100 min-w-[60px] border-r border-gray-100 last:border-gray-200"
+                                                    onClick={(e) => handleSort(`${p}_${colConfig[col].key}`, e)}
+                                                    style={headerBgStyle}
+                                                >
+                                                    {colConfig[col].label} {getSortIndicator(`${p}_${colConfig[col].key}`)}
+                                                </th>
                                             );
                                         })}
                                     </React.Fragment>
@@ -625,8 +663,8 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                         <tbody className="divide-y divide-gray-100 bg-white">
                             {processedData.length > 0 ? (
                                 processedData.map((row) => (
-                                    <tr 
-                                        key={row.id} 
+                                    <tr
+                                        key={row.id}
                                         className="hover:bg-gray-50 transition-colors"
                                         onMouseEnter={(e) => { setHoveredRow(row); setCursorPos({ x: e.clientX, y: e.clientY }); }}
                                         onMouseMove={(e) => setCursorPos({ x: e.clientX, y: e.clientY })}
@@ -649,17 +687,17 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                         {/* Platform Cells */}
                                         {selectedPlatforms.map(p => {
                                             const qty = row[`${p}_qty`];
-                                            
+
                                             // Pre-calc visual states
                                             const pm = row[`${p}_pm`];
-                                            const pmClass = pm < 0 ? 'text-red-600 bg-red-50' : pm >= 15 ? 'text-green-600 bg-green-50' : 'text-amber-600';
+                                            const pmClass = pm < 0 ? 'text-red-500 bg-red-50' : pm >= 15 ? 'text-emerald-600 bg-emerald-50' : 'text-amber-500';
                                             const hasActivity = qty > 0;
-                                            
+
                                             // Platform Tint
                                             const platformColor = pricingRules[p]?.color || '#9ca3af';
                                             const rgb = hexToRgb(platformColor);
                                             const bgStyle = rgb ? { backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)` } : {};
-                                            
+
                                             const hasPmBg = pm < 0 || pm >= 15;
 
                                             return (
@@ -675,7 +713,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('pm') && (
-                                                        <td 
+                                                        <td
                                                             className={`px-2 py-3 text-right text-xs font-bold border-r border-gray-50 ${hasActivity ? pmClass : 'text-gray-300'}`}
                                                             style={hasPmBg ? {} : bgStyle}
                                                         >
@@ -693,7 +731,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('profit') && (
-                                                        <td className={`px-2 py-3 text-right text-xs font-bold border-r border-gray-100 ${row[`${p}_profit`] >= 0 ? 'text-green-600' : 'text-red-600'}`} style={bgStyle}>
+                                                        <td className={`px-2 py-3 text-right text-xs font-bold border-r border-gray-100 ${row[`${p}_profit`] >= 0 ? 'text-emerald-600' : 'text-red-500'}`} style={bgStyle}>
                                                             {hasActivity ? formatMoney(row[`${p}_profit`], 0) : '-'}
                                                         </td>
                                                     )}

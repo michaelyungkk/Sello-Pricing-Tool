@@ -1,5 +1,5 @@
 
-import { Product, PricingRules, HistoryPayload, ShipmentLog } from '../types';
+import { Product, PricingRules, HistoryPayload } from '../types';
 import { asDateKeyNaive } from '../services/dateUtils';
 import { getCanonicalSku } from '../services/skuNormalization';
 
@@ -93,7 +93,7 @@ self.onmessage = (e: MessageEvent) => {
         let maxDate = new Date(0);
         let hasDates = false;
 
-        const shipmentLogs: ShipmentLog[] = [];
+        const shipmentLogs: any[] = [];
 
         const aliasMap: Record<string, string> = {};
         products.forEach((p: Product) => {

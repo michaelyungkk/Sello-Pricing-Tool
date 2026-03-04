@@ -85,6 +85,38 @@ export async function clearTransactions(password: string):
     } catch { return { success: false, error: 'Network error' }; }
 }
 
+export async function pushRefundsAndShipments(
+    password: string,
+    refunds: any[],
+    shipments: any[]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const res = await fetch(`${BASE}/db-push-refunds`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password, refunds, shipments })
+        });
+        return await res.json();
+    } catch {
+        return { success: false, error: 'Network error' };
+    }
+}
+
+export async function pullRefundsAndShipments():
+    Promise<{
+        success: boolean;
+        refunds?: any[];
+        shipments?: any[];
+        error?: string
+    }> {
+    try {
+        const res = await fetch(`${BASE}/db-pull-refunds`);
+        return await res.json();
+    } catch {
+        return { success: false, error: 'Network error' };
+    }
+}
+
 export async function initDatabase():
     Promise<{ success: boolean; error?: string }> {
     try {

@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { TagSearchInput } from '../../TagSearchInput';
 import { GradeBadge } from '../../GradeBadge';
+import { FilterBar } from '../../common/FilterBar';
 import { SortableHeader } from '../../common/SortableHeader';
 import { SortState } from '../../../utils/tableSort';
 import { Eye, EyeOff, AlertCircle, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Layers } from 'lucide-react';
@@ -27,6 +27,9 @@ interface RecommendationsTableProps {
     setSearchTags: (t: string[]) => void;
     setSearchQuery: (q: string) => void;
     themeColor: string;
+    showAudit?: boolean;
+    auditActive?: boolean;
+    onAuditToggle?: () => void;
     skuFamilies: SkuFamily[];
     products: Product[];
 }
@@ -49,6 +52,9 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
     setSearchTags,
     setSearchQuery,
     themeColor,
+    showAudit,
+    auditActive,
+    onAuditToggle,
     skuFamilies = [],
     products = []
 }) => {
@@ -80,37 +86,38 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
 
     return (
         <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
-            <div className="p-4 border-b border-custom-glass flex items-center justify-between bg-gray-50/50">
-                <div className="flex items-center gap-4">
-                    <TagSearchInput
-                        tags={searchTags}
-                        onTagsChange={(tags) => { setSearchTags(tags); setCurrentPage(1); }}
-                        onInputChange={(val) => { setSearchQuery(val); setCurrentPage(1); }}
-                        placeholder="Filter by SKU or Alias..."
-                        themeColor={themeColor}
-                    />
-                    <div className="flex bg-gray-200/50 p-1 rounded-lg">
-                        {['All', 'INCREASE', 'DECREASE', 'MAINTAIN'].map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setFilterTab(tab as any)}
-                                className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${filterTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                {tab === 'All' ? 'All' : tab.charAt(0) + tab.slice(1).toLowerCase()}
-                            </button>
-                        ))}
-                    </div>
-                    <button
-                        onClick={() => setShowOOS(!showOOS)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold border text-xs transition-all shadow-sm ${showOOS ? 'bg-gray-800 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-300'}`}
-                        title={showOOS ? "Hide Out of Stock items" : "Show Out of Stock items (Active Only)"}
-                    >
-                        {showOOS ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                        {showOOS ? 'OOS Shown' : 'OOS Hidden'}
-                    </button>
-                </div>
-                <div className="text-xs text-gray-500">Showing <strong>{totalCount}</strong> SKUs</div>
-            </div>
+            <FilterBar
+                searchValue={searchTags[0] || ''}
+                onSearchChange={(val) => { setSearchTags([val]); setSearchQuery(val); setCurrentPage(1); }}
+                searchPlaceholder="Filter by SKU or Alias..."
+                pillGroup={{
+                    options: [
+                        { key: 'All', label: 'All' },
+                        { key: 'INCREASE', label: 'Increase' },
+                        { key: 'DECREASE', label: 'Decrease' },
+                        { key: 'MAINTAIN', label: 'Maintain' }
+                    ],
+                    active: filterTab,
+                    onChange: setFilterTab
+                }}
+                toggles={[
+                    {
+                        key: 'oos',
+                        label: 'OOS Hidden',
+                        activeLabel: 'OOS Shown',
+                        icon: EyeOff,
+                        activeIcon: Eye,
+                        active: showOOS,
+                        onChange: setShowOOS
+                    }
+                ]}
+                showAudit={showAudit}
+                auditActive={auditActive}
+                onAuditToggle={onAuditToggle}
+                rightSlot={
+                    <div className="text-xs text-gray-500 mr-2">Showing <strong>{totalCount}</strong> SKUs</div>
+                }
+            />
 
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm whitespace-nowrap">
@@ -192,7 +199,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                 <td className="p-4 text-right bg-blue-50/30">£{formatMoney(row.averagePrice, 2, '')}</td>
                                 <td className="p-4 text-right bg-blue-50/30">£{formatNumber(row.recentTotalSales, 2)}</td>
                                 <td className="p-4 text-right bg-blue-50/30 font-bold">{formatNumber(row.recentTotalQty, 0)}</td>
-                                <td className="p-4 text-right bg-green-50/30 font-bold text-green-700">
+                                <td className="p-4 text-right bg-green-50/30 font-bold text-emerald-600">
                                     <span title={`Profit: £${formatMoney(row.totalProfit, 4, '')} / Sales: £${formatNumber(row.recentTotalSales, 2)}`} className="cursor-help border-b border-dotted border-green-700/50">
                                         {formatPct(row.netPmPercent, 1)}
                                     </span>

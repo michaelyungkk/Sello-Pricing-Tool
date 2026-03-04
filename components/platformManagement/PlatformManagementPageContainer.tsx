@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { ContextBar } from '../common/ContextBar';
 import { Product, PricingRules, PriceLog, RefundLog, ReturnDateBasis } from '../../types';
 import { LayoutDashboard, Coins, Activity, Calendar, RotateCcw, Clock, BarChart2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -16,10 +16,10 @@ import { PlatformOverviewTab } from './tabs/PlatformOverviewTab';
 import { FeesAndRoiTab } from './tabs/FeesAndRoiTab';
 import { PerformanceTrendTab } from './tabs/PerformanceTrendTab';
 import { AdGroupsTab } from './tabs/AdGroupsTab';
-
+import { TabSwitcher } from '../common/TabSwitcher';
 export const PlatformManagementPageContainer: React.FC<PlatformManagementPageProps> = ({
   products = [],
-  priceHistoryMap = new Map(),
+  priceHistoryMap = new Map<string, PriceLog[]>(),
   refundHistory = [],
   deductRefunds,
   setDeductRefunds,
@@ -46,7 +46,6 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('30D');
   const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
   const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
-  const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
 
   // Return Logic State
   const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
@@ -597,14 +596,38 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 pb-10">
       <div className="flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
-          <button onClick={() => setActiveTab('performance')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'performance' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Performance Trend</button>
-          <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'overview' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><LayoutDashboard className="w-4 h-4" />Platform Overview</button>
-          <button onClick={() => setActiveTab('roi')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'roi' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Fees & ROI</button>
-          <button onClick={() => setActiveTab('ad-groups')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ad-groups' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><BarChart2 className="w-4 h-4" />Ad Groups</button>
-        </div>
+        <TabSwitcher
+          tabs={[
+            { key: 'performance', label: 'Performance Trend', icon: Activity },
+            { key: 'overview', label: 'Platform Overview', icon: LayoutDashboard },
+            { key: 'roi', label: 'Fees & ROI', icon: Coins },
+            { key: 'ad-groups', label: 'Ad Groups', icon: BarChart2 },
+          ]}
+          activeTab={activeTab}
+          onChange={(key) => setActiveTab(key as Tab)}
+          size="sm"
+        />
 
-        <div className="flex items-center gap-3">
+      </div>
+
+      <ContextBar
+        timeOptions={[
+          { key: '7D', label: '7D' },
+          { key: '14D', label: '14D' },
+          { key: '30D', label: '30D' },
+          { key: '60D', label: '60D' },
+          { key: 'ALL', label: 'All Time' },
+          { key: 'CUSTOM', label: 'Custom' }
+        ]}
+        activeWindow={timeWindow}
+        onWindowChange={(key) => setTimeWindow(key as any)}
+        periodLabel={periodLabel}
+        customStart={customStart}
+        customEnd={customEnd}
+        onCustomStartChange={setCustomStart}
+        onCustomEndChange={setCustomEnd}
+      >
+        {activeTab !== 'ad-groups' && (<>
           <div className="flex bg-gray-100 p-1 rounded-lg">
             <button
               onClick={() => setReturnDateBasis('refundDate')}
@@ -630,23 +653,11 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
             />
             <div className="flex items-center gap-1.5">
               <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
-              <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds/Resends</span>
+              <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
             </div>
           </label>
-        </div>
-      </div>
-
-      <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Time Window</span>
-          <div className="flex bg-gray-100 p-1 rounded-lg">{(['7D', '14D', '30D', '60D'] as const).map(w => (<button key={w} onClick={() => { setTimeWindow(w); setIsCustomDateModalOpen(false); }} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === w ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>{w}</button>))}<button onClick={() => { setTimeWindow('ALL'); setIsCustomDateModalOpen(false); }} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${timeWindow === 'ALL' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>All Time</button><button onClick={() => setIsCustomDateModalOpen(true)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${timeWindow === 'CUSTOM' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}><Calendar className="w-3 h-3" /> Custom</button></div>
-        </div>
-        <div className="flex items-center gap-2 pl-4 border-l border-gray-200"><span className="text-xs text-gray-400 font-medium">Analyzing:</span><span className="text-sm font-bold text-indigo-600">{periodLabel}</span></div>
-      </div>
-
-      {isCustomDateModalOpen && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsCustomDateModalOpen(false)}><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-gray-200 p-6" onClick={e => e.stopPropagation()}><h3 className="text-lg font-bold text-gray-900 mb-4">Select Custom Range</h3><div className="space-y-4"><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Start Date</label><input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" /></div><div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">End Date</label><input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" /></div></div><div className="mt-6 flex justify-end gap-3"><button onClick={() => setIsCustomDateModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button><button onClick={() => { setTimeWindow('CUSTOM'); setIsCustomDateModalOpen(false); }} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700">Apply Range</button></div></div></div>, document.body
-      )}
+        </>)}
+      </ContextBar>
 
       <div className="min-h-[500px]">
         {activeTab === 'performance' && (
@@ -684,6 +695,8 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
             hiddenSeries={hiddenSeries}
             pricingRules={pricingRules}
             barChartData={barChartData}
+            startKey={dateWindow.startKey}
+            endKey={dateWindow.endKey}
           />
         )}
         {activeTab === 'overview' && (
@@ -698,6 +711,8 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
             sort={sort}
             setSort={setSort}
             topPlatformKey={topPlatformKey}
+            startKey={dateWindow.startKey}
+            endKey={dateWindow.endKey}
           />
         )}
         {activeTab === 'roi' && (
@@ -707,6 +722,8 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
             themeColor={themeColor}
             sort={sort}
             setSort={setSort}
+            startKey={dateWindow.startKey}
+            endKey={dateWindow.endKey}
           />
         )}
         {activeTab === 'ad-groups' && (

@@ -13,11 +13,16 @@ import { SortState, sortRows } from '../../utils/tableSort';
 import { SortableHeader } from '../common/SortableHeader';
 import UkSalesMap from '../UkSalesMap';
 import { CategoryPerformanceSlide } from '../CategoryPerformanceSlide';
+import { aggregateCategoryData } from '../../services/categoryAgg';
 import AuditPanel from '../AuditPanel';
+import { FilterBar } from '../common/FilterBar';
 import { Calendar, ChevronDown, Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingUp, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
 import { formatMoney, formatNumber, formatPct } from '../../utils/format';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, Bar, Line, BarChart, Cell } from 'recharts';
 import { resolveEffectiveVelocity } from '../../services/metrics';
+import { MetricValue } from '../common/MetricValue';
+import { TabSwitcher } from '../common/TabSwitcher';
+import { ContextBar } from '../common/ContextBar';
 
 interface OverviewPageContainerProps {
     products: Product[];
@@ -79,6 +84,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     }, [products]);
 
     const [activeTab, setActiveTab] = useState<OverviewTab>('actions');
+    const [isAuditVisible, setIsAuditVisible] = useState(false);
     const [range, setRange] = useState<DateRange>('30d');
     const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
     const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
@@ -408,6 +414,12 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     }, [selectedAlert, alerts, processedData, sort]);
 
     const paginatedData = workbenchData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const categoryData = useMemo(() => {
+        if (activeTab !== 'categories') return [];
+        const result = aggregateCategoryData(products, priceHistoryMap, dateRange, refundHistory, deductRefunds);
+        return result.mainCategories;
+    }, [activeTab, products, priceHistoryMap, dateRange, refundHistory, deductRefunds]);
+
     const totalPages = Math.ceil(workbenchData.length / itemsPerPage);
 
     const financialStats = useMemo(() => {
@@ -469,60 +481,59 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
 
     return (
         <div className="space-y-6 pb-20 animate-in fade-in duration-500 max-w-[1600px] mx-auto min-h-full flex flex-col">
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-                <button onClick={() => setActiveTab('actions')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'actions' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}><ShieldAlert className="w-4 h-4" /> Decisions</button>
-                <button onClick={() => setActiveTab('financials')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'financials' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}><BarChart2 className="w-4 h-4" /> Financials</button>
-                <button onClick={() => setActiveTab('map')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'map' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}><MapIcon className="w-4 h-4" /> Sales Map</button>
-                <button onClick={() => setActiveTab('categories')} className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === 'categories' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}><PieChart className="w-4 h-4" /> Categories</button>
-            </div>
+            <TabSwitcher
+                tabs={[
+                    { key: 'actions', label: 'Decisions', icon: ShieldAlert },
+                    { key: 'financials', label: 'Financials', icon: BarChart2 },
+                    { key: 'map', label: 'Sales Map', icon: MapIcon },
+                    { key: 'categories', label: 'Categories', icon: PieChart },
+                ]}
+                activeTab={activeTab}
+                onChange={(key) => setActiveTab(key as any)}
+                size="sm"
+            />
 
-            <div className="flex flex-col md:flex-row justify-between items-center bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm gap-4 relative z-30 backdrop-blur-custom">
+            <ContextBar
+                timeOptions={[
+                    { key: 'yesterday', label: 'Yesterday' },
+                    { key: '7d', label: '7 Days' },
+                    { key: '14d', label: '14 Days' },
+                    { key: '30d', label: '30 Days' },
+                    { key: '90d', label: '90 Days' },
+                    { key: 'custom', label: 'Custom' }
+                ]}
+                activeWindow={range}
+                onWindowChange={(key) => setRange(key as any)}
+                periodLabel={periodLabel}
+                customStart={customStart}
+                customEnd={customEnd}
+                onCustomStartChange={(val) => { setCustomStart(val); setRange('custom'); }}
+                onCustomEndChange={(val) => { setCustomEnd(val); setRange('custom'); }}
+                onCustomApply={() => { setRange('custom'); setShowDatePicker(false); }}
+            >
                 <div className="flex items-center gap-2">
                     <div className="relative">
                         <select
                             value={platformScope}
                             onChange={(e) => setPlatformScope(e.target.value)}
-                            className="appearance-none bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold py-2 pl-4 pr-10 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="appearance-none bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold py-1.5 pl-3 pr-8 rounded-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                             <option value="All">Global View (All)</option>
                             {Object.keys(pricingRules).map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
-                        <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-indigo-600 pointer-events-none" />
+                        <ChevronDown className="absolute right-2.5 top-2 w-3.5 h-3.5 text-indigo-600 pointer-events-none" />
                     </div>
-                    <div className="h-8 w-px bg-gray-300 mx-2"></div>
-                    <div className="relative">
-                        <button
-                            onClick={() => setShowDatePicker(!showDatePicker)}
-                            className={`p-2 border rounded-lg hover:bg-gray-50 transition-colors ${showDatePicker || range === 'custom' ? 'border-indigo-300 text-indigo-600 bg-indigo-50' : 'border-gray-200 text-gray-600 bg-white/50'}`}
-                        >
-                            <Calendar className="w-5 h-5" />
-                        </button>
-                        {showDatePicker && (
-                            <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-4 z-50 animate-in fade-in slide-in-from-top-2 w-64">
-                                <label className="text-xs font-bold text-gray-500 uppercase block mb-3">Custom Range</label>
-                                <div className="space-y-3">
-                                    <input type="date" value={customStart} onChange={(e) => { setCustomStart(e.target.value); setRange('custom'); }} className="border rounded px-2 py-1.5 text-sm w-full" />
-                                    <input type="date" value={customEnd} onChange={(e) => { setCustomEnd(e.target.value); setRange('custom'); }} min={customStart} className="border rounded px-2 py-1.5 text-sm w-full" />
-                                </div>
-                                <div className="mt-3 flex justify-end"><button onClick={() => setShowDatePicker(false)} className="text-xs text-indigo-600 font-bold">Close</button></div>
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex bg-gray-100 p-1 rounded-lg overflow-x-auto no-scrollbar">
-                        {['yesterday', '7d', '14d', '30d', '90d'].map((r: any) => (
-                            <button key={r} onClick={() => setRange(r)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${range === r ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>{r === 'yesterday' ? 'Yesterday' : r.toUpperCase().replace('D', ' Days')}</button>
-                        ))}
-                    </div>
-                    <div className="ml-3 flex flex-col justify-center pl-2 border-l border-gray-200"><span className="text-[10px] text-gray-400 font-medium uppercase leading-none mb-0.5">Analyzing Period</span><span className="text-xs font-medium text-indigo-600 flex items-center gap-1.5"><Calendar className="w-3 h-3" />{periodLabel}</span></div>
                 </div>
-                <div className="flex items-center gap-4">
+                {activeTab !== 'map' && (
                     <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
                         <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300" />
-                        <div className="flex items-center gap-1.5"><RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} /><span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds</span></div>
+                        <div className="flex items-center gap-1.5"><RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} /><span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span></div>
                     </label>
+                )}
+                {(activeTab === 'actions' || activeTab === 'financials') && (
                     <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Activity className="w-4 h-4" />Audit</button>
-                </div>
-            </div>
+                )}
+            </ContextBar>
 
             {isAuditPanelVisible && (
                 <div className="mb-4 animate-in slide-in-from-top-2 duration-300">
@@ -694,15 +705,17 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                             </span>
                                                         </td>
                                                         <td className="p-4 text-right">
-                                                            <span className="font-black text-red-600">
-                                                                {formatPct(p.volumeDropPct)}
+                                                            <MetricValue value={p.volumeDropPct} type="percent" size="sm" />
+                                                        </td>
+                                                        <td className="p-4 text-right text-gray-700 font-semibold">{formatNumber(p.periodUnits)}</td>
+                                                        <td className="p-4 text-right text-gray-400 font-medium">{formatNumber(p.historicalMedianUnits, 0)}</td>
+                                                        <td className="p-4 text-right">
+                                                            <span className={isPriceHigh ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}>
+                                                                <MetricValue value={p.displayPrice} type="currency" neutral size="sm" />
                                                             </span>
                                                         </td>
-                                                        <td className="p-4 text-right font-bold text-gray-900">{formatNumber(p.periodUnits)}</td>
-                                                        <td className="p-4 text-right text-gray-400 font-medium">{formatNumber(p.historicalMedianUnits, 0)}</td>
-                                                        <td className={`p-4 text-right font-bold ${isPriceHigh ? 'text-amber-600' : 'text-gray-900'}`}>£{formatMoney(p.displayPrice, 2, '')}</td>
                                                         <td className="p-4 text-right text-gray-400 font-medium">£{formatMoney(p.historicalMedianPrice, 2, '')}</td>
-                                                        <td className={`p-4 text-right font-bold ${p.stockLevel < thresholds.minAbsoluteFloor ? 'text-orange-600' : 'text-gray-800'}`}>{formatNumber(p.stockLevel)}</td>
+                                                        <td className={`p-4 text-right ${p.stockLevel < thresholds.minAbsoluteFloor ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}`}>{formatNumber(p.stockLevel)}</td>
 
                                                         {/* Price Changes Column - Tooltip restricted to hover on this badge only */}
                                                         <td className="p-4 text-center">
@@ -775,20 +788,20 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                             <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
                                                         </td>
                                                         <td className="p-4 text-right">
-                                                            <span className={`font-black text-sm px-2 py-1 rounded ${p.periodRunway < p.effectiveAlertLeadTime ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
+                                                            <span className={`font-semibold text-sm px-2 py-1 rounded ${p.periodRunway < p.effectiveAlertLeadTime ? 'bg-red-100 text-red-500 border border-red-200' : 'bg-amber-100 text-amber-500 border border-amber-200'}`}>
                                                                 {p.periodRunway.toFixed(0)} Days
                                                             </span>
                                                         </td>
                                                         <td className="p-4 text-right">
                                                             <div className="flex flex-col items-end">
-                                                                <span className="font-medium text-gray-900">{p.effectiveAlertLeadTime} Days</span>
+                                                                <span className="text-gray-700 font-semibold">{p.effectiveAlertLeadTime} Days</span>
                                                                 <span className="text-[10px] text-gray-400 uppercase font-bold">{isArrivalDriven ? 'Arrival ETA' : 'No Shipment'}</span>
                                                             </div>
                                                         </td>
-                                                        <td className="p-4 text-right font-medium text-gray-700">
+                                                        <td className="p-4 text-right text-gray-700 font-semibold">
                                                             {formatNumber(p.periodDailyVelocity, 1)} /day
                                                         </td>
-                                                        <td className="p-4 text-right font-bold text-gray-900">
+                                                        <td className={`p-4 text-right ${p.stockLevel < (thresholds.minAbsoluteFloor || 2) ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}`}>
                                                             {formatNumber(p.stockLevel)}
                                                         </td>
                                                         <td className="p-4 text-right pr-6">
@@ -820,16 +833,16 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                             </div>
                                                             <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
                                                         </td>
-                                                        <td className="p-4 text-right font-bold text-gray-900">
+                                                        <td className="p-4 text-right text-gray-700 font-semibold">
                                                             {formatNumber(p.stockLevel)}
                                                         </td>
-                                                        <td className="p-4 text-right font-bold text-red-600">
-                                                            {formatMoney(p.inventoryValue, 0)}
+                                                        <td className="p-4 text-right">
+                                                            <MetricValue value={p.inventoryValue} type="currency" neutral size="sm" />
                                                         </td>
-                                                        <td className={`p-4 text-right font-medium ${p.daysSinceLastSale > 60 ? 'text-red-600' : 'text-gray-700'}`}>
+                                                        <td className={`p-4 text-right font-semibold ${p.daysSinceLastSale > 60 ? 'text-red-500' : 'text-gray-700'}`}>
                                                             {p.daysSinceLastSale === 999 ? 'No Sales' : `${p.daysSinceLastSale} days`}
                                                         </td>
-                                                        <td className="p-4 text-right text-gray-500 italic">
+                                                        <td className="p-4 text-right text-gray-400 font-medium">
                                                             {p.historicalMedianDemand.toFixed(1)} /day
                                                         </td>
                                                         <td className="p-4 text-right pr-6">
@@ -859,15 +872,17 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                                 {p.caPrice ? formatMoney(p.caPrice) : '—'}
                                                             </td>
                                                             <td className="p-4 text-right">
-                                                                <span className={`font-black text-sm px-2 py-1 rounded ${p.periodMargin < 0 ? 'bg-red-100 text-red-700 border border-red-200' : 'text-red-600'}`}>
-                                                                    {formatPct(p.periodMargin)}
-                                                                </span>
+                                                                <MetricValue value={p.periodMargin} type="percent" size="sm" />
                                                             </td>
-                                                            <td className="p-4 text-right font-medium text-gray-900">
+                                                            <td className="p-4 text-right text-gray-700 font-semibold">
                                                                 {formatNumber(p.periodUnits)}
                                                             </td>
-                                                            <td className="p-4 text-right font-medium text-gray-600">{formatMoney(p.periodRevenue, 0)}</td>
-                                                            <td className={`p-4 text-right font-bold ${p.periodProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatMoney(p.periodProfit, 2)}</td>
+                                                            <td className="p-4 text-right">
+                                                                <MetricValue value={p.periodRevenue} type="currency" neutral size="sm" />
+                                                            </td>
+                                                            <td className="p-4 text-right">
+                                                                <MetricValue value={p.periodProfit} type="currency" size="sm" />
+                                                            </td>
                                                             <td className="p-4">
                                                                 <div className="flex items-center gap-2 group relative inline-block">
                                                                     <span className={`text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded border shadow-sm ${p.primaryDrag === "Ad Spend Heavy" ? 'text-purple-700 bg-purple-50 border-purple-100' :
@@ -922,9 +937,20 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <MetricCard title="Total Revenue" value={`£${financialStats.totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={DollarSign} color="blue" />
-                            <MetricCard title="True Net Profit" value={`£${financialStats.totalProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={Coins} color="green" />
+                            <MetricCard
+                                title="True Net Profit"
+                                value={<span className={financialStats.totalProfit >= 0 ? 'text-emerald-600' : 'text-red-500'}>{financialStats.totalProfit < 0 ? '-' : ''}£{Math.abs(financialStats.totalProfit).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>}
+                                icon={Coins}
+                                color={financialStats.totalProfit >= 0 ? "green" : "red"}
+                            />
                             <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={Megaphone} color="purple" desc="Includes Ad-Only Transactions" />
-                            <MetricCard title="TACoS %" value={`${financialStats.tacos.toFixed(1)}%`} icon={BarChart2} color="orange" desc="Total Advertising Cost of Sales" />
+                            <MetricCard
+                                title="TACoS %"
+                                value={<span className={financialStats.tacos > 20 ? 'text-amber-500' : 'text-gray-800'}>{financialStats.tacos.toFixed(1)}%</span>}
+                                icon={BarChart2}
+                                color="orange"
+                                desc="Total Advertising Cost of Sales"
+                            />
                         </div>
                         <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[500px]">
                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-600" /> Financial Performance</h3>
@@ -933,7 +959,40 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                     </div>
                 )}
                 {activeTab === 'map' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope} themeColor={themeColor} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
-                {activeTab === 'categories' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto pb-24"><CategoryPerformanceSlide products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} themeColor={themeColor} refundHistory={refundHistory} deductRefunds={deductRefunds} /></div>)}
+                {activeTab === 'categories' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-4 pb-24 h-auto">
+                        <FilterBar
+                            showAudit
+                            auditActive={isAuditVisible}
+                            onAuditToggle={() => setIsAuditVisible(v => !v)}
+                        />
+
+                        {isAuditVisible && (
+                            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                <AuditPanel
+                                    title="Categories Performance Audit"
+                                    startKey={asDateKey(dateRange.start) || ''}
+                                    endKey={asDateKey(dateRange.end) || ''}
+                                    rows={categoryData}
+                                    getDateKey={() => null}
+                                    getRevenue={(row) => row.total.revenue}
+                                    getQty={() => 0}
+                                    getProfit={() => 0}
+                                    getAdSpend={() => 0}
+                                />
+                            </div>
+                        )}
+
+                        <CategoryPerformanceSlide
+                            products={products}
+                            priceHistoryMap={priceHistoryMap}
+                            dateRange={dateRange}
+                            themeColor={themeColor}
+                            refundHistory={refundHistory}
+                            deductRefunds={deductRefunds}
+                        />
+                    </div>
+                )}
             </div>
 
             {totalPages > 1 && activeTab === 'actions' && (

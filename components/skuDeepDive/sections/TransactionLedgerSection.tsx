@@ -106,7 +106,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
 
 
             {isAuditPanelVisible && (
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
                     <div className="flex flex-wrap gap-4 items-center">
                         <div className="relative">
                             <select
@@ -163,14 +163,14 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm text-sm">
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium">Sales Rows</span>
                     <div className="text-xl font-bold text-gray-800">{ledgerStats.salesRows}</div>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium">Total Units</span>
-                    <div className="text-xl font-bold text-green-700">{ledgerStats.totalUnits}</div>
+                    <div className="text-xl font-bold text-emerald-600">{ledgerStats.totalUnits}</div>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium flex items-center gap-1">
@@ -179,19 +179,19 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                             <Info className="w-3 h-3 text-gray-400" />
                         </span>
                     </span>
-                    <div className="text-xl font-bold text-orange-700">{formatMoney(ledgerStats.adOnlySpend)}</div>
+                    <div className="text-xl font-bold text-amber-500">{formatMoney(ledgerStats.adOnlySpend)}</div>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium">Refunds (Detected)</span>
-                    <div className="text-xl font-bold text-red-700 flex items-center gap-1">
+                    <div className="text-xl font-bold text-red-500 flex items-center gap-1">
                         {ledgerStats.refundCount}
                         {ledgerStats.refundValue > 0 && <span className="text-sm font-medium opacity-70">(-{formatMoney(ledgerStats.refundValue, 0)})</span>}
                     </div>
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in">
-                <div className="p-3 bg-gray-50/50 border-b border-gray-100">
+            <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden animate-in fade-in">
+                <div className="p-3 bg-white/10 border-b border-custom-glass">
                     <h4 className="text-xs font-bold text-gray-500 uppercase">Platform Subtotals (for period)</h4>
                 </div>
                 <div className="divide-y divide-gray-100">
@@ -225,7 +225,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 </div>
                                 <div className="text-right w-20">
                                     <div className="text-gray-400">Margin %</div>
-                                    <div className={`font-mono font-bold ${sub.margin !== null && sub.margin >= thresholds.marginBelowTargetPct ? 'text-green-600' : sub.margin !== null && sub.margin >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                                    <div className={`font-mono font-bold ${sub.margin !== null && sub.margin >= thresholds.marginBelowTargetPct ? 'text-emerald-600' : sub.margin !== null && sub.margin >= 0 ? 'text-amber-500' : 'text-red-600'}`}>
                                         {formatPct(sub.margin)}
                                     </div>
                                 </div>
@@ -238,10 +238,10 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden">
                 <div className="overflow-x-auto border rounded-lg">
                     <table className="w-full text-sm text-left whitespace-nowrap">
-                        <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100">
+                        <thead className="bg-white/10 text-gray-500 font-semibold border-b border-custom-glass">
                             <tr>
                                 <th className="p-3">Date</th>
                                 <th className="p-3">Platform</th>
@@ -297,7 +297,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                         <td className="p-3 text-right text-orange-600 font-medium">
                                             {(tx.adsSpend || 0) > 0 ? formatMoney(tx.adsSpend * VAT_MULTIPLIER) : '-'}
                                         </td>
-                                        <td className={`p-3 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-600' : 'text-green-600'}`}>
+                                        <td className={`p-3 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-500' : 'text-emerald-600'}`}>
                                             {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '—' : '-'}
                                         </td>
                                     </tr>

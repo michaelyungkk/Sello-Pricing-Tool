@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { RefundLog, Product, PricingRules, PriceLog, ReturnDateBasis } from '../../../types';
 import { RotateCcw, DollarSign, Package, Info, ChevronDown, Calendar, AlertTriangle, Truck as TruckIcon, Search, ArrowRight, Layers, GitMerge, Clock, ChevronRight, Map as MapIcon, FileSearch, Clipboard } from 'lucide-react';
+import { FilterBar } from '../../common/FilterBar';
 import { SortableHeader } from '../../common/SortableHeader';
 import { formatPct, formatMoney } from '../../../utils/format';
 import { MetricCard } from '../parts/MetricCard';
@@ -10,6 +11,7 @@ import { sortRows, SortState } from '../../../utils/tableSort';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { parseReturnsReason } from '../../../services/returnsReasonCodes';
 import { aggregateRefundKeywords } from '../../../services/refundTextAgg';
+import AuditPanel from '../../AuditPanel';
 
 interface ReturnsAndRefundsTabProps {
     refundHistory: RefundLog[];
@@ -32,11 +34,11 @@ const isIsoDateInRange = (isoDate: string, start: string, end: string) => {
     return datePart >= start && datePart <= end;
 };
 
-export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({ 
-    refundHistory = [], 
-    products, 
-    themeColor, 
-    pricingRules, 
+export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
+    refundHistory = [],
+    products,
+    themeColor,
+    pricingRules,
     onDeepDive,
     priceHistoryMap = new Map(),
     startDate,
@@ -45,15 +47,16 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
 }) => {
     // State for filters and view mode
     const [platformScope, setPlatformScope] = useState<string>('All');
+    const [isAuditVisible, setIsAuditVisible] = useState(false);
     const [mainCategoryScope, setMainCategoryScope] = useState<string>('All');
     const [subCategoryScope, setSubCategoryScope] = useState<string>('All');
     const [includeResends, setIncludeResends] = useState(true);
     const [viewMode, setViewMode] = useState<ViewMode>('reason');
     const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
-    
+
     // Sort state for the main detail table
     const [sortConfig, setSortConfig] = useState<SortState<string>>({ key: 'totalValue', dir: 'desc' });
-    
+
     // Sort state for the triage table
     const [triageSortConfig, setTriageSortConfig] = useState<SortState<string>>({ key: 'refundValue', dir: 'desc' });
 
@@ -65,6 +68,8 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const productLookup = useMemo(() => new Map(products.map(p => [p.sku, p])), [products]);
+
+    const platformOptions = useMemo(() => Object.keys(pricingRules), [pricingRules]);
 
     // Derived category lists
     const mainCategories = useMemo(() => {
@@ -91,11 +96,11 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                 const p = logs[i];
                 if (p.orderId) {
                     const dKey = p.date.substring(0, 10); // Fast extraction
-                    map.set(p.orderId, { 
-                        platform: p.platform || 'Unknown', 
+                    map.set(p.orderId, {
+                        platform: p.platform || 'Unknown',
                         partner: p.logisticPartner,
                         service: p.logisticService,
-                        date: dKey 
+                        date: dKey
                     });
                 }
             }
@@ -107,11 +112,11 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     const salesStats = useMemo(() => {
         const salesMap = new Map<string, number>();
         const revenueMap = new Map<string, number>();
-        const productMap = new Map<string, {name: string}>();
-        
+        const productMap = new Map<string, { name: string }>();
+
         const targetSkus = new Set<string>();
         const isCatFilterActive = mainCategoryScope !== 'All' || subCategoryScope !== 'All';
-        
+
         if (isCatFilterActive) {
             products.forEach(p => {
                 if (mainCategoryScope !== 'All' && p.category !== mainCategoryScope) return;
@@ -136,7 +141,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
             for (let i = 0; i < logs.length; i++) {
                 const log = logs[i];
                 if (platformScope !== 'All' && log.platform !== platformScope) continue;
-                
+
                 if (isIsoDateInRange(log.date, startDate, endDate)) {
                     skuPeriodSales += log.velocity;
                     skuPeriodRevenue += (log.velocity * (log.price + extraFreight));
@@ -154,11 +159,11 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     }, [priceHistoryMap, products, startDate, endDate, platformScope, mainCategoryScope, subCategoryScope, productLookup]);
 
     // Main data processing
-    const { 
-        totalValue, 
-        totalCount, 
-        byReason, 
-        byProduct, 
+    const {
+        totalValue,
+        totalCount,
+        byReason,
+        byProduct,
         byPartner,
         triageOverview,
         topKeywords,
@@ -188,19 +193,19 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
 
         const filteredRefunds = refundHistory.filter(r => {
             const context = resolveOrderContext(r);
-            
+
             let dKey: string | null = null;
             if (returnDateBasis === 'orderDate' && context) {
-                 dKey = context.date;
+                dKey = context.date;
             } else {
-                 dKey = r.date.substring(0, 10);
+                dKey = r.date.substring(0, 10);
             }
 
             if (!dKey || dKey < startDate || dKey > endDate) return false;
-            
+
             const pName = r.platform || context?.platform || 'Unknown';
             if (platformScope !== 'All' && pName !== platformScope) return false;
-            
+
             const isResend = r.orderType === 'resend' || (r.id && r.id.toLowerCase().includes('resend'));
             if (!includeResends && isResend) return false;
 
@@ -228,15 +233,15 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
 
         // Aggregation Maps
         const reasonMap = new Map<string, { totalValue: number, count: number, skus: Set<string> }>();
-        const partnerMap = new Map<string, { 
-            totalValue: number, 
-            count: number, 
-            skus: Set<string>, 
-            reasons: Map<string, number>, 
+        const partnerMap = new Map<string, {
+            totalValue: number,
+            count: number,
+            skus: Set<string>,
+            reasons: Map<string, number>,
             services: Map<string, { count: number, value: number }>,
             records: RefundLog[] // Track source records
         }>();
-        
+
         const prodMap = new Map<string, { totalValue: number, count: number, reasons: Map<string, number> }>();
 
         for (const r of filteredRefunds) {
@@ -255,7 +260,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
             // 2. Partner Grouping
             const context = resolveOrderContext(r);
             const pKey = context?.partner || r.logisticPartner || 'Unattributed Carrier';
-            
+
             if (!partnerMap.has(pKey)) partnerMap.set(pKey, { totalValue: 0, count: 0, skus: new Set(), reasons: new Map(), services: new Map(), records: [] });
             const pEntry = partnerMap.get(pKey)!;
             pEntry.totalValue += rowVal;
@@ -278,7 +283,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
             prEntry.count++;
             prEntry.reasons.set(rKey, (prEntry.reasons.get(rKey) || 0) + 1);
         }
-        
+
         const byReason = Array.from(reasonMap.entries()).map(([reason, data]) => ({ reason, ...data }));
         const byProduct = Array.from(prodMap.entries()).map(([sku, data]) => {
             const topReason = [...data.reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
@@ -288,10 +293,10 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
             const topReason = [...data.reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
             const countShare = totalCount > 0 ? (data.count / totalCount) * 100 : 0;
             const valueShare = totalValue > 0 ? (data.totalValue / totalValue) * 100 : 0;
-            
+
             const servicesBreakdown = Array.from(data.services.entries())
-                .map(([name, stats]) => ({ 
-                    name, 
+                .map(([name, stats]) => ({
+                    name,
                     ...stats,
                     share: data.count > 0 ? (stats.count / data.count) * 100 : 0
                 }))
@@ -303,8 +308,8 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
         const topGripingPartner = byPartner.sort((a, b) => b.count - a.count)[0];
         const topKeywords = aggregateRefundKeywords(filteredRefunds, 20);
 
-        return { 
-            totalValue, totalCount, byReason, byProduct, byPartner, triageOverview, 
+        return {
+            totalValue, totalCount, byReason, byProduct, byPartner, triageOverview,
             topKeywords,
             topGripingPartner
         };
@@ -316,7 +321,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
         if (viewMode === 'reason') data = byReason;
         else if (viewMode === 'product') data = byProduct;
         else data = byPartner;
-        
+
         const getValue = (row: any, key: string) => row[key];
         return sortRows(data, sortConfig, getValue);
     }, [byReason, byProduct, byPartner, viewMode, sortConfig]);
@@ -348,101 +353,88 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 pb-12">
-             <div className="flex flex-col md:flex-row justify-between items-center bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm gap-4 relative z-10">
-                <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <select 
-                                value={platformScope} 
-                                onChange={(e) => setPlatformScope(e.target.value)}
-                                className="appearance-none bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold py-2 pl-4 pr-10 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
-                            >
-                                <option value="All">Global (All Platforms)</option>
-                                {Object.keys(pricingRules).map(p => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-indigo-600 pointer-events-none" />
-                        </div>
-                    </div>
+            <FilterBar
+                showAudit
+                auditActive={isAuditVisible}
+                onAuditToggle={() => setIsAuditVisible(v => !v)}
+                multiSelects={[
+                    {
+                        key: 'platform',
+                        label: 'Platform',
+                        icon: MapIcon,
+                        options: platformOptions,
+                        selected: platformScope === 'All' ? [] : [platformScope],
+                        onChange: (selected) => setPlatformScope(selected.length > 0 ? selected[0] : 'All')
+                    },
+                    {
+                        key: 'mainCategory',
+                        label: 'Main Category',
+                        icon: Layers,
+                        options: mainCategories,
+                        selected: mainCategoryScope === 'All' ? [] : [mainCategoryScope],
+                        onChange: (selected) => { setMainCategoryScope(selected.length > 0 ? selected[0] : 'All'); setSubCategoryScope('All'); }
+                    },
+                    {
+                        key: 'subCategory',
+                        label: 'Sub Category',
+                        icon: GitMerge,
+                        options: subCategories,
+                        selected: subCategoryScope === 'All' ? [] : [subCategoryScope],
+                        onChange: (selected) => setSubCategoryScope(selected.length > 0 ? selected[0] : 'All')
+                    }
+                ]}
+                pillGroup={{
+                    options: [
+                        { key: 'refundDate', label: 'Refund Date' },
+                        { key: 'orderDate', label: 'Order Date' }
+                    ],
+                    active: returnDateBasis,
+                    onChange: (key) => setReturnDateBasis(key as ReturnDateBasis)
+                }}
+                toggles={[
+                    {
+                        key: 'includeResends',
+                        label: 'Include Resends',
+                        active: includeResends,
+                        onChange: setIncludeResends
+                    }
+                ]}
+            />
 
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <Layers className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                            <select 
-                                value={mainCategoryScope} 
-                                onChange={(e) => { setMainCategoryScope(e.target.value); setSubCategoryScope('All'); }}
-                                className="appearance-none bg-white border border-gray-300 text-gray-700 py-2 pl-9 pr-10 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
-                            >
-                                <option value="All">All Categories</option>
-                                {mainCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <GitMerge className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                            <select 
-                                value={subCategoryScope} 
-                                onChange={(e) => setSubCategoryScope(e.target.value)}
-                                className="appearance-none bg-white border border-gray-300 text-gray-700 py-2 pl-9 pr-10 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
-                            >
-                                <option value="All">All Sub-Categories</option>
-                                {subCategories.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
-                        </div>
-                    </div>
+            {isAuditVisible && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                    <AuditPanel
+                        title="Returns & Refunds Audit"
+                        startKey={startDate}
+                        endKey={endDate}
+                        rows={triageOverview.skuRows}
+                        getDateKey={() => null}
+                        getRevenue={(row: any) => row.refundValue}
+                        getQty={(row: any) => row.refundQty}
+                        getProfit={() => 0}
+                        getAdSpend={() => 0}
+                    />
                 </div>
-                
-                <div className="flex items-center gap-4">
-                    <div className="flex bg-gray-100 p-1 rounded-lg">
-                        <button 
-                            onClick={() => setReturnDateBasis('refundDate')} 
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            <Clock className="w-3 h-3" />
-                            Refund Date
-                        </button>
-                        <button 
-                            onClick={() => setReturnDateBasis('orderDate')} 
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            <Calendar className="w-3 h-3" />
-                            Order Date
-                        </button>
-                    </div>
-
-                    <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer select-none bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm hover:border-indigo-300">
-                        <input 
-                            type="checkbox" 
-                            checked={includeResends} 
-                            onChange={e => setIncludeResends(e.target.checked)} 
-                            className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300" 
-                        />
-                        Include Resends
-                    </label>
-                </div>
-            </div>
+            )}
 
             {/* Refund Triage KPI Section */}
             <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    <MetricCard 
-                        title="Refund Cases" 
-                        value={triageOverview.kpis.totalRefundCount.toLocaleString()} 
-                        icon={RotateCcw} 
-                        color="orange" 
+                    <MetricCard
+                        title="Refund Cases"
+                        value={triageOverview.kpis.totalRefundCount.toLocaleString()}
+                        icon={RotateCcw}
+                        color="orange"
                         desc="Unique requests"
                     />
-                    <MetricCard 
-                        title="Loss Value" 
-                        value={formatMoney(triageOverview.kpis.totalRefundValue)} 
-                        icon={DollarSign} 
-                        color="red" 
+                    <MetricCard
+                        title="Loss Value"
+                        value={formatMoney(triageOverview.kpis.totalRefundValue)}
+                        icon={DollarSign}
+                        color="red"
                         desc="Inc VAT & Freight"
                     />
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-bold text-gray-500 uppercase">Return Rate (Qty)</span>
                             <Package className="w-4 h-4 text-indigo-500" />
@@ -452,8 +444,8 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         </div>
                         <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Units vs Sold</div>
                     </div>
-                    
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
+
+                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-bold text-gray-500 uppercase">Return Rate (Val)</span>
                             <DollarSign className="w-4 h-4 text-rose-500" />
@@ -464,7 +456,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Value vs Revenue</div>
                     </div>
 
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between group">
+                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between group">
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-bold text-gray-500 uppercase">Worst Carrier</span>
                             <TruckIcon className="w-4 h-4 text-indigo-500" />
@@ -507,7 +499,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                         return (
                                             <tr key={row.sku} className="hover:bg-gray-50/80 transition-colors group even:bg-gray-50/20">
                                                 <td className="p-3 text-center">
-                                                    <button 
+                                                    <button
                                                         onClick={() => !isInvalidSku && handleDeepDiveClick(row.sku)}
                                                         className={`p-1.5 rounded-lg transition-colors ${isInvalidSku ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
                                                         disabled={isInvalidSku}
@@ -522,14 +514,14 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                 </td>
                                                 <td className="p-3 text-right font-bold text-gray-800">{row.refundQty}</td>
                                                 <td className="p-3 text-right font-mono">
-                                                    {row.refundRate !== null 
+                                                    {row.refundRate !== null
                                                         ? <span className="text-gray-600">{row.refundRate.toFixed(1)}%</span>
                                                         : <span className="text-gray-300">-</span>
                                                     }
                                                 </td>
                                                 <td className="p-3 text-right font-bold text-gray-800">{formatMoney(row.refundValue)}</td>
                                                 <td className="p-3 text-right font-mono">
-                                                    {row.refundRateValue !== null 
+                                                    {row.refundRateValue !== null
                                                         ? <span className="text-gray-600">{(row.refundRateValue || 0).toFixed(1)}%</span>
                                                         : <span className="text-gray-300">-</span>
                                                     }
@@ -582,15 +574,15 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                 {viewMode === 'reason' ? (
                                     <tr>
                                         <SortableHeader label="Reason" sortKey="reason" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right"/>
-                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right"/>
+                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                                         <th className="p-3 text-right">SKUs Affected</th>
                                     </tr>
                                 ) : viewMode === 'product' ? (
                                     <tr>
                                         <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right"/>
-                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right"/>
+                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                                         <th className="p-3">Top Reason</th>
                                         <th className="p-3 text-right w-12">Action</th>
                                     </tr>
@@ -598,9 +590,9 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                     <tr>
                                         <th className="w-8"></th>
                                         <SortableHeader label="Logistic Partner" sortKey="partner" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                        <SortableHeader label="Complaint Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right"/>
-                                        <SortableHeader label="Share %" sortKey="countShare" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right"/>
-                                        <SortableHeader label="Loss Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right"/>
+                                        <SortableHeader label="Complaint Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                        <SortableHeader label="Share %" sortKey="countShare" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
+                                        <SortableHeader label="Loss Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                                         <th className="p-3">Primary Issue</th>
                                         <th className="p-3 text-right">Action</th>
                                     </tr>
@@ -610,7 +602,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                 {paginatedData.map((item: any) => {
                                     const isInvalidSku = viewMode === 'product' && (!item.sku || item.sku === 'Unknown' || item.sku === 'Freight');
                                     const isPartnerExpanded = viewMode === 'partner' && expandedPartner === item.partner;
-                                    
+
                                     return (
                                         <React.Fragment key={viewMode === 'reason' ? item.reason : viewMode === 'product' ? item.sku : item.partner}>
                                             <tr className={`hover:bg-gray-50/50 transition-colors even:bg-gray-50/20 ${isPartnerExpanded ? 'bg-indigo-50/20 border-l-2 border-indigo-500' : ''}`} onClick={() => viewMode === 'partner' && togglePartnerExpand(item.partner)}>
@@ -633,9 +625,9 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                             {parseReturnsReason(item.topReason).description || item.topReason}
                                                         </td>
                                                         <td className="p-3 text-right">
-                                                            <button 
+                                                            <button
                                                                 onClick={() => !isInvalidSku && handleDeepDiveClick(item.sku)}
-                                                                className={`p-1.5 bg-white border rounded transition-all ${isInvalidSku ? 'opacity-20 grayscale cursor-not-allowed' : 'border-gray-200 hover:border-indigo-300 text-gray-400 hover:text-indigo-600'}`} 
+                                                                className={`p-1.5 bg-white border rounded transition-all ${isInvalidSku ? 'opacity-20 grayscale cursor-not-allowed' : 'border-gray-200 hover:border-indigo-300 text-gray-400 hover:text-indigo-600'}`}
                                                             >
                                                                 <Search className="w-3.5 h-3.5" />
                                                             </button>
@@ -706,60 +698,60 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                                     </tbody>
                                                                 </table>
                                                             </div>
-                                                            
+
                                                             {/* Source Records Inspector */}
                                                             <div className="bg-white rounded border border-gray-200 shadow-sm overflow-hidden">
                                                                 <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex justify-between items-center cursor-pointer hover:bg-gray-100"
-                                                                     onClick={() => setShowSourceRecords(showSourceRecords === item.partner ? null : item.partner)}>
-                                                                     <div className="flex items-center gap-2">
-                                                                         <FileSearch className="w-3.5 h-3.5 text-gray-500"/>
-                                                                         <span className="text-[10px] font-bold uppercase text-gray-600">Inspect Contributing Records ({item.records.length})</span>
-                                                                     </div>
-                                                                     <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showSourceRecords === item.partner ? 'rotate-180' : ''}`} />
+                                                                    onClick={() => setShowSourceRecords(showSourceRecords === item.partner ? null : item.partner)}>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <FileSearch className="w-3.5 h-3.5 text-gray-500" />
+                                                                        <span className="text-[10px] font-bold uppercase text-gray-600">Inspect Contributing Records ({item.records.length})</span>
+                                                                    </div>
+                                                                    <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showSourceRecords === item.partner ? 'rotate-180' : ''}`} />
                                                                 </div>
-                                                                
+
                                                                 {showSourceRecords === item.partner && (
                                                                     <div className="max-h-60 overflow-y-auto">
-                                                                       {item.partner === 'Unattributed Carrier' && (
-                                                                           <div className="px-3 py-2 bg-amber-50 text-[10px] text-amber-700 border-b border-amber-100 flex items-start gap-2">
-                                                                               <AlertTriangle className="w-3.5 h-3.5 mt-0.5" />
-                                                                               <div>
-                                                                                   <strong>Diagnosis:</strong> These refunds could not be linked to a known carrier. 
-                                                                                   <ul className="list-disc pl-3 mt-1 space-y-0.5">
-                                                                                       <li>Check if the <strong>Order ID</strong> exists in your imported Sales History.</li>
-                                                                                       <li>Check if the Sales History has a <strong>Logistic Partner</strong> column mapped.</li>
-                                                                                   </ul>
-                                                                               </div>
-                                                                           </div>
-                                                                       )}
-                                                                       <table className="w-full text-xs text-left">
-                                                                           <thead className="bg-gray-50/30 text-gray-400">
-                                                                               <tr>
-                                                                                   <th className="px-3 py-1.5 font-medium sticky top-0 bg-white">Date</th>
-                                                                                   <th className="px-3 py-1.5 font-medium sticky top-0 bg-white">Order ID</th>
-                                                                                   <th className="px-3 py-1.5 font-medium sticky top-0 bg-white">SKU</th>
-                                                                                   <th className="px-3 py-1.5 font-medium text-right sticky top-0 bg-white">Refund Amt</th>
-                                                                               </tr>
-                                                                           </thead>
-                                                                           <tbody className="divide-y divide-gray-50">
-                                                                               {item.records.slice(0, 100).map((rec: RefundLog, rIdx: number) => (
-                                                                                   <tr key={rec.id || rIdx} className="hover:bg-gray-50">
-                                                                                       <td className="px-3 py-1.5 font-mono text-gray-600">{new Date(rec.date).toLocaleDateString()}</td>
-                                                                                       <td className="px-3 py-1.5 font-mono text-indigo-600 font-medium select-all cursor-text flex items-center gap-1">
-                                                                                          {rec.orderId || '—'}
-                                                                                       </td>
-                                                                                       <td className="px-3 py-1.5 font-mono text-gray-600">{rec.sku}</td>
-                                                                                       <td className="px-3 py-1.5 text-right text-gray-800">£{((rec.amount || 0) + (rec.freightAmount || 0)).toFixed(2)}</td>
-                                                                                   </tr>
-                                                                               ))}
-                                                                               {item.records.length > 100 && (
-                                                                                   <tr><td colSpan={4} className="px-3 py-2 text-center text-gray-400 italic">...and {item.records.length - 100} more</td></tr>
-                                                                               )}
-                                                                           </tbody>
-                                                                       </table>
+                                                                        {item.partner === 'Unattributed Carrier' && (
+                                                                            <div className="px-3 py-2 bg-amber-50 text-[10px] text-amber-700 border-b border-amber-100 flex items-start gap-2">
+                                                                                <AlertTriangle className="w-3.5 h-3.5 mt-0.5" />
+                                                                                <div>
+                                                                                    <strong>Diagnosis:</strong> These refunds could not be linked to a known carrier.
+                                                                                    <ul className="list-disc pl-3 mt-1 space-y-0.5">
+                                                                                        <li>Check if the <strong>Order ID</strong> exists in your imported Sales History.</li>
+                                                                                        <li>Check if the Sales History has a <strong>Logistic Partner</strong> column mapped.</li>
+                                                                                    </ul>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                        <table className="w-full text-xs text-left">
+                                                                            <thead className="bg-gray-50/30 text-gray-400">
+                                                                                <tr>
+                                                                                    <th className="px-3 py-1.5 font-medium sticky top-0 bg-white">Date</th>
+                                                                                    <th className="px-3 py-1.5 font-medium sticky top-0 bg-white">Order ID</th>
+                                                                                    <th className="px-3 py-1.5 font-medium sticky top-0 bg-white">SKU</th>
+                                                                                    <th className="px-3 py-1.5 font-medium text-right sticky top-0 bg-white">Refund Amt</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody className="divide-y divide-gray-50">
+                                                                                {item.records.slice(0, 100).map((rec: RefundLog, rIdx: number) => (
+                                                                                    <tr key={rec.id || rIdx} className="hover:bg-gray-50">
+                                                                                        <td className="px-3 py-1.5 font-mono text-gray-600">{new Date(rec.date).toLocaleDateString()}</td>
+                                                                                        <td className="px-3 py-1.5 font-mono text-indigo-600 font-medium select-all cursor-text flex items-center gap-1">
+                                                                                            {rec.orderId || '—'}
+                                                                                        </td>
+                                                                                        <td className="px-3 py-1.5 font-mono text-gray-600">{rec.sku}</td>
+                                                                                        <td className="px-3 py-1.5 text-right text-gray-800">£{((rec.amount || 0) + (rec.freightAmount || 0)).toFixed(2)}</td>
+                                                                                    </tr>
+                                                                                ))}
+                                                                                {item.records.length > 100 && (
+                                                                                    <tr><td colSpan={4} className="px-3 py-2 text-center text-gray-400 italic">...and {item.records.length - 100} more</td></tr>
+                                                                                )}
+                                                                            </tbody>
+                                                                        </table>
                                                                     </div>
                                                                 )}
-                                                             </div>
+                                                            </div>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -771,15 +763,15 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         </table>
                     </div>
                 </div>
-                 {totalPages > 1 && (
+                {totalPages > 1 && (
                     <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-end">
-                         <div className="flex gap-1">
+                        <div className="flex gap-1">
                             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 border rounded bg-white text-xs font-bold">Prev</button>
                             <span className="px-2 py-1 text-xs text-gray-500">Page {currentPage} of {totalPages}</span>
                             <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 border rounded bg-white text-xs font-bold">Next</button>
-                         </div>
+                        </div>
                     </div>
-                 )}
+                )}
             </div>
         </div>
     );

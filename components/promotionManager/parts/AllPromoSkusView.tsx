@@ -56,7 +56,7 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
 
         (promotions || []).forEach(promo => {
             if (!promo) return;
-            
+
             // Dynamic Status
             let status: 'UPCOMING' | 'ACTIVE' | 'ENDED' = 'ACTIVE';
             if (promo.startDate > today) status = 'UPCOMING';
@@ -64,7 +64,7 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
 
             (promo.items || []).forEach(item => {
                 if (!item || !item.sku) return;
-                
+
                 // Prevent duplicates: Ensure distinct SKU per Promo ID
                 const uniqueKey = `${promo.id}|${item.sku.toUpperCase()}`;
                 if (seenKeys.has(uniqueKey)) return;
@@ -72,14 +72,14 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
 
                 const product = productMap.get(item.sku.toUpperCase());
                 const baseline = getBaselineForProduct(promo, product);
-                
+
                 let computed = 0;
                 if (promo.promotionScope === 'SHOP') {
                     computed = calculateEffectivePrice(baseline, promo.shopDiscountType || 'PERCENT_OFF', promo.shopDiscountValue || 0);
                 } else {
                     computed = calculateEffectivePrice(baseline, item.discountType || 'FIXED_PRICE', item.discountValue || 0);
                 }
-                
+
                 const resolved = (computed > 0) ? computed : (item.promoPrice > 0 ? item.promoPrice : 0);
 
                 rows.push({
@@ -103,11 +103,11 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
 
         const filtered = allRows.filter(row => {
             const product = productMap.get(row.sku.toUpperCase());
-            
+
             const matchesTerm = (term: string) => {
-                if (!term) return true; 
+                if (!term) return true;
                 const t = term.toLowerCase().trim();
-                if (!t) return true; 
+                if (!t) return true;
 
                 if ((row.sku || '').toLowerCase().includes(t)) return true;
                 if ((row.eventName || '').toLowerCase().includes(t)) return true;
@@ -122,7 +122,7 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
             } else if (currentSearchQuery.trim()) {
                 if (!matchesTerm(currentSearchQuery)) return false;
             }
-                
+
             return platformFilter === 'All Platforms' || row.platform === platformFilter;
         });
 
@@ -145,11 +145,11 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
 
     const handleExport = () => {
         const headers = ['Platform SKU (Alias)', 'Master SKU', 'Product Name', 'Event Name', 'Platform', 'Promo Price', 'Start Date', 'End Date', 'Status'];
-        
+
         const csvRows = sortedRows.map(row => {
             const product = productMap.get(row.sku.toUpperCase());
             const escape = (str: string) => `"${String(str || '').replace(/"/g, '""')}"`;
-            
+
             let platformSku = row.sku;
             if (product) {
                 const channel = product.channels.find(c => c.platform.toLowerCase() === row.platform.toLowerCase());
@@ -187,7 +187,7 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
         <div className="space-y-6">
             <div className="flex gap-4 bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
                 <div className="relative flex-1">
-                    <TagSearchInput 
+                    <TagSearchInput
                         tags={searchTags}
                         onTagsChange={setSearchTags}
                         onInputChange={setSearchQuery}

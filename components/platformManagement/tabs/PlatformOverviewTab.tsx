@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { User, Globe, BarChart3, X } from 'lucide-react';
 import { SortState } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
@@ -8,6 +8,8 @@ import { TAX_NOTE_SHORT } from '../../../services/taxPolicy';
 import { PlatformSummary, PlatformSortKey } from '../platformManagement.types';
 import { PricingRules } from '../../../types';
 import { PlatformMetricCard } from '../parts/PlatformMetricCard';
+import { FilterBar } from '../../common/FilterBar';
+import AuditPanel from '../../AuditPanel';
 
 interface PlatformOverviewTabProps {
     sortedSummaries: PlatformSummary[];
@@ -20,6 +22,8 @@ interface PlatformOverviewTabProps {
     sort: SortState<PlatformSortKey>;
     setSort: (sort: SortState<PlatformSortKey>) => void;
     topPlatformKey: string | null;
+    startKey?: string;
+    endKey?: string;
 }
 
 export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
@@ -32,20 +36,44 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
     categoryBreakdown,
     sort,
     setSort,
-    topPlatformKey
+    topPlatformKey,
+    startKey = '',
+    endKey = ''
 }) => {
+    const [isAuditVisible, setIsAuditVisible] = useState(false);
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <FilterBar
+                showAudit
+                auditActive={isAuditVisible}
+                onAuditToggle={() => setIsAuditVisible(v => !v)}
+            />
+
+            {isAuditVisible && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                    <AuditPanel
+                        title="Platform Overview Audit"
+                        startKey={startKey}
+                        endKey={endKey}
+                        rows={sortedSummaries}
+                        getDateKey={() => null}
+                        getRevenue={(row) => row.revenue}
+                        getQty={(row) => row.units}
+                        getProfit={(row) => row.profit}
+                        getAdSpend={(row) => row.adSpend}
+                    />
+                </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {sortedSummaries.map((summary) => (
-                    <PlatformMetricCard 
-                        key={summary.platform} 
-                        summary={summary} 
-                        isTop={summary.platform === topPlatformKey} 
-                        isSelected={selectedPlatformKey === summary.platform} 
-                        onSelect={() => setSelectedPlatformKey(summary.platform)} 
-                        rule={pricingRules[summary.platform]} 
-                        themeColor={themeColor} 
+                    <PlatformMetricCard
+                        key={summary.platform}
+                        summary={summary}
+                        isTop={summary.platform === topPlatformKey}
+                        isSelected={selectedPlatformKey === summary.platform}
+                        onSelect={() => setSelectedPlatformKey(summary.platform)}
+                        rule={pricingRules[summary.platform]}
+                        themeColor={themeColor}
                     />
                 ))}
             </div>
@@ -72,8 +100,8 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100/50">
-                                {sortedSummaries.map((summary) => { 
-                                    const rule = pricingRules[summary.platform]; 
+                                {sortedSummaries.map((summary) => {
+                                    const rule = pricingRules[summary.platform];
                                     const isSelected = selectedPlatformKey === summary.platform;
                                     const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
                                     return (
@@ -91,11 +119,11 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                                 {isCostBased && <span className="block text-[8px] text-slate-400 font-normal uppercase mt-0.5">Cost Basis</span>}
                                             </td>
                                             <td className="p-4 text-right font-medium text-gray-700">{formatMoney(summary.profit, 0)}</td>
-                                            <td className="p-4 text-right font-bold text-green-700 bg-green-50/10">{formatMoney(summary.netProfit, 0)}</td>
-                                            <td className="p-4 text-right"><span className={`font-bold ${summary.marginPct >= 15 ? 'text-green-600' : summary.marginPct >= 0 ? 'text-amber-600' : 'text-red-600'}`}>{formatPct(summary.marginPct)}</span></td>
+                                            <td className="p-4 text-right font-bold text-emerald-600 bg-emerald-50/10">{formatMoney(summary.netProfit, 0)}</td>
+                                            <td className="p-4 text-right"><span className={`font-bold ${summary.marginPct >= 15 ? 'text-emerald-600' : summary.marginPct >= 0 ? 'text-amber-500' : 'text-red-500'}`}>{formatPct(summary.marginPct)}</span></td>
                                             <td className="p-4 text-right text-gray-500">{formatNumber(summary.units)}</td>
                                         </tr>
-                                    ); 
+                                    );
                                 })}
                             </tbody>
                         </table>
@@ -120,12 +148,12 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                         </span>
                                         <div className="text-xl font-bold text-gray-900">{formatMoney(selectedSummary.revenue, 0)}</div>
                                     </div>
-                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Net Profit</span><div className={`text-xl font-bold ${selectedSummary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatMoney(selectedSummary.netProfit, 0)}</div></div>
+                                    <div><span className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Net Profit</span><div className={`text-xl font-bold ${selectedSummary.netProfit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatMoney(selectedSummary.netProfit, 0)}</div></div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
                                     <div className="space-y-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase block">Performance</span>
-                                        <div className={`text-sm font-black ${selectedSummary.marginPct >= 15 ? 'text-green-600' : 'text-amber-600'}`}><span className="text-gray-400 font-normal mr-1">Margin:</span> {formatPct(selectedSummary.marginPct)}</div>
+                                        <div className={`text-sm font-black ${selectedSummary.marginPct >= 15 ? 'text-emerald-600' : 'text-amber-500'}`}><span className="text-gray-400 font-normal mr-1">Margin:</span> {formatPct(selectedSummary.marginPct)}</div>
                                         <div className="text-sm font-black text-gray-700"><span className="text-gray-400 font-normal mr-1">TACoS:</span> {formatPct(selectedSummary.tacosPct)}</div>
                                     </div>
                                     <div className="space-y-1 text-right">
@@ -155,7 +183,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                                     <span className="font-bold text-gray-900">{formatMoney(cat.revenue, 0)}</span>
                                                 </div>
                                                 <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000 ease-out" style={{ width: `${(cat.revenue / categoryBreakdown[0].revenue) * 100}%` }}/>
+                                                    <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000 ease-out" style={{ width: `${(cat.revenue / categoryBreakdown[0].revenue) * 100}%` }} />
                                                 </div>
                                             </div>
                                         ))}

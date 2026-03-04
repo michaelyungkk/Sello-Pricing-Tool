@@ -103,25 +103,25 @@ export const DistributionAnalysisSection: React.FC<DistributionAnalysisSectionPr
                 </div>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm select-none">
+            <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm select-none">
                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
                     <Megaphone className="w-3 h-3 text-orange-500" /> Advertising Efficiency (TACoS)
                 </h4>
                 <div className="grid grid-cols-3 gap-4 text-center divide-x divide-gray-100">
                     <div>
-                        <div className={`text-xl font-bold ${typeof tacosStats.d7.tacosPct === 'number' && tacosStats.d7.tacosPct > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-800'}`}>
+                        <div className={`text-xl font-bold ${typeof tacosStats.d7.tacosPct === 'number' && tacosStats.d7.tacosPct > thresholds.highAdDependencyPct ? 'text-red-500' : 'text-gray-800'}`}>
                             {typeof tacosStats.d7.tacosPct === 'number' ? `${tacosStats.d7.tacosPct.toFixed(1)}%` : tacosStats.d7.tacosPct}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">7 Days</div>
                     </div>
                     <div>
-                        <div className={`text-xl font-bold ${typeof tacosStats.d30.tacosPct === 'number' && tacosStats.d30.tacosPct > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-800'}`}>
+                        <div className={`text-xl font-bold ${typeof tacosStats.d30.tacosPct === 'number' && tacosStats.d30.tacosPct > thresholds.highAdDependencyPct ? 'text-red-500' : 'text-gray-800'}`}>
                             {typeof tacosStats.d30.tacosPct === 'number' ? `${tacosStats.d30.tacosPct.toFixed(1)}%` : tacosStats.d30.tacosPct}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">30 Days</div>
                     </div>
                     <div>
-                        <div className={`text-xl font-bold ${typeof tacosStats.d90.tacosPct === 'number' && tacosStats.d90.tacosPct > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-800'}`}>
+                        <div className={`text-xl font-bold ${typeof tacosStats.d90.tacosPct === 'number' && tacosStats.d90.tacosPct > thresholds.highAdDependencyPct ? 'text-red-500' : 'text-gray-800'}`}>
                             {typeof tacosStats.d90.tacosPct === 'number' ? `${tacosStats.d90.tacosPct.toFixed(1)}%` : tacosStats.d90.tacosPct}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">90 Days</div>

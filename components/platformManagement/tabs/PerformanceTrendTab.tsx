@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Trophy, BellRing, X, Settings, Plus, Layers, TrendingUp, RotateCcw, BarChart as BarChartIcon, ArrowUpRight, ArrowDownRight, Activity, Check, ChevronDown, Minus, Medal, Info, ArrowUp, ArrowDown, LayoutGrid, Maximize2, Sparkles } from 'lucide-react';
+import { Trophy, BellRing, X, Settings, Plus, Layers, TrendingUp, RotateCcw, BarChart as BarChartIcon, ArrowUpRight, ArrowDownRight, Activity, Check, ChevronDown, Minus, Medal, Info, ArrowUp, ArrowDown, LayoutGrid, Maximize2, Sparkles, Search } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, ReferenceArea, BarChart, Bar, Cell, ReferenceLine, AreaChart, Area } from 'recharts';
 import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
 import { Tab3AlertRules } from '../../../services/platformAlertRules';
@@ -8,6 +8,8 @@ import { PlatformTrendData } from '../../../services/platformTrendAgg';
 import { Flag } from '../platformManagement.types';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
+import AuditPanel from '../../AuditPanel';
+import { FilterBar } from '../../common/FilterBar';
 
 interface PerformanceTrendTabProps {
     trendData: PlatformTrendData[];
@@ -43,15 +45,17 @@ interface PerformanceTrendTabProps {
     hiddenSeries: Set<string>;
     pricingRules: any;
     barChartData: any[];
+    startKey?: string;
+    endKey?: string;
 }
 
 const SummaryCard = ({ title, platform, delta, value, type }: { title: string, platform?: string, delta?: number | null, value?: number, type: 'pos' | 'neg' | 'info' }) => {
     const Icon = type === 'pos' ? ArrowUpRight : type === 'neg' ? ArrowDownRight : Activity;
-    const colorClass = type === 'pos' ? 'text-green-600' : type === 'neg' ? 'text-red-600' : 'text-indigo-600';
+    const colorClass = type === 'pos' ? 'text-emerald-600' : type === 'neg' ? 'text-red-500' : 'text-indigo-600';
     const bgClass = type === 'pos' ? 'bg-green-50' : type === 'neg' ? 'bg-red-50' : 'bg-indigo-50';
 
     return (
-        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between min-w-0">
+        <div className="bg-custom-glass backdrop-blur-custom p-3.5 rounded-xl border border-custom-glass shadow-sm flex items-start justify-between min-w-0">
             <div className="min-w-0 flex-1">
                 <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1 truncate">{title}</span>
                 <div className="font-medium text-gray-900 truncate text-sm">
@@ -77,11 +81,11 @@ const SummaryCard = ({ title, platform, delta, value, type }: { title: string, p
 const TrendDeltaPill = ({ value, isPp = false, invert = false }: { value: number | null, isPp?: boolean, invert?: boolean }) => {
     if (value === null || !isFinite(value)) return <span className="text-[10px] text-gray-400">New</span>;
     if (Math.abs(value) < 0.1) return <Minus className="w-3 h-3 text-gray-300" />;
-    
+
     const isPositive = value > 0;
     const isGood = invert ? !isPositive : isPositive;
-    const colorClass = isGood ? 'text-green-700 bg-green-50 border-green-200' : 'text-red-700 bg-red-50 border-red-200';
-    
+    const colorClass = isGood ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200';
+
     return (
         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border ${colorClass}`}>
             {isPositive ? '+' : ''}{value.toFixed(1)}{isPp ? 'pp' : '%'}
@@ -89,14 +93,14 @@ const TrendDeltaPill = ({ value, isPp = false, invert = false }: { value: number
     );
 };
 
-const FocusPlatformDropdown = ({ 
-    platforms = [], 
-    selected = [], 
-    onChange 
-}: { 
-    platforms?: string[], 
-    selected?: string[], 
-    onChange: (p: string[]) => void 
+const FocusPlatformDropdown = ({
+    platforms = [],
+    selected = [],
+    onChange
+}: {
+    platforms?: string[],
+    selected?: string[],
+    onChange: (p: string[]) => void
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -135,7 +139,7 @@ const FocusPlatformDropdown = ({
 
     return (
         <div className="relative" ref={dropdownRef}>
-            <button 
+            <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-medium text-gray-700 shadow-sm hover:border-indigo-300 transition-all"
             >
@@ -159,8 +163,8 @@ const FocusPlatformDropdown = ({
                         {platforms.map(p => {
                             const isSelected = selected.includes(p);
                             return (
-                                <button 
-                                    key={p} 
+                                <button
+                                    key={p}
                                     onClick={() => togglePlatform(p)}
                                     className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors text-left group"
                                 >
@@ -178,17 +182,45 @@ const FocusPlatformDropdown = ({
     );
 };
 
-export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({ 
-    trendData, performanceSummary, timeWindow, alertRules, setAlertRules, 
-    uniquePlatforms, selectedChartPlatforms, setSelectedChartPlatforms, 
-    platformGroups, setPlatformGroups, isGroupCreatorOpen, setIsGroupCreatorOpen, 
-    newGroupName, setNewGroupName, newGroupPlatforms, setNewGroupPlatforms, 
-    handleCreateGroup, deleteGroup, toggleNewGroupPlatform, 
-    trendMetric, setTrendMetric, zoomState, handleResetZoom, visibleChartData, 
-    setRefAreaLeft, setRefAreaRight, refAreaLeft, refAreaRight, zoom, 
-    handleLegendClick, hiddenSeries, pricingRules, barChartData 
+export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
+    trendData,
+    performanceSummary,
+    timeWindow,
+    alertRules,
+    setAlertRules,
+    uniquePlatforms,
+    selectedChartPlatforms,
+    setSelectedChartPlatforms,
+    platformGroups,
+    setPlatformGroups,
+    isGroupCreatorOpen,
+    setIsGroupCreatorOpen,
+    newGroupName,
+    setNewGroupName,
+    newGroupPlatforms,
+    setNewGroupPlatforms,
+    handleCreateGroup,
+    deleteGroup,
+    toggleNewGroupPlatform,
+    trendMetric,
+    setTrendMetric,
+    zoomState,
+    handleResetZoom,
+    visibleChartData,
+    setRefAreaLeft,
+    setRefAreaRight,
+    refAreaLeft,
+    refAreaRight,
+    zoom,
+    handleLegendClick,
+    hiddenSeries,
+    pricingRules,
+    barChartData,
+    startKey = '',
+    endKey = '',
 }) => {
     const [isAlertRulesOpen, setIsAlertRulesOpen] = useState(false);
+    const [isAuditVisible, setIsAuditVisible] = useState(false);
     const [chartViewMode, setChartViewMode] = useState<'OVERLAY' | 'TRELLIS'>('OVERLAY');
     const [hoveredPlatform, setHoveredPlatform] = useState<string | null>(null);
     const [isSmoothed, setIsSmoothed] = useState(true);
@@ -224,10 +256,10 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
     // --- ENHANCED MATRIX LOGIC ---
     const portfolioAverages = useMemo(() => {
         if (trendData.length === 0) return null;
-        
+
         const sumCurrent = { rev: 0, profit: 0, units: 0, orders: 0, adSpend: 0, refundValue: 0 };
         const sumPrior = { rev: 0, profit: 0, units: 0, orders: 0, adSpend: 0, refundValue: 0 };
-        
+
         trendData.forEach(d => {
             sumCurrent.rev += d.current.revenue;
             sumCurrent.profit += d.current.netProfit;
@@ -246,7 +278,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
 
         const currentMargin = sumCurrent.rev > 0 ? (sumCurrent.profit / sumCurrent.rev) * 100 : 0;
         const priorMargin = sumPrior.rev > 0 ? (sumPrior.profit / sumPrior.rev) * 100 : 0;
-        
+
         const currentTacos = sumCurrent.rev > 0 ? (sumCurrent.adSpend / sumCurrent.rev) * 100 : 0;
         const priorTacos = sumPrior.rev > 0 ? (sumPrior.adSpend / sumPrior.rev) * 100 : 0;
 
@@ -285,18 +317,18 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
     const rankedPlatforms = useMemo(() => {
         const currentRanked = [...trendData].sort((a, b) => b.current.revenue - a.current.revenue);
         const priorRanked = [...trendData].sort((a, b) => b.prior.revenue - a.prior.revenue);
-        
+
         const ranked = currentRanked.map((item, idx) => {
             const currentPos = idx + 1;
             const priorIdx = priorRanked.findIndex(p => p.platform === item.platform);
             const priorPos = priorIdx !== -1 ? priorIdx + 1 : currentPos;
-            const shift = priorPos - currentPos; 
+            const shift = priorPos - currentPos;
             return { ...item, currentPos, shift };
         });
 
         // Apply UI Sorting
         const getValue = (row: any, key: string) => {
-            switch(key) {
+            switch (key) {
                 case 'name': return row.platform;
                 case 'rank': return row.currentPos;
                 case 'revenue': return row.current.revenue;
@@ -354,6 +386,27 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <FilterBar
+                showAudit
+                auditActive={isAuditVisible}
+                onAuditToggle={() => setIsAuditVisible(v => !v)}
+            />
+            {isAuditVisible && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                    <AuditPanel
+                        title="Platform Performance Audit"
+                        startKey={startKey}
+                        endKey={endKey}
+                        rows={trendData}
+                        getDateKey={() => null}
+                        getRevenue={(row: any) => row.current.revenue}
+                        getQty={(row: any) => row.current.unitsSold}
+                        getProfit={(row: any) => row.current.netProfit}
+                        getAdSpend={(row: any) => row.current.adSpend}
+                    />
+                </div>
+            )}
+
             <div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
                     <SummaryCard title="Biggest Revenue Gainer" platform={performanceSummary?.gainer?.platform} delta={performanceSummary?.gainer?.deltas.revenueDeltaPct} type="pos" />
@@ -374,7 +427,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                     </div>
                     <div className="relative">
                         <button onClick={() => setIsAlertRulesOpen(!isAlertRulesOpen)} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 flex items-center gap-1.5 shadow-sm transition-all"><BellRing className="w-3.5 h-3.5 text-indigo-500" />Alert Rules</button>
-                        {isAlertRulesOpen && (<div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"><div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h4 className="font-bold text-gray-900 text-sm">Alert Thresholds</h4><button onClick={() => setIsAlertRulesOpen(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="space-y-4"><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Revenue Drop Threshold (%)</label><input type="number" value={alertRules.revenueDropPctThreshold} onChange={e => setAlertRules({...alertRules, revenueDropPctThreshold: parseFloat(e.target.value) || 0})} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Low Margin Threshold (%)</label><input type="number" value={alertRules.marginLowThreshold} onChange={e => setAlertRules({...alertRules, marginLowThreshold: parseFloat(e.target.value) || 0})} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">High TACoS Threshold (%)</label><input type="number" value={alertRules.tacosHighThreshold} onChange={e => setAlertRules({...alertRules, tacosHighThreshold: parseFloat(e.target.value) || 0})} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div></div><div className="mt-6 flex gap-2"><button onClick={() => setIsAlertRulesOpen(false)} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-medium text-xs">Save</button></div></div>)}
+                        {isAlertRulesOpen && (<div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"><div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h4 className="font-bold text-gray-900 text-sm">Alert Thresholds</h4><button onClick={() => setIsAlertRulesOpen(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="space-y-4"><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Revenue Drop Threshold (%)</label><input type="number" value={alertRules.revenueDropPctThreshold} onChange={e => setAlertRules({ ...alertRules, revenueDropPctThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Low Margin Threshold (%)</label><input type="number" value={alertRules.marginLowThreshold} onChange={e => setAlertRules({ ...alertRules, marginLowThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">High TACoS Threshold (%)</label><input type="number" value={alertRules.tacosHighThreshold} onChange={e => setAlertRules({ ...alertRules, tacosHighThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div></div><div className="mt-6 flex gap-2"><button onClick={() => setIsAlertRulesOpen(false)} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-medium text-xs">Save</button></div></div>)}
                     </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -402,9 +455,9 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                     <td className="px-4 py-3 text-center"><span className="text-[10px] font-bold text-indigo-400 uppercase italic">System Baseline</span></td>
                                 </tr>
                             )}
-                            {rankedPlatforms.map((row) => { 
-                                const rule = pricingRules[row.platform]; 
-                                const revDelta = row.deltas.revenueDeltaPct; 
+                            {rankedPlatforms.map((row) => {
+                                const rule = pricingRules[row.platform];
+                                const revDelta = row.deltas.revenueDeltaPct;
                                 const marginDelta = row.deltas.marginDeltaPp;
                                 const tacosDelta = row.deltas.tacosDeltaPp;
                                 const refundDelta = row.deltas.refundRateDeltaPp;
@@ -414,15 +467,15 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                 const isRefundHigh = row.current.refundRatePct > 5.0;
                                 const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
 
-                                const flags: Flag[] = []; 
-                                if (isRevWarning) flags.push({ label: "Growth Drop", style: "bg-red-100 text-red-800 border-red-200", tooltip: `Revenue down ${revDelta?.toFixed(1)}%` }); 
+                                const flags: Flag[] = [];
+                                if (isRevWarning) flags.push({ label: "Growth Drop", style: "bg-red-100 text-red-800 border-red-200", tooltip: `Revenue down ${revDelta?.toFixed(1)}%` });
                                 if (isMarginCritical) flags.push({ label: "Low Margin", style: "bg-amber-100 text-amber-800 border-amber-200", tooltip: "Below efficiency target" });
                                 if (isTacosHigh) flags.push({ label: "High Ad Costs", style: "bg-purple-100 text-purple-800 border-purple-200", tooltip: "Ad spend above threshold" });
                                 if (isRefundHigh) flags.push({ label: "High Returns", style: "bg-orange-100 text-orange-800 border-orange-200", tooltip: "Quality/Fulfillment issues detected" });
-                                if (row.current.netProfit < 0) flags.push({ label: "Bleeding", style: "bg-red-900 text-white border-red-950 shadow-sm", tooltip: "Operating at a net loss" }); 
+                                if (row.current.netProfit < 0) flags.push({ label: "Bleeding", style: "bg-red-900 text-white border-red-950 shadow-sm", tooltip: "Operating at a net loss" });
                                 return (
                                     <tr key={row.platform} className={`even:bg-gray-50/20 hover:bg-gray-100/40 transition-all cursor-pointer ${hoveredPlatform === row.platform ? 'bg-indigo-50/40 ring-1 ring-inset ring-indigo-200' : ''}`} onMouseEnter={() => setHoveredPlatform(row.platform)} onMouseLeave={() => setHoveredPlatform(null)}>
-                                        <td className="p-4 text-center"><div className="flex flex-col items-center gap-0.5"><div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-black border border-gray-200">{row.currentPos}</div>{row.shift !== 0 ? (<div className={`text-[8px] font-black flex items-center ${row.shift > 0 ? 'text-green-600' : 'text-red-500'}`}>{row.shift > 0 ? <ArrowUp className="w-2 h-2" /> : <ArrowDown className="w-2 h-2" />}{Math.abs(row.shift)}</div>) : <Minus className="w-2 h-2 text-gray-300" />}</div></td>
+                                        <td className="p-4 text-center"><div className="flex flex-col items-center gap-0.5"><div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-black border border-gray-200">{row.currentPos}</div>{row.shift !== 0 ? (<div className={`text-[8px] font-black flex items-center ${row.shift > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{row.shift > 0 ? <ArrowUp className="w-2 h-2" /> : <ArrowDown className="w-2 h-2" />}{Math.abs(row.shift)}</div>) : <Minus className="w-2 h-2 text-gray-300" />}</div></td>
                                         <td className="p-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white shadow-sm" style={{ backgroundColor: rule?.color || '#6366f1' }}>{row.platform[0]}</div><div className="flex flex-col"><div className="font-bold text-gray-900 text-sm leading-none">{row.platform}</div><div className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-wider">{rule?.manager || 'Unassigned'}</div></div></div></td>
                                         <td className={`p-4 text-right transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}>
                                             <div className="flex flex-col items-end">
@@ -431,12 +484,12 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                                 <TrendDeltaPill value={revDelta} />
                                             </div>
                                         </td>
-                                        <td className={`p-4 text-right transition-colors ${isMarginCritical ? 'bg-amber-50/30' : ''}`}><div className="flex flex-col items-end"><span className={`font-black ${row.current.marginPct < 15 ? 'text-amber-600' : 'text-green-600'}`}>{formatPct(row.current.marginPct)}</span><TrendDeltaPill value={marginDelta} isPp /></div></td>
+                                        <td className={`p-4 text-right transition-colors ${isMarginCritical ? 'bg-amber-50/30' : ''}`}><div className="flex flex-col items-end"><span className={`font-black ${row.current.marginPct < 15 ? 'text-amber-500' : 'text-emerald-600'}`}>{formatPct(row.current.marginPct)}</span><TrendDeltaPill value={marginDelta} isPp /></div></td>
                                         <td className={`p-4 text-right transition-colors ${isTacosHigh ? 'bg-purple-50/30' : ''}`}><div className="flex flex-col items-end"><span className="font-medium text-gray-700">{formatPct(row.current.tacosPct)}</span><TrendDeltaPill value={tacosDelta} isPp invert /></div></td>
                                         <td className={`p-4 text-right transition-colors ${isRefundHigh ? 'bg-orange-50/30' : ''}`}><div className="flex flex-col items-end"><span className="font-medium text-gray-700">{formatPct(row.current.refundRatePct)}</span><TrendDeltaPill value={refundDelta} isPp invert /></div></td>
-                                        <td className="p-4 text-center"><div className="flex justify-center gap-1.5 flex-wrap min-w-[120px]">{flags.length > 0 ? flags.map((flag, idx) => (<span key={idx} className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border cursor-help shadow-xs ${flag.style}`} title={flag.tooltip}>{flag.label}</span>)) : (<span className="px-2 py-0.5 rounded text-[9px] font-bold text-green-700 bg-green-50 border border-green-200 uppercase">Healthy</span>)}</div></td>
+                                        <td className="p-4 text-center"><div className="flex justify-center gap-1.5 flex-wrap min-w-[120px]">{flags.length > 0 ? flags.map((flag, idx) => (<span key={idx} className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border cursor-help shadow-xs ${flag.style}`} title={flag.tooltip}>{flag.label}</span>)) : (<span className="px-2 py-0.5 rounded text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 uppercase">Healthy</span>)}</div></td>
                                     </tr>
-                                ); 
+                                );
                             })}
                         </tbody>
                     </table>
@@ -455,7 +508,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                         <div>
                             <span className="text-[10px] font-medium text-gray-400 uppercase block mb-3 tracking-widest">Processing</span>
                             <div className="flex items-center gap-4">
-                                <button 
+                                <button
                                     onClick={() => setIsSmoothed(!isSmoothed)}
                                     className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all shadow-sm ${isSmoothed ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-200'}`}
                                 >
@@ -479,7 +532,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                         </div>
                         <div className="flex bg-gray-100 p-1 rounded-lg">{(['NET_PROFIT', 'MARGIN_PCT', 'AVG_ORDER_VALUE', 'UNITS_SOLD'] as const).map(m => (<button key={m} onClick={() => setTrendMetric(m)} className={`px-4 py-2 text-[10px] font-medium uppercase tracking-wider rounded-md transition-all ${trendMetric === m ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>{metricLabels[m]}</button>))}</div>
                     </div>
-                    
+
                     {chartViewMode === 'OVERLAY' ? (
                         <div className="h-[450px] w-full relative group/chart select-none">
                             {zoomState.isZoomed && (<button onClick={handleResetZoom} className="absolute top-4 right-12 z-20 px-3 py-1.5 bg-white/90 backdrop-blur-sm border border-indigo-100 text-indigo-600 rounded-lg shadow-lg hover:bg-indigo-50 transition-all flex items-center gap-1.5 text-xs font-medium animate-in fade-in slide-in-from-top-2"><RotateCcw className="w-3.5 h-3.5" />Reset View</button>)}
@@ -490,43 +543,46 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                         <XAxis dataKey="date" tickFormatter={(val) => new Date(val).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={true} />
                                         <YAxis tickFormatter={formatYAxis} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={true} domain={['auto', 'auto']} />
                                         <RechartsTooltip shared={true} cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '3 3' }} content={<CustomTrendTooltip />} />
-                                        <Legend 
-                                            wrapperStyle={{ paddingTop: '20px' }} 
-                                            onClick={handleLegendClick} 
-                                            onMouseEnter={(o) => setHoveredPlatform(o.dataKey.replace(`_${trendMetric}`, ''))}
+                                        <Legend
+                                            wrapperStyle={{ paddingTop: '20px' }}
+                                            onClick={handleLegendClick}
+                                            onMouseEnter={(o) => {
+                                                const key = o.dataKey as string;
+                                                if (key) setHoveredPlatform(key.replace(`_${trendMetric}`, ''));
+                                            }}
                                             onMouseLeave={() => setHoveredPlatform(null)}
-                                            formatter={(value) => (<span className={`text-xs font-medium cursor-pointer transition-opacity ${hiddenSeries.has(value) ? 'opacity-30' : 'opacity-100'} ${hoveredPlatform === value ? 'font-bold underline' : ''}`}>{value}</span>)} 
+                                            formatter={(value) => (<span className={`text-xs font-medium cursor-pointer transition-opacity ${hiddenSeries.has(value) ? 'opacity-30' : 'opacity-100'} ${hoveredPlatform === value ? 'font-bold underline' : ''}`}>{value}</span>)}
                                         />
                                         {refAreaLeft && refAreaRight && (<ReferenceArea x1={refAreaLeft} x2={refAreaRight} strokeOpacity={0.3} fill="#8884d8" fillOpacity={0.3} />)}
                                         {selectedChartPlatforms.map((platform: string) => (
-                                            <Line 
-                                                key={platform} 
-                                                type="monotone" 
-                                                dataKey={`${platform}_${trendMetric}`} 
-                                                name={platform} 
-                                                stroke={pricingRules[platform]?.color || '#9ca3af'} 
-                                                strokeWidth={hoveredPlatform === platform ? 4 : 2} 
+                                            <Line
+                                                key={platform}
+                                                type="monotone"
+                                                dataKey={`${platform}_${trendMetric}`}
+                                                name={platform}
+                                                stroke={pricingRules[platform]?.color || '#9ca3af'}
+                                                strokeWidth={hoveredPlatform === platform ? 4 : 2}
                                                 strokeOpacity={!hoveredPlatform || hoveredPlatform === platform ? 1 : 0.15}
-                                                dot={false} 
+                                                dot={false}
                                                 connectNulls={true}
-                                                hide={hiddenSeries.has(platform)} 
-                                                isAnimationActive={false} 
+                                                hide={hiddenSeries.has(platform)}
+                                                isAnimationActive={false}
                                             />
                                         ))}
                                         {platformGroups.map((group: any, i: number) => (
-                                            <Line 
-                                                key={group.id} 
-                                                type="monotone" 
-                                                dataKey={`${group.name}_${trendMetric}`} 
-                                                name={group.name} 
-                                                stroke={['#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#6366f1'][i % 5]} 
-                                                strokeWidth={hoveredPlatform === group.name ? 5 : 3} 
+                                            <Line
+                                                key={group.id}
+                                                type="monotone"
+                                                dataKey={`${group.name}_${trendMetric}`}
+                                                name={group.name}
+                                                stroke={['#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#6366f1'][i % 5]}
+                                                strokeWidth={hoveredPlatform === group.name ? 5 : 3}
                                                 strokeOpacity={!hoveredPlatform || hoveredPlatform === group.name ? 1 : 0.15}
-                                                strokeDasharray="5 5" 
-                                                dot={false} 
+                                                strokeDasharray="5 5"
+                                                dot={false}
                                                 connectNulls={true}
-                                                hide={hiddenSeries.has(group.name)} 
-                                                isAnimationActive={false} 
+                                                hide={hiddenSeries.has(group.name)}
+                                                isAnimationActive={false}
                                             />
                                         ))}
                                     </LineChart>
@@ -539,12 +595,12 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                 const platformKey = `${platform}_${trendMetric}`;
                                 const color = pricingRules[platform]?.color || '#9ca3af';
                                 const sId = sanitizeId(platform);
-                                
+
                                 const chartDomain = (() => {
                                     const platValues = smoothedChartData.map(d => d[platformKey]).filter(v => v !== undefined && v !== null);
                                     const avgValues = globalTrendLine.map(d => d.avg).filter(v => v !== undefined && v !== null);
                                     const combined = [...platValues, ...avgValues];
-                                    
+
                                     if (combined.length === 0) return ['auto', 'auto'];
                                     const min = Math.min(...combined);
                                     const max = Math.max(...combined);
@@ -564,7 +620,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                                 {(() => {
                                                     const platData = trendData.find(d => d.platform === platform);
                                                     let val = 0;
-                                                    switch(trendMetric) {
+                                                    switch (trendMetric) {
                                                         case 'NET_PROFIT': val = platData?.current.netProfit || 0; break;
                                                         case 'MARGIN_PCT': val = platData?.current.marginPct || 0; break;
                                                         case 'AVG_ORDER_VALUE': val = platData?.current.avgOrderValue || 0; break;
@@ -579,8 +635,8 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                                 <AreaChart data={smoothedChartData}>
                                                     <defs>
                                                         <linearGradient id={`gradient-${sId}`} x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor={color} stopOpacity={0.06}/>
-                                                            <stop offset="95%" stopColor={color} stopOpacity={0}/>
+                                                            <stop offset="5%" stopColor={color} stopOpacity={0.06} />
+                                                            <stop offset="95%" stopColor={color} stopOpacity={0} />
                                                         </linearGradient>
                                                     </defs>
                                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
@@ -598,15 +654,15 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                                         return null;
                                                     }} />
                                                     <ReferenceLine y={0} stroke="#e2e8f0" />
-                                                    <Area 
-                                                        type="monotone" 
-                                                        dataKey={platformKey} 
-                                                        stroke={color} 
-                                                        strokeWidth={2.5} 
-                                                        fill={`url(#gradient-${sId})`} 
-                                                        connectNulls={true} 
-                                                        dot={false} 
-                                                        isAnimationActive={false} 
+                                                    <Area
+                                                        type="monotone"
+                                                        dataKey={platformKey}
+                                                        stroke={color}
+                                                        strokeWidth={2.5}
+                                                        fill={`url(#gradient-${sId})`}
+                                                        connectNulls={true}
+                                                        dot={false}
+                                                        isAnimationActive={false}
                                                     />
                                                     {/* Dimmed Portfolio Average Reference */}
                                                     <Line data={globalTrendLine} type="monotone" dataKey="avg" stroke="#cbd5e1" strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls={true} isAnimationActive={false} />
@@ -660,8 +716,8 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                                             <span className="text-gray-400">Change:</span>
                                                             <span className={`font-medium ${currVal >= priorVal ? 'text-green-400' : 'text-red-400'}`}>
                                                                 {(currVal - priorVal >= 0 ? '+' : '')}
-                                                                {trendMetric === 'MARGIN_PCT' 
-                                                                    ? (currVal - priorVal).toFixed(1) + 'pp' 
+                                                                {trendMetric === 'MARGIN_PCT'
+                                                                    ? (currVal - priorVal).toFixed(1) + 'pp'
                                                                     : (((currVal - priorVal) / (Math.abs(priorVal) || 1)) * 100).toFixed(1) + '%'}
                                                             </span>
                                                         </div>

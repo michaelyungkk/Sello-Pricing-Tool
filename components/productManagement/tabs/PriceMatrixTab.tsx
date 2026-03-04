@@ -249,9 +249,9 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                                     
                                     if (!isPromoActive && refPrice) {
                                         if (displayPrice > refPrice + 0.01) {
-                                            priceStyle = "font-bold text-green-700 bg-green-50 px-1 py-0.5 rounded border border-green-200";
+                                            priceStyle = "font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200";
                                         } else if (displayPrice < refPrice - 0.01) {
-                                            priceStyle = "font-bold text-red-700 bg-red-50 px-1 py-0.5 rounded border border-red-200";
+                                            priceStyle = "font-bold text-red-500 bg-red-50 px-1 py-0.5 rounded border border-red-200";
                                         }
                                     }
 
@@ -261,7 +261,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                                                 <div className="flex flex-col items-center gap-0.5">
                                                     {isPromoActive ? (
                                                         <div className="flex items-center gap-1 justify-center relative group/promo cursor-help" title={`Active Promo: ${promo?.name}\nRegular Price: £${displayPrice.toFixed(2)}`}>
-                                                            <span className="font-bold text-red-600">£{effectivePromoPrice.toFixed(2)}</span>
+                                                            <span className="font-bold text-red-500">£{effectivePromoPrice.toFixed(2)}</span>
                                                             <Tag className="w-3 h-3 text-red-500" />
                                                         </div>
                                                     ) : (

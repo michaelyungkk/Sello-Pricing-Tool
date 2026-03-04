@@ -21,7 +21,7 @@ export default async (req: Request) => {
         const { password, transactions, clearAll, chunkIndex, totalChunks } = body;
 
         const hash = process.env.ADMIN_PASSWORD_HASH;
-        const dbUrl = process.env.NETLIFY_DATABASE_URL;
+        const dbUrl = process.env.NETLIFY_DATABASE_URL_UNPOOLED || process.env.NETLIFY_DATABASE_URL;
         if (!hash || !dbUrl) throw new Error('Server config error');
 
         const valid = await bcrypt.compare(password, hash);
@@ -47,8 +47,6 @@ export default async (req: Request) => {
                 { status: 400, headers: CORS }
             );
 
-        let upsertedCount = 0;
-
         if (transactions.length === 0) {
             return new Response(
                 JSON.stringify({ success: true, chunkIndex, totalChunks, upsertedCount: 0 }),
@@ -56,7 +54,6 @@ export default async (req: Request) => {
             );
         }
 
-        // Build all rows with dedup keys
         const rows = transactions.map((tx: any) => {
             const dedupKey = tx.orderId
                 ? `${tx.sku}|${tx.orderId}`
@@ -82,8 +79,7 @@ export default async (req: Request) => {
             };
         });
 
-        // Single batch INSERT for the entire chunk
-        const valuePlaceholders = rows.map((_: any, i: number) => {
+        const placeholders = rows.map((_: any, i: number) => {
             const b = i * 17;
             return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15},$${b + 16},$${b + 17},NOW())`;
         }).join(',');
@@ -95,13 +91,13 @@ export default async (req: Request) => {
             r.real_postage, r.real_extra_freight, r.dedup_key
         ]);
 
-        const query = `
+        await sql.query(`
             INSERT INTO transaction_history (
                 id, sku, date, price, velocity, margin, profit,
                 ads_spend, raw_ads_spend, platform, order_id,
                 postcode, logistic_partner, logistic_service,
                 real_postage, real_extra_freight, dedup_key, updated_at
-            ) VALUES ${valuePlaceholders}
+            ) VALUES ${placeholders}
             ON CONFLICT (dedup_key) DO UPDATE SET
                 price = EXCLUDED.price,
                 velocity = EXCLUDED.velocity,
@@ -110,23 +106,16 @@ export default async (req: Request) => {
                 ads_spend = EXCLUDED.ads_spend,
                 raw_ads_spend = EXCLUDED.raw_ads_spend,
                 updated_at = NOW()
-        `;
+        `, flatValues);
 
-        await (sql as any).unsafe(query, flatValues);
-        upsertedCount = rows.length;
-
-        console.log(`[db-push-transactions] chunk ${chunkIndex}/${totalChunks} — ${upsertedCount} rows upserted`);
+        console.log(`[db-push-transactions] chunk ${chunkIndex}/${totalChunks} — ${rows.length} rows upserted`);
 
         return new Response(
-            JSON.stringify({
-                success: true,
-                chunkIndex,
-                totalChunks,
-                upsertedCount
-            }),
+            JSON.stringify({ success: true, chunkIndex, totalChunks, upsertedCount: rows.length }),
             { status: 200, headers: CORS }
         );
     } catch (error: any) {
+        console.error('[db-push-transactions] error:', error.message);
         return new Response(
             JSON.stringify({ success: false, error: error.message }),
             { status: 500, headers: CORS }

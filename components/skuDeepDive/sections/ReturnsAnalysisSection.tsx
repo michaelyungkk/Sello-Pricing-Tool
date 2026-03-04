@@ -143,7 +143,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
 
                         <div className="space-y-6">
                                 {/* Top Reasons */}
-                                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col h-[250px]">
+                                <div className="bg-custom-glass backdrop-blur-custom p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[250px]">
                                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2"><AlertTriangle className="w-3 h-3 text-amber-500" /> Top Reasons</h4>
                                     <div className="flex-1 overflow-auto pr-1">
                                         <div className="space-y-2">
@@ -176,7 +176,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                     </div>
                                 </div>
                                 ) : (
-                                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm animate-in fade-in">
+                                <div className="bg-custom-glass backdrop-blur-custom p-5 rounded-xl border border-custom-glass shadow-sm animate-in fade-in">
                                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2"><Smile className="w-3 h-3 text-purple-500" /> Sentiment (Local)</h4>
                                     
                                     <div className="space-y-3">
@@ -207,7 +207,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                 )}
 
                                 {/* Word Cloud */}
-                                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                                <div className="bg-custom-glass backdrop-blur-custom p-5 rounded-xl border border-custom-glass shadow-sm">
                                     <div className="flex justify-between items-center mb-4">
                                         <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
                                             <MessageSquare className="w-3 h-3 text-blue-500" /> Keyword Cloud
@@ -248,8 +248,8 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                     </div>
 
                     {/* Refund Detail Table - Extended full width */}
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in">
-                        <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                    <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden flex flex-col animate-in fade-in">
+                        <div className="p-4 border-b border-custom-glass bg-white/10 flex justify-between items-center">
                             <h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-2">
                                 <Hash className="w-4 h-4 text-red-500" />
                                 Refund Return Records (Full History)
@@ -258,7 +258,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs">
-                                <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0 z-10 whitespace-nowrap">
+                                <thead className="bg-white/10 text-gray-500 font-semibold border-b border-custom-glass sticky top-0 z-10 whitespace-nowrap">
                                     <tr>
                                         <SortableHeader label="Date" sortKey="date" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
                                         <SortableHeader label="Order ID" sortKey="orderId" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
@@ -322,7 +322,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                             </table>
                         </div>
                         {totalRefundPages > 1 && (
-                            <div className="bg-gray-50/50 px-4 py-2.5 border-t border-gray-100 flex items-center justify-between">
+                            <div className="bg-white/10 px-4 py-2.5 border-t border-custom-glass flex items-center justify-between">
                                 <span className="text-[10px] text-gray-400 font-bold uppercase">
                                     Page {refundPage} of {totalRefundPages} ({filteredRefundsLength} items)
                                 </span>

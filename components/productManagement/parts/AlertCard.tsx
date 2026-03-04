@@ -1,34 +1,44 @@
-
 import React from 'react';
 
 export const AlertCard = ({ title, count, icon: Icon, color, isActive, onClick, desc }: any) => {
-    const colorStyles = {
-        red: isActive ? 'bg-red-600 text-white border-red-700' : 'bg-white hover:border-red-300 border-transparent',
-        amber: isActive ? 'bg-amber-500 text-white border-amber-600' : 'bg-white hover:border-amber-300 border-transparent',
-        purple: isActive ? 'bg-purple-600 text-white border-purple-700' : 'bg-white hover:border-purple-300 border-transparent',
-        gray: isActive ? 'bg-gray-700 text-white border-gray-800' : 'bg-white hover:border-gray-300 border-transparent',
+    const activeBorderStyles = {
+        red: '!border-l-red-500',
+        amber: '!border-l-amber-500',
+        purple: '!border-l-purple-500',
+        gray: '!border-l-gray-400',
     };
 
-    const textStyles = {
-        red: isActive ? 'text-red-100' : 'text-red-600',
-        amber: isActive ? 'text-amber-100' : 'text-amber-600',
-        purple: isActive ? 'text-purple-100' : 'text-purple-600',
-        gray: isActive ? 'text-gray-300' : 'text-gray-500',
+    const activeIconStyles = {
+        red: 'text-red-500',
+        amber: 'text-amber-500',
+        purple: 'text-purple-500',
+        gray: 'text-gray-500',
     };
+
+    const currentBorderStyle = isActive
+        ? activeBorderStyles[color as keyof typeof activeBorderStyles]
+        : '!border-l-transparent';
+
+    const currentIconColor = isActive
+        ? activeIconStyles[color as keyof typeof activeIconStyles]
+        : 'text-gray-400';
+
+    const hoverClass = !isActive ? 'hover:-translate-y-1 hover:shadow-md' : '';
 
     return (
-        <button 
+        <button
             onClick={onClick}
-            className={`p-4 rounded-xl shadow-sm border transition-all duration-200 flex flex-col items-start text-left ${colorStyles[color as keyof typeof colorStyles]} ${!isActive && 'hover:shadow-md hover:-translate-y-1'}`}
+            className={`p-3 rounded-xl shadow-sm transition-all duration-200 flex flex-col items-start text-left w-full bg-custom-glass backdrop-blur-custom border border-custom-glass border-l-4 ${currentBorderStyle} ${hoverClass}`}
         >
             <div className="flex justify-between w-full items-start mb-2">
-                <span className={`font-bold text-sm ${isActive ? 'text-white' : 'text-gray-600'}`}>{title}</span>
-                <Icon className={`w-5 h-5 ${textStyles[color as keyof typeof textStyles]}`} />
+                <span className="text-sm font-bold text-gray-500">{title}</span>
+                <Icon className={`w-5 h-5 ${currentIconColor}`} />
             </div>
-            <div className="text-3xl font-bold mb-1">{count}</div>
-            <div className={`text-[10px] font-medium uppercase tracking-wide opacity-80 ${isActive ? 'text-white' : 'text-gray-400'}`}>
+            <div className="text-3xl font-bold text-gray-800 mb-1">{count}</div>
+            <div className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
                 {desc}
             </div>
         </button>
     );
 };
+

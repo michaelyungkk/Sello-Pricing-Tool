@@ -498,7 +498,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
                     />
                     <div className="flex items-center gap-1.5">
                         <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
-                        <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
                     </div>
                 </label>
             </div>
