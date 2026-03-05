@@ -14,7 +14,6 @@ import {
     PromotionEvent,
     UserProfile as UserProfileType,
     LogisticsRule,
-    ShipmentLog, // keep for migration compat
     FreightRate,
     StrategyConfig,
     VelocityLookback,

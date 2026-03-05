@@ -105,61 +105,59 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             </div>
 
 
-            {isAuditPanelVisible && (
-                <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                    <div className="flex flex-wrap gap-4 items-center">
-                        <div className="relative">
-                            <select
-                                value={txDays}
-                                onChange={e => setTxDays(Number(e.target.value))}
-                                className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option value={7}>Last 7 Days</option>
-                                <option value={14}>Last 14 Days</option>
-                                <option value={30}>Last 30 Days</option>
-                                <option value={90}>Last 90 Days</option>
-                            </select>
-                            <Calendar className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                        </div>
-                        <div className="relative">
-                            <select
-                                value={txFilterPlatform}
-                                onChange={e => setTxFilterPlatform(e.target.value)}
-                                className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option value="All">All Platforms</option>
-                                {platforms.map(p => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                            <Filter className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                        </div>
-                        <div className="relative">
-                            <select
-                                value={txFilterType}
-                                onChange={e => setTxFilterType(e.target.value)}
-                                className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option value="All">All Types</option>
-                                <option value="Sale">Sale (Price {'>'} 0)</option>
-                                <option value="Ad Cost">Ad Cost (Ads {'>'} 0)</option>
-                                <option value="Refund">Refunds Only</option>
-                            </select>
-                            <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                        </div>
-                    </div>
+            <div className="flex flex-wrap gap-4 items-center">
+                <div className="relative">
+                    <select
+                        value={txDays}
+                        onChange={e => setTxDays(Number(e.target.value))}
+                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value={7}>Last 7 Days</option>
+                        <option value={14}>Last 14 Days</option>
+                        <option value={30}>Last 30 Days</option>
+                        <option value={90}>Last 90 Days</option>
+                    </select>
+                    <Calendar className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                </div>
+                <div className="relative">
+                    <select
+                        value={txFilterPlatform}
+                        onChange={e => setTxFilterPlatform(e.target.value)}
+                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="All">All Platforms</option>
+                        {platforms.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <Filter className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                </div>
+                <div className="relative">
+                    <select
+                        value={txFilterType}
+                        onChange={e => setTxFilterType(e.target.value)}
+                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="All">All Types</option>
+                        <option value="Sale">Sale (Price {'>'} 0)</option>
+                        <option value="Ad Cost">Ad Cost (Ads {'>'} 0)</option>
+                        <option value="Refund">Refunds Only</option>
+                    </select>
+                    <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                </div>
+            </div>
 
-                    <div className="pt-4 border-t border-gray-100">
-                        <AuditPanel
-                            title="Ledger Reconciliation"
-                            startKey={startKey}
-                            endKey={endKey}
-                            rows={filteredTransactions}
-                            getDateKey={(row: any) => asDateKey(row.date)}
-                            getRevenue={(row: any) => calcRevenue(row)}
-                            getQty={(row: any) => calcUnits(row)}
-                            getProfit={(row: any) => calcProfit(row)}
-                            getAdSpend={(row: any) => calcAdSpend(row)}
-                        />
-                    </div>
+            {isAuditPanelVisible && (
+                <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                    <AuditPanel
+                        title="Ledger Reconciliation"
+                        startKey={startKey}
+                        endKey={endKey}
+                        rows={filteredTransactions}
+                        getDateKey={(row: any) => asDateKey(row.date)}
+                        getRevenue={(row: any) => calcRevenue(row)}
+                        getQty={(row: any) => calcUnits(row)}
+                        getProfit={(row: any) => calcProfit(row)}
+                        getAdSpend={(row: any) => calcAdSpend(row)}
+                    />
                 </div>
             )}
 
