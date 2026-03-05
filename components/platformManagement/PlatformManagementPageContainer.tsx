@@ -41,6 +41,7 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
   const [activeTab, setActiveTab] = useState<Tab>('performance');
   const [sort, setSort] = useState<SortState<PlatformSortKey>>({ key: 'revenue', dir: 'desc' });
   const [selectedPlatformKey, setSelectedPlatformKey] = useState<string | null>(null);
+  const [isAuditVisible, setIsAuditVisible] = useState(false);
 
   // Time Window State
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('30D');
@@ -656,6 +657,14 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
               <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
             </div>
           </label>
+          <button
+            onClick={() => setIsAuditVisible(v => !v)}
+            className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+            title="Toggle Audit Panel"
+          >
+            <Activity className="w-4 h-4" />
+            Audit{isAuditVisible ? ': On' : ''}
+          </button>
         </>)}
       </ContextBar>
 
@@ -697,6 +706,7 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
             barChartData={barChartData}
             startKey={dateWindow.startKey}
             endKey={dateWindow.endKey}
+            isAuditVisible={isAuditVisible}
           />
         )}
         {activeTab === 'overview' && (
@@ -713,6 +723,7 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
             topPlatformKey={topPlatformKey}
             startKey={dateWindow.startKey}
             endKey={dateWindow.endKey}
+            isAuditVisible={isAuditVisible}
           />
         )}
         {activeTab === 'roi' && (
@@ -724,6 +735,7 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
             setSort={setSort}
             startKey={dateWindow.startKey}
             endKey={dateWindow.endKey}
+            isAuditVisible={isAuditVisible}
           />
         )}
         {activeTab === 'ad-groups' && (

@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { Layers, Activity, Calendar, Filter, Search, Info, Rows, Settings2 } from 'lucide-react';
+import { Layers, Activity, Calendar, Search, Info, Rows, Settings2 } from 'lucide-react';
+import { SelectFilter } from '../../common/SelectFilter';
 import AuditPanel from '../../AuditPanel';
 import { GradeBadge } from '../../GradeBadge';
 import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
@@ -119,17 +120,14 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     </select>
                     <Calendar className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 </div>
-                <div className="relative">
-                    <select
-                        value={txFilterPlatform}
-                        onChange={e => setTxFilterPlatform(e.target.value)}
-                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
-                    >
-                        <option value="All">All Platforms</option>
-                        {platforms.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                    <Filter className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                </div>
+                <SelectFilter
+                    label="Platform"
+                    options={platforms}
+                    selected={txFilterPlatform === 'All' ? [] : [txFilterPlatform]}
+                    onChange={sel => setTxFilterPlatform(sel.length === 0 ? 'All' : sel[0])}
+                    singleSelect
+                    allLabel="All Platforms"
+                />
                 <div className="relative">
                     <select
                         value={txFilterType}

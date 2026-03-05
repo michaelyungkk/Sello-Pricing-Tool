@@ -24,109 +24,15 @@ import {
     ChevronDown,
     CheckSquare,
     Square,
-    Search
+    Search,
 } from 'lucide-react';
 import { formatMoney, formatPct, formatNumber } from '../utils/format';
 import { GradeBadge } from './GradeBadge';
+import { SelectFilter } from './common/SelectFilter';
 import * as XLSX from 'xlsx';
 
-const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, themeColor = '#4f46e5' }: any) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const dropdownRef = React.useRef<HTMLDivElement>(null);
-    const currentSelected = selected || [];
-
-    React.useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const toggleOption = (option: string) => {
-        if (currentSelected.includes(option)) {
-            onChange(currentSelected.filter((item: string) => item !== option));
-        } else {
-            onChange([...currentSelected, option]);
-        }
-    };
-
-    const displayText = currentSelected.length === 0 ? 'All' : currentSelected.length === 1 ? currentSelected[0] : `${currentSelected.length} Selected`;
-    const filteredOptions = options ? options.filter((opt: string) => opt.toLowerCase().includes(searchTerm.toLowerCase())) : [];
-
-    return (
-        <div className="relative" ref={dropdownRef}>
-            <div
-                className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden cursor-pointer h-7"
-                onClick={() => setIsOpen(!isOpen)}
-                style={{ borderColor: isOpen ? themeColor : '#d1d5db' }}
-            >
-                <div className="flex items-center gap-1 px-2 py-1 bg-gray-50 border-r border-gray-200 min-w-fit h-full">
-                    {Icon && <Icon className="w-3 h-3 text-gray-400" />}
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{label}</span>
-                </div>
-                <div className="flex-1 min-w-[100px] px-2 py-1 flex items-center justify-between h-full">
-                    <span className="text-[10px] text-gray-900 truncate max-w-[120px]">{displayText}</span>
-                    <ChevronDown className="w-3 h-3 text-gray-400" />
-                </div>
-            </div>
-
-            {isOpen && (
-                <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-100">
-                    <div className="p-2 border-b border-gray-100 space-y-2">
-                        <div className="relative">
-                            <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
-                            <input 
-                                type="text" 
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Search..."
-                                className="w-full pl-7 pr-2 py-1 text-[10px] border border-gray-200 rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-indigo-500 transition-all"
-                                autoFocus
-                            />
-                        </div>
-                        <div className="flex justify-between">
-                            <button
-                                className="text-[10px] text-gray-500 hover:text-gray-800 font-medium"
-                                onClick={() => onChange(options)}
-                            >Select All</button>
-                            <button
-                                className="text-[10px] text-gray-500 hover:text-gray-800 font-medium"
-                                onClick={() => onChange([])}
-                            >Clear</button>
-                        </div>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto p-1">
-                        {filteredOptions.length > 0 ? (
-                            filteredOptions.map((opt: string) => {
-                                const isSelected = currentSelected.includes(opt);
-                                return (
-                                    <div
-                                        key={opt}
-                                        className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer rounded-md transition-colors"
-                                        onClick={() => toggleOption(opt)}
-                                    >
-                                        {isSelected ? (
-                                            <CheckSquare className="w-4 h-4 text-indigo-600 flex-shrink-0" style={{ color: themeColor }} />
-                                        ) : (
-                                            <Square className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                                        )}
-                                        <span className={`text-[10px] truncate ${isSelected ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{opt}</span>
-                                    </div>
-                                );
-                            })
-                        ) : (
-                            <div className="p-4 text-center text-[10px] text-gray-400 italic">No matches found</div>
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
+// Local alias so existing usages inside this file need no changes
+const MultiSelectDropdown = SelectFilter;
 
 interface CustomReportPageProps {
     products: Product[];

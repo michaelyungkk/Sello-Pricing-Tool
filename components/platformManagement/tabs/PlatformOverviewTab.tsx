@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { User, Globe, BarChart3, X } from 'lucide-react';
 import { SortState } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
@@ -8,7 +8,6 @@ import { TAX_NOTE_SHORT } from '../../../services/taxPolicy';
 import { PlatformSummary, PlatformSortKey } from '../platformManagement.types';
 import { PricingRules } from '../../../types';
 import { PlatformMetricCard } from '../parts/PlatformMetricCard';
-import { FilterBar } from '../../common/FilterBar';
 import AuditPanel from '../../AuditPanel';
 
 interface PlatformOverviewTabProps {
@@ -24,6 +23,7 @@ interface PlatformOverviewTabProps {
     topPlatformKey: string | null;
     startKey?: string;
     endKey?: string;
+    isAuditVisible: boolean;
 }
 
 export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
@@ -38,16 +38,11 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
     setSort,
     topPlatformKey,
     startKey = '',
-    endKey = ''
+    endKey = '',
+    isAuditVisible
 }) => {
-    const [isAuditVisible, setIsAuditVisible] = useState(false);
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <FilterBar
-                showAudit
-                auditActive={isAuditVisible}
-                onAuditToggle={() => setIsAuditVisible(v => !v)}
-            />
 
             {isAuditVisible && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300">

@@ -71,6 +71,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
     const [timeWindow, setTimeWindow] = useState<'7D' | '14D' | '30D' | '60D' | 'ALL' | 'CUSTOM'>('30D');
     const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
     const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
+    const [isAuditVisible, setIsAuditVisible] = useState(false);
 
 
     const handleViewShipments = (sku: string) => {
@@ -187,6 +188,16 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
                     </div>
                 </label>
+                {activeTab === 'performance' && (
+                    <button
+                        onClick={() => setIsAuditVisible(v => !v)}
+                        className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                        title="Toggle Audit Panel"
+                    >
+                        <Activity className="w-4 h-4" />
+                        Audit{isAuditVisible ? ': On' : ''}
+                    </button>
+                )}
             </ContextBar>}
 
             <div className="flex-1 min-h-0 relative">
@@ -201,6 +212,7 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         onDeepDive={onDeepDive}
                         startKey={dateWindow.startKey}
                         endKey={dateWindow.endKey}
+                        isAuditVisible={isAuditVisible}
                     />
                 )}
 

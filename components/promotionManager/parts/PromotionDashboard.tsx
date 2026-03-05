@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { LayoutDashboard, Activity, Zap, Archive, TrendingUp, Filter, Plus, Edit2, Trash2 } from 'lucide-react';
+import { LayoutDashboard, Activity, Zap, Archive, TrendingUp, Plus, Edit2, Trash2 } from 'lucide-react';
+import { SelectFilter } from '../../common/SelectFilter';
 import { MetricCard } from '../../productManagement/parts/MetricCard';
 import { StatusBadge } from './StatusBadge';
 import { CreateEventModal } from './CreateEventModal';
@@ -213,19 +214,14 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                     <p className="text-sm text-gray-500">Manage sales events and pricing overrides.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className="appearance-none bg-white border border-gray-300 text-gray-700 py-2 pl-3 pr-8 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                            <option value="ALL">All Statuses</option>
-                            <option value="UPCOMING">Upcoming</option>
-                            <option value="ACTIVE">Active</option>
-                            <option value="ENDED">Ended</option>
-                        </select>
-                        <Filter className="absolute right-2.5 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
+                    <SelectFilter
+                        label="Status"
+                        options={['UPCOMING', 'ACTIVE', 'ENDED']}
+                        selected={statusFilter === 'ALL' ? [] : [statusFilter]}
+                        onChange={sel => setStatusFilter(sel.length === 0 ? 'ALL' : sel[0])}
+                        singleSelect
+                        allLabel="All Statuses"
+                    />
                     <button
                         onClick={() => setIsCreateOpen(true)}
                         className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"

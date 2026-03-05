@@ -262,7 +262,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 {showAudit && (
                     <button
                         onClick={onAuditToggle}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold border transition-all shadow-sm text-xs ${auditActive
+                        className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${auditActive
                             ? 'bg-amber-500 text-white border-amber-600'
                             : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                             }`}
