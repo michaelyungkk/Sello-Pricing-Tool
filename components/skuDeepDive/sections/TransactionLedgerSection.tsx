@@ -73,40 +73,14 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
 }) => {
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-start">
-                <div>
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 mr-auto">
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                         <Rows className="w-5 h-5 text-indigo-600" />
                         Transaction Ledger
-                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">Recent Logs</span>
+                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">Recent Logs</span>
                     </h3>
-                    <p className="text-xs text-gray-400 mt-1">
-                        Viewing {Math.min(txLimit, filteredTransactionsLength)} of {filteredTransactionsLength} records for the selected period.
-                    </p>
-                    {adRedistributionSummary?.active && (
-                        <p className="text-[11px] text-gray-400 flex items-center gap-1.5 mt-1.5 opacity-80">
-                            <Info className="w-3 h-3 flex-shrink-0" />
-                            Ad spend redistributed across family members
-                            &nbsp;·&nbsp;
-                            Raw: £{adRedistributionSummary.rawSpend.toFixed(2)}
-                            &nbsp;→&nbsp;
-                            Adjusted: £{adRedistributionSummary.adjustedSpend.toFixed(2)}
-                        </p>
-                    )}
                 </div>
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border flex items-center gap-2 ${isAuditPanelVisible ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <Activity className="w-4 h-4" />
-                        {isAuditPanelVisible ? 'Hide Audit' : 'Audit Reconciliation'}
-                    </button>
-                </div>
-            </div>
-
-
-            <div className="flex flex-wrap gap-4 items-center">
                 <div className="relative">
                     <select
                         value={txDays}
@@ -141,7 +115,27 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     </select>
                     <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 </div>
+                <button
+                    onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border flex items-center gap-2 ${isAuditPanelVisible ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                >
+                    <Activity className="w-4 h-4" />
+                    {isAuditPanelVisible ? 'Hide Audit' : 'Audit Reconciliation'}
+                </button>
             </div>
+            {adRedistributionSummary?.active && (
+                <p className="text-[11px] text-gray-400 flex items-center gap-1.5 -mt-2 opacity-80">
+                    <Info className="w-3 h-3 flex-shrink-0" />
+                    Ad spend redistributed across family members
+                    &nbsp;·&nbsp;
+                    Raw: £{adRedistributionSummary.rawSpend.toFixed(2)}
+                    &nbsp;→&nbsp;
+                    Adjusted: £{adRedistributionSummary.adjustedSpend.toFixed(2)}
+                </p>
+            )}
+            <p className="text-xs text-gray-400 -mt-2">
+                Viewing {Math.min(txLimit, filteredTransactionsLength)} of {filteredTransactionsLength} records for the selected period.
+            </p>
 
             {isAuditPanelVisible && (
                 <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm animate-in fade-in zoom-in-95 duration-200">
