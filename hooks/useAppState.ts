@@ -14,7 +14,7 @@ import {
     PromotionEvent,
     UserProfile as UserProfileType,
     LogisticsRule,
-    ShipmentLog,
+    FreightRate,
     StrategyConfig,
     VelocityLookback,
     RefundLog,
@@ -46,7 +46,8 @@ import { redistributeAdSpend } from '../services/adSpreadService';
 import {
     verifyPassword, pushSnapshot, pullSnapshot,
     pushTransactions, pullTransactions, getLatestTransactionDate,
-    pullTransactionPage, checkVersion
+    pullTransactionPage, checkVersion,
+    pushRefundsAndShipments, pullRefundsAndShipments
 } from '../services/dbService';
 import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
 
@@ -206,7 +207,7 @@ export const useAppState = () => {
     const [products, setProducts] = useState<Product[]>([]);
     const [salesHistory, setSalesHistory] = useState<PriceLog[]>([]);
     const [refundHistory, setRefundHistory] = useState<RefundLog[]>([]);
-    const [shipmentHistory, setShipmentHistory] = useState<ShipmentLog[]>([]);
+    const [freightRates, setFreightRates] = useState<FreightRate[]>([]);
     const [priceChangeHistory, setPriceChangeHistory] = useState<PriceChangeRecord[]>([]);
     const [costChangeHistory, setCostChangeHistory] = useState<CostChangeRecord[]>([]);
     const [inventoryChangeHistory, setInventoryChangeHistory] = useState<InventoryChangeRecord[]>([]);
@@ -523,20 +524,18 @@ export const useAppState = () => {
         skuFamilies,
         adGroups,
         inventoryTemplates,
-        refundHistory,
-        shipmentHistory
+        freightRates
     }), [products, priceChangeHistory, costChangeHistory,
         inventoryChangeHistory, promotions, learnedAliases,
         pricingRules, logisticsRules, strategyRules, searchConfig,
         thresholds, brandMap, categoryMap, skuFamilies, adGroups,
-        inventoryTemplates, refundHistory, shipmentHistory]);
+        inventoryTemplates, freightRates]);
 
     const handleBackup = useCallback(() => {
         const data = {
             ...getSharedSnapshot(),
             priceHistory: salesHistory,
             refundHistory,
-            shipmentHistory,
             velocityLookback,
             userProfile,
             uploadTimestamps,
@@ -555,7 +554,7 @@ export const useAppState = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     }, [getSharedSnapshot, salesHistory, refundHistory,
-        shipmentHistory, velocityLookback, userProfile,
+        velocityLookback, userProfile,
         uploadTimestamps]);
 
     const handleRestore = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -581,7 +580,6 @@ export const useAppState = () => {
                     products: Array.isArray(migrated.products) ? migrated.products : [],
                     priceHistory: Array.isArray(migrated.priceHistory) ? migrated.priceHistory : [],
                     refundHistory: Array.isArray(migrated.refundHistory) ? migrated.refundHistory : [],
-                    shipmentHistory: Array.isArray(migrated.shipmentHistory) ? migrated.shipmentHistory : [],
                     priceChangeHistory: Array.isArray(migrated.priceChangeHistory) ? migrated.priceChangeHistory : [],
                     costChangeHistory: Array.isArray(migrated.costChangeHistory) ? migrated.costChangeHistory : [],
                     inventoryChangeHistory: Array.isArray(migrated.inventoryChangeHistory) ? migrated.inventoryChangeHistory : [],
@@ -599,12 +597,13 @@ export const useAppState = () => {
                     brandMap: migrated.brandMap && typeof migrated.brandMap === 'object' ? migrated.brandMap : {},
                     categoryMap: migrated.categoryMap && typeof migrated.categoryMap === 'object' ? migrated.categoryMap : {},
                     skuFamilies: Array.isArray(migrated.skuFamilies) ? migrated.skuFamilies : [],
-                    adGroups: Array.isArray(migrated.adGroups) ? migrated.adGroups : []
+                    adGroups: Array.isArray(migrated.adGroups) ? migrated.adGroups : [],
+                    freightRates: Array.isArray(migrated.freightRates) ? migrated.freightRates : []
                 };
 
                 // Apply restored state
                 setRefundHistory(restored.refundHistory);
-                setShipmentHistory(restored.shipmentHistory);
+                setFreightRates(restored.freightRates);
                 setPriceChangeHistory(restored.priceChangeHistory);
                 setCostChangeHistory(restored.costChangeHistory);
                 setInventoryChangeHistory(restored.inventoryChangeHistory);
@@ -665,7 +664,7 @@ export const useAppState = () => {
     const handleUpdateCostChangeRecord = useCallback((recordToUpdate: CostChangeRecord) => { setCostChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
     const handleUpdateInventoryChangeRecord = useCallback((recordToUpdate: InventoryChangeRecord) => { setInventoryChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
 
-    const handleSalesImportConfirm = useCallback((updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: ShipmentLog[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>) => {
+    const handleSalesImportConfirm = useCallback((updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: any[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>) => {
         if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
         let updatedPriceHistory = [...(salesHistory || [])];
         if (historyPayload && historyPayload.length > 0) {
@@ -695,7 +694,6 @@ export const useAppState = () => {
         const finalProducts = recalculateProductMetrics(mergedProducts, redistributed, velocityLookback, getThresholdConfig(), pricingRules, brandMap, categoryMap);
         setSalesHistory(redistributed);
         setProducts(finalProducts);
-        if (newShipmentLogs && newShipmentLogs.length > 0) setShipmentHistory(prev => [...newShipmentLogs, ...(prev || [])]);
         if (discoveredPlatforms && discoveredPlatforms.length > 0) { setPricingRules(prev => { const newRules = { ...(prev || {}) }; let changed = false; discoveredPlatforms.forEach(p => { if (!newRules[p]) { newRules[p] = { markup: 0, commission: 15, manager: 'Unassigned', color: '#6b7280', pricingControl: 'MERCHANT', feeModel: 'COMMISSION_PCT', adsEnabled: false }; changed = true; } }); return changed ? newRules : prev; }); }
         updateTimestamp('Sales'); setIsSalesImportModalOpen(false);
         if (isAdminMode) setIsDirty(true);
@@ -808,7 +806,6 @@ export const useAppState = () => {
 
     const handleResetSalesData = useCallback(() => {
         setSalesHistory([]);
-        setShipmentHistory([]);
         const currentThresholds = getThresholdConfig();
         const recalculated = recalculateProductMetrics(products, [], velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
         setProducts(recalculated);
@@ -868,6 +865,18 @@ export const useAppState = () => {
         setIsReturnsModalOpen(false);
         if (isAdminMode) setIsDirty(true);
     }, [refundHistory, updateTimestamp, isAdminMode]);
+
+    const handleFreightRatesUpload = useCallback((rates: FreightRate[]) => {
+        if (!rates || rates.length === 0) return;
+        setFreightRates(rates);
+        // Apply rates directly to product.postage so all profit/margin calculations use them
+        setProducts(prev => (prev || []).map(p => {
+            const match = rates.find(r => r.sku.toUpperCase() === p.sku.toUpperCase());
+            return match ? { ...p, postage: match.rate } : p;
+        }));
+        updateTimestamp('FreightRates');
+        if (isAdminMode) setIsDirty(true);
+    }, [updateTimestamp, isAdminMode]);
 
     const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string }[], reportDate: string) => {
         const changes: PriceChangeRecord[] = [];
@@ -996,7 +1005,7 @@ export const useAppState = () => {
             console.log(`[push] local total: ${allTransactions.length}, sending: ${newTransactions.length}`);
 
             // Step 3: Calculate total chunks for progress
-            const CHUNK_SIZE = 200;
+            const CHUNK_SIZE = 50;
             const txChunks: typeof newTransactions[] = [];
             for (let i = 0; i < newTransactions.length; i += CHUNK_SIZE) {
                 txChunks.push(newTransactions.slice(i, i + CHUNK_SIZE));
@@ -1036,6 +1045,20 @@ export const useAppState = () => {
 
             console.log(`[push] complete — pushed ${newTransactions.length} transactions`);
 
+            // Push refunds and shipments
+            console.log(`[push] pushing ${refundHistory?.length || 0} refunds`);
+            const refundPushRes = await pushRefundsAndShipments(
+                storedAdminPassword,
+                refundHistory || [],
+                []
+            );
+            if (!refundPushRes.success) {
+                console.error('[push] refunds error:', refundPushRes.error);
+                setSyncStatus('error');
+                return;
+            }
+            console.log(`[push] refunds pushed`);
+
             setPushProgress(0);
             setPushTotal(0);
             setIsDirty(false);
@@ -1052,21 +1075,19 @@ export const useAppState = () => {
             setPushProgress(0);
             setPushTotal(0);
         }
-    }, [isAdminMode, storedAdminPassword, getSharedSnapshot, salesHistory]);
+    }, [isAdminMode, storedAdminPassword, getSharedSnapshot,
+        salesHistory, refundHistory]);
 
     const applyLoadedState = useCallback((
         snapshot: any,
-        transactions: any[]
+        transactions: any[],
+        refunds: any[] = []
     ) => {
         const safe = normalizeRestoredState(snapshot);
         const m = migrateRestoredDatabase(safe);
 
-        setRefundHistory(
-            Array.isArray(m.refundHistory) ? m.refundHistory : []
-        );
-        setShipmentHistory(
-            Array.isArray(m.shipmentHistory) ? m.shipmentHistory : []
-        );
+        setRefundHistory(Array.isArray(refunds) ? refunds : []);
+        setFreightRates(Array.isArray(m.freightRates) ? m.freightRates : []);
         setPriceChangeHistory(
             Array.isArray(m.priceChangeHistory) ? m.priceChangeHistory : []
         );
@@ -1177,7 +1198,12 @@ export const useAppState = () => {
             }
 
             setSyncStep('Applying data...');
-            applyLoadedState(incoming, allTransactions);
+
+            // Pull refunds only
+            const refundRes = await pullRefundsAndShipments();
+            const refunds = refundRes.success ? (refundRes.refunds || []) : [];
+
+            applyLoadedState(incoming, allTransactions, refunds);
 
             const time = masterRes.lastUpdatedAt || new Date().toISOString();
             setLastSyncedAt(time);
@@ -1186,7 +1212,7 @@ export const useAppState = () => {
             // Save to local cache with current version
             const versionRes = await checkVersion();
             const version = versionRes.lastPushAt || time;
-            await saveToCache(incoming, allTransactions, version);
+            await saveToCache(incoming, allTransactions, refunds, [], version);
 
             console.log(`[sync] complete — cached version: ${version}`);
             setSyncProgress(0);
@@ -1236,7 +1262,11 @@ export const useAppState = () => {
                 setSyncStatus('syncing');
                 const cache = await loadFromCache();
                 if (cache) {
-                    applyLoadedState(cache.snapshot, cache.transactions);
+                    applyLoadedState(
+                        cache.snapshot,
+                        cache.transactions,
+                        cache.refunds || []
+                    );
                     const time = localStorage.getItem('sello_last_synced_at')
                         || cache.cachedAt;
                     setLastSyncedAt(time);
@@ -1263,8 +1293,9 @@ export const useAppState = () => {
         setSalesHistory,
         refundHistory,
         setRefundHistory,
-        shipmentHistory,
-        setShipmentHistory,
+        freightRates,
+        setFreightRates,
+        handleFreightRatesUpload,
         priceChangeHistory,
         setPriceChangeHistory,
         costChangeHistory,

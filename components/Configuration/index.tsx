@@ -8,60 +8,32 @@ import { AnalysisLogicSection } from './sections/AnalysisLogicSection';
 import { PersonalizationSection } from './sections/PersonalizationSection';
 import { DataNormalizationSection } from './sections/DataNormalizationSection';
 import { Globe, Truck, AlertTriangle, Search, Save, Database } from 'lucide-react';
-
+import { TabSwitcher } from '../common/TabSwitcher';
 export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
     const {
         activeTab, setActiveTab, rules, logistics, searchConfig, setSearchConfig,
         newPlatformName, setNewPlatformName, isSaved, discoveredPlatforms, platformKeys,
         handleFieldChange, toggleExclusion, toggleAdsSupported, handleAddPlatform, handleDeletePlatform,
-        handleLogisticsChange, handleAutoCalibrate, handleSave
+        handleLogisticsChange, handleFreightFileUpload, freightRates,
+        freightUploadStatus, freightUploadCount, handleSave
     } = useConfigurationState(props);
 
     return (
         <div className="max-w-[1600px] mx-auto pb-10 flex flex-col">
 
             {/* Tab Navigation */}
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
-                <button
-                    onClick={() => setActiveTab('platforms')}
-                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'platforms' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    <Globe className="w-4 h-4" />
-                    Platform Rules
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('logistics')}
-                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'logistics' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    <Truck className="w-4 h-4" />
-                    Logistics Rates
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('thresholds')}
-                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'thresholds' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    <AlertTriangle className="w-4 h-4" />
-                    Alerts & Diagnostics
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('search')}
-                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'search' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    <Search className="w-4 h-4" />
-                    Search Settings
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('normalization')}
-                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'normalization' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    <Database className="w-4 h-4" />
-                    Data Normalization
-                </button>
-            </div>
+            <TabSwitcher
+                tabs={[
+                    { key: 'platforms', label: 'Platform Rules', icon: Globe },
+                    { key: 'logistics', label: 'Logistics Rates', icon: Truck },
+                    { key: 'thresholds', label: 'Alerts & Diagnostics', icon: AlertTriangle },
+                    { key: 'search', label: 'Search Settings', icon: Search },
+                    { key: 'normalization', label: 'Data Normalization', icon: Database },
+                ]}
+                activeTab={activeTab}
+                onChange={(key) => setActiveTab(key as any)}
+                size="sm"
+            />
 
             <div className="pr-2">
                 {activeTab === 'platforms' && (
@@ -85,8 +57,10 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
                     <SystemBehaviorSection
                         logistics={logistics}
                         handleLogisticsChange={handleLogisticsChange}
-                        handleAutoCalibrate={handleAutoCalibrate}
-                        shipmentHistory={props.shipmentHistory}
+                        handleFreightFileUpload={handleFreightFileUpload}
+                        freightRates={freightRates}
+                        freightUploadStatus={freightUploadStatus}
+                        freightUploadCount={freightUploadCount}
                         themeColor={props.themeColor}
                         headerStyle={props.headerStyle}
                     />
@@ -114,7 +88,7 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
                         headerStyle={props.headerStyle}
                     />
                 )}
-                
+
                 <PersonalizationSection />
             </div>
 

@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { AdGroup, SkuFamily, Product, PricingRules } from '../../../types';
 import { formatMoney } from '../../../utils/format';
+import { MetricCard } from '../../productManagement/parts/MetricCard';
+import { FilterBar } from '../../common/FilterBar';
 
 interface AdGroupsTabProps {
     adGroups: AdGroup[];
@@ -35,6 +37,7 @@ interface AdGroupsTabProps {
     themeColor: string;
     platforms: string[];
     pricingRules: PricingRules;
+    lastRecalculationSummary?: { affectedTransactions: number, totalSpreadAmount: number, daysProcessed: number } | null;
 }
 
 type SortKey = 'name' | 'status' | 'dateRange';
@@ -60,7 +63,6 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
     const [selectedSyncPlatform, setSelectedSyncPlatform] = useState<string>(platforms[0] || 'Amazon');
 
     // Filters
-    const [showFilters, setShowFilters] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [platformFilter, setPlatformFilter] = useState('All Platforms');
     const [statusFilter, setStatusFilter] = useState('All Status');
@@ -123,13 +125,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
         return { total, ongoing, ended, scheduled };
     }, [adGroups, todayStr]);
 
-    const activeFilterCount = useMemo(() => {
-        let count = 0;
-        if (searchQuery) count++;
-        if (platformFilter !== 'All Platforms') count++;
-        if (statusFilter !== 'All Status') count++;
-        return count;
-    }, [searchQuery, platformFilter, statusFilter]);
+    const platformOptions = useMemo(() => Array.from(new Set(adGroups.map(g => g.platform))).sort(), [adGroups]);
 
     const filteredAndSortedGroups = useMemo(() => {
         let result = adGroups.filter(g => {
@@ -294,12 +290,6 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
         setSelectedIds(new Set());
     };
 
-    const clearFilters = () => {
-        setSearchQuery('');
-        setPlatformFilter('All Platforms');
-        setStatusFilter('All Status');
-    };
-
     // --- RENDER HELPERS ---
     const renderStatusBadge = (status: string) => {
         switch (status) {
@@ -348,18 +338,6 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-bold shadow-sm transition-all relative ${showFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                    >
-                        <SlidersHorizontal className="w-4 h-4" />
-                        Filters
-                        {activeFilterCount > 0 && (
-                            <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-in zoom-in">
-                                {activeFilterCount}
-                            </span>
-                        )}
-                    </button>
-                    <button
                         onClick={() => setIsSyncModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 transition-all group"
                     >
@@ -379,73 +357,40 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
             {/* Stats Bar */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                    { label: 'Total Groups', value: stats.total, icon: Target, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-                    { label: 'Ongoing', value: stats.ongoing, icon: Clock, color: 'text-green-600', bg: 'bg-green-50' },
-                    { label: 'Ended', value: stats.ended, icon: History, color: 'text-gray-500', bg: 'bg-gray-50' },
-                    { label: 'Scheduled', value: stats.scheduled, icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50' }
-                ].map((stat, i) => (
-                    <div key={i} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${stat.bg} ${stat.color}`}>
-                                <stat.icon className="w-4 h-4" />
-                            </div>
-                            <div>
-                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{stat.label}</div>
-                                <div className="text-xl font-bold text-gray-900">{stat.value}</div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                <MetricCard title="Total Groups" value={stats.total} icon={Target} color="indigo" />
+                <MetricCard title="Ongoing" value={stats.ongoing} icon={Clock} color="emerald" />
+                <MetricCard title="Ended" value={stats.ended} icon={History} color="gray" />
+                <MetricCard title="Scheduled" value={stats.scheduled} icon={Calendar} color="blue" />
             </div>
 
             {/* Filters Bar */}
-            {showFilters && (
-                <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex flex-wrap items-center gap-4 animate-in slide-in-from-top-2 duration-300">
-                    <div className="relative flex-1 min-w-[240px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search by group name or SKU..."
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                        />
-                    </div>
-                    <select
-                        value={platformFilter}
-                        onChange={e => setPlatformFilter(e.target.value)}
-                        className="px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                    >
-                        <option>All Platforms</option>
-                        {Array.from(new Set(adGroups.map(g => g.platform))).map(p => (
-                            <option key={p} value={p}>{p}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={statusFilter}
-                        onChange={e => setStatusFilter(e.target.value)}
-                        className="px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                    >
-                        <option>All Status</option>
-                        <option>Ongoing</option>
-                        <option>Ended</option>
-                        <option>Scheduled</option>
-                    </select>
-                    {activeFilterCount > 0 && (
-                        <button
-                            onClick={clearFilters}
-                            className="text-xs font-bold text-red-500 hover:text-red-600 px-2 py-1 flex items-center gap-1 transition-colors"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                            Clear Filters
-                        </button>
-                    )}
-                </div>
-            )}
+            <FilterBar
+                searchValue={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Search by group name or SKU..."
+                multiSelects={[
+                    {
+                        key: 'platform',
+                        label: 'Platform',
+                        options: platformOptions,
+                        selected: platformFilter === 'All Platforms' ? [] : [platformFilter],
+                        onChange: (selected) => setPlatformFilter(selected.length > 0 ? selected[0] : 'All Platforms')
+                    }
+                ]}
+                pillGroup={{
+                    options: [
+                        { key: 'All Status', label: 'All Status' },
+                        { key: 'Ongoing', label: 'Ongoing' },
+                        { key: 'Ended', label: 'Ended' },
+                        { key: 'Scheduled', label: 'Scheduled' }
+                    ],
+                    active: statusFilter,
+                    onChange: setStatusFilter
+                }}
+            />
 
             {/* Table Container */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
+            <div className="bg-custom-glass backdrop-blur-custom rounded-xl shadow-sm border border-custom-glass overflow-hidden relative">
                 {/* Bulk Actions Bar */}
                 {selectedIds.size > 0 && (
                     <div className="absolute top-0 left-0 right-0 h-14 bg-indigo-600 px-6 flex items-center justify-between text-white z-20 animate-in slide-in-from-top duration-300">

@@ -24,7 +24,7 @@ export default async (req: Request) => {
                 { status: 400, headers: CORS }
             );
         const hash = process.env.ADMIN_PASSWORD_HASH;
-        const dbUrl = process.env.NETLIFY_DATABASE_URL;
+        const dbUrl = process.env.NETLIFY_DATABASE_URL_UNPOOLED || process.env.NETLIFY_DATABASE_URL;
         if (!hash || !dbUrl) throw new Error('Server config error');
         const valid = await bcrypt.compare(password, hash);
         if (!valid)

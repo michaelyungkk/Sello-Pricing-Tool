@@ -1,35 +1,32 @@
-
-import React from 'react';
-import { LogisticsRule, ShipmentLog } from '../../../types';
-import { Calculator, Scale, Ruler } from 'lucide-react';
+import React, { useRef } from 'react';
+import { LogisticsRule, FreightRate } from '../../../types';
+import { Scale, Ruler, Upload, CheckCircle, AlertCircle, Package } from 'lucide-react';
 
 interface SystemBehaviorSectionProps {
     logistics: LogisticsRule[];
     handleLogisticsChange: (id: string, field: keyof LogisticsRule, value: string) => void;
-    handleAutoCalibrate: () => void;
-    shipmentHistory?: ShipmentLog[];
+    handleFreightFileUpload: (file: File) => void;
+    freightRates?: FreightRate[];
+    freightUploadStatus: 'idle' | 'success' | 'error';
+    freightUploadCount: number;
     themeColor: string;
     headerStyle: React.CSSProperties;
 }
 
 export const SystemBehaviorSection: React.FC<SystemBehaviorSectionProps> = ({
-    logistics, handleLogisticsChange, handleAutoCalibrate, shipmentHistory, themeColor, headerStyle
+    logistics, handleLogisticsChange, handleFreightFileUpload,
+    freightRates, freightUploadStatus, freightUploadCount, themeColor, headerStyle
 }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     return (
         <div className="space-y-6">
+            {/* Logistics Rate Cards */}
             <div className="flex justify-between items-start">
                 <div>
                     <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>Logistics Rate Cards</h2>
                     <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>Define shipping rates, weight limits, and dimensions for your carriers.</p>
                 </div>
-                <button
-                    onClick={handleAutoCalibrate}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md transition-colors flex items-center gap-2"
-                    title={shipmentHistory && shipmentHistory.length > 0 ? `Calibrate using ${shipmentHistory.length} records` : "No shipment history available"}
-                >
-                    <Calculator className="w-4 h-4" />
-                    Auto-Calibrate from History
-                </button>
             </div>
 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
@@ -56,11 +53,8 @@ export const SystemBehaviorSection: React.FC<SystemBehaviorSectionProps> = ({
                                 <div className="col-span-2">
                                     <div className="relative">
                                         <input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={rule.price || ''}
-                                            placeholder="0.00"
+                                            type="number" min="0" step="0.01"
+                                            value={rule.price || ''} placeholder="0.00"
                                             onChange={(e) => handleLogisticsChange(rule.id, 'price', e.target.value)}
                                             className="w-full pl-6 pr-3 py-1.5 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-opacity-50 font-bold text-gray-900 text-sm bg-white"
                                             style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
@@ -71,11 +65,8 @@ export const SystemBehaviorSection: React.FC<SystemBehaviorSectionProps> = ({
                                 <div className="col-span-2">
                                     <div className="relative">
                                         <input
-                                            type="number"
-                                            min="0"
-                                            step="0.1"
-                                            value={rule.maxWeight || ''}
-                                            placeholder="-"
+                                            type="number" min="0" step="0.1"
+                                            value={rule.maxWeight || ''} placeholder="-"
                                             onChange={(e) => handleLogisticsChange(rule.id, 'maxWeight', e.target.value)}
                                             className="w-full pl-3 pr-8 py-1.5 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-opacity-50 text-sm bg-white"
                                             style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
@@ -86,11 +77,8 @@ export const SystemBehaviorSection: React.FC<SystemBehaviorSectionProps> = ({
                                 <div className="col-span-2">
                                     <div className="relative">
                                         <input
-                                            type="number"
-                                            min="0"
-                                            step="1"
-                                            value={rule.maxLength || ''}
-                                            placeholder="-"
+                                            type="number" min="0" step="1"
+                                            value={rule.maxLength || ''} placeholder="-"
                                             onChange={(e) => handleLogisticsChange(rule.id, 'maxLength', e.target.value)}
                                             className="w-full pl-3 pr-8 py-1.5 text-right border border-gray-300 rounded-md focus:ring-2 focus:ring-opacity-50 text-sm bg-white"
                                             style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
@@ -100,6 +88,71 @@ export const SystemBehaviorSection: React.FC<SystemBehaviorSectionProps> = ({
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Freight Rate Upload */}
+            <div>
+                <div className="mb-4">
+                    <h2 className="text-2xl font-bold transition-colors" style={headerStyle}>SKU Freight Rates</h2>
+                    <p className="mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
+                        Upload your official freight rate table (Excel). Each SKU's postage cost will be updated for profit calculations.
+                        Rates are reference only — actual cost may vary by shipping zone.
+                    </p>
+                </div>
+
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass backdrop-blur-custom p-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Package className="w-5 h-5 text-gray-400" />
+                            <div>
+                                {freightRates && freightRates.length > 0 ? (
+                                    <p className="text-sm font-medium text-gray-700">
+                                        {freightRates.length} SKU rates loaded
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-gray-500">No freight rates uploaded yet</p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    Required columns: <span className="font-mono">SKU</span> and one of <span className="font-mono">Rate / Freight / Postage / Cost</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            {freightUploadStatus === 'success' && (
+                                <span className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
+                                    <CheckCircle className="w-4 h-4" />
+                                    {freightUploadCount} rates applied
+                                </span>
+                            )}
+                            {freightUploadStatus === 'error' && (
+                                <span className="flex items-center gap-1.5 text-sm text-red-600 font-medium">
+                                    <AlertCircle className="w-4 h-4" />
+                                    Upload failed
+                                </span>
+                            )}
+
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".xlsx,.xls,.csv"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleFreightFileUpload(file);
+                                    e.target.value = '';
+                                }}
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md transition-colors flex items-center gap-2"
+                            >
+                                <Upload className="w-4 h-4" />
+                                Upload Rate Table
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

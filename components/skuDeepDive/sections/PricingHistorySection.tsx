@@ -201,7 +201,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                         </div>
                     </div>
 
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-[420px] select-none relative">
+                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[420px] select-none relative">
                         {viewMode === 'deviation' ? (
                             <>
                                 <div className="flex justify-between items-start mb-4 shrink-0">
@@ -348,7 +348,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                         </h3>
                     </div>
 
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-[420px] overflow-y-auto">
+                    <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden h-[420px] overflow-y-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0">
                                 <tr>
@@ -417,10 +417,10 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
             </div>
 
             {isInFamily && (
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom duration-500 delay-150">
-                    <div className="p-4 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 border-b border-gray-100 flex items-center justify-between">
+                <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom duration-500 delay-150">
+                    <div className="p-4 bg-white/10 border-b border-custom-glass flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="bg-white p-2 rounded-lg shadow-sm">
+                            <div className="bg-custom-glass backdrop-blur-custom p-2 rounded-lg shadow-sm border border-custom-glass">
                                 <Users className="w-5 h-5 text-indigo-600" />
                             </div>
                             <div>
@@ -431,7 +431,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left whitespace-nowrap">
-                            <thead className="bg-gray-50/50 text-[10px] text-gray-400 font-bold uppercase tracking-wider border-b border-gray-100">
+                            <thead className="bg-white/10 text-[10px] text-gray-400 font-bold uppercase tracking-wider border-b border-gray-100">
                                 <tr>
                                     <th className="px-6 py-3">Sibling SKU</th>
                                     <th className="px-6 py-3">Product Name</th>

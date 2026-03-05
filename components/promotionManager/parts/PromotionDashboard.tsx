@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { LayoutDashboard, Activity, Zap, Archive, TrendingUp, Filter, Plus, Edit2, Trash2 } from 'lucide-react';
-import { PromoKpiCard } from './PromoKpiCard';
+import { LayoutDashboard, Activity, Zap, Archive, TrendingUp, Plus, Edit2, Trash2 } from 'lucide-react';
+import { SelectFilter } from '../../common/SelectFilter';
+import { MetricCard } from '../../productManagement/parts/MetricCard';
 import { StatusBadge } from './StatusBadge';
 import { CreateEventModal } from './CreateEventModal';
 import { EditScheduleModal } from './EditScheduleModal';
@@ -194,31 +195,16 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                     Promotion Performance Overview
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                  <PromoKpiCard title="Total Campaigns" value={performanceStats.totalCount} icon={LayoutDashboard} color="gray" />
-                  <PromoKpiCard title="Active Now" value={performanceStats.activeCount} icon={Zap} color="green" />
-                  <PromoKpiCard title="Completed" value={performanceStats.endedCount} icon={Archive} color="blue" />
-                  
-                  {/* Lift Card */}
-                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative group">
-                      <div className="flex justify-between items-start mb-2">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase">Avg Lift (Ended)</span>
-                          <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-                              <TrendingUp className="w-4 h-4" />
-                          </div>
-                      </div>
-                      <div className={`text-2xl font-bold ${performanceStats.avgLift > 0 ? 'text-green-600' : performanceStats.avgLift < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                          {performanceStats.hasLifts ? formatPct(performanceStats.avgLift * 100) : '—'}
-                      </div>
-                      <div className="text-[10px] text-gray-500 mt-1 flex gap-2">
-                          <span title="Best Lift">Max: {performanceStats.hasLifts ? formatPct(performanceStats.bestLift * 100) : '-'}</span>
-                          <span title="Positive Impact Rate">Pos: {performanceStats.hasLifts ? formatPct(performanceStats.positivePct) : '-'}</span>
-                      </div>
-                      
-                      {/* Tooltip */}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
-                        Lift compares actual units sold during the event vs expected baseline units.
-                      </div>
-                  </div>
+                  <MetricCard title="Total Campaigns" value={performanceStats.totalCount} icon={LayoutDashboard} color="gray" />
+                  <MetricCard title="Active Now" value={performanceStats.activeCount} icon={Zap} color="green" />
+                  <MetricCard title="Completed" value={performanceStats.endedCount} icon={Archive} color="blue" />
+                  <MetricCard
+                      title="Avg Lift (Ended)"
+                      value={performanceStats.hasLifts ? <span className={performanceStats.avgLift > 0 ? 'text-emerald-600' : performanceStats.avgLift < 0 ? 'text-red-500' : 'text-gray-800'}>{formatPct(performanceStats.avgLift * 100)}</span> : '—'}
+                      icon={TrendingUp}
+                      color="indigo"
+                      desc={performanceStats.hasLifts ? `Max: ${formatPct(performanceStats.bestLift * 100)} · Pos: ${formatPct(performanceStats.positivePct)}` : undefined}
+                  />
                 </div>
             </div>
 
@@ -228,19 +214,14 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                     <p className="text-sm text-gray-500">Manage sales events and pricing overrides.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className="appearance-none bg-white border border-gray-300 text-gray-700 py-2 pl-3 pr-8 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                            <option value="ALL">All Statuses</option>
-                            <option value="UPCOMING">Upcoming</option>
-                            <option value="ACTIVE">Active</option>
-                            <option value="ENDED">Ended</option>
-                        </select>
-                        <Filter className="absolute right-2.5 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
+                    <SelectFilter
+                        label="Status"
+                        options={['UPCOMING', 'ACTIVE', 'ENDED']}
+                        selected={statusFilter === 'ALL' ? [] : [statusFilter]}
+                        onChange={sel => setStatusFilter(sel.length === 0 ? 'ALL' : sel[0])}
+                        singleSelect
+                        allLabel="All Statuses"
+                    />
                     <button
                         onClick={() => setIsCreateOpen(true)}
                         className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
@@ -254,7 +235,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                 <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-custom-glass">
+                    <thead className="bg-white/10 text-gray-500 font-bold border-b border-custom-glass">
                         <tr>
                             <SortableHeader label="Campaign Name" sortKey="name" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
                             <SortableHeader label="Platform" sortKey="platform" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
@@ -307,7 +288,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                                 </td>
                                 <td className="p-4 text-right">
                                     {promo.lift !== null ? (
-                                        <span className={`font-bold ${promo.lift > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        <span className={`font-bold ${promo.lift > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                             {promo.lift > 0 ? '+' : ''}{formatPct(promo.lift * 100)}
                                         </span>
                                     ) : (

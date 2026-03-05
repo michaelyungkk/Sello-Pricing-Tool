@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { ContextBar } from '../common/ContextBar';
 import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog, SkuFamily } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../../constants';
@@ -81,7 +82,6 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
     });
     const [customStart, setCustomStart] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
-    const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
     const [isManualLodgeOpen, setIsManualLodgeOpen] = useState(false);
     const [isManualCostLodgeOpen, setIsManualCostLodgeOpen] = useState(false);
 
@@ -206,7 +206,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             }
         });
 
-        // Deduct Refunds if requested
+        // Deduct Returns if requested
         if (deductRefunds) {
             const skuRefunds = refundHistory.filter(r => {
                 if (r.sku !== product.sku) return false;
@@ -700,48 +700,44 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                     <button onClick={() => setActiveTab('INVENTORY_HISTORY')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'INVENTORY_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Database className="w-4 h-4" />Inventory Change Log</button>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-                        <input
-                            type="checkbox"
-                            checked={deductRefunds}
-                            onChange={e => setDeductRefunds(e.target.checked)}
-                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
-                        />
-                        <div className="flex items-center gap-1.5">
-                            <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
-                            <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Refunds/Resends</span>
-                        </div>
-                    </label>
-                </div>
             </div>
 
             {activeTab === 'ENGINE' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                    <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative z-20 backdrop-blur-custom">
-                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
-                            <div className="flex items-center gap-3">
-                                <div className="flex bg-gray-100 p-1 rounded-lg">
-                                    {['7', '14', '30', '60'].map(w => (
-                                        <button key={w} onClick={() => { setSelectedWindow(w); setCurrentPage(1); }} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${selectedWindow === w ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>{w}D</button>
-                                    ))}
-                                    <button onClick={() => setIsCustomDateModalOpen(true)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${selectedWindow === 'Custom' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}><Calendar className="w-3 h-3" />Custom</button>
-                                </div>
-                                <div className="flex flex-col items-start justify-center pl-2 border-l border-gray-200"><span className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-0.5">Analyzing Period</span><div className="text-xs font-bold text-indigo-600 flex items-center gap-1.5">{formattedDateRange}</div></div>
+                    <ContextBar
+                        timeOptions={[
+                            { key: '7', label: '7D' },
+                            { key: '14', label: '14D' },
+                            { key: '30', label: '30D' },
+                            { key: '60', label: '60D' },
+                            { key: 'Custom', label: 'Custom' }
+                        ]}
+                        activeWindow={selectedWindow}
+                        onWindowChange={(key) => { setSelectedWindow(key); setCurrentPage(1); }}
+                        periodLabel={formattedDateRange}
+                        customStart={customStart}
+                        customEnd={customEnd}
+                        onCustomStartChange={setCustomStart}
+                        onCustomEndChange={setCustomEnd}
+                        onCustomApply={() => { setSelectedWindow('Custom'); setCurrentPage(1); }}
+                    >
+                        <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                            <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300" />
+                            <div className="flex items-center gap-1.5">
+                                <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
+                                <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
                             </div>
+                        </label>
+                        <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title="Toggle Reconciliation Panel"><Activity className="w-4 h-4" />Audit: {isAuditPanelVisible ? 'On' : 'Off'}</button>
+                        <button onClick={() => setIncludeIncoming(!includeIncoming)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title={includeIncoming ? "Including Incoming Stock in Runway Calc" : "Excluding Incoming Stock (Conservative Mode)"}><Ship className="w-4 h-4" />{includeIncoming ? 'Incoming Included' : 'Incoming Excluded'}</button>
+                        <button onClick={() => setIsConfigOpen(!isConfigOpen)} className={`px-4 py-2 rounded-lg font-medium border flex items-center gap-2 transition-all text-sm ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Settings className="w-4 h-4" />{isConfigOpen ? 'Hide Rules' : 'Edit Rules'}</button>
+                        <div className="relative">
+                            <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition-colors shadow-sm"><Download className="w-4 h-4" />Export Matrix</button>
+                            {isExportMenuOpen && createPortal(
+                                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}><div className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20" onClick={e => e.stopPropagation()}><div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50"><h3 className="font-bold text-gray-900">Export Strategy</h3><button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200/50 rounded-full transition-colors"><X className="w-4 h-4 text-gray-500" /></button></div><div className="p-2"><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div><button onClick={() => handleExport('All')} className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between group rounded-lg transition-colors"><span className="font-medium">Standard (Master SKUs)</span><ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" /></button><div className="my-2 border-t border-gray-100/50"></div><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div><div className="max-h-60 overflow-y-auto">{uniquePlatforms.map(platform => (<button key={platform} onClick={() => handleExport(platform)} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between rounded-lg transition-colors"><span>{platform}</span><span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span></button>))}{uniquePlatforms.length === 0 && (<div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>)}</div></div></div></div>, document.body
+                            )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 justify-end w-full xl:w-auto">
-                            <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title="Toggle Reconciliation Panel"><Activity className="w-4 h-4" />Audit: {isAuditPanelVisible ? 'On' : 'Off'}</button>
-                            <button onClick={() => setIncludeIncoming(!includeIncoming)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title={includeIncoming ? "Including Incoming Stock in Runway Calc" : "Excluding Incoming Stock (Conservative Mode)"}><Ship className="w-4 h-4" />{includeIncoming ? 'Incoming Included' : 'Incoming Excluded'}</button>
-                            <button onClick={() => setIsConfigOpen(!isConfigOpen)} className={`px-4 py-2 rounded-lg font-medium border flex items-center gap-2 transition-all text-sm ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Settings className="w-4 h-4" />{isConfigOpen ? 'Hide Rules' : 'Edit Rules'}</button>
-                            <div className="relative">
-                                <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition-colors shadow-sm"><Download className="w-4 h-4" />Export Matrix</button>
-                                {isExportMenuOpen && createPortal(
-                                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}><div className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20" onClick={e => e.stopPropagation()}><div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50"><h3 className="font-bold text-gray-900">Export Strategy</h3><button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200/50 rounded-full transition-colors"><X className="w-4 h-4 text-gray-500" /></button></div><div className="p-2"><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div><button onClick={() => handleExport('All')} className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between group rounded-lg transition-colors"><span className="font-medium">Standard (Master SKUs)</span><ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" /></button><div className="my-2 border-t border-gray-100/50"></div><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div><div className="max-h-60 overflow-y-auto">{uniquePlatforms.map(platform => (<button key={platform} onClick={() => handleExport(platform)} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between rounded-lg transition-colors"><span>{platform}</span><span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span></button>))}{uniquePlatforms.length === 0 && (<div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>)}</div></div></div></div>, document.body
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                    </ContextBar>
 
                     <AuditReconciliationPanel
                         isVisible={isAuditPanelVisible}
@@ -831,7 +827,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                                 <td className="p-4 text-right text-gray-400 line-through">£{row.oldPrice.toFixed(2)}</td>
                                                 <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
                                                 <td className="p-4 font-bold text-gray-900">£{row.newPrice.toFixed(2)}</td>
-                                                <td className="p-4"><div className="flex items-center justify-center gap-2 text-xs"><span className="text-gray-500 font-medium">{row.preVel.toFixed(1)}/d</span><ArrowRight className="w-3 h-3 text-gray-300" /><span className={`font-bold ${row.postVel > row.preVel ? 'text-green-600' : row.postVel < row.preVel ? 'text-red-600' : 'text-gray-600'}`}>{row.postVel.toFixed(1)}/d</span></div></td>
+                                                <td className="p-4"><div className="flex items-center justify-center gap-2 text-xs"><span className="text-gray-500 font-medium">{row.preVel.toFixed(1)}/d</span><ArrowRight className="w-3 h-3 text-gray-300" /><span className={`font-bold ${row.postVel > row.preVel ? 'text-emerald-600' : row.postVel < row.preVel ? 'text-red-500' : 'text-gray-600'}`}>{row.postVel.toFixed(1)}/d</span></div></td>
                                                 <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdatePriceChangeRecord && editingDate) { onUpdatePriceChangeRecord({ ...row, date: editingDate }); setRecentlySavedId(row.id); setTimeout(() => setRecentlySavedId(null), 2500); } setEditingHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingHistoryId(row.id); setEditingDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
                                             </tr>
                                         )
@@ -1004,22 +1000,6 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                         )}
                     </div>
                 </div>
-            )}
-
-            {isCustomDateModalOpen && createPortal(
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsCustomDateModalOpen(false)}>
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-gray-200 p-6" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Select Custom Range</h3>
-                        <div className="space-y-4">
-                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Start Date</label><input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" /></div>
-                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">End Date</label><input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" /></div>
-                        </div>
-                        <div className="mt-6 flex justify-end gap-3">
-                            <button onClick={() => setIsCustomDateModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
-                            <button onClick={() => { setSelectedWindow('Custom'); setIsCustomDateModalOpen(false); setCurrentPage(1); }} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700">Apply Range</button>
-                        </div>
-                    </div>
-                </div>, document.body
             )}
 
             {isManualLodgeOpen && onManualPriceChange && (

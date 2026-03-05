@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { LayoutDashboard, List } from 'lucide-react';
+import { TabSwitcher } from '../common/TabSwitcher';
 import { CampaignsTab } from './tabs/CampaignsTab';
 import { MasterPromoLogTab } from './tabs/MasterPromoLogTab';
 import { PromotionEvent, Product, PricingRules, PriceLog, LogisticsRule, PriceChangeRecord } from '../../types';
@@ -38,22 +39,15 @@ export const PromotionManagerPageContainer: React.FC<PromotionManagerPageContain
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-                <button
-                    onClick={() => setActiveTab('dashboard')}
-                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    <LayoutDashboard className="w-4 h-4" />
-                    Campaigns
-                </button>
-                <button
-                    onClick={() => setActiveTab('all_skus')}
-                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 ${activeTab === 'all_skus' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    <List className="w-4 h-4" />
-                    Master Promo Log
-                </button>
-            </div>
+            <TabSwitcher
+                tabs={[
+                    { key: 'dashboard', label: 'Campaigns', icon: LayoutDashboard },
+                    { key: 'all_skus', label: 'Master Promo Log', icon: List },
+                ]}
+                activeTab={activeTab}
+                onChange={(key) => setActiveTab(key as Tab)}
+                size="sm"
+            />
 
             <div className="min-h-[500px]">
                 {activeTab === 'dashboard' && (

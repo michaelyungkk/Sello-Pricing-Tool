@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { Product, PricingRules, HistoryPayload, ShipmentLog } from '../types';
+import { Product, PricingRules, HistoryPayload } from '../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search, Hash } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { asDateKeyNaive } from '../services/dateUtils';
@@ -18,7 +18,7 @@ interface SalesImportModalProps {
         updatedProducts: Product[],
         dateLabels?: { current: string, last: string },
         historyPayload?: HistoryPayload[],
-        shipmentLogs?: ShipmentLog[],
+        shipmentLogs?: any[],
         discoveredPlatforms?: string[],
         newlyLearnedAliases?: Record<string, string>
     ) => void;
@@ -211,6 +211,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         learnedAliases,
                         extraAliases: {}
                     });
+                    return; // keep isProcessing=true while worker runs
                 } else {
                     setStep('mapping');
                 }
@@ -218,9 +219,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             } catch (err) {
                 console.error(err);
                 setError("Failed to parse file.");
-            } finally {
-                setIsProcessing(false);
             }
+            setIsProcessing(false);
         };
 
         if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file);

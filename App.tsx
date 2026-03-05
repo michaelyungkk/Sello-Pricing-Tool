@@ -46,7 +46,8 @@ const App: React.FC = () => {
         setProducts,
         salesHistory,
         refundHistory,
-        shipmentHistory,
+        freightRates,
+        handleFreightRatesUpload,
         priceChangeHistory,
         costChangeHistory,
         inventoryChangeHistory,
@@ -746,7 +747,8 @@ const App: React.FC = () => {
                                 logisticsRules={logisticsRules || []}
                                 onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }}
                                 products={products}
-                                shipmentHistory={shipmentHistory || []}
+                                freightRates={freightRates || []}
+                                onFreightRatesUpload={handleFreightRatesUpload}
                                 themeColor={userProfile.themeColor}
                                 searchConfig={searchConfig}
                                 velocityLookback={velocityLookback}

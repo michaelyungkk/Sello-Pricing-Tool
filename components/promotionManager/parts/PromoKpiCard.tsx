@@ -11,7 +11,7 @@ export const PromoKpiCard = ({ title, value, subValue, icon: Icon, color, toolti
     };
 
     return (
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative group">
+        <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm relative group">
             <div className="flex justify-between items-start mb-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase">{title}</span>
                 <div className={`p-1.5 rounded-lg ${colorStyles[color as keyof typeof colorStyles] || colorStyles.gray}`}>

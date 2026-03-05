@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { PricingRules, LogisticsRule, SearchConfig, VelocityLookback, Product, PriceLog, PromotionEvent, ShipmentLog, AttributeMap } from '../../types';
+import { PricingRules, LogisticsRule, SearchConfig, VelocityLookback, Product, PriceLog, PromotionEvent, FreightRate, AttributeMap } from '../../types';
 
 export interface ConfigurationPageProps {
     currentRules: PricingRules;
@@ -12,7 +12,8 @@ export interface ConfigurationPageProps {
         priceHistory: PriceLog[];
         promotions: PromotionEvent[];
     };
-    shipmentHistory?: ShipmentLog[];
+    freightRates?: FreightRate[];
+    onFreightRatesUpload?: (rates: FreightRate[]) => void;
     themeColor: string;
     headerStyle: React.CSSProperties;
     searchConfig?: SearchConfig;

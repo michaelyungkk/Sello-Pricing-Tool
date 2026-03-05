@@ -1,6 +1,6 @@
 
-import { useState, useEffect, useMemo } from 'react';
-import { PricingRules, LogisticsRule, SearchConfig, VelocityLookback, Platform, PlatformConfig } from '../../../types';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { PricingRules, LogisticsRule, SearchConfig, VelocityLookback, Platform, PlatformConfig, FreightRate } from '../../../types';
 import { ensureCapabilities } from '../../../services/platformCapabilities';
 import { ConfigurationPageProps, ConfigTab } from '../types';
 
@@ -13,21 +13,21 @@ export const useConfigurationState = ({
     onSaveLogistics,
     products,
     extraData,
-    shipmentHistory
+    freightRates,
+    onFreightRatesUpload
 }: ConfigurationPageProps) => {
     const [activeTab, setActiveTab] = useState<ConfigTab>('platforms');
     const [rules, setRules] = useState<PricingRules>(JSON.parse(JSON.stringify(currentRules)));
     const [logistics, setLogistics] = useState<LogisticsRule[]>(JSON.parse(JSON.stringify(logisticsRules || [])));
     const [searchConfig, setSearchConfig] = useState<SearchConfig>(initialSearchConfig ? JSON.parse(JSON.stringify(initialSearchConfig)) : { volumeBands: { topPercentile: 20, bottomPercentile: 20 }, minAbsoluteFloor: 10 });
     const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(initialVelocityLookback);
+    const [freightUploadStatus, setFreightUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [freightUploadCount, setFreightUploadCount] = useState(0);
 
     const [newPlatformName, setNewPlatformName] = useState('');
     const [isSaved, setIsSaved] = useState(false);
     const [adsRefresh, setAdsRefresh] = useState(0);
-    
-    // Ads capabilities refresh trigger
 
-    // Sync state with props
     useEffect(() => {
         setRules(JSON.parse(JSON.stringify(currentRules)));
         setLogistics(JSON.parse(JSON.stringify(logisticsRules || [])));
@@ -58,6 +58,13 @@ export const useConfigurationState = ({
         }
     }, [isSaved]);
 
+    useEffect(() => {
+        if (freightUploadStatus === 'success' || freightUploadStatus === 'error') {
+            const timer = setTimeout(() => setFreightUploadStatus('idle'), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [freightUploadStatus]);
+
     const handleFieldChange = (platform: Platform, field: keyof PlatformConfig, value: any) => {
         setRules(prev => {
             const updatedPlatform = { ...prev[platform], [field]: value };
@@ -72,7 +79,7 @@ export const useConfigurationState = ({
     const toggleExclusion = (platform: Platform) => {
         handleFieldChange(platform, 'isExcluded', !rules[platform].isExcluded);
     };
-    
+
     const toggleAdsSupported = (platform: Platform) => {
         const current = rules[platform].adsEnabled;
         handleFieldChange(platform, 'adsEnabled', !current);
@@ -115,70 +122,59 @@ export const useConfigurationState = ({
         ));
     };
 
-    const handleAutoCalibrate = () => {
-        if (!shipmentHistory || shipmentHistory.length === 0) {
-            alert("No shipping history found. Please import a Transaction Report with 'Logistics Service' mapped first.");
-            return;
-        }
+    const handleFreightFileUpload = (file: File) => {
+        if (!onFreightRatesUpload) return;
+        import('xlsx').then(XLSX => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-        const serviceStats: Record<string, { costs: number[], maxWeight: number, maxLength: number }> = {};
+                    if (rows.length < 2) {
+                        setFreightUploadStatus('error');
+                        return;
+                    }
 
-        shipmentHistory.forEach(log => {
-            const product = products.find(p => p.sku === log.sku);
-            if (!product) return;
+                    // Find SKU and rate columns (case-insensitive)
+                    const headers = (rows[0] as string[]).map(h => String(h || '').toLowerCase().trim());
+                    const skuCol = headers.findIndex(h => h.includes('sku'));
+                    const rateCol = headers.findIndex(h =>
+                        h.includes('rate') || h.includes('freight') || h.includes('postage') || h.includes('cost')
+                    );
 
-            const normalizedService = log.service.toUpperCase();
-            if (!serviceStats[normalizedService]) serviceStats[normalizedService] = { costs: [], maxWeight: 0, maxLength: 0 };
+                    if (skuCol === -1 || rateCol === -1) {
+                        setFreightUploadStatus('error');
+                        alert(`Could not find SKU and rate columns. Found headers: ${rows[0].join(', ')}`);
+                        return;
+                    }
 
-            const stats = serviceStats[normalizedService];
-            stats.costs.push(log.cost);
+                    const rates: FreightRate[] = [];
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        const sku = String(row[skuCol] || '').trim();
+                        const rate = parseFloat(String(row[rateCol] || '0'));
+                        if (sku && !isNaN(rate) && rate >= 0) {
+                            rates.push({ sku, rate });
+                        }
+                    }
 
-            if (product.cartonDimensions) {
-                if (product.cartonDimensions.weight > stats.maxWeight) stats.maxWeight = product.cartonDimensions.weight;
-                if (product.cartonDimensions.length > stats.maxLength) stats.maxLength = product.cartonDimensions.length;
-            }
-        });
+                    if (rates.length === 0) {
+                        setFreightUploadStatus('error');
+                        return;
+                    }
 
-        const newRules = [...logistics];
-        let updatesCount = 0;
-
-        Object.entries(serviceStats).forEach(([serviceName, stats]) => {
-            stats.costs.sort((a, b) => a - b);
-            const mid = Math.floor(stats.costs.length / 2);
-            const medianCost = stats.costs.length % 2 !== 0 ? stats.costs[mid] : (stats.costs[mid - 1] + stats.costs[mid]) / 2;
-
-            const existingIdx = newRules.findIndex(r => r.name.trim().toUpperCase() === serviceName);
-
-            const ruleUpdate = {
-                price: Number(medianCost.toFixed(2)),
-                maxWeight: stats.maxWeight > 0 ? Number(stats.maxWeight.toFixed(2)) : undefined,
-                maxLength: stats.maxLength > 0 ? Number(stats.maxLength.toFixed(2)) : undefined
+                    onFreightRatesUpload(rates);
+                    setFreightUploadCount(rates.length);
+                    setFreightUploadStatus('success');
+                } catch (err) {
+                    setFreightUploadStatus('error');
+                }
             };
-
-            if (existingIdx >= 0) {
-                const existing = newRules[existingIdx];
-                newRules[existingIdx] = {
-                    ...existing,
-                    price: ruleUpdate.price,
-                    maxWeight: ruleUpdate.maxWeight || existing.maxWeight,
-                    maxLength: ruleUpdate.maxLength || existing.maxLength
-                };
-                updatesCount++;
-            } else {
-                newRules.push({
-                    id: `auto-${serviceName.toLowerCase().replace(/\s/g, '-')}`,
-                    name: serviceName,
-                    carrier: 'Auto-Detected',
-                    price: ruleUpdate.price,
-                    maxWeight: ruleUpdate.maxWeight,
-                    maxLength: ruleUpdate.maxLength
-                });
-                updatesCount++;
-            }
+            reader.readAsArrayBuffer(file);
         });
-
-        setLogistics(newRules);
-        alert(`Calibration complete. Updated rates for ${updatesCount} services based on ${shipmentHistory.length} shipments.`);
     };
 
     const handleSave = () => {
@@ -207,7 +203,10 @@ export const useConfigurationState = ({
         handleAddPlatform,
         handleDeletePlatform,
         handleLogisticsChange,
-        handleAutoCalibrate,
+        handleFreightFileUpload,
+        freightRates,
+        freightUploadStatus,
+        freightUploadCount,
         handleSave
     };
 };
