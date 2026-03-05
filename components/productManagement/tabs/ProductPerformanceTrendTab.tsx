@@ -6,7 +6,6 @@ import { aggregateProductTrends, ProductTrendData } from '../../../services/prod
 import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
 import { GradeBadge } from '../../GradeBadge';
 import { SortableHeader } from '../../common/SortableHeader';
-import { FilterBar } from '../../common/FilterBar';
 import AuditPanel from '../../AuditPanel';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { BcgMatrix } from '../parts/BcgMatrix';
@@ -21,6 +20,7 @@ interface ProductPerformanceTrendTabProps {
   onDeepDive: (sku: string) => void;
   startKey: string;
   endKey: string;
+  isAuditVisible: boolean;
 }
 
 const SummaryCard = ({ title, sku, delta, value, type }: any) => {
@@ -69,9 +69,8 @@ const TrendDeltaPill = ({ value, isPp = false, invert = false }: { value: number
 
 export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProps> = ({
   products, priceHistoryMap, refundHistory, dateWindow, deductRefunds, themeColor, onDeepDive,
-  startKey, endKey
+  startKey, endKey, isAuditVisible
 }) => {
-  const [isAuditVisible, setIsAuditVisible] = useState(false);
   const [sort, setSort] = useState<SortState<string>>({ key: 'revenue', dir: 'desc' });
   const [viewMode, setViewMode] = useState<'LIST' | 'MATRIX'>('LIST');
   const [showMatrixInfo, setShowMatrixInfo] = useState(false);
@@ -110,11 +109,6 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
 
   return (
     <div className="space-y-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <FilterBar
-        showAudit
-        auditActive={isAuditVisible}
-        onAuditToggle={() => setIsAuditVisible(v => !v)}
-      />
 
       {isAuditVisible && (
         <div className="animate-in fade-in slide-in-from-top-2 duration-300">

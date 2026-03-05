@@ -16,13 +16,14 @@ import { CategoryPerformanceSlide } from '../CategoryPerformanceSlide';
 import { aggregateCategoryData } from '../../services/categoryAgg';
 import AuditPanel from '../AuditPanel';
 import { FilterBar } from '../common/FilterBar';
-import { Calendar, ChevronDown, Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingUp, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
+import { Calendar, Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingUp, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
 import { formatMoney, formatNumber, formatPct } from '../../utils/format';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, Bar, Line, BarChart, Cell } from 'recharts';
 import { resolveEffectiveVelocity } from '../../services/metrics';
 import { MetricValue } from '../common/MetricValue';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { ContextBar } from '../common/ContextBar';
+import { SelectFilter } from '../common/SelectFilter';
 
 interface OverviewPageContainerProps {
     products: Product[];
@@ -89,7 +90,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
     const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
     const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
     const [showDatePicker, setShowDatePicker] = useState(false);
-    const [platformScope, setPlatformScope] = useState<string>('All');
+    const [platformScope, setPlatformScope] = useState<string[]>([]);
     // Default to 'margin' (Fix Margin)
     const [selectedAlert, setSelectedAlert] = useState<AlertType>('margin');
     const [currentPage, setCurrentPage] = useState(1);
@@ -157,7 +158,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             // Exclusion shield ONLY affects strategy, not dashboard metrics.
             const scopeLogs = logs.filter(l => {
                 const platform = l.platform || 'Unknown';
-                const matchesScope = platformScope === 'All' || platform === platformScope || platform.includes(platformScope);
+                const matchesScope = platformScope.length === 0 || platformScope.some(p => platform === p || platform.includes(p));
                 return matchesScope;
             });
 
@@ -187,7 +188,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
 
             // Calculate Historical Medians
             const allSkuLogs = logs.filter(l => {
-                if (platformScope !== 'All' && l.platform !== platformScope && !l.platform?.includes(platformScope)) return false;
+                if (platformScope.length > 0 && !platformScope.some(p => l.platform === p || l.platform?.includes(p))) return false;
                 return true;
             });
             const histDailyUnits = allSkuLogs.map(l => l.velocity);
@@ -234,7 +235,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             if (deductRefunds) {
                 const skuRefunds = refundHistory.filter(r => {
                     if (r.sku !== p.sku) return false;
-                    if (platformScope !== 'All' && r.platform !== platformScope) return false;
+                    if (platformScope.length > 0 && !platformScope.includes(r.platform)) return false;
                     const dKey = asDateKey(r.date);
                     return dKey && isDateKeyBetween(dKey, startKey, endKey);
                 });
@@ -249,8 +250,8 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             const velocityChange = prevUnits > 0 ? ((curUnits - prevUnits) / prevUnits) * 100 : (curUnits > 0 ? 100 : 0);
 
             let displayPrice = p.currentPrice;
-            if (platformScope !== 'All') {
-                const channel = p.channels.find(c => c.platform === platformScope);
+            if (platformScope.length === 1) {
+                const channel = p.channels.find(c => c.platform === platformScope[0]);
                 if (channel && channel.price) displayPrice = channel.price;
             }
 
@@ -511,27 +512,24 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                 onCustomEndChange={(val) => { setCustomEnd(val); setRange('custom'); }}
                 onCustomApply={() => { setRange('custom'); setShowDatePicker(false); }}
             >
-                <div className="flex items-center gap-2">
-                    <div className="relative">
-                        <select
-                            value={platformScope}
-                            onChange={(e) => setPlatformScope(e.target.value)}
-                            className="appearance-none bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold py-1.5 pl-3 pr-8 rounded-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                            <option value="All">Global View (All)</option>
-                            {Object.keys(pricingRules).map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                        <ChevronDown className="absolute right-2.5 top-2 w-3.5 h-3.5 text-indigo-600 pointer-events-none" />
-                    </div>
-                </div>
+                <SelectFilter
+                    label="Platform"
+                    options={Object.keys(pricingRules)}
+                    selected={platformScope}
+                    onChange={sel => setPlatformScope(sel)}
+                    allLabel="Global View (All)"
+                />
                 {activeTab !== 'map' && (
-                    <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                    <label className="flex items-center gap-2 px-3 h-8 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
                         <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300" />
                         <div className="flex items-center gap-1.5"><RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} /><span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span></div>
                     </label>
                 )}
                 {(activeTab === 'actions' || activeTab === 'financials') && (
-                    <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Activity className="w-4 h-4" />Audit</button>
+                    <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-3 h-8 rounded-lg font-medium border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Activity className="w-4 h-4" />Audit</button>
+                )}
+                {activeTab === 'categories' && (
+                    <button onClick={() => setIsAuditVisible(v => !v)} className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Activity className="w-4 h-4" />Audit{isAuditVisible ? ': On' : ''}</button>
                 )}
             </ContextBar>
 
@@ -958,14 +956,9 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                         </div>
                     </div>
                 )}
-                {activeTab === 'map' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope} themeColor={themeColor} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
+                {activeTab === 'map' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope.length === 1 ? platformScope[0] : 'All'} themeColor={themeColor} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
                 {activeTab === 'categories' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-4 pb-24 h-auto">
-                        <FilterBar
-                            showAudit
-                            auditActive={isAuditVisible}
-                            onAuditToggle={() => setIsAuditVisible(v => !v)}
-                        />
 
                         {isAuditVisible && (
                             <div className="animate-in fade-in slide-in-from-top-2 duration-300">

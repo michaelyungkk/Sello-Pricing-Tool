@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { MetricCard } from '../../productManagement/parts/MetricCard';
 import { Megaphone, PieChart, Zap, Target, Trophy, Coins, Database, Wallet, HelpCircle } from 'lucide-react';
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip as RechartsTooltip, Cell, ReferenceLine, ReferenceArea } from 'recharts';
@@ -8,7 +8,6 @@ import { SortableHeader } from '../../common/SortableHeader';
 import { formatMoney, formatPct } from '../../../utils/format';
 import { PlatformFeesRoi, PlatformSortKey } from '../platformManagement.types';
 import { PricingRules, PlatformConfig } from '../../../types';
-import { FilterBar } from '../../common/FilterBar';
 import AuditPanel from '../../AuditPanel';
 
 interface FeesAndRoiTabProps {
@@ -19,10 +18,10 @@ interface FeesAndRoiTabProps {
     setSort: (sort: SortState<PlatformSortKey>) => void;
     startKey?: string;
     endKey?: string;
+    isAuditVisible: boolean;
 }
 
-export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRules, themeColor, sort, setSort, startKey = '', endKey = '' }) => {
-    const [isAuditVisible, setIsAuditVisible] = useState(false);
+export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRules, themeColor, sort, setSort, startKey = '', endKey = '', isAuditVisible }) => {
     const totalAdSpend = roiData.reduce((sum: number, d: any) => sum + d.adSpend, 0);
     const totalRevenueForAds = roiData.reduce((sum: number, d: any) => (d.dataQuality.hasAdData && d.revenue > 0) ? sum + d.revenue : sum, 0);
     const avgTacos = totalRevenueForAds > 0 ? (totalAdSpend / totalRevenueForAds) * 100 : 0;
@@ -32,11 +31,6 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <FilterBar
-                showAudit
-                auditActive={isAuditVisible}
-                onAuditToggle={() => setIsAuditVisible(v => !v)}
-            />
 
             {isAuditVisible && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300">

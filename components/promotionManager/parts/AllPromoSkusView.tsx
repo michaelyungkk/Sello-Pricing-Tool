@@ -8,6 +8,7 @@ import { GradeBadge } from '../../GradeBadge';
 import { StatusBadge } from './StatusBadge';
 import { getTodayKeyMelbourne } from '../../../services/dateUtils';
 import { Download } from 'lucide-react';
+import { SelectFilter } from '../../common/SelectFilter';
 
 interface AllPromoSkusViewProps {
     promotions: PromotionEvent[];
@@ -195,18 +196,15 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
                         themeColor={themeColor}
                     />
                 </div>
-                <div className="w-48">
-                    <select
-                        value={platformFilter}
-                        onChange={(e) => setPlatformFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white/50 text-sm font-medium"
-                    >
-                        <option>All Platforms</option>
-                        {Array.from(new Set((promotions || []).filter(Boolean).map(p => p.platform))).sort().map(p => (
-                            <option key={p} value={p}>{p}</option>
-                        ))}
-                    </select>
-                </div>
+                <SelectFilter
+                    label="Platform"
+                    options={Array.from(new Set((promotions || []).filter(Boolean).map(p => p.platform))).sort()}
+                    selected={platformFilter === 'All Platforms' ? [] : [platformFilter]}
+                    onChange={sel => setPlatformFilter(sel.length === 0 ? 'All Platforms' : sel[0])}
+                    singleSelect
+                    allLabel="All Platforms"
+                    themeColor={themeColor}
+                />
                 <button
                     onClick={handleExport}
                     className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-bold flex items-center gap-2 transition-colors shadow-sm"

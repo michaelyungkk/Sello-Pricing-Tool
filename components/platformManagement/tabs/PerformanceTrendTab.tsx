@@ -47,6 +47,7 @@ interface PerformanceTrendTabProps {
     barChartData: any[];
     startKey?: string;
     endKey?: string;
+    isAuditVisible: boolean;
 }
 
 const SummaryCard = ({ title, platform, delta, value, type }: { title: string, platform?: string, delta?: number | null, value?: number, type: 'pos' | 'neg' | 'info' }) => {
@@ -218,9 +219,9 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
     barChartData,
     startKey = '',
     endKey = '',
+    isAuditVisible,
 }) => {
     const [isAlertRulesOpen, setIsAlertRulesOpen] = useState(false);
-    const [isAuditVisible, setIsAuditVisible] = useState(false);
     const [chartViewMode, setChartViewMode] = useState<'OVERLAY' | 'TRELLIS'>('OVERLAY');
     const [hoveredPlatform, setHoveredPlatform] = useState<string | null>(null);
     const [isSmoothed, setIsSmoothed] = useState(true);
@@ -386,11 +387,6 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <FilterBar
-                showAudit
-                auditActive={isAuditVisible}
-                onAuditToggle={() => setIsAuditVisible(v => !v)}
-            />
             {isAuditVisible && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                     <AuditPanel
