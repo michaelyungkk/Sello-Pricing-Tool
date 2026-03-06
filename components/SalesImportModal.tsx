@@ -619,16 +619,16 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                             <button
                                 onClick={handleManualAnalyze}
                                 disabled={isProcessing}
-                                className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
                             >
                                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
                                 Analyze Data
                             </button>
                         )}
-                        {step === 'preview' && (
+                        {step === 'preview' && previewData && (
                             <button
                                 onClick={() => onConfirm(previewData.updates, { current: previewData.stats.dateLabel, last: "Previous" }, previewData.history, previewData.shipmentLogs, previewData.stats.discoveredPlatforms, resolvedAliases)}
-                                className="px-6 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all"
+                                className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all"
                             >
                                 <Check className="w-4 h-4" />
                                 Confirm Import

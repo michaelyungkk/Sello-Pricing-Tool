@@ -134,7 +134,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                             <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="text-purple-600" />
                             <SortableHeader label="New Price" sortKey="newPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                             <SortableHeader label="Action" sortKey="action" sort={sort} onChange={setSort} themeColor={themeColor} align="center" />
-                            <th className="p-4">Reason</th>
+                            <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Reason</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">

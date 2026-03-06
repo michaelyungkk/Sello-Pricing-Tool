@@ -490,7 +490,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                     { key: 'categories', label: 'Categories', icon: PieChart },
                 ]}
                 activeTab={activeTab}
-                onChange={(key) => setActiveTab(key as any)}
+                onChange={(key) => { setActiveTab(key as OverviewTab); setIsAuditVisible(false); setIsAuditPanelVisible(false); }}
                 size="sm"
             />
 
@@ -526,7 +526,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                     </label>
                 )}
                 {(activeTab === 'actions' || activeTab === 'financials') && (
-                    <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-3 h-8 rounded-lg font-medium border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Activity className="w-4 h-4" />Audit</button>
+                    <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Activity className="w-4 h-4" />Audit</button>
                 )}
                 {activeTab === 'categories' && (
                     <button onClick={() => setIsAuditVisible(v => !v)} className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Activity className="w-4 h-4" />Audit{isAuditVisible ? ': On' : ''}</button>
@@ -571,87 +571,85 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                 <button onClick={() => { }} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"><Download className="w-4 h-4" /></button>
                             </div>
                             <div className="flex-1 overflow-auto">
-                                <table className="w-full text-left text-sm whitespace-nowrap relative">
-                                    <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-200/50 sticky top-0 z-20 backdrop-blur-sm">
+                                <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                                    <thead className="sticky top-0 z-20">
                                         {selectedAlert === 'margin' ? (
-                                            <tr>
-                                                <th className="p-4 w-12 text-center">Detail</th>
+                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
                                                 <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
                                                 <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="text-purple-600" />
                                                 <SortableHeader label="Actual Margin" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Recent Qty" sortKey="qtySold" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="p-4 text-left">Cause</th>
-                                                <th className="p-4 text-right pr-6">Recommend</th>
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Cause</th>
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">Recommend</th>
                                             </tr>
                                         ) : selectedAlert === 'velocity' ? (
-                                            <tr>
-                                                <th className="p-4 w-12 text-center">Detail</th>
+                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
                                                 <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
                                                 <SortableHeader label="Drop #" sortKey="volumeDrop" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Drop %" sortKey="volumeDrop" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Period Qty" sortKey="qtySold" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="p-4 text-right group/header relative">
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right group/header relative">
                                                     <div className="flex items-center justify-end gap-1 cursor-help">
                                                         Baseline Qty
                                                         <Info className="w-3 h-3 text-gray-400" />
                                                     </div>
-                                                    <div className="absolute top-full right-0 mt-2 w-64 bg-slate-900/95 backdrop-blur shadow-2xl rounded-xl opacity-0 group-hover/header:opacity-100 transition-all pointer-events-none z-50 border border-slate-700 p-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                        <div className="font-black border-b border-slate-700 pb-1.5 mb-2 uppercase tracking-widest text-[9px] text-indigo-300 flex items-center justify-center gap-1.5">
-                                                            <Calculator className="w-3 h-3" /> Calculation Logic
+                                                    <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover/header:opacity-100 transition-all pointer-events-none z-50 border border-gray-700 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                        <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight flex items-center justify-center gap-1.5">
+                                                            <Calculator className="w-3 h-3 text-indigo-400" /> Calculation Logic
                                                         </div>
-                                                        <div className="text-[10px] text-slate-300 leading-relaxed text-center normal-case font-medium whitespace-normal">
-                                                            Projected volume based on <span className="text-white font-bold">Median Daily Sales</span> multiplied by the <span className="text-white font-bold">{expectedDays} days</span> currently selected in your filter window.
+                                                        <div className="leading-relaxed text-center normal-case font-medium whitespace-normal">
+                                                            Projected volume based on <span className="font-bold">Median Daily Sales</span> x <span className="font-bold">{expectedDays} days</span> window.
                                                         </div>
-                                                        <div className="absolute bottom-full right-4 -mb-1.5 border-[6px] border-transparent border-b-slate-900/95"></div>
                                                     </div>
                                                 </th>
                                                 <SortableHeader label="Price" sortKey="price" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="p-4 text-right">Hist. Price</th>
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Hist. Price</th>
                                                 <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Price Adj." sortKey="priceChanges" sort={sort} onChange={setSort} themeColor={themeColor} align="center" />
-                                                <th className="p-4 text-right pr-6">CTA / Justification</th>
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">CTA / Justification</th>
                                             </tr>
                                         ) : selectedAlert === 'stock' ? (
-                                            <tr>
-                                                <th className="p-4 w-12 text-center">Detail</th>
+                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
                                                 <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
                                                 <SortableHeader label="Runway (Days)" sortKey="runway" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Lead Time" sortKey="leadTime" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="p-4 text-right group/header relative">
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right group/header relative">
                                                     <div className="flex items-center justify-end gap-1 cursor-help">
                                                         Global Velocity
                                                         <Info className="w-3 h-3 text-gray-400" />
                                                     </div>
-                                                    <div className="absolute top-full right-0 mt-2 w-64 bg-slate-900/95 backdrop-blur shadow-2xl rounded-xl opacity-0 group-hover/header:opacity-100 transition-all pointer-events-none z-50 border border-slate-700 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                        <div className="font-black border-b border-slate-700 pb-2 mb-3 uppercase tracking-widest text-[10px] text-indigo-300 flex items-center justify-center gap-1.5">
-                                                            <Calculator className="w-3 h-3" /> Data Source
+                                                    <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover/header:opacity-100 transition-all pointer-events-none z-50 border border-gray-700 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                        <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight flex items-center justify-center gap-1.5">
+                                                            <Calculator className="w-3 h-3 text-indigo-400" /> Data Source
                                                         </div>
-                                                        <div className="text-[10px] text-slate-300 leading-relaxed text-center normal-case font-medium whitespace-normal">
-                                                            Prioritizes <span className="text-white font-bold">Average Daily Sales from ERP</span> if available, otherwise calculates from imported history.
+                                                        <div className="leading-relaxed text-center normal-case font-medium whitespace-normal">
+                                                            Prioritizes <span className="font-bold">ERP Daily Sales</span> if available, else calculates from imported history.
                                                         </div>
-                                                        <div className="absolute top-full right-4 -mb-1.5 border-[6px] border-transparent border-t-slate-900/95"></div>
                                                     </div>
                                                 </th>
                                                 <SortableHeader label="Stock (Min 2)" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="p-4 text-right pr-6">Action / Continuity Strategy</th>
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">Action / Continuity Strategy</th>
                                             </tr>
                                         ) : selectedAlert === 'dead' ? (
-                                            <tr>
-                                                <th className="p-4 w-12 text-center">Detail</th>
+                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
                                                 <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
                                                 <SortableHeader label="Inventory Units" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Inventory Value" sortKey="inventoryValue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Days Since Sale" sortKey="daysSinceLastSale" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="p-4 text-right">Median Demand</th>
-                                                <th className="p-4 text-right pr-6">Action</th>
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Median Demand</th>
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">Action</th>
                                             </tr>
                                         ) : (
-                                            <tr>
-                                                <th className="p-4 w-12 text-center">Action</th>
+                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Action</th>
                                                 <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <th className="p-4">Signals</th>
+                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Signals</th>
                                                 <SortableHeader label="Price (Inc VAT)" sortKey="price" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Sales" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                                                 <SortableHeader label="Net Margin %" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
@@ -722,33 +720,25 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                                     <History className="w-3 h-3" />
                                                                     {p.priceChangeCount}
                                                                 </div>
-                                                                {p.priceChangeCount > 0 && (
-                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-72 bg-slate-900/95 backdrop-blur shadow-2xl rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-all pointer-events-none z-50 border border-slate-700 p-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                                                        <div className="font-black border-b border-slate-700 pb-2 mb-3 uppercase tracking-widest text-[10px] text-indigo-300 flex justify-between items-center">
-                                                                            <span>Recent Price Adjustments</span>
+                                                                 {p.priceChangeCount > 0 && (
+                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover/tooltip:opacity-100 transition-all pointer-events-none z-50 border border-gray-700 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                                        <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight flex justify-between items-center">
+                                                                            <span>Recent Changes</span>
                                                                             <History className="w-3 h-3" />
                                                                         </div>
-                                                                        <div className="space-y-2.5">
+                                                                        <div className="space-y-1">
                                                                             {p.changesInPeriod.slice(0, 5).map(c => (
                                                                                 <div key={c.id} className="flex justify-between items-center gap-3">
-                                                                                    <div className="flex flex-col">
-                                                                                        <span className="text-[10px] text-slate-400 font-medium uppercase">{new Date(c.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
-                                                                                    </div>
-                                                                                    <div className="flex items-center gap-2 flex-1 justify-end">
-                                                                                        <span className="text-[10px] text-white font-mono italic">£{c.oldPrice.toFixed(2)} → £{c.newPrice.toFixed(2)}</span>
-                                                                                        <span className={`font-black text-xs min-w-[50px] text-right ${(c.changeType || (c.newPrice > c.oldPrice ? 'INCREASE' : 'DECREASE')) === 'INCREASE' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                                                            {(c.changeType || (c.newPrice > c.oldPrice ? 'INCREASE' : 'DECREASE')) === 'INCREASE' ? '↑' : '↓'} {(c.percentChange ?? (c.oldPrice > 0 ? ((c.newPrice - c.oldPrice) / c.oldPrice) * 100 : 0)).toFixed(1)}%
+                                                                                    <span className="text-gray-400">{new Date(c.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="font-mono">£{c.oldPrice.toFixed(2)} → £{c.newPrice.toFixed(2)}</span>
+                                                                                        <span className={`${(c.changeType || (c.newPrice > c.oldPrice ? 'INCREASE' : 'DECREASE')) === 'INCREASE' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                                            {(c.changeType || (c.newPrice > c.oldPrice ? 'INCREASE' : 'DECREASE')) === 'INCREASE' ? '↑' : '↓'}{(c.percentChange ?? (c.oldPrice > 0 ? ((c.newPrice - c.oldPrice) / c.oldPrice) * 100 : 0)).toFixed(1)}%
                                                                                         </span>
                                                                                     </div>
                                                                                 </div>
                                                                             ))}
-                                                                            {p.priceChangeCount > 5 && (
-                                                                                <div className="text-center pt-2 border-t border-slate-800 text-[9px] text-slate-500 font-bold uppercase tracking-tight">
-                                                                                    + {p.priceChangeCount - 5} additional events
-                                                                                </div>
-                                                                            )}
                                                                         </div>
-                                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1.5 border-[6px] border-transparent border-t-slate-900/95"></div>
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -892,8 +882,8 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                                         }`}>
                                                                         {p.primaryDrag}
                                                                     </span>
-                                                                    <div className="absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-[10px] p-2 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none border border-gray-700">
-                                                                        <div className="font-bold border-b border-gray-700 pb-1 mb-1">Cost Breakdown (Ex VAT)</div>
+                                                                     <div className="absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none border border-gray-700">
+                                                                        <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight">Cost Breakdown (Ex VAT)</div>
                                                                         <div className="space-y-0.5">
                                                                             <div className="flex justify-between"><span>Unit Revenue:</span><span>{formatMoney(p.displayPrice, 2)}</span></div>
                                                                             <div className="flex justify-between text-orange-400"><span>Ad Cost:</span><span>-{formatMoney((p.adsFee || 0), 2)} ({formatPct(p.tacos)})</span></div>
@@ -916,7 +906,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                             <td className="p-4 text-center"><button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Search className="w-4 h-4" /></button></td>
                                                             <td className="p-4"><div className="font-medium text-gray-900 group-hover:text-indigo-600 transition-colors flex items-center">{p.sku}<GradeBadge gradeLevel={p.gradeLevel} /></div><div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div></td>
                                                             <td className="p-4"><div className="flex flex-wrap gap-1 max-w-[140px]">{p.signals.slice(0, 2).map((id: string) => { const meta = getDiagnosisMeta(id as CanonicalDiagnosisId); return <span key={id} onClick={() => onDeepDive(p.sku)} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${meta.priority === 'High' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`} title={meta.description}>{meta.shortLabel}</span> })}</div></td>
-                                                            <td className="p-4 text-right">£{(p.displayPrice * VAT_MULTIPLIER).toFixed(2)}</td>
+                                                            <td className="p-4 text-right text-gray-700">£{(p.displayPrice * VAT_MULTIPLIER).toFixed(2)}</td>
                                                             <td className="p-4 text-right text-gray-600">£{p.periodRevenue.toFixed(0)}</td>
                                                             <td className="p-4 text-right"><span className={`font-medium ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span></td>
                                                             <td className="p-4 text-right font-medium text-gray-800">{p.stockLevel}</td>

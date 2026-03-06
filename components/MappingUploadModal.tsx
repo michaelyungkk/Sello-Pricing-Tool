@@ -161,7 +161,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
             if (!row || row.length <= skuIdx) continue;
 
             const rawSku = String(row[skuIdx]).trim();
-            
+
             // --- SKU NORMALIZATION ---
             const canonicalRawSku = getCanonicalSku(rawSku);
             const fileSku = canonicalRawSku.replace(/^"|"$/g, '');
@@ -197,7 +197,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
             }
             else {
                 // Fuzzy Logic
-                
+
                 // IMPORTANT: Identify Bundles
                 // If a SKU ends in 'x' followed by digits (e.g. HOCAL012x2), it implies a bundle.
                 // Bundles usually have unique inventory levels and should NOT map to the single unit Master SKU automatically.
@@ -220,10 +220,10 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                     } else {
                         // Strategy B: Master Prefix Match (e.g. Master: BF1078-D-UK, File: BF1078-D)
                         // Or File Prefix Match (e.g. Master: BF1078-D, File: BF1078-D-UK_1)
-                        
+
                         let bestPrefixMatch = '';
                         for (const prod of products) {
-                            
+
                             // Check if File SKU starts with Master SKU (e.g. Master: ITEM, File: ITEM_1)
                             if (fileSku.startsWith(prod.sku)) {
                                 const remaining = fileSku.slice(prod.sku.length);
@@ -233,7 +233,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                     bestPrefixMatch = prod.sku;
                                 }
                             }
-                            
+
                             // Check if Master SKU starts with File SKU (e.g. Master: ITEM-UK, File: ITEM)
                             // This handles "BF1078-D" (File) -> "BF1078-D-UK" (Master)
                             if (prod.sku.startsWith(fileSku)) {
@@ -243,7 +243,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                 }
                             }
                         }
-                        
+
                         if (bestPrefixMatch) {
                             masterSku = bestPrefixMatch;
                             method = 'fuzzy';
@@ -547,11 +547,11 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                 </div>
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
                     {step === 'preview' && matchedCount > 0 && (
                         <button
                             onClick={handleSave}
-                            className={`px-6 py-2 text-white font-medium rounded-lg shadow-md flex items-center gap-2 ${importMode === 'replace' ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                            className={`px-4 py-2 text-white text-sm font-bold rounded-lg shadow-md flex items-center gap-2 ${importMode === 'replace' ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                         >
                             {importMode === 'replace' ? <Eraser className="w-4 h-4" /> : <Check className="w-4 h-4" />}
                             Confirm {importMode === 'replace' ? 'Overwrite' : 'Merge'} {matchedCount} Mappings

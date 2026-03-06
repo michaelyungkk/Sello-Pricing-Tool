@@ -66,13 +66,12 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
     const [productForTags, setProductForTags] = useState<Product | null>(null);
     const [shipmentSearchTags, setShipmentSearchTags] = useState<string[]>([]);
+    const [isAuditVisible, setIsAuditVisible] = useState(false);
 
     // Time Window State (Mirroring Platform Management)
     const [timeWindow, setTimeWindow] = useState<'7D' | '14D' | '30D' | '60D' | 'ALL' | 'CUSTOM'>('30D');
     const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
     const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
-    const [isAuditVisible, setIsAuditVisible] = useState(false);
-
 
     const handleViewShipments = (sku: string) => {
         setShipmentSearchTags([sku]);
@@ -157,14 +156,14 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         { key: 'family-groups', label: 'Family Groups', icon: Layers },
                     ]}
                     activeTab={activeTab}
-                    onChange={(key) => setActiveTab(key as Tab)}
+                    onChange={(key) => { setActiveTab(key as Tab); setIsAuditVisible(false); }}
                     size="sm"
                 />
 
             </div>
 
             {/* Global Context Control — only relevant for data-driven tabs */}
-            {(activeTab === 'performance' || activeTab === 'comparison') && <ContextBar
+            {(activeTab === 'performance' || activeTab === 'comparison' || activeTab === 'returns') && <ContextBar
                 timeOptions={[
                     { key: '7D', label: '7D' },
                     { key: '14D', label: '14D' },
@@ -181,13 +180,15 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                 onCustomStartChange={setCustomStart}
                 onCustomEndChange={setCustomEnd}
             >
-                <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-                    <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300" />
-                    <div className="flex items-center gap-1.5">
-                        <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
-                        <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
-                    </div>
-                </label>
+                {activeTab !== 'returns' && (
+                    <label className="flex items-center h-8 gap-2 px-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                        <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300" />
+                        <div className="flex items-center gap-1.5">
+                            <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
+                            <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
+                        </div>
+                    </label>
+                )}
                 {activeTab === 'performance' && (
                     <button
                         onClick={() => setIsAuditVisible(v => !v)}
@@ -273,8 +274,6 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
                         themeColor={themeColor}
                         deductRefunds={deductRefunds}
                         refundHistory={refundHistory}
-                        startKey={dateWindow.startKey}
-                        endKey={dateWindow.endKey}
                     />
                 )}
 

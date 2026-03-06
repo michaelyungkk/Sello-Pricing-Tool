@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PriceLog, RefundLog } from '../../../types';
 import { FilterBar } from '../../common/FilterBar';
-import { Columns, ChevronDown, CheckSquare, Square, Download, X, GripVertical, Settings2, ArrowUp, ArrowDown, Plus, Trash2, ListFilter, Trophy } from 'lucide-react';
+import { Columns, ChevronDown, CheckSquare, Square, Download, GripVertical, Settings2, ArrowUp, ArrowDown, Plus, Trash2, ListFilter, Trophy } from 'lucide-react';
 import { asDateKey, isDateKeyBetween } from '../../../services/dateUtils';
 import { calcRevenue, calcProfit, calcUnits } from '../../../services/metrics';
 import { formatPct, formatNumber, formatMoney } from '../../../utils/format';
@@ -21,8 +21,6 @@ interface PlatformComparisonTabProps {
     themeColor: string;
     deductRefunds: boolean;
     refundHistory: RefundLog[];
-    startKey: string;
-    endKey: string;
 }
 
 interface SortRule {
@@ -30,7 +28,7 @@ interface SortRule {
     dir: 'asc' | 'desc';
 }
 
-const MultiSelectDropdown = ({ label, options, selected, onChange, themeColor, icon: Icon = Columns }: any) => {
+const MultiSelectDropdown = ({ label, options, selected, onChange, icon: Icon = Columns }: any) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -93,7 +91,7 @@ const MultiSelectDropdown = ({ label, options, selected, onChange, themeColor, i
                             const isSelected = selected.includes(opt);
                             return (
                                 <div key={opt} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer rounded-lg transition-colors" onClick={() => toggleOption(opt)}>
-                                    {isSelected ? <CheckSquare className="w-4 h-4 text-indigo-600" style={{ color: themeColor }} /> : <Square className="w-4 h-4 text-gray-300" />}
+                                    {isSelected ? <CheckSquare className="w-4 h-4 text-indigo-600" /> : <Square className="w-4 h-4 text-gray-300" />}
                                     <span className={`text-xs ${isSelected ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{getLabel(opt)}</span>
                                 </div>
                             );
@@ -105,7 +103,7 @@ const MultiSelectDropdown = ({ label, options, selected, onChange, themeColor, i
     );
 };
 
-const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platforms, themeColor }: any) => {
+const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platforms }: any) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const [addKey, setAddKey] = useState('');
@@ -208,16 +206,14 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
     themeColor,
     deductRefunds,
     refundHistory,
-    startKey,
-    endKey,
     pricingRules,
     priceHistoryMap,
     dateWindow
 }) => {
-    const [searchTags, setSearchTags] = useState<string[]>([]);
+    const [isAuditVisible, setIsAuditVisible] = useState(false);
+    const [searchTags] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
-    const [isAuditVisible, setIsAuditVisible] = useState(false);
 
     // Updated Sort State to support hierarchy
     const [sortRules, setSortRules] = useState<SortRule[]>([{ key: 'totalQty', dir: 'desc' }]);
@@ -236,9 +232,9 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         if (selectedPlatforms.length === 0 && platformOptions.length > 0) {
             setSelectedPlatforms(platformOptions);
         }
-    }, [platformOptions]);
+    }, [platformOptions, selectedPlatforms.length]);
 
-    const { processedData, totals } = useMemo(() => {
+    const { processedData } = useMemo(() => {
         const { startKey, endKey } = dateWindow;
 
         // 1. Pre-process Refunds for lookup (Ex-VAT)
@@ -257,7 +253,6 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         }
 
         const rows: any[] = [];
-        let grandTotalQty = 0;
 
         products.forEach(product => {
             const matchesTerm = (term: string) => {
@@ -319,19 +314,18 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
 
             if (productTotalQty === 0 && searchQuery === '' && searchTags.length === 0) return;
 
-            grandTotalQty += productTotalQty;
-
             const row: any = {
                 id: product.id,
                 sku: product.sku,
                 name: product.name,
                 gradeLevel: product.gradeLevel,
-                totalQty: productTotalQty
+                totalQty: productTotalQty,
+                totalRevenue: productTotalRevenue,
+                totalProfit: productTotalProfit
             };
 
             selectedPlatforms.forEach(p => {
                 const stats = platformStats[p];
-                // Apply VAT multiplier for display values
                 const revenueInc = stats.revenue * VAT_MULTIPLIER;
                 const profitInc = stats.profit * VAT_MULTIPLIER;
 
@@ -346,9 +340,6 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                 row[`${p}_revenue`] = revenueInc;
                 row[`${p}_profit`] = profitInc;
             });
-
-            row.totalRevenue = productTotalRevenue;
-            row.totalProfit = productTotalProfit;
 
             rows.push(row);
         });
@@ -370,8 +361,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
             return 0;
         });
 
-        return { processedData: sorted, totals: { grandTotalQty } };
-
+        return { processedData: sorted };
     }, [products, priceHistoryMap, dateWindow, selectedPlatforms, searchTags, searchQuery, deductRefunds, sortRules, refundHistory]);
 
     const handleExport = () => {
@@ -455,8 +445,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         setDraggedPlatform(null);
     };
 
-    // Row Hover Logic for Winner Calculation
-    const getWinnerInfo = (row: any) => {
+    const getWinnerInfo = React.useCallback((row: any) => {
         if (!row || sortRules.length === 0) return null;
 
         // Infer metric from primary sort key
@@ -489,9 +478,9 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         else displayVal = formatNumber(maxVal);
 
         return { winner, metric, value: displayVal };
-    };
+    }, [selectedPlatforms, sortRules]);
 
-    const hoveredWinner = useMemo(() => getWinnerInfo(hoveredRow), [hoveredRow, sortRules]);
+    const hoveredWinner = useMemo(() => getWinnerInfo(hoveredRow), [hoveredRow, getWinnerInfo]);
 
     const colConfig: Record<string, { label: string, key: string, align: string }> = {
         qty: { label: 'QTY', key: 'qty', align: 'right' },
@@ -553,8 +542,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                         />
                         <button
                             onClick={handleExport}
-                            className="flex items-center gap-2 px-4 py-2 text-white rounded-lg shadow-md hover:brightness-110 transition-all font-bold text-sm"
-                            style={{ backgroundColor: themeColor }}
+                            className="px-3 h-8 text-xs font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm flex items-center gap-2 transition-colors"
                         >
                             <Download className="w-4 h-4" /> Export
                         </button>
@@ -599,18 +587,18 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
             {/* Table */}
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex-1 flex flex-col backdrop-blur-custom relative z-0">
                 <div className="overflow-auto flex-1 relative">
-                    <table className="w-full text-sm text-left whitespace-nowrap border-collapse">
-                        <thead className="bg-gray-50 text-gray-600 text-[10px] uppercase font-bold sticky top-0 z-20 shadow-sm">
-                            <tr>
+                    <table className="w-full text-sm text-left whitespace-nowrap border-separate border-spacing-0">
+                        <thead className="sticky top-0 z-20">
+                            <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
                                 {/* Sticky SKU Column */}
-                                <th className="p-3 sticky left-0 z-30 bg-gray-100 border-b border-r border-gray-200 min-w-[200px]" onClick={(e) => handleSort('sku', e)}>
+                                        <th className="px-4 py-3 sticky left-0 z-30 bg-gray-50/80 border-b border-r border-gray-200/50 min-w-[200px]" onClick={(e) => handleSort('sku', e)}>
                                     <div className="flex items-center justify-between cursor-pointer">
                                         SKU
                                         {getSortIndicator('sku')}
                                     </div>
                                 </th>
                                 {/* Total Column */}
-                                <th className="p-3 border-b border-r border-gray-200 text-right bg-gray-50 min-w-[80px]" onClick={(e) => handleSort('totalQty', e)}>
+                                <th className="px-4 py-3 border-b border-r border-gray-200/50 text-right bg-gray-50/80 min-w-[80px]" onClick={(e) => handleSort('totalQty', e)}>
                                     <div className="flex items-center justify-end cursor-pointer">
                                         Total QTY
                                         {getSortIndicator('totalQty')}
@@ -620,7 +608,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                 {selectedPlatforms.map(p => (
                                     <React.Fragment key={p}>
                                         <th
-                                            className={`p-3 border-b border-gray-200 text-center bg-gray-50 border-r border-gray-200 cursor-move hover:bg-gray-100 transition-colors ${draggedPlatform === p ? 'opacity-50 border-dashed border-2 border-indigo-300' : ''}`}
+                                            className={`px-4 py-3 border-b border-gray-200/50 text-center bg-gray-50/80 border-r border-gray-200/50 cursor-move hover:bg-gray-100/80 transition-colors ${draggedPlatform === p ? 'opacity-50 border-dashed border-2 border-indigo-300' : ''}`}
                                             colSpan={visibleColumns.length}
                                             draggable
                                             onDragStart={(e) => handleDragStart(e, p)}
@@ -635,20 +623,20 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                     </React.Fragment>
                                 ))}
                             </tr>
-                            <tr>
-                                <th className="p-0 sticky left-0 z-30 bg-gray-100 border-r border-gray-200"></th>
-                                <th className="p-0 border-r border-gray-200 bg-gray-50"></th>
+                            <tr className="bg-gray-50/80 border-b border-gray-200/30 text-[10px] uppercase tracking-wider text-gray-500 font-semibold backdrop-blur-sm transition-colors">
+                                <th className="px-4 py-2 sticky left-0 z-30 bg-gray-50/80 border-r border-gray-200/50 border-b border-gray-200/30 h-8"></th>
+                                <th className="px-4 py-2 border-r border-gray-200/50 bg-gray-50/80 border-b border-gray-200/30 h-8"></th>
                                 {selectedPlatforms.map(p => (
                                     <React.Fragment key={`${p}-sub`}>
                                         {visibleColumns.map(col => {
                                             const platformColor = pricingRules[p]?.color || '#9ca3af';
                                             const rgb = hexToRgb(platformColor);
-                                            const headerBgStyle = rgb ? { backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)` } : {};
+                                            const headerBgStyle = rgb ? { backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.05)` } : {};
 
                                             return (
                                                 <th
                                                     key={`${p}-${col}`}
-                                                    className="px-2 py-1 text-right border-b border-gray-200 bg-gray-50/50 text-gray-500 cursor-pointer hover:bg-gray-100 min-w-[60px] border-r border-gray-100 last:border-gray-200"
+                                                    className="px-4 py-2 text-right border-b border-gray-200/30 bg-gray-50/30 text-gray-500 font-semibold cursor-pointer hover:bg-gray-100/50 min-w-[80px] border-r border-gray-100/50 last:border-gray-200 transition-colors uppercase text-[10px]"
                                                     onClick={(e) => handleSort(`${p}_${colConfig[col].key}`, e)}
                                                     style={headerBgStyle}
                                                 >
@@ -660,18 +648,18 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100 bg-white">
+                        <tbody className="divide-y divide-gray-100/50">
                             {processedData.length > 0 ? (
                                 processedData.map((row) => (
                                     <tr
                                         key={row.id}
-                                        className="hover:bg-gray-50 transition-colors"
+                                        className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group"
                                         onMouseEnter={(e) => { setHoveredRow(row); setCursorPos({ x: e.clientX, y: e.clientY }); }}
                                         onMouseMove={(e) => setCursorPos({ x: e.clientX, y: e.clientY })}
                                         onMouseLeave={() => setHoveredRow(null)}
                                     >
                                         {/* Sticky SKU Cell */}
-                                        <td className="p-3 sticky left-0 z-10 bg-white border-r border-gray-100 group-hover:bg-gray-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                        <td className="px-4 py-3 sticky left-0 z-10 bg-white border-r border-gray-100/50 group-hover:bg-gray-50/50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-bold text-gray-900 font-mono text-xs">{row.sku}</span>
                                                 <GradeBadge gradeLevel={row.gradeLevel} />
@@ -680,7 +668,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                         </td>
 
                                         {/* Total Qty */}
-                                        <td className="p-3 text-right font-bold text-gray-800 border-r border-gray-100 bg-gray-50/30">
+                                        <td className="px-4 py-3 text-right font-bold text-gray-800 border-r border-gray-100/50 bg-gray-50/10">
                                             {formatNumber(row.totalQty)}
                                         </td>
 
@@ -703,35 +691,35 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                             return (
                                                 <React.Fragment key={p}>
                                                     {visibleColumns.includes('qty') && (
-                                                        <td className="px-2 py-3 text-right font-medium text-gray-700 border-gray-50 text-xs border-r border-gray-100" style={bgStyle}>
+                                                        <td className="px-4 py-3 text-right font-medium text-gray-700 border-gray-50 text-xs border-r border-gray-100/50" style={bgStyle}>
                                                             {hasActivity ? qty : <span className="text-gray-300">-</span>}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('share') && (
-                                                        <td className="px-2 py-3 text-right text-xs text-gray-500 border-gray-50 border-r border-gray-50" style={bgStyle}>
+                                                        <td className="px-4 py-3 text-right text-[10px] text-gray-500 border-gray-50 border-r border-gray-50" style={bgStyle}>
                                                             {hasActivity ? `${row[`${p}_share`].toFixed(0)}%` : <span className="text-gray-300">-</span>}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('pm') && (
                                                         <td
-                                                            className={`px-2 py-3 text-right text-xs font-bold border-r border-gray-50 ${hasActivity ? pmClass : 'text-gray-300'}`}
+                                                            className={`px-4 py-3 text-right text-[10px] font-bold border-r border-gray-50 ${hasActivity ? pmClass : 'text-gray-300'}`}
                                                             style={hasPmBg ? {} : bgStyle}
                                                         >
                                                             {hasActivity ? `${pm.toFixed(0)}%` : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('avgPrice') && (
-                                                        <td className="px-2 py-3 text-right text-xs text-gray-600 border-r border-gray-50" style={bgStyle}>
+                                                        <td className="px-4 py-3 text-right text-[10px] text-gray-600 border-r border-gray-50" style={bgStyle}>
                                                             {hasActivity ? `£${row[`${p}_avgPrice`].toFixed(2)}` : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('revenue') && (
-                                                        <td className="px-2 py-3 text-right text-xs text-indigo-600 font-medium border-r border-gray-50" style={bgStyle}>
+                                                        <td className="px-4 py-3 text-right text-[10px] text-indigo-600 font-medium border-r border-gray-50" style={bgStyle}>
                                                             {hasActivity ? formatMoney(row[`${p}_revenue`], 0) : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('profit') && (
-                                                        <td className={`px-2 py-3 text-right text-xs font-bold border-r border-gray-100 ${row[`${p}_profit`] >= 0 ? 'text-emerald-600' : 'text-red-500'}`} style={bgStyle}>
+                                                        <td className={`px-4 py-3 text-right text-[10px] font-bold border-r border-gray-100/50 ${row[`${p}_profit`] >= 0 ? 'text-emerald-600' : 'text-red-500'}`} style={bgStyle}>
                                                             {hasActivity ? formatMoney(row[`${p}_profit`], 0) : '-'}
                                                         </td>
                                                     )}

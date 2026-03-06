@@ -107,14 +107,14 @@ const ProductRow = React.memo(({
     priceHistoryMap
 }: ProductRowProps) => {
 
-    const { totalAdSpend, totalRevenue, acos } = useMemo(() => {
-        if (!priceHistoryMap || !priceHistoryMap.get) return { totalAdSpend: 0, totalRevenue: 0, acos: null };
+    const { totalAdSpend, acos } = useMemo(() => {
+        if (!priceHistoryMap || !priceHistoryMap.get) return { totalAdSpend: 0, acos: null };
         const logs = priceHistoryMap.get(product.sku) || [];
         const adSpend = logs.reduce((sum, l) => sum + (l.adsSpend || 0), 0);
         const revenue = logs.reduce((sum, l) =>
             sum + (l.price * (l.velocity || 0) * VAT_MULTIPLIER), 0);
         const acosVal = revenue > 0 ? (adSpend / revenue) * 100 : null;
-        return { totalAdSpend: adSpend, totalRevenue: revenue, acos: acosVal };
+        return { totalAdSpend: adSpend, acos: acosVal };
     }, [product.sku, priceHistoryMap]);
 
     // Apply 20% VAT Uplift for Display using shared constant
@@ -138,8 +138,8 @@ const ProductRow = React.memo(({
     const isHighReturns = product.returnRate !== undefined && product.returnRate > 5;
 
     return (
-        <tr key={product.id} className="even:bg-gray-50/50 hover:bg-gray-100/50 transition-colors group text-sm border-b border-gray-50 last:border-none">
-            <td className="px-2 py-3 text-center w-[80px]">
+        <tr key={product.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group text-sm border-b border-gray-100/50 last:border-none">
+            <td className="px-4 py-4 text-center w-[80px]">
                 <div className="grid grid-cols-2 gap-1.5 w-fit mx-auto">
                     {onDeepDive && (
                         <button
@@ -179,7 +179,7 @@ const ProductRow = React.memo(({
                     )}
                 </div>
             </td>
-            <td className="px-4 py-3">
+            <td className="px-4 py-4">
                 <div>
                     <div className="flex items-center">
                         <div className="font-bold text-gray-900 font-mono">{product.sku}</div>
@@ -207,7 +207,7 @@ const ProductRow = React.memo(({
                     </div>
                 </div>
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="px-4 py-4 text-right">
                 {optimalPriceWithVat ? (
                     <div className="flex items-center justify-end gap-1 font-bold" style={{ color: themeColor }} title="Based on historical margin & velocity performance (VAT Inc)">
                         <Star className="w-3 h-3" style={{ fill: `${themeColor}20` }} />
@@ -222,15 +222,15 @@ const ProductRow = React.memo(({
                     <span className="text-gray-300">-</span>
                 )}
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="px-4 py-4 text-right">
                 <div className="text-gray-400 font-medium">
                     {oldPriceWithVat ? `£${oldPriceWithVat.toFixed(2)}` : '-'}
                 </div>
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="px-4 py-4 text-right">
                 <div className="font-bold text-gray-900">£{currentPriceWithVat.toFixed(2)}</div>
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="px-4 py-4 text-right">
                 {product.caPrice ? (
                     <div className="font-bold text-purple-600 font-mono" title="Channel Advisor Reference Price">
                         £{product.caPrice.toFixed(2)}
@@ -240,7 +240,7 @@ const ProductRow = React.memo(({
                 )}
             </td>
 
-            <td className="px-4 py-3 text-right">
+            <td className="px-4 py-4 text-right">
                 <div className="flex flex-col items-end gap-0.5">
                     <span className="font-bold text-gray-900">{product.stockLevel}</span>
                     {product.incomingStock && product.incomingStock > 0 ? (
@@ -260,7 +260,7 @@ const ProductRow = React.memo(({
             </td>
 
             <td
-                className="px-4 py-3 text-right cursor-help"
+                className="px-4 py-4 text-right cursor-help"
                 onMouseEnter={(e) => handleMouseEnter(product.id, e)}
                 onMouseLeave={handleMouseLeave}
             >
@@ -277,7 +277,7 @@ const ProductRow = React.memo(({
                     </div>
                 </div>
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="px-4 py-4 text-right">
                 {product.returnRate !== undefined ? (
                     <div className={`flex items-center justify-end gap-1 font-medium ${isHighReturns ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
                         {isHighReturns && <CornerDownLeft className="w-3 h-3" />}
@@ -285,7 +285,7 @@ const ProductRow = React.memo(({
                     </div>
                 ) : <span className="text-gray-300">-</span>}
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="px-4 py-4 text-right">
                 <div className="flex flex-col items-end">
                     <span className="text-orange-600 font-bold">
                         £{(totalAdSpend || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -484,10 +484,10 @@ const FamilyGridView = ({
                 return (
                     <React.Fragment key={family.id}>
                         <tr
-                            className="bg-gray-100/80 border-y border-gray-200 cursor-pointer hover:bg-gray-200/80 transition-colors group"
+                            className="bg-gray-50/80 border-y border-gray-200/50 cursor-pointer hover:bg-gray-100/80 transition-colors group"
                             onClick={() => toggleFamily(family.id)}
                         >
-                            <td className="px-4 py-3" colSpan={2}>
+                            <td className="px-4 py-4" colSpan={2}>
                                 <div className="flex items-center gap-3">
                                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
                                     <div className="flex items-center gap-2">
@@ -549,7 +549,7 @@ const FamilyGridView = ({
                             </div>
                         </td>
                     </tr>
-                    {!collapsedFamilies.has('ungrouped') && familiesWithProducts.ungrouped.map(p => (
+                    {!collapsedFamilies.has('ungrouped') && familiesWithProducts.ungrouped.map((p: Product) => (
                         <ProductRow
                             key={p.id}
                             product={p}
@@ -605,12 +605,12 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
     const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'status', dir: 'desc' });
 
-    const getEffectiveManager = (platform: string, storedManager: string) => {
+    const getEffectiveManager = React.useCallback((platform: string, storedManager: string) => {
         if (pricingRules && pricingRules[platform]?.manager && pricingRules[platform].manager !== 'Unassigned') {
             return pricingRules[platform].manager;
         }
         return storedManager || 'Unassigned';
-    };
+    }, [pricingRules]);
 
     const uniqueManagers = useMemo(() => {
         const managerSet = new Set<string>();
@@ -888,14 +888,14 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                         <div className="flex bg-gray-100/50 p-1 rounded-lg border border-gray-200">
                             <button
                                 onClick={() => setViewMode('LIST')}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${viewMode === 'LIST' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${viewMode === 'LIST' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 <List className="w-3.5 h-3.5" />
                                 List View
                             </button>
                             <button
                                 onClick={() => setViewMode('FAMILY')}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${viewMode === 'FAMILY' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${viewMode === 'FAMILY' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 <Layers className="w-3.5 h-3.5" />
                                 Family View
@@ -907,7 +907,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                 <div className="w-full xl:w-auto flex justify-end relative">
                     <button
                         onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-                        className="px-4 py-1.5 bg-white/50 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
+                        className="px-3 h-8 bg-white/50 border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
                     >
                         <Download className="w-3.5 h-3.5" />
                         Export List
@@ -1024,7 +1024,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
                             <button
                                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                                className={`px-3 py-2.5 border rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ml-auto lg:ml-0`}
+                                className={`px-3 py-1.5 border rounded-lg flex items-center gap-2 text-xs font-bold transition-colors ml-auto lg:ml-0`}
                                 style={{
                                     backgroundColor: showAdvancedFilters ? `${themeColor}10` : 'rgba(255,255,255,0.5)',
                                     borderColor: showAdvancedFilters ? themeColor : '#d1d5db',
@@ -1084,19 +1084,19 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                             <div className="flex flex-wrap gap-3">
                                 <button
                                     onClick={() => setShowOOS(!showOOS)}
-                                    className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors hover:bg-gray-50 ${showOOS ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
+                                    className={`flex items-center justify-between gap-3 px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors hover:bg-gray-50 ${showOOS ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
                                     style={showOOS ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
                                 >
-                                    <span className="text-xs font-bold uppercase">Show Out of Stock</span>
+                                    <span className="text-[10px] uppercase">Show Out of Stock</span>
                                     {showOOS ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                                 </button>
 
                                 <button
                                     onClick={() => setShowInactive(!showInactive)}
-                                    className={`flex items-center justify-between gap-3 px-3 py-2 border rounded-lg text-sm font-medium transition-colors hover:bg-gray-50 ${showInactive ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
+                                    className={`flex items-center justify-between gap-3 px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors hover:bg-gray-50 ${showInactive ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
                                     style={showInactive ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
                                 >
-                                    <span className="text-xs font-bold uppercase">Show Inactive</span>
+                                    <span className="text-[10px] uppercase">Show Inactive</span>
                                     {showInactive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                                 </button>
                             </div>
@@ -1123,10 +1123,10 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-medium">
-                                <th className="px-2 py-3 font-semibold text-center w-[80px] text-[10px] uppercase text-gray-500">Actions</th>
+                    <table className="w-full text-left border-separate border-spacing-0">
+                        <thead className="sticky top-0 z-10">
+                            <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                <th className="px-4 py-3 font-semibold text-center w-[80px] text-xs uppercase text-gray-600 tracking-wider">Actions</th>
                                 <SortableHeader label="Product" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} className="min-w-[250px]" />
                                 <SortableHeader label="Optimal Ref." sortKey="optimalPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
                                 <SortableHeader label="Last Week" sortKey="oldPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />

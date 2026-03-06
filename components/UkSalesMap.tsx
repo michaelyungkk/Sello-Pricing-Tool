@@ -3,10 +3,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
 import { Product, PriceLog, SearchChip } from '../types';
-import { POSTCODE_COORDS } from './UkPostcodeMapCoords';
 import { UK_POSTCODE_AREA_NAME } from '../ukPostcodeAreaNames';
-import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, CornerDownLeft, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, Ship, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Search, Truck, RotateCcw } from 'lucide-react';
-import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from '../services/metrics';
+import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, ArrowUpDown, ChevronUp, ChevronDown, Search, Truck, RotateCcw, CornerDownRight } from 'lucide-react';
 import { aggregateUkMapData, AreaData } from '../services/mapAgg';
 
 // Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
@@ -270,7 +268,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     const isActive = tableSort.key === sortKey;
     return (
         <th 
-            className={`px-3 py-2 cursor-pointer hover:bg-gray-100 transition-colors text-${align}`}
+            className={`px-3 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors text-${align}`}
             onClick={() => setTableSort(prev => ({ key: sortKey, direction: prev.key === sortKey && prev.direction === 'desc' ? 'asc' : 'desc' }))}
             style={isActive ? { backgroundColor: `${themeColor}12` } : {}}
         >
@@ -812,7 +810,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs whitespace-nowrap">
-                    <thead className="bg-gray-50 text-gray-500 font-bold text-[10px] uppercase tracking-wider sticky top-0">
+                    <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-[10px] uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm">
                         <tr>
                             <SortableHeader label="Area" sortKey="code" />
                             <SortableHeader label="Orders" sortKey="orders" align="right"/>
@@ -824,16 +822,16 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <SortableHeader label="TACoS %" sortKey="tacos" align="right"/>
                             <SortableHeader label="Total Ship" sortKey="totalShippingCost" align="right"/>
                             <SortableHeader label="Avg Ship" sortKey="avgShippingCost" align="right"/>
-                            <th className="px-3 py-2 text-center w-12">Action</th>
+                            <th className="px-3 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-center w-12">Action</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-100/50">
                         {sortedTableData.map(d => {
                             const isPinned = pinnedArea && pinnedArea.code === d.code;
                             return (
                                 <React.Fragment key={d.code}>
                                     <tr 
-                                        className={`hover:bg-gray-50 cursor-pointer ${isPinned ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
+                                        className={`even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors cursor-pointer ${isPinned ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
                                         onClick={() => setPinnedArea(prev => (prev && prev.code === d.code) ? null : d)}
                                     >
                                         <td className="px-3 py-2 font-bold text-gray-800">{getAreaDisplayName(d.code)}</td>

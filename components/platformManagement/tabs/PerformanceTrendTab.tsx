@@ -428,7 +428,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200/50 text-[10px] uppercase tracking-wider">
+                        <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-[10px] uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
                             <tr>
                                 <SortableHeader label="Rank" sortKey="rank" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="center" className="w-10" />
                                 <SortableHeader label="Platform Performance" sortKey="name" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" />
@@ -436,7 +436,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                 <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
                                 <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
                                 <SortableHeader label="Quality (Refunds)" sortKey="refunds" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
-                                <th className="px-4 py-3 text-center">Risk Analysis</th>
+                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Risk Analysis</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100/50">
@@ -470,7 +470,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                 if (isRefundHigh) flags.push({ label: "High Returns", style: "bg-orange-100 text-orange-800 border-orange-200", tooltip: "Quality/Fulfillment issues detected" });
                                 if (row.current.netProfit < 0) flags.push({ label: "Bleeding", style: "bg-red-900 text-white border-red-950 shadow-sm", tooltip: "Operating at a net loss" });
                                 return (
-                                    <tr key={row.platform} className={`even:bg-gray-50/20 hover:bg-gray-100/40 transition-all cursor-pointer ${hoveredPlatform === row.platform ? 'bg-indigo-50/40 ring-1 ring-inset ring-indigo-200' : ''}`} onMouseEnter={() => setHoveredPlatform(row.platform)} onMouseLeave={() => setHoveredPlatform(null)}>
+                                    <tr key={row.platform} className={`even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors cursor-pointer ${hoveredPlatform === row.platform ? 'bg-indigo-50/40 ring-1 ring-inset ring-indigo-200' : ''}`} onMouseEnter={() => setHoveredPlatform(row.platform)} onMouseLeave={() => setHoveredPlatform(null)}>
                                         <td className="p-4 text-center"><div className="flex flex-col items-center gap-0.5"><div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-black border border-gray-200">{row.currentPos}</div>{row.shift !== 0 ? (<div className={`text-[8px] font-black flex items-center ${row.shift > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{row.shift > 0 ? <ArrowUp className="w-2 h-2" /> : <ArrowDown className="w-2 h-2" />}{Math.abs(row.shift)}</div>) : <Minus className="w-2 h-2 text-gray-300" />}</div></td>
                                         <td className="p-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white shadow-sm" style={{ backgroundColor: rule?.color || '#6366f1' }}>{row.platform[0]}</div><div className="flex flex-col"><div className="font-bold text-gray-900 text-sm leading-none">{row.platform}</div><div className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-wider">{rule?.manager || 'Unassigned'}</div></div></div></td>
                                         <td className={`p-4 text-right transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}>

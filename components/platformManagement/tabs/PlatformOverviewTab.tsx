@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { User, Globe, BarChart3, X } from 'lucide-react';
 import { SortState } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
@@ -9,6 +9,7 @@ import { PlatformSummary, PlatformSortKey } from '../platformManagement.types';
 import { PricingRules } from '../../../types';
 import { PlatformMetricCard } from '../parts/PlatformMetricCard';
 import AuditPanel from '../../AuditPanel';
+import { FilterBar } from '../../common/FilterBar';
 
 interface PlatformOverviewTabProps {
     sortedSummaries: PlatformSummary[];
@@ -39,11 +40,10 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
     topPlatformKey,
     startKey = '',
     endKey = '',
-    isAuditVisible
+    isAuditVisible,
 }) => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
             {isAuditVisible && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                     <AuditPanel
@@ -82,7 +82,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200/50 text-[10px] uppercase tracking-wider">
+                            <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
                                 <tr>
                                     <SortableHeader label="Platform" sortKey="name" sort={sort} onChange={setSort as any} themeColor={themeColor} />
                                     {!selectedPlatformKey && <SortableHeader label="Manager" sortKey="manager" sort={sort} onChange={setSort as any} themeColor={themeColor} />}
@@ -100,7 +100,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                     const isSelected = selectedPlatformKey === summary.platform;
                                     const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
                                     return (
-                                        <tr key={summary.platform} className={`even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`} onClick={() => setSelectedPlatformKey(isSelected ? null : summary.platform)}>
+                                        <tr key={summary.platform} className={`even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`} onClick={() => setSelectedPlatformKey(isSelected ? null : summary.platform)}>
                                             <td className="p-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm" style={{ backgroundColor: rule?.color || '#6366f1' }}>{summary.platform[0]}</div>

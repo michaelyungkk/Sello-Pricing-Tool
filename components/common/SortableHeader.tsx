@@ -33,7 +33,7 @@ export function SortableHeader<K extends string>({
 
   return (
     <th
-      className={`px-4 py-3 font-semibold cursor-pointer select-none hover:bg-gray-100/50 transition-colors text-${align} ${className}`}
+      className={`px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100/50 transition-colors text-${align} ${className}`}
       onClick={handleClick}
       role="columnheader"
       aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}

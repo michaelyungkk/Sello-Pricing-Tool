@@ -231,20 +231,20 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden">
                 <div className="overflow-x-auto border rounded-lg">
                     <table className="w-full text-sm text-left whitespace-nowrap">
-                        <thead className="bg-white/10 text-gray-500 font-semibold border-b border-custom-glass">
+                        <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-[10px] uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
                             <tr>
-                                <th className="p-3">Date</th>
-                                <th className="p-3">Platform</th>
-                                <th className="p-3 text-right">Price</th>
-                                <th className="p-3 text-right">Qty</th>
-                                <th className="p-3 text-right">Revenue</th>
-                                <th className="p-3 text-right">Ex. Freight</th>
-                                <th className="p-3 text-right">Postage</th>
-                                <th className="p-3 text-right">Ads</th>
-                                <th className="p-3 text-right">Margin</th>
+                                <th className="px-4 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-left">Date</th>
+                                <th className="px-4 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-left">Platform</th>
+                                <th className="px-4 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Price</th>
+                                <th className="px-4 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Qty</th>
+                                <th className="px-4 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Revenue</th>
+                                <th className="px-4 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Ex. Freight</th>
+                                <th className="px-4 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Postage</th>
+                                <th className="px-4 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Ads</th>
+                                <th className="px-4 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Margin</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-100/50">
                             {paginatedTransactions.map((tx: any, idx: number) => {
                                 const isRefund = tx._type === 'REFUND_LOG' || tx.velocity < 0;
                                 const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
@@ -256,12 +256,13 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 const totalPostage = !isRefund && !isAdRow ? (tx.realPostage || 0) * VAT_MULTIPLIER : 0;
 
                                 return (
-                                    <tr key={idx} className={`hover:bg-gray-50/50 transition-colors ${isAdRow ? 'bg-orange-50/40 text-orange-900' :
+                                    <tr key={idx} className={`even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors ${
+                                        isAdRow ? 'bg-orange-50/40 text-orange-900' :
                                         isRefund ? 'bg-red-50/40 text-red-900' :
-                                            isZeroRev ? 'opacity-60 bg-gray-50/30' : ''
-                                        }`}>
-                                        <td className="p-3 font-mono text-xs opacity-80">{new Date(tx.date).toLocaleDateString('en-GB')}</td>
-                                        <td className="p-3">
+                                        isZeroRev ? 'opacity-60 bg-gray-50/30' : ''
+                                    }`}>
+                                        <td className="px-4 py-2 font-mono text-xs opacity-80">{new Date(tx.date).toLocaleDateString('en-GB')}</td>
+                                        <td className="px-4 py-2">
                                             <div className="flex flex-col">
                                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold border w-fit ${isAdRow ? 'bg-orange-100 border-orange-200 text-orange-800' : isRefund ? 'bg-red-100 border-red-200 text-red-800' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                                     {tx.platform}
@@ -271,23 +272,23 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="p-3 text-right font-medium">
+                                        <td className="px-4 py-2 text-right font-medium">
                                             {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : formatMoney(tx.price * VAT_MULTIPLIER)}
                                         </td>
-                                        <td className="p-3 text-right font-bold opacity-90">{formatNumber(tx.velocity)}</td>
-                                        <td className={`p-3 text-right ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
+                                        <td className="px-4 py-2 text-right font-bold opacity-90">{formatNumber(tx.velocity)}</td>
+                                        <td className={`px-4 py-2 text-right ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
                                             {formatMoney(tx.price * tx.velocity * VAT_MULTIPLIER)}
                                         </td>
-                                        <td className="p-3 text-right text-green-600 font-medium">
+                                        <td className="px-4 py-2 text-right text-green-600 font-medium">
                                             {totalExtraFreight > 0 ? formatMoney(totalExtraFreight) : '-'}
                                         </td>
-                                        <td className="p-3 text-right text-orange-600 font-medium">
+                                        <td className="px-4 py-2 text-right text-orange-600 font-medium">
                                             {totalPostage > 0 ? formatMoney(totalPostage) : '-'}
                                         </td>
-                                        <td className="p-3 text-right text-orange-600 font-medium">
+                                        <td className="px-4 py-2 text-right text-orange-600 font-medium">
                                             {(tx.adsSpend || 0) > 0 ? formatMoney(tx.adsSpend * VAT_MULTIPLIER) : '-'}
                                         </td>
-                                        <td className={`p-3 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-500' : 'text-emerald-600'}`}>
+                                        <td className={`px-4 py-2 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-500' : 'text-emerald-600'}`}>
                                             {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '—' : '-'}
                                         </td>
                                     </tr>

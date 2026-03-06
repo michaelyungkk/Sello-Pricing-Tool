@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { RefundLog, Product, PricingRules, PriceLog, ReturnDateBasis } from '../../../types';
-import { RotateCcw, DollarSign, Package, Info, ChevronDown, Calendar, AlertTriangle, Truck as TruckIcon, Search, ArrowRight, Layers, GitMerge, Clock, ChevronRight, Map as MapIcon, FileSearch, Clipboard } from 'lucide-react';
+import { RotateCcw, DollarSign, Package, Info, ChevronDown, AlertTriangle, Truck as TruckIcon, Search, Layers, GitMerge, ChevronRight, Map as MapIcon, FileSearch } from 'lucide-react';
 import { FilterBar } from '../../common/FilterBar';
 import { SortableHeader } from '../../common/SortableHeader';
 import { formatPct, formatMoney } from '../../../utils/format';
@@ -10,7 +10,6 @@ import { buildRefundOverview } from '../../../services/refundAgg';
 import { sortRows, SortState } from '../../../utils/tableSort';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { parseReturnsReason } from '../../../services/returnsReasonCodes';
-import { aggregateRefundKeywords } from '../../../services/refundTextAgg';
 import AuditPanel from '../../AuditPanel';
 
 interface ReturnsAndRefundsTabProps {
@@ -46,8 +45,8 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     onAnalyzeCarrier
 }) => {
     // State for filters and view mode
-    const [platformScope, setPlatformScope] = useState<string>('All');
     const [isAuditVisible, setIsAuditVisible] = useState(false);
+    const [platformScope, setPlatformScope] = useState<string>('All');
     const [mainCategoryScope, setMainCategoryScope] = useState<string>('All');
     const [subCategoryScope, setSubCategoryScope] = useState<string>('All');
     const [includeResends, setIncludeResends] = useState(true);
@@ -65,7 +64,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     const [showSourceRecords, setShowSourceRecords] = useState<string | null>(null);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const itemsPerPage = 10;
 
     const productLookup = useMemo(() => new Map(products.map(p => [p.sku, p])), [products]);
 
@@ -160,13 +159,10 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
 
     // Main data processing
     const {
-        totalValue,
-        totalCount,
         byReason,
         byProduct,
         byPartner,
         triageOverview,
-        topKeywords,
         topGripingPartner
     } = useMemo(() => {
         // Internal helper to resolve order context, handling Resend suffixes
@@ -306,11 +302,9 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
         });
 
         const topGripingPartner = byPartner.sort((a, b) => b.count - a.count)[0];
-        const topKeywords = aggregateRefundKeywords(filteredRefunds, 20);
 
         return {
-            totalValue, totalCount, byReason, byProduct, byPartner, triageOverview,
-            topKeywords,
+            byReason, byProduct, byPartner, triageOverview,
             topGripingPartner
         };
     }, [refundHistory, startDate, endDate, platformScope, mainCategoryScope, subCategoryScope, productLookup, includeResends, returnDateBasis, orderContextMap, salesStats]);
@@ -471,34 +465,34 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                 </div>
 
                 {/* SKU Alerts Table */}
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col max-h-[500px]">
-                    <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg flex flex-col max-h-[500px] backdrop-blur-custom">
+                    <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
                         <h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-2">
                             <AlertTriangle className="w-4 h-4 text-red-500" />
                             SKU Alerts
                         </h4>
                     </div>
                     <div className="overflow-auto flex-1">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100 text-[10px] uppercase tracking-wider sticky top-0 z-10 shadow-sm">
-                                <tr>
-                                    <th className="p-3 w-12 text-center">Detail</th>
+                        <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                            <thead className="sticky top-0 z-10">
+                                <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
                                     <SortableHeader label="SKU / Product" sortKey="sku" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} />
                                     <SortableHeader label="Return QTY" sortKey="refundQty" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
                                     <SortableHeader label="Return QTY%" sortKey="refundRate" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
                                     <SortableHeader label="Return AMT" sortKey="refundValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
                                     <SortableHeader label="Return AMT%" sortKey="refundRateValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <th className="p-3">Top Reason</th>
-                                    <th className="p-3">Flags</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Top Reason</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Flags</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50">
+                            <tbody className="divide-y divide-gray-100/50">
                                 {sortedTriageRows.length > 0 ? (
                                     sortedTriageRows.map((row: any) => {
                                         const isInvalidSku = !row.sku || row.sku === 'Unknown' || row.sku === 'Freight';
                                         return (
-                                            <tr key={row.sku} className="hover:bg-gray-50/80 transition-colors group even:bg-gray-50/20">
-                                                <td className="p-3 text-center">
+                                            <tr key={row.sku} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                                <td className="px-4 py-4 text-center">
                                                     <button
                                                         onClick={() => !isInvalidSku && handleDeepDiveClick(row.sku)}
                                                         className={`p-1.5 rounded-lg transition-colors ${isInvalidSku ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
@@ -508,29 +502,29 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                         <Search className="w-4 h-4" />
                                                     </button>
                                                 </td>
-                                                <td className="p-3">
+                                                <td className="px-4 py-4">
                                                     <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{row.sku}</div>
                                                     <div className="text-[10px] text-gray-500 truncate max-w-[200px]">{row.title}</div>
                                                 </td>
-                                                <td className="p-3 text-right font-bold text-gray-800">{row.refundQty}</td>
-                                                <td className="p-3 text-right font-mono">
+                                                <td className="px-4 py-4 text-right font-bold text-gray-800">{row.refundQty}</td>
+                                                <td className="px-4 py-4 text-right font-mono">
                                                     {row.refundRate !== null
                                                         ? <span className="text-gray-600">{row.refundRate.toFixed(1)}%</span>
                                                         : <span className="text-gray-300">-</span>
                                                     }
                                                 </td>
-                                                <td className="p-3 text-right font-bold text-gray-800">{formatMoney(row.refundValue)}</td>
-                                                <td className="p-3 text-right font-mono">
+                                                <td className="px-4 py-4 text-right font-bold text-gray-800">{formatMoney(row.refundValue)}</td>
+                                                <td className="px-4 py-4 text-right font-mono">
                                                     {row.refundRateValue !== null
                                                         ? <span className="text-gray-600">{(row.refundRateValue || 0).toFixed(1)}%</span>
                                                         : <span className="text-gray-300">-</span>
                                                     }
                                                 </td>
-                                                <td className="p-3 text-gray-600 truncate max-w-[180px]" title={parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}>
+                                                <td className="px-4 py-4 text-gray-600 truncate max-w-[180px]" title={parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}>
                                                     {parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}
-                                                    {row.topReasons[0] && <span className="text-gray-400 ml-1 text-[10px]">({row.topReasons[0].count})</span>}
+                                                    {row.topReasons[0] && <span className="text-gray-400 ml-1 text-xs">({row.topReasons[0].count})</span>}
                                                 </td>
-                                                <td className="p-3">
+                                                <td className="px-4 py-4">
                                                     <div className="flex gap-1 flex-wrap">
                                                         {row.flags.map((flag: string) => (
                                                             <span key={flag} className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] rounded border border-red-200 font-bold uppercase whitespace-nowrap">
@@ -555,76 +549,76 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                 <div className="p-4 border-b border-custom-glass flex justify-between items-center bg-gray-50/50">
                     <h3 className="font-bold text-gray-800 text-sm uppercase">Refund Details Explorer</h3>
                     <div className="flex bg-white border border-gray-200 p-0.5 rounded-lg">
-                        <button onClick={() => setViewMode('reason')} className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-md flex items-center gap-2 transition-all ${viewMode === 'reason' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                        <button onClick={() => setViewMode('reason')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'reason' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                             <Info className="w-3.5 h-3.5" /> By Reason
                         </button>
-                        <button onClick={() => setViewMode('product')} className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-md flex items-center gap-2 transition-all ${viewMode === 'product' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                        <button onClick={() => setViewMode('product')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'product' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                             <Package className="w-3.5 h-3.5" /> By Product
                         </button>
-                        <button onClick={() => setViewMode('partner')} className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-md flex items-center gap-2 transition-all ${viewMode === 'partner' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                        <button onClick={() => setViewMode('partner')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'partner' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                             <TruckIcon className="w-3.5 h-3.5" /> By Carrier
                         </button>
                     </div>
                 </div>
 
                 <div className="p-6">
-                    <div className="overflow-auto border rounded-lg max-h-[400px]">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50/50 text-gray-500 font-bold border-b border-gray-200/50 text-[10px] uppercase tracking-wider sticky top-0 z-10 shadow-sm">
+                    <div className="overflow-auto border border-gray-100 rounded-lg max-h-[400px]">
+                        <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                            <thead className="sticky top-0 z-10">
                                 {viewMode === 'reason' ? (
-                                    <tr>
+                                    <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
                                         <SortableHeader label="Reason" sortKey="reason" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
                                         <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                                         <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <th className="p-3 text-right">SKUs Affected</th>
+                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">SKUs Affected</th>
                                     </tr>
                                 ) : viewMode === 'product' ? (
-                                    <tr>
+                                    <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
                                         <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
                                         <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                                         <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <th className="p-3">Top Reason</th>
-                                        <th className="p-3 text-right w-12">Action</th>
+                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Top Reason</th>
+                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right w-12">Action</th>
                                     </tr>
                                 ) : (
-                                    <tr>
+                                    <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
                                         <th className="w-8"></th>
                                         <SortableHeader label="Logistic Partner" sortKey="partner" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
                                         <SortableHeader label="Complaint Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                                         <SortableHeader label="Share %" sortKey="countShare" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
                                         <SortableHeader label="Loss Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <th className="p-3">Primary Issue</th>
-                                        <th className="p-3 text-right">Action</th>
+                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Primary Issue</th>
+                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Action</th>
                                     </tr>
                                 )}
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-gray-100/50">
                                 {paginatedData.map((item: any) => {
                                     const isInvalidSku = viewMode === 'product' && (!item.sku || item.sku === 'Unknown' || item.sku === 'Freight');
                                     const isPartnerExpanded = viewMode === 'partner' && expandedPartner === item.partner;
 
                                     return (
                                         <React.Fragment key={viewMode === 'reason' ? item.reason : viewMode === 'product' ? item.sku : item.partner}>
-                                            <tr className={`hover:bg-gray-50/50 transition-colors even:bg-gray-50/20 ${isPartnerExpanded ? 'bg-indigo-50/20 border-l-2 border-indigo-500' : ''}`} onClick={() => viewMode === 'partner' && togglePartnerExpand(item.partner)}>
+                                            <tr className={`even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors cursor-pointer ${isPartnerExpanded ? 'bg-indigo-50/20 border-l-2 border-indigo-500' : ''}`} onClick={() => viewMode === 'partner' && togglePartnerExpand(item.partner)}>
                                                 {viewMode === 'reason' ? (
                                                     <>
-                                                        <td className="p-3 font-medium text-gray-700 truncate max-w-xs" title={item.reason}>{item.reason}</td>
-                                                        <td className="p-3 text-right font-mono">{item.count}</td>
-                                                        <td className="p-3 text-right font-mono font-bold text-red-600">£{item.totalValue.toFixed(2)}</td>
-                                                        <td className="p-3 text-right font-mono">{item.skus.size}</td>
+                                                        <td className="px-4 py-4 font-medium text-gray-700 truncate max-w-xs" title={item.reason}>{item.reason}</td>
+                                                        <td className="px-4 py-4 text-right font-mono">{item.count}</td>
+                                                        <td className="px-4 py-4 text-right font-mono font-bold text-red-600">£{item.totalValue.toFixed(2)}</td>
+                                                        <td className="px-4 py-4 text-right font-mono">{item.skus.size}</td>
                                                     </>
                                                 ) : viewMode === 'product' ? (
                                                     <>
-                                                        <td className="p-3">
+                                                        <td className="px-4 py-4">
                                                             <div className="font-mono font-bold text-gray-800">{item.sku}</div>
                                                             <div className="text-gray-500 truncate max-w-[150px]">{productLookup.get(item.sku)?.name || ''}</div>
                                                         </td>
-                                                        <td className="p-3 text-right font-mono">{item.count}</td>
-                                                        <td className="p-3 text-right font-mono font-bold text-red-600">£{item.totalValue.toFixed(2)}</td>
-                                                        <td className="p-3 truncate max-w-[150px] text-gray-600">
+                                                        <td className="px-4 py-4 text-right font-mono">{item.count}</td>
+                                                        <td className="px-4 py-4 text-right font-mono font-bold text-red-600">£{item.totalValue.toFixed(2)}</td>
+                                                        <td className="px-4 py-4 truncate max-w-[150px] text-gray-600">
                                                             {parseReturnsReason(item.topReason).description || item.topReason}
                                                         </td>
-                                                        <td className="p-3 text-right">
+                                                        <td className="px-4 py-4 text-right">
                                                             <button
                                                                 onClick={() => !isInvalidSku && handleDeepDiveClick(item.sku)}
                                                                 className={`p-1.5 bg-white border rounded transition-all ${isInvalidSku ? 'opacity-20 grayscale cursor-not-allowed' : 'border-gray-200 hover:border-indigo-300 text-gray-400 hover:text-indigo-600'}`}
@@ -635,12 +629,12 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <td className="p-3 text-center cursor-pointer">
+                                                        <td className="px-4 py-4 text-center cursor-pointer">
                                                             {isPartnerExpanded ? <ChevronDown className="w-4 h-4 text-indigo-500" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                                                         </td>
-                                                        <td className="p-3 font-bold text-gray-800 cursor-pointer">{item.partner}</td>
-                                                        <td className="p-3 text-right font-mono">{item.count}</td>
-                                                        <td className="p-3 text-right font-mono text-gray-600">
+                                                        <td className="px-4 py-4 font-bold text-gray-800 cursor-pointer">{item.partner}</td>
+                                                        <td className="px-4 py-4 text-right font-mono">{item.count}</td>
+                                                        <td className="px-4 py-4 text-right font-mono text-gray-600">
                                                             <div className="flex items-center justify-end gap-2">
                                                                 <span>{item.countShare.toFixed(1)}%</span>
                                                                 <div className="w-12 h-1 bg-gray-100 rounded-full overflow-hidden">
@@ -648,11 +642,11 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="p-3 text-right font-mono font-bold text-red-600">£{item.totalValue.toFixed(2)}</td>
-                                                        <td className="p-3 text-gray-600 truncate max-w-[200px]">
+                                                        <td className="px-4 py-4 text-right font-mono font-bold text-red-600">£{item.totalValue.toFixed(2)}</td>
+                                                        <td className="px-4 py-4 text-gray-600 truncate max-w-[200px]">
                                                             {item.topReason}
                                                         </td>
-                                                        <td className="p-3 text-right">
+                                                        <td className="px-4 py-4 text-right">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); onAnalyzeCarrier(item.partner); }}
                                                                 className="p-1.5 bg-white border border-gray-200 rounded hover:border-indigo-300 text-gray-400 hover:text-indigo-600 transition-colors"
@@ -673,27 +667,27 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                                     <span>Service Breakdown for {item.partner}</span>
                                                                     <span>Breakdown based on imported transaction log</span>
                                                                 </div>
-                                                                <table className="w-full text-xs text-left">
-                                                                    <thead className="bg-gray-50/30 text-gray-400">
-                                                                        <tr>
-                                                                            <th className="px-3 py-1.5 font-medium">Service Name</th>
-                                                                            <th className="px-3 py-1.5 font-medium text-right">Refunds</th>
-                                                                            <th className="px-3 py-1.5 font-medium text-right">Share %</th>
-                                                                            <th className="px-3 py-1.5 font-medium text-right">Value</th>
+                                                                 <table className="w-full text-xs text-left border-separate border-spacing-0">
+                                                                    <thead className="bg-gray-50/80 text-gray-600 font-semibold border-b border-gray-200/50 uppercase tracking-wider transition-colors sticky top-0 z-10 backdrop-blur-sm">
+                                                                         <tr>
+                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Service Name</th>
+                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Refunds</th>
+                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Share %</th>
+                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Value</th>
                                                                         </tr>
                                                                     </thead>
-                                                                    <tbody className="divide-y divide-gray-50">
+                                                                     <tbody className="divide-y divide-gray-100/50">
                                                                         {item.servicesBreakdown.length > 0 ? (
                                                                             item.servicesBreakdown.map((srv: any, idx: number) => (
-                                                                                <tr key={idx} className="hover:bg-indigo-50/10">
-                                                                                    <td className="px-3 py-1.5 font-mono text-gray-700">{srv.name || 'Unknown / Not Mapped'}</td>
-                                                                                    <td className="px-3 py-1.5 text-right font-bold">{srv.count}</td>
-                                                                                    <td className="px-3 py-1.5 text-right text-gray-500">{srv.share.toFixed(1)}%</td>
-                                                                                    <td className="px-3 py-1.5 text-right text-red-600">£{srv.value.toFixed(2)}</td>
+                                                                                <tr key={idx} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors">
+                                                                                    <td className="px-4 py-2 font-mono text-gray-700">{srv.name || 'Unknown / Not Mapped'}</td>
+                                                                                    <td className="px-4 py-2 text-right font-bold">{srv.count}</td>
+                                                                                    <td className="px-4 py-2 text-right text-gray-500">{srv.share.toFixed(1)}%</td>
+                                                                                    <td className="px-4 py-2 text-right text-red-600">£{srv.value.toFixed(2)}</td>
                                                                                 </tr>
                                                                             ))
                                                                         ) : (
-                                                                            <tr><td colSpan={4} className="px-3 py-3 text-center text-gray-400 italic">No service detail available. Re-import Sales Report to capture logistics names.</td></tr>
+                                                                            <tr><td colSpan={4} className="px-4 py-4 text-center text-gray-400 italic">No service detail available. Re-import Sales Report to capture logistics names.</td></tr>
                                                                         )}
                                                                     </tbody>
                                                                 </table>
@@ -724,24 +718,24 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                                                 </div>
                                                                             </div>
                                                                         )}
-                                                                        <table className="w-full text-xs text-left">
-                                                                            <thead className="bg-gray-50/30 text-gray-400">
-                                                                                <tr>
-                                                                                    <th className="px-3 py-1.5 font-medium sticky top-0 bg-white">Date</th>
-                                                                                    <th className="px-3 py-1.5 font-medium sticky top-0 bg-white">Order ID</th>
-                                                                                    <th className="px-3 py-1.5 font-medium sticky top-0 bg-white">SKU</th>
-                                                                                    <th className="px-3 py-1.5 font-medium text-right sticky top-0 bg-white">Refund Amt</th>
+                                                                         <table className="w-full text-xs text-left border-separate border-spacing-0">
+                                                                            <thead className="bg-gray-50/80 text-gray-600 font-semibold border-b border-gray-200/50 uppercase tracking-wider transition-colors sticky top-0 z-10 backdrop-blur-sm">
+                                                                                 <tr>
+                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Date</th>
+                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Order ID</th>
+                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">SKU</th>
+                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Refund Amt</th>
                                                                                 </tr>
                                                                             </thead>
-                                                                            <tbody className="divide-y divide-gray-50">
+                                                                            <tbody className="divide-y divide-gray-100/50">
                                                                                 {item.records.slice(0, 100).map((rec: RefundLog, rIdx: number) => (
-                                                                                    <tr key={rec.id || rIdx} className="hover:bg-gray-50">
-                                                                                        <td className="px-3 py-1.5 font-mono text-gray-600">{new Date(rec.date).toLocaleDateString()}</td>
-                                                                                        <td className="px-3 py-1.5 font-mono text-indigo-600 font-medium select-all cursor-text flex items-center gap-1">
+                                                                                    <tr key={rec.id || rIdx} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors">
+                                                                                        <td className="px-4 py-2 font-mono text-gray-600">{new Date(rec.date).toLocaleDateString()}</td>
+                                                                                        <td className="px-4 py-2 font-mono text-indigo-600 font-medium select-all cursor-text flex items-center gap-1">
                                                                                             {rec.orderId || '—'}
                                                                                         </td>
-                                                                                        <td className="px-3 py-1.5 font-mono text-gray-600">{rec.sku}</td>
-                                                                                        <td className="px-3 py-1.5 text-right text-gray-800">£{((rec.amount || 0) + (rec.freightAmount || 0)).toFixed(2)}</td>
+                                                                                        <td className="px-4 py-2 font-mono text-gray-600">{rec.sku}</td>
+                                                                                        <td className="px-4 py-2 text-right text-gray-800">£{((rec.amount || 0) + (rec.freightAmount || 0)).toFixed(2)}</td>
                                                                                     </tr>
                                                                                 ))}
                                                                                 {item.records.length > 100 && (
@@ -766,9 +760,9 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                 {totalPages > 1 && (
                     <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-end">
                         <div className="flex gap-1">
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 border rounded bg-white text-xs font-bold">Prev</button>
-                            <span className="px-2 py-1 text-xs text-gray-500">Page {currentPage} of {totalPages}</span>
-                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 border rounded bg-white text-xs font-bold">Next</button>
+                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 border rounded-lg bg-white text-xs font-bold disabled:opacity-50">Prev</button>
+                            <span className="px-3 py-1.5 text-xs text-gray-500 flex items-center">Page {currentPage} of {totalPages}</span>
+                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 border rounded-lg bg-white text-xs font-bold disabled:opacity-50">Next</button>
                         </div>
                     </div>
                 )}

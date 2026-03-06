@@ -207,7 +207,7 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
                 />
                 <button
                     onClick={handleExport}
-                    className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-bold flex items-center gap-2 transition-colors shadow-sm"
+                    className="px-3 h-8 text-xs font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm flex items-center gap-2 transition-colors"
                 >
                     <Download className="w-4 h-4" /> Export CSV
                 </button>

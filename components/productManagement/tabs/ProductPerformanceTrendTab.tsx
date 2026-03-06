@@ -7,6 +7,7 @@ import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
 import { GradeBadge } from '../../GradeBadge';
 import { SortableHeader } from '../../common/SortableHeader';
 import AuditPanel from '../../AuditPanel';
+import { FilterBar } from '../../common/FilterBar';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { BcgMatrix } from '../parts/BcgMatrix';
 
@@ -109,7 +110,6 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
 
   return (
     <div className="space-y-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
       {isAuditVisible && (
         <div className="animate-in fade-in slide-in-from-top-2 duration-300">
           <AuditPanel
@@ -223,16 +223,16 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
           </div>
           <div className="overflow-x-auto pb-20">
             <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-gray-100/50 text-gray-500 font-bold border-b border-gray-200/50 text-[10px] uppercase tracking-wider">
+              <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
                 <tr>
-                  <th className="p-4 w-12 text-center">Detail</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
                   <SortableHeader label="Product SKU" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
                   <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                   <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                   <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                   <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
                   <SortableHeader label="Quality (Refunds)" sortKey="refund" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <th className="px-4 py-3 text-center">Flags</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Flags</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100/50">
@@ -242,7 +242,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                   const isTacosHigh = row.current.tacosPct !== null && row.current.tacosPct > 25;
 
                   return (
-                    <tr key={row.sku} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-all group">
+                    <tr key={row.sku} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
                       <td className="p-4 text-center">
                         <button
                           onClick={() => onDeepDive(row.sku)}

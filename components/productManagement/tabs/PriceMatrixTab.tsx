@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, PricingRules, PromotionEvent } from '../../../types';
 import { TagSearchInput } from '../../TagSearchInput';
-import { Download, Info, DollarSign, Activity, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
+import { Download, Info, DollarSign, Activity, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { getTodayKeyMelbourne } from '../../../services/dateUtils';
 
@@ -21,13 +21,13 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
     const platforms = Object.keys(pricingRules);
-    
+
     const filtered = useMemo(() => products.filter(p => {
         const matchesTerm = (term: string) => {
             const t = term.toLowerCase();
-            return p.sku.toLowerCase().includes(t) || 
-                   p.name.toLowerCase().includes(t) ||
-                   p.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
+            return p.sku.toLowerCase().includes(t) ||
+                p.name.toLowerCase().includes(t) ||
+                p.channels.some(c => c.skuAlias?.toLowerCase().includes(t));
         };
 
         if (searchTags.length > 0) {
@@ -37,27 +37,27 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
         }
         return matchesTerm(search);
     }), [products, search, searchTags]);
-    
+
     useEffect(() => { setCurrentPage(1); }, [search, searchTags]);
 
     const paginatedProducts = useMemo(() => {
         return filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     }, [filtered, currentPage, itemsPerPage]);
-    
+
     const totalPages = Math.ceil(filtered.length / itemsPerPage);
-    
+
     const getActivePromo = (sku: string, platform: string) => {
         const targetSku = sku.toUpperCase();
         const targetPlatform = platform.toLowerCase().trim();
         const today = getTodayKeyMelbourne();
-        
+
         return promotions.find(p => {
             // Dynamic Date Check: Promo must be currently valid
             if (p.startDate > today || p.endDate < today) return false;
-            
+
             // Platform Check
             if (p.platform.toLowerCase().trim() !== targetPlatform) return false;
-            
+
             // SKU Check
             return p.items.some(i => i.sku.toUpperCase() === targetSku);
         });
@@ -133,17 +133,17 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                 const rawPrice = channel?.price || p.currentPrice;
                 const displayPrice = rawPrice * VAT;
                 const velocity = channel?.velocity || 0;
-                
+
                 const promo = getActivePromo(p.sku, platform);
                 const promoItem = promo?.items.find(i => i.sku.toUpperCase() === p.sku.toUpperCase());
-                const effectivePromoPrice = promoItem ? calculatePromoPrice(p, promo, promoItem) : 0;
-                
+                const effectivePromoPrice = (promo && promoItem) ? calculatePromoPrice(p, promo, promoItem) : 0;
+
                 const finalExportPrice = effectivePromoPrice > 0 ? effectivePromoPrice : displayPrice;
 
                 rowData.push(finalExportPrice.toFixed(2));
                 rowData.push(velocity.toFixed(2));
             });
-            
+
             return rowData.join(',');
         });
 
@@ -163,7 +163,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
             <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between z-40">
                 <div className="flex-1 w-full flex items-center gap-3">
                     <div className="flex-1">
-                        <TagSearchInput 
+                        <TagSearchInput
                             tags={searchTags}
                             onTagsChange={setSearchTags}
                             onInputChange={setSearch}
@@ -171,7 +171,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                             themeColor={themeColor}
                         />
                     </div>
-                    
+
                     <div className="group relative flex items-center justify-center z-50">
                         <button className="p-2.5 rounded-lg hover:bg-white/50 text-gray-400 hover:text-indigo-600 transition-colors border border-transparent hover:border-gray-200">
                             <Info className="w-5 h-5" />
@@ -198,8 +198,8 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                                 <div className="pt-2 border-t border-gray-700">
                                     <span className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">Deviation from CA Price</span>
                                     <div className="grid grid-cols-2 gap-2">
-                                       <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div> <span className="text-gray-300">Higher</span></div>
-                                       <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div> <span className="text-gray-300">Lower</span></div>
+                                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div> <span className="text-gray-300">Higher</span></div>
+                                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div> <span className="text-gray-300">Lower</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -207,60 +207,60 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                     </div>
 
                 </div>
-                <button onClick={handleExport} className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm font-bold whitespace-nowrap">
+                <button onClick={handleExport} className="px-3 h-8 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2 text-xs font-bold whitespace-nowrap">
                     <Download className="w-4 h-4" /> Export CSV
                 </button>
             </div>
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-auto flex-1">
-                <table className="w-full text-left text-xs whitespace-nowrap">
-                    <thead className="bg-gray-50/50 font-bold border-b border-gray-200 sticky top-0 z-10 text-[10px] uppercase tracking-wider text-gray-500">
-                        <tr>
-                            <th className="p-2 bg-white/90 backdrop-blur sticky left-0 z-20 min-w-[150px] border-r border-gray-100">Product Reference</th>
-                            <th className="p-2 bg-white/90 backdrop-blur sticky left-[150px] z-20 w-[80px] text-right border-r border-gray-100">CA Price</th>
-                            {platforms.map(p => <th key={p} className="p-2 text-center min-w-[100px]">{p}</th>)}
+                <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                    <thead className="sticky top-0 z-20">
+                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                            <th className="px-4 py-3 sticky left-0 z-30 bg-gray-50/80 backdrop-blur-sm min-w-[150px] border-r border-gray-200/50">Product Reference</th>
+                            <th className="px-4 py-3 sticky left-[150px] z-30 bg-gray-50/80 backdrop-blur-sm w-[80px] text-right border-r border-gray-200/50">CA Price</th>
+                            {platforms.map(p => <th key={p} className="px-4 py-3 text-center min-w-[120px] font-semibold text-gray-600 uppercase tracking-wider">{p}</th>)}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100/50">
                         {paginatedProducts.map(p => (
-                            <tr key={p.id} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors">
-                                <td className="p-2 sticky left-0 bg-white/50 backdrop-blur-sm z-10 border-r border-gray-100">
+                            <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                <td className="px-4 py-4 sticky left-0 bg-white border-r border-gray-100/50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors group-hover:bg-gray-50/50">
                                     <div className="font-mono font-bold text-gray-900 truncate max-w-[134px]">{p.sku}</div>
                                     <div className="text-[10px] text-gray-500 truncate max-w-[134px]">{p.name}</div>
                                 </td>
-                                <td className="p-2 sticky left-[150px] bg-white/50 backdrop-blur-sm z-10 text-right font-medium text-purple-600 border-r border-gray-100">
+                                <td className="px-4 py-4 sticky left-[150px] bg-white text-right font-medium text-purple-600 border-r border-gray-100/50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors group-hover:bg-gray-50/50">
                                     {p.caPrice ? `£${p.caPrice.toFixed(2)}` : '-'}
                                 </td>
                                 {platforms.map(platform => {
                                     const channel = p.channels.find(c => c.platform === platform);
                                     const promo = getActivePromo(p.sku, platform);
                                     const promoItem = promo?.items.find(i => i.sku.toUpperCase() === p.sku.toUpperCase());
-                                    
+
                                     const rawPrice = channel?.price || p.currentPrice;
                                     const displayPrice = rawPrice * VAT;
                                     const velocity = channel?.velocity || 0;
 
                                     // Dynamic Promo Price Calculation
-                                    const effectivePromoPrice = promoItem ? calculatePromoPrice(p, promo, promoItem) : 0;
+                                    const effectivePromoPrice = (promo && promoItem) ? calculatePromoPrice(p, promo, promoItem) : 0;
                                     const isPromoActive = effectivePromoPrice > 0;
 
                                     // Deviation Logic
                                     const refPrice = p.caPrice;
                                     let priceStyle = "font-bold text-gray-900";
-                                    
+
                                     if (!isPromoActive && refPrice) {
                                         if (displayPrice > refPrice + 0.01) {
-                                            priceStyle = "font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200";
+                                            priceStyle = "font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200";
                                         } else if (displayPrice < refPrice - 0.01) {
-                                            priceStyle = "font-bold text-red-500 bg-red-50 px-1 py-0.5 rounded border border-red-200";
+                                            priceStyle = "font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-200";
                                         }
                                     }
 
                                     return (
-                                        <td key={platform} className="p-2 text-center align-top">
+                                        <td key={platform} className="px-4 py-4 text-center align-top border-r border-gray-50/50">
                                             {(channel || promo) ? (
-                                                <div className="flex flex-col items-center gap-0.5">
+                                                <div className="flex flex-col items-center gap-1">
                                                     {isPromoActive ? (
-                                                        <div className="flex items-center gap-1 justify-center relative group/promo cursor-help" title={`Active Promo: ${promo?.name}\nRegular Price: £${displayPrice.toFixed(2)}`}>
+                                                        <div className="flex items-center gap-1 justify-center relative group/promo cursor-help bg-red-50 px-1.5 py-0.5 rounded border border-red-100 shadow-sm" title={`Active Promo: ${promo?.name}\nRegular Price: £${displayPrice.toFixed(2)}`}>
                                                             <span className="font-bold text-red-500">£{effectivePromoPrice.toFixed(2)}</span>
                                                             <Tag className="w-3 h-3 text-red-500" />
                                                         </div>
@@ -270,10 +270,10 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                                                             {promo && <span className="text-[8px] bg-gray-100 text-gray-400 px-1 rounded border border-gray-200" title="Promo detected but calc = 0. Check data.">P?</span>}
                                                         </div>
                                                     )}
-                                                    
+
                                                     {velocity > 0 && (
-                                                        <span className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5 bg-gray-100 px-1 py-0.5 rounded">
-                                                            <Activity className="w-2.5 h-2.5" /> {velocity.toFixed(1)}/d
+                                                        <span className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5 bg-gray-50/80 px-1.5 py-0.5 rounded border border-gray-100">
+                                                            <Activity className="w-2.5 h-2.5 text-indigo-500" /> {velocity.toFixed(1)}/d
                                                         </span>
                                                     )}
                                                 </div>
@@ -287,7 +287,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                         ))}
                     </tbody>
                 </table>
-                 {filtered.length > itemsPerPage && (
+                {filtered.length > itemsPerPage && (
                     <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6 sticky bottom-0">
                         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                             <div className="flex items-center gap-4">

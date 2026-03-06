@@ -2,14 +2,14 @@
 import React, { useState, useMemo } from 'react';
 import { Product, PriceLog, RefundLog } from '../types';
 import { getReportLayouts, saveReportLayout, ReportLayout } from '../services/persistenceService';
-import { 
-    Layout, 
-    Plus, 
-    GripVertical, 
-    X, 
-    Clock, 
-    BarChart3, 
-    Save, 
+import {
+    Layout,
+    Plus,
+    GripVertical,
+    X,
+    Clock,
+    BarChart3,
+    Save,
     FileText,
     Play,
     Loader2,
@@ -105,17 +105,17 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         { id: Math.random().toString(36).substr(2, 9), metricId: 'revenue', timeRange: '30d' },
         { id: Math.random().toString(36).substr(2, 9), metricId: 'profit', timeRange: '30d' }
     ]);
-    
+
     const [filters, setFilters] = useState<FilterRule[]>([]);
     const [pendingFilters, setPendingFilters] = useState<FilterRule[]>([]);
     const [customMetrics, setCustomMetrics] = useState<CustomMetric[]>([]);
     const [isCustomMetricModalOpen, setIsCustomMetricModalOpen] = useState(false);
-    
+
     const [reportName, setReportName] = useState('New Custom Report');
     const [savedLayouts, setSavedLayouts] = useState<ReportLayout[]>(getReportLayouts());
     const [sortRules, setSortRules] = useState<SortRule[]>([{ key: 'total_units', dir: 'desc' }]);
     const [activePopover, setActivePopover] = useState<string | null>(null);
-    
+
     const [isGenerating, setIsGenerating] = useState(false);
     const [reportResult, setReportResult] = useState<{
         rows: any[];
@@ -163,10 +163,10 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     };
 
     const handleAddMetric = (metricId: string) => {
-        setMetrics([...metrics, { 
-            id: Math.random().toString(36).substr(2, 9), 
-            metricId, 
-            timeRange: '30d' 
+        setMetrics([...metrics, {
+            id: Math.random().toString(36).substr(2, 9),
+            metricId,
+            timeRange: '30d'
         }]);
         setNeedsGeneration(true);
     };
@@ -312,10 +312,10 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             } else {
                 const next = [...metrics];
                 const insertIdx = targetIdx !== undefined ? targetIdx : next.length;
-                next.splice(insertIdx, 0, { 
-                    id: Math.random().toString(36).substr(2, 9), 
-                    metricId: id, 
-                    timeRange: '30d' 
+                next.splice(insertIdx, 0, {
+                    id: Math.random().toString(36).substr(2, 9),
+                    metricId: id,
+                    timeRange: '30d'
                 });
                 setMetrics(next);
             }
@@ -343,7 +343,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
         setTimeout(() => {
             const now = new Date();
-            
+
             // Helper to get start/end dates for a specific time range
             const getDates = (range: string, customStart?: string, customEnd?: string) => {
                 let start: Date | null = null;
@@ -475,7 +475,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             // 5. Finalize Rows
             const finalRows = Array.from(rowMap.values()).map(row => {
                 const data: any = { ...row };
-                
+
                 const calculateMetricValue = (items: any[], mConfig: typeof metrics[0], rowSkus: Set<string>) => {
                     const { start, end } = getDates(mConfig.timeRange, mConfig.startDate, mConfig.endDate);
                     const filtered = items.filter(l => {
@@ -494,7 +494,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                     const refundQty = refunds.reduce((sum, l) => sum + (l.quantity || 0), 0);
                     const refundVal = refunds.reduce((sum, l) => sum + (l.amount || 0), 0);
 
-                    const getBaseValue = (mId: string) => {
+                    const getBaseValue = (mId: string): number => {
                         switch (mId) {
                             case 'units': return units;
                             case 'revenue': return rev;
@@ -530,8 +530,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 // Check custom metrics
                                 const custom = customMetrics.find(cm => cm.id === mId);
                                 if (custom) {
-                                    const valA = getBaseValue(custom.metricA);
-                                    const valB = getBaseValue(custom.metricB);
+                                    const valA: number = getBaseValue(custom.metricA);
+                                    const valB: number = getBaseValue(custom.metricB);
                                     switch (custom.operator) {
                                         case '+': return valA + valB;
                                         case '-': return valA - valB;
@@ -574,7 +574,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
     const processedData = useMemo(() => {
         if (!reportResult) return null;
-        
+
         let rows = [...reportResult.rows];
 
         // Apply Filters
@@ -585,7 +585,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
                     const val = row[`total_${f.field}`] || 0;
                     const targetVal = f.value;
-                    
+
                     switch (f.operator) {
                         case 'gt': return Number(val) > Number(targetVal);
                         case 'lt': return Number(val) < Number(targetVal);
@@ -651,7 +651,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         });
         metrics.forEach(m => headers.push(`Grand Total - ${getMetricLabel(m.metricId)} (${m.timeRange})`));
 
-        const data = processedData.map(row => {
+        const data = (processedData || []).map(row => {
             const r = [...row.rowKeyParts];
             reportResult.colHeaders.forEach(ch => {
                 metrics.forEach(m => r.push(row[`${ch.id}_${m.id}`]));
@@ -671,35 +671,34 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             {/* Header */}
             <div className="flex items-center justify-end shrink-0">
                 <div className="flex items-center gap-2">
-                    <button 
+                    <button
                         onClick={() => setShowBuilder(!showBuilder)}
-                        className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-bold transition-all shadow-sm ${showBuilder ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        className={`flex items-center gap-2 px-3 h-8 border rounded-lg text-xs font-bold transition-all shadow-sm ${showBuilder ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                     >
                         <Settings2 className="w-4 h-4" />
                         {showBuilder ? 'Hide Builder' : 'Show Builder'}
                     </button>
-                    <button 
+                    <button
                         onClick={() => generateReport()}
                         disabled={!needsGeneration}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm ${
-                            needsGeneration 
-                                ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md' 
-                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        }`}
+                        className={`flex items-center gap-2 px-4 h-8 rounded-lg text-xs font-bold transition-all shadow-sm ${needsGeneration
+                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            }`}
                     >
                         <Play className="w-4 h-4 fill-current" />
                         Generate Report
                     </button>
                     {savedLayouts.length > 0 && (
                         <div className="relative group">
-                            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm">
+                            <button className="flex items-center gap-2 px-4 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm">
                                 <FolderOpen className="w-4 h-4" />
                                 Load
                             </button>
                             <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 hidden group-hover:block animate-in slide-in-from-top-1">
                                 {savedLayouts.map(layout => (
-                                    <button 
-                                        key={layout.id} 
+                                    <button
+                                        key={layout.id}
                                         onClick={() => handleLoadLayout(layout)}
                                         className="w-full text-left px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded truncate"
                                     >
@@ -709,17 +708,17 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             </div>
                         </div>
                     )}
-                    <button 
+                    <button
                         onClick={handleExport}
                         disabled={!reportResult}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
                     >
                         <Download className="w-4 h-4" />
                         Export
                     </button>
-                    <button 
+                    <button
                         onClick={handleSave}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm"
+                        className="flex items-center gap-2 px-4 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm"
                     >
                         <Save className="w-4 h-4" />
                         Save Layout
@@ -786,7 +785,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                         {/* Drop Zones */}
                         <div className="col-span-8 space-y-3">
                             {/* Rows */}
-                            <div 
+                            <div
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => onDropRow(e)}
                                 className="flex items-center gap-3 bg-gray-50/50 border border-dashed border-gray-200 rounded-lg p-2 min-h-[44px]"
@@ -794,8 +793,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-16 shrink-0">Rows</span>
                                 <div className="flex flex-wrap gap-2 flex-1">
                                     {rowDims.map((id, idx) => (
-                                        <div 
-                                            key={id} 
+                                        <div
+                                            key={id}
                                             draggable
                                             onDragStart={(e) => onDragStart(e, id, 'dim', 'rows')}
                                             onDragOver={(e) => e.preventDefault()}
@@ -812,7 +811,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             </div>
 
                             {/* Columns */}
-                            <div 
+                            <div
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => onDropCol(e)}
                                 className="flex items-center gap-3 bg-gray-50/50 border border-dashed border-gray-200 rounded-lg p-2 min-h-[44px]"
@@ -820,8 +819,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-16 shrink-0">Columns</span>
                                 <div className="flex flex-wrap gap-2 flex-1">
                                     {colDims.map((id, idx) => (
-                                        <div 
-                                            key={id} 
+                                        <div
+                                            key={id}
                                             draggable
                                             onDragStart={(e) => onDragStart(e, id, 'dim', 'cols')}
                                             onDragOver={(e) => e.preventDefault()}
@@ -838,7 +837,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             </div>
 
                             {/* Metrics */}
-                            <div 
+                            <div
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => onDropMetric(e)}
                                 className="flex items-center gap-3 bg-gray-50/50 border border-dashed border-gray-200 rounded-lg p-2 min-h-[44px]"
@@ -846,8 +845,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-16 shrink-0">Values</span>
                                 <div className="flex flex-wrap gap-2 flex-1">
                                     {metrics.map((m, idx) => (
-                                        <div 
-                                            key={m.id} 
+                                        <div
+                                            key={m.id}
                                             draggable
                                             onDragStart={(e) => onDragStart(e, m.id, 'metric', 'metrics')}
                                             onDragOver={(e) => e.preventDefault()}
@@ -858,7 +857,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                 <GripVertical className="w-3 h-3 text-gray-300" />
                                                 <div className="flex flex-col">
                                                     <span>{getMetricLabel(m.metricId)}</span>
-                                                    <button 
+                                                    <button
                                                         onClick={() => setActivePopover(activePopover === m.id ? null : m.id)}
                                                         className="text-[8px] text-gray-400 flex items-center gap-0.5 hover:text-indigo-600"
                                                     >
@@ -892,8 +891,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                     </div>
                                                     {m.timeRange === 'custom' && (
                                                         <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
-                                                            <input 
-                                                                type="date" 
+                                                            <input
+                                                                type="date"
                                                                 value={m.startDate || ''}
                                                                 onChange={(e) => {
                                                                     const next = [...metrics];
@@ -902,8 +901,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                                 }}
                                                                 className="w-full text-[9px] p-1 border border-gray-200 rounded"
                                                             />
-                                                            <input 
-                                                                type="date" 
+                                                            <input
+                                                                type="date"
                                                                 value={m.endDate || ''}
                                                                 onChange={(e) => {
                                                                     const next = [...metrics];
@@ -912,7 +911,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                                 }}
                                                                 className="w-full text-[9px] p-1 border border-gray-200 rounded"
                                                             />
-                                                            <button 
+                                                            <button
                                                                 onClick={() => { setActivePopover(null); setNeedsGeneration(true); }}
                                                                 className="w-full py-1 bg-indigo-600 text-white text-[9px] font-bold rounded"
                                                             >
@@ -933,7 +932,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             )}
 
             {/* Filter Bar */}
-            <div 
+            <div
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={onDropFilter}
                 className="bg-white border border-gray-200 rounded-lg p-2 flex items-center gap-3 shrink-0 shadow-sm"
@@ -946,7 +945,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                     {pendingFilters.map((f, idx) => (
                         <div key={f.id} className="flex items-center gap-2 bg-gray-50 p-1.5 border border-gray-200 rounded shadow-sm">
                             {f.type === 'dim' ? (
-                                <MultiSelectDropdown 
+                                <MultiSelectDropdown
                                     label={getDimLabel(f.field)}
                                     icon={DIMENSIONS.find(d => d.id === f.field)?.icon}
                                     selected={Array.isArray(f.value) ? f.value : []}
@@ -962,7 +961,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                     <span className="text-[10px] font-bold text-gray-600">
                                         {getMetricLabel(f.field)}
                                     </span>
-                                    <select 
+                                    <select
                                         value={f.operator}
                                         onChange={(e) => {
                                             const next = [...pendingFilters];
@@ -975,8 +974,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                         <option value="lt">&lt;</option>
                                         <option value="equals">=</option>
                                     </select>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         value={f.value as string}
                                         onChange={(e) => {
                                             const next = [...pendingFilters];
@@ -991,7 +990,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             <button onClick={() => handleRemoveFilter(f.id)}><X className="w-3 h-3 text-gray-400 hover:text-red-500" /></button>
                         </div>
                     ))}
-                    
+
                     {/* Add Filter Dropdown */}
                     <div className="relative group">
                         <button className="flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold hover:bg-indigo-100 transition-colors">
@@ -1001,8 +1000,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                         <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 hidden group-hover:block animate-in slide-in-from-top-1">
                             <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Dimensions</div>
                             {DIMENSIONS.map(d => (
-                                <button 
-                                    key={d.id} 
+                                <button
+                                    key={d.id}
                                     onClick={() => handleAddFilter(d.id, 'dim')}
                                     className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded"
                                 >
@@ -1012,8 +1011,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             <div className="border-t border-gray-100 my-1"></div>
                             <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Metrics</div>
                             {METRICS.map(m => (
-                                <button 
-                                    key={m.id} 
+                                <button
+                                    key={m.id}
                                     onClick={() => handleAddFilter(m.id, 'metric')}
                                     className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded"
                                 >
@@ -1024,7 +1023,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                     </div>
 
                     {pendingFilters.length > 0 && (
-                        <button 
+                        <button
                             onClick={applyFilters}
                             className="ml-auto px-3 py-1 bg-indigo-600 text-white rounded text-[10px] font-bold hover:bg-indigo-700 shadow-sm"
                         >
@@ -1036,194 +1035,194 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
             {/* Table Container */}
             <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col relative p-4">
-                        {needsGeneration && !isGenerating && !reportResult && (
-                            <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
-                                <button 
-                                    onClick={() => generateReport()}
-                                    className="flex items-center gap-3 px-10 py-5 bg-indigo-600 text-white rounded-2xl font-bold shadow-2xl hover:bg-indigo-700 hover:scale-105 transition-all animate-in zoom-in-95"
-                                >
-                                    <Play className="w-6 h-6 fill-current" />
-                                    Generate Pivot Report
-                                </button>
-                            </div>
-                        )}
-
-                        {isGenerating && (
-                            <div className="absolute inset-0 z-30 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center space-y-4">
-                                <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
-                                <p className="text-lg font-bold text-gray-900">Crunching Data...</p>
-                                <p className="text-xs text-gray-400">Aggregating dimensions and calculating metrics</p>
-                            </div>
-                        )}
-
-                        <div className="flex-1 overflow-auto">
-                            {!reportResult ? (
-                                <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4 p-12 text-center">
-                                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center">
-                                        <Layout className="w-10 h-10 opacity-20" />
-                                    </div>
-                                    <div>
-                                        <p className="text-xl font-bold text-gray-900">Build your view</p>
-                                        <p className="text-sm max-w-[320px] mt-2">Drag dimensions to rows/columns and metrics to values to start your analysis.</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <table className="w-full text-left border-collapse min-w-full table-auto">
-                                    <thead className="bg-gray-50 text-gray-600 text-[10px] uppercase font-bold sticky top-0 z-20 shadow-sm">
-                                        <tr>
-                                            {reportResult.rowHeaders.map((rh, idx) => (
-                                                <th key={rh} rowSpan={2} className="sticky left-0 z-30 bg-gray-100 border-b border-r border-gray-200 px-4 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: idx * 160 }}>
-                                                    <div className="flex items-center justify-between cursor-pointer w-full">
-                                                        <div className="flex items-center gap-2" onClick={() => handleSort(rh)}>
-                                                            <span className="truncate">{getDimLabel(rh)}</span>
-                                                            {sortRules[0]?.key === rh && (
-                                                                sortRules[0].dir === 'asc' ? <ArrowUp className="w-2.5 h-2.5 text-indigo-600 flex-shrink-0 ml-1" /> : <ArrowDown className="w-2.5 h-2.5 text-indigo-600 flex-shrink-0 ml-1" />
-                                                            )}
-                                                        </div>
-                                                        {idx === 0 && (
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); handleSwapDims(); }}
-                                                                className="p-1.5 bg-white hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 rounded-md transition-all shadow-sm border border-gray-200 hover:border-indigo-200 group"
-                                                                title="Swap Rows/Columns"
-                                                            >
-                                                                <ArrowLeftRight className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </th>
-                                            ))}
-                                            {reportResult.colHeaders.map(ch => (
-                                                <th key={ch.id} colSpan={metrics.length} className="px-4 py-3 text-center border-b border-r border-gray-200 bg-indigo-50/50 text-[10px] font-bold text-indigo-700 uppercase tracking-wider whitespace-nowrap">
-                                                    {ch.label}
-                                                </th>
-                                            ))}
-                                            <th colSpan={metrics.length} className="px-4 py-3 text-center border-b border-gray-200 bg-gray-100 text-[10px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
-                                                Grand Total
-                                            </th>
-                                        </tr>
-                                        <tr>
-                                            {reportResult.colHeaders.map(ch => (
-                                                metrics.map(m => (
-                                                    <th 
-                                                        key={`${ch.id}_${m.id}`} 
-                                                        onClick={(e) => handleSort(`${ch.id}_${m.id}`, e)}
-                                                        className="px-4 py-2 text-right border-b border-r border-gray-100 bg-white text-[9px] font-bold text-gray-400 uppercase cursor-pointer hover:bg-gray-50 transition-colors min-w-[120px] whitespace-nowrap"
-                                                    >
-                                                        <div className="flex items-center justify-end gap-1">
-                                                            <div className="flex flex-col items-end">
-                                                                <span>{getMetricLabel(m.metricId)}</span>
-                                                                <span className="text-[7px] opacity-60">({m.timeRange})</span>
-                                                            </div>
-                                                            {sortRules[0]?.key === `${ch.id}_${m.id}` && (
-                                                                sortRules[0].dir === 'asc' ? <ArrowUp className="w-2.5 h-2.5 text-indigo-600" /> : <ArrowDown className="w-2.5 h-2.5 text-indigo-600" />
-                                                            )}
-                                                        </div>
-                                                    </th>
-                                                ))
-                                            ))}
-                                            {metrics.map(m => (
-                                                <th 
-                                                    key={`total_${m.id}`} 
-                                                    onClick={(e) => handleSort(`total_${m.id}`, e)}
-                                                    className="px-4 py-2 text-right border-b border-gray-100 bg-gray-50 text-[9px] font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 transition-colors min-w-[120px] whitespace-nowrap"
-                                                >
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <div className="flex flex-col items-end">
-                                                            <span>{getMetricLabel(m.metricId)}</span>
-                                                            <span className="text-[7px] opacity-60">({m.timeRange})</span>
-                                                        </div>
-                                                        {sortRules[0]?.key === `total_${m.id}` && (
-                                                            sortRules[0].dir === 'asc' ? <ArrowUp className="w-2.5 h-2.5 text-indigo-600" /> : <ArrowDown className="w-2.5 h-2.5 text-indigo-600" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100 bg-white">
-                                        {processedData.map((row, idx) => (
-                                            <tr key={idx} className="hover:bg-gray-50 transition-colors group">
-                                                {row.rowKeyParts.map((part: string, pIdx: number) => {
-                                                    const dim = reportResult.rowHeaders[pIdx];
-                                                    const meta = row.metadata[dim];
-                                                    
-                                                    if (dim === 'sku' && meta) {
-                                                        return (
-                                                            <td key={pIdx} className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-100 px-4 py-4 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px]" style={{ left: pIdx * 160 }}>
-                                                                <div className="flex items-center gap-2 truncate">
-                                                                    <span className="font-bold text-gray-900 font-mono text-xs truncate">{meta.sku}</span>
-                                                                    <GradeBadge gradeLevel={meta.gradeLevel} />
-                                                                </div>
-                                                                <div className="text-[10px] text-gray-500 truncate max-w-full">{meta.name}</div>
-                                                            </td>
-                                                        );
-                                                    }
-
-                                                    return (
-                                                        <td key={pIdx} className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-100 px-4 py-4 text-xs font-bold text-gray-900 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: pIdx * 160 }}>
-                                                            {part}
-                                                        </td>
-                                                    );
-                                                })}
-                                                {reportResult.colHeaders.map(ch => (
-                                                    metrics.map(m => {
-                                                        const val = row[`${ch.id}_${m.id}`];
-                                                        const mConfig = getMetricConfig(m.metricId);
-                                                        
-                                                        let cellClass = "px-4 py-4 text-right text-xs font-medium border-r border-gray-50";
-                                                        if (m.metricId === 'margin' || m.metricId === 'roi' || m.metricId === 'profit') {
-                                                            if (val < 0) cellClass += " text-red-600 bg-red-50/50";
-                                                            else if (val >= 15 && m.metricId !== 'profit') cellClass += " text-green-600 bg-green-50/50";
-                                                            else if (val >= 0) cellClass += " text-gray-700";
-                                                        } else {
-                                                            cellClass += " text-gray-600";
-                                                        }
-
-                                                        return (
-                                                            <td key={`${ch.id}_${m.id}`} className={cellClass}>
-                                                                {val === 0 && mConfig?.type !== 'percent' ? (
-                                                                    <span className="text-gray-300">-</span>
-                                                                ) : (
-                                                                    mConfig?.type === 'currency' ? formatMoney(val, 0) : 
-                                                                    mConfig?.type === 'percent' ? formatPct(val) : 
-                                                                    formatNumber(val)
-                                                                )}
-                                                            </td>
-                                                        );
-                                                    })
-                                                ))}
-                                                {metrics.map(m => {
-                                                    const val = row[`total_${m.id}`];
-                                                    const mConfig = getMetricConfig(m.metricId);
-                                                    
-                                                    let cellClass = "px-4 py-4 text-right text-xs font-bold bg-gray-50/30";
-                                                    if (m.metricId === 'margin' || m.metricId === 'roi' || m.metricId === 'profit') {
-                                                        if (val < 0) cellClass += " text-red-600";
-                                                        else if (val >= 15 && m.metricId !== 'profit') cellClass += " text-green-600";
-                                                        else cellClass += " text-gray-900";
-                                                    } else {
-                                                        cellClass += " text-gray-900";
-                                                    }
-
-                                                    return (
-                                                        <td key={`total_${m.id}`} className={cellClass}>
-                                                            {val === 0 && mConfig?.type !== 'percent' ? (
-                                                                <span className="text-gray-300">-</span>
-                                                            ) : (
-                                                                mConfig?.type === 'currency' ? formatMoney(val, 0) : 
-                                                                mConfig?.type === 'percent' ? formatPct(val) : 
-                                                                formatNumber(val)
-                                                            )}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
+                {needsGeneration && !isGenerating && !reportResult && (
+                    <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
+                        <button
+                            onClick={() => generateReport()}
+                            className="flex items-center gap-3 px-10 py-5 bg-indigo-600 text-white rounded-2xl font-bold shadow-2xl hover:bg-indigo-700 hover:scale-105 transition-all animate-in zoom-in-95"
+                        >
+                            <Play className="w-6 h-6 fill-current" />
+                            Generate Pivot Report
+                        </button>
                     </div>
+                )}
+
+                {isGenerating && (
+                    <div className="absolute inset-0 z-30 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center space-y-4">
+                        <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
+                        <p className="text-lg font-bold text-gray-900">Crunching Data...</p>
+                        <p className="text-xs text-gray-400">Aggregating dimensions and calculating metrics</p>
+                    </div>
+                )}
+
+                <div className="flex-1 overflow-auto">
+                    {!reportResult ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4 p-12 text-center">
+                            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center">
+                                <Layout className="w-10 h-10 opacity-20" />
+                            </div>
+                            <div>
+                                <p className="text-xl font-bold text-gray-900">Build your view</p>
+                                <p className="text-sm max-w-[320px] mt-2">Drag dimensions to rows/columns and metrics to values to start your analysis.</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse min-w-full table-auto">
+                            <thead className="bg-gray-50 text-gray-600 text-[10px] uppercase font-bold sticky top-0 z-20 shadow-sm">
+                                <tr>
+                                    {reportResult.rowHeaders.map((rh, idx) => (
+                                        <th key={rh} rowSpan={2} className="sticky left-0 z-30 bg-gray-100 border-b border-r border-gray-200 px-4 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: idx * 160 }}>
+                                            <div className="flex items-center justify-between cursor-pointer w-full">
+                                                <div className="flex items-center gap-2" onClick={() => handleSort(rh)}>
+                                                    <span className="truncate">{getDimLabel(rh)}</span>
+                                                    {sortRules[0]?.key === rh && (
+                                                        sortRules[0].dir === 'asc' ? <ArrowUp className="w-2.5 h-2.5 text-indigo-600 flex-shrink-0 ml-1" /> : <ArrowDown className="w-2.5 h-2.5 text-indigo-600 flex-shrink-0 ml-1" />
+                                                    )}
+                                                </div>
+                                                {idx === 0 && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleSwapDims(); }}
+                                                        className="p-1.5 bg-white hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 rounded-md transition-all shadow-sm border border-gray-200 hover:border-indigo-200 group"
+                                                        title="Swap Rows/Columns"
+                                                    >
+                                                        <ArrowLeftRight className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </th>
+                                    ))}
+                                    {reportResult.colHeaders.map(ch => (
+                                        <th key={ch.id} colSpan={metrics.length} className="px-4 py-3 text-center border-b border-r border-gray-200 bg-indigo-50/50 text-[10px] font-bold text-indigo-700 uppercase tracking-wider whitespace-nowrap">
+                                            {ch.label}
+                                        </th>
+                                    ))}
+                                    <th colSpan={metrics.length} className="px-4 py-3 text-center border-b border-gray-200 bg-gray-100 text-[10px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                                        Grand Total
+                                    </th>
+                                </tr>
+                                <tr>
+                                    {reportResult.colHeaders.map(ch => (
+                                        metrics.map(m => (
+                                            <th
+                                                key={`${ch.id}_${m.id}`}
+                                                onClick={(e) => handleSort(`${ch.id}_${m.id}`, e)}
+                                                className="px-4 py-2 text-right border-b border-r border-gray-100 bg-white text-[9px] font-bold text-gray-400 uppercase cursor-pointer hover:bg-gray-50 transition-colors min-w-[120px] whitespace-nowrap"
+                                            >
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <div className="flex flex-col items-end">
+                                                        <span>{getMetricLabel(m.metricId)}</span>
+                                                        <span className="text-[7px] opacity-60">({m.timeRange})</span>
+                                                    </div>
+                                                    {sortRules[0]?.key === `${ch.id}_${m.id}` && (
+                                                        sortRules[0].dir === 'asc' ? <ArrowUp className="w-2.5 h-2.5 text-indigo-600" /> : <ArrowDown className="w-2.5 h-2.5 text-indigo-600" />
+                                                    )}
+                                                </div>
+                                            </th>
+                                        ))
+                                    ))}
+                                    {metrics.map(m => (
+                                        <th
+                                            key={`total_${m.id}`}
+                                            onClick={(e) => handleSort(`total_${m.id}`, e)}
+                                            className="px-4 py-2 text-right border-b border-gray-100 bg-gray-50 text-[9px] font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 transition-colors min-w-[120px] whitespace-nowrap"
+                                        >
+                                            <div className="flex items-center justify-end gap-1">
+                                                <div className="flex flex-col items-end">
+                                                    <span>{getMetricLabel(m.metricId)}</span>
+                                                    <span className="text-[7px] opacity-60">({m.timeRange})</span>
+                                                </div>
+                                                {sortRules[0]?.key === `total_${m.id}` && (
+                                                    sortRules[0].dir === 'asc' ? <ArrowUp className="w-2.5 h-2.5 text-indigo-600" /> : <ArrowDown className="w-2.5 h-2.5 text-indigo-600" />
+                                                )}
+                                            </div>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 bg-white">
+                                {processedData?.map((row, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50 transition-colors group">
+                                        {row.rowKeyParts.map((part: string, pIdx: number) => {
+                                            const dim = reportResult.rowHeaders[pIdx];
+                                            const meta = row.metadata[dim];
+
+                                            if (dim === 'sku' && meta) {
+                                                return (
+                                                    <td key={pIdx} className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-100 px-4 py-4 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px]" style={{ left: pIdx * 160 }}>
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            <span className="font-bold text-gray-900 font-mono text-xs truncate">{meta.sku}</span>
+                                                            <GradeBadge gradeLevel={meta.gradeLevel} />
+                                                        </div>
+                                                        <div className="text-[10px] text-gray-500 truncate max-w-full">{meta.name}</div>
+                                                    </td>
+                                                );
+                                            }
+
+                                            return (
+                                                <td key={pIdx} className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-100 px-4 py-4 text-xs font-bold text-gray-900 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: pIdx * 160 }}>
+                                                    {part}
+                                                </td>
+                                            );
+                                        })}
+                                        {reportResult.colHeaders.map(ch => (
+                                            metrics.map(m => {
+                                                const val = row[`${ch.id}_${m.id}`];
+                                                const mConfig = getMetricConfig(m.metricId);
+
+                                                let cellClass = "px-4 py-4 text-right text-xs font-medium border-r border-gray-50";
+                                                if (m.metricId === 'margin' || m.metricId === 'roi' || m.metricId === 'profit') {
+                                                    if (val < 0) cellClass += " text-red-600 bg-red-50/50";
+                                                    else if (val >= 15 && m.metricId !== 'profit') cellClass += " text-green-600 bg-green-50/50";
+                                                    else if (val >= 0) cellClass += " text-gray-700";
+                                                } else {
+                                                    cellClass += " text-gray-600";
+                                                }
+
+                                                return (
+                                                    <td key={`${ch.id}_${m.id}`} className={cellClass}>
+                                                        {val === 0 && mConfig?.type !== 'percent' ? (
+                                                            <span className="text-gray-300">-</span>
+                                                        ) : (
+                                                            mConfig?.type === 'currency' ? formatMoney(val, 0) :
+                                                                mConfig?.type === 'percent' ? formatPct(val) :
+                                                                    formatNumber(val)
+                                                        )}
+                                                    </td>
+                                                );
+                                            })
+                                        ))}
+                                        {metrics.map(m => {
+                                            const val = row[`total_${m.id}`];
+                                            const mConfig = getMetricConfig(m.metricId);
+
+                                            let cellClass = "px-4 py-4 text-right text-xs font-bold bg-gray-50/30";
+                                            if (m.metricId === 'margin' || m.metricId === 'roi' || m.metricId === 'profit') {
+                                                if (val < 0) cellClass += " text-red-600";
+                                                else if (val >= 15 && m.metricId !== 'profit') cellClass += " text-green-600";
+                                                else cellClass += " text-gray-900";
+                                            } else {
+                                                cellClass += " text-gray-900";
+                                            }
+
+                                            return (
+                                                <td key={`total_${m.id}`} className={cellClass}>
+                                                    {val === 0 && mConfig?.type !== 'percent' ? (
+                                                        <span className="text-gray-300">-</span>
+                                                    ) : (
+                                                        mConfig?.type === 'currency' ? formatMoney(val, 0) :
+                                                            mConfig?.type === 'percent' ? formatPct(val) :
+                                                                formatNumber(val)
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
             {isCustomMetricModalOpen && (
                 <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
@@ -1239,8 +1238,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                         <div className="p-6 space-y-4">
                             <div>
                                 <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Label</label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     id="cm-label"
                                     placeholder="e.g. Contribution Margin"
                                     className="w-full p-2 border border-gray-200 rounded-lg text-sm"
@@ -1279,20 +1278,20 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             </div>
                         </div>
                         <div className="p-6 bg-gray-50 flex gap-3">
-                            <button 
+                            <button
                                 onClick={() => setIsCustomMetricModalOpen(false)}
                                 className="flex-1 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                             >
                                 Cancel
                             </button>
-                            <button 
+                            <button
                                 onClick={() => {
                                     const label = (document.getElementById('cm-label') as HTMLInputElement).value;
                                     const metricA = (document.getElementById('cm-a') as HTMLSelectElement).value;
                                     const metricB = (document.getElementById('cm-b') as HTMLSelectElement).value;
                                     const operator = (document.getElementById('cm-op') as HTMLSelectElement).value as any;
                                     const type = (document.getElementById('cm-type') as HTMLSelectElement).value as any;
-                                    
+
                                     if (label) {
                                         setCustomMetrics([...customMetrics, {
                                             id: Math.random().toString(36).substr(2, 9),

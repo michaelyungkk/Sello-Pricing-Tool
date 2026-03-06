@@ -64,26 +64,23 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
                   <p className="text-xs text-blue-500 mt-2">{t('restock_in_days', { days: product.leadTimeDays })}</p>
                 </div>
 
-                <div className={`p-4 rounded-xl border ${
-                  analysis.status === 'Critical' ? 'bg-red-50/80 border-red-100' :
-                  analysis.status === 'Warning' ? 'bg-amber-50/80 border-amber-100' :
-                  analysis.status === 'Overstock' ? 'bg-orange-50/80 border-orange-100' :
-                  'bg-green-50/80 border-green-100'
-                }`}>
-                  <p className={`text-sm mb-1 font-medium ${
-                    analysis.status === 'Critical' ? 'text-red-600' :
-                    analysis.status === 'Warning' ? 'text-amber-600' :
-                    analysis.status === 'Overstock' ? 'text-orange-600' :
-                    'text-green-600'
-                  }`}>{t('analysis_health_assessment')}</p>
+                <div className={`p-4 rounded-xl border ${analysis.status === 'Critical' ? 'bg-red-50/80 border-red-100' :
+                    analysis.status === 'Warning' ? 'bg-amber-50/80 border-amber-100' :
+                      analysis.status === 'Overstock' ? 'bg-orange-50/80 border-orange-100' :
+                        'bg-green-50/80 border-green-100'
+                  }`}>
+                  <p className={`text-sm mb-1 font-medium ${analysis.status === 'Critical' ? 'text-red-600' :
+                      analysis.status === 'Warning' ? 'text-amber-600' :
+                        analysis.status === 'Overstock' ? 'text-orange-600' :
+                          'text-green-600'
+                    }`}>{t('analysis_health_assessment')}</p>
                   <div className="flex items-center gap-2">
                     {analysis.status === 'Critical' && <AlertTriangle className="w-6 h-6 text-red-600" />}
-                    <span className={`text-2xl font-bold ${
-                      analysis.status === 'Critical' ? 'text-red-900' :
-                      analysis.status === 'Warning' ? 'text-amber-900' :
-                      analysis.status === 'Overstock' ? 'text-orange-900' :
-                      'text-green-900'
-                    }`}>{analysis.status}</span>
+                    <span className={`text-2xl font-bold ${analysis.status === 'Critical' ? 'text-red-900' :
+                        analysis.status === 'Warning' ? 'text-amber-900' :
+                          analysis.status === 'Overstock' ? 'text-orange-900' :
+                            'text-green-900'
+                      }`}>{analysis.status}</span>
                   </div>
                 </div>
 
@@ -95,9 +92,8 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
                       <span className="text-xs text-gray-500 ml-2">{t('currently_price', { price: currentPriceWithVat.toFixed(2) })}</span>
                     </div>
                   </div>
-                  <div className={`text-sm mt-2 font-semibold flex items-center gap-1 ${
-                    analysis.percentageChange > 0 ? 'text-emerald-600' : analysis.percentageChange < 0 ? 'text-red-600' : 'text-gray-500'
-                  }`}>
+                  <div className={`text-sm mt-2 font-semibold flex items-center gap-1 ${analysis.percentageChange > 0 ? 'text-emerald-600' : analysis.percentageChange < 0 ? 'text-red-600' : 'text-gray-500'
+                    }`}>
                     {analysis.percentageChange > 0 ? <TrendingUp className="w-4 h-4" /> : analysis.percentageChange < 0 ? <TrendingDown className="w-4 h-4" /> : null}
                     {analysis.percentageChange > 0 ? '+' : ''}{analysis.percentageChange.toFixed(2)}{t('adjustment_percent')}
                   </div>
@@ -112,24 +108,24 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
                   {isOffline && <WifiOff className="w-3.5 h-3.5 text-amber-500" />}
                 </h3>
                 {isOffline && (
-                    <div className="mb-3 text-[10px] uppercase font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block border border-amber-100">
-                        {t('analysis_connection_limit')}
-                    </div>
+                  <div className="mb-3 text-[10px] uppercase font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded inline-block border border-amber-100">
+                    {t('analysis_connection_limit')}
+                  </div>
                 )}
                 <p className="text-gray-600 leading-relaxed">{analysis.reasoning}</p>
               </div>
 
               {/* Chart */}
-              <StockChart 
+              <StockChart
                 currentStock={product.stockLevel}
                 dailySalesCurrent={product.averageDailySales}
                 dailySalesProjected={
                   // Simple heuristic for chart visualization: Price up 5% = Sales down 10% (elasticity assumption for visual)
                   // In a real app, AI would return projected velocity.
-                  analysis.percentageChange > 0 
-                    ? product.averageDailySales * 0.85 
-                    : analysis.percentageChange < 0 
-                      ? product.averageDailySales * 1.2 
+                  analysis.percentageChange > 0
+                    ? product.averageDailySales * 0.85
+                    : analysis.percentageChange < 0
+                      ? product.averageDailySales * 1.2
                       : product.averageDailySales
                 }
                 leadTimeDays={product.leadTimeDays}
@@ -141,16 +137,16 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
 
         {/* Footer */}
         <div className="p-6 border-t border-gray-100/50 bg-gray-50/50 rounded-b-2xl flex justify-end gap-3">
-          <button 
+          <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200/50 rounded-lg transition-colors"
+            className="px-4 py-2 text-gray-700 text-sm font-bold hover:bg-gray-200/50 rounded-lg transition-colors"
           >
             {t('cancel')}
           </button>
           {analysis && (
-            <button 
+            <button
               onClick={() => onApplyPrice(product.id, analysis.recommendedPrice)}
-              className="px-6 py-2 text-white font-medium rounded-lg shadow-md transition-all flex items-center gap-2"
+              className="px-4 py-2 text-white text-sm font-bold rounded-lg shadow-md transition-all flex items-center gap-2"
               style={{ backgroundColor: themeColor, boxShadow: `0 4px 6px -1px ${themeColor}40` }}
             >
               <Check className="w-4 h-4" />

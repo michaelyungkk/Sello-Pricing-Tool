@@ -14,7 +14,7 @@ interface ShipmentsTabProps {
 export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor, initialTags = [], onTagsChange }) => {
     const [inputValue, setInputValue] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(25);
+    const itemsPerPage = 25;
     const searchTags = initialTags;
     const updateTags = (newTags: string[]) => { if (onTagsChange) onTagsChange(newTags); };
 
@@ -130,18 +130,24 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
                         </div>
                     )}
                     <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50/50 border-b border-gray-200 text-[10px] uppercase font-bold tracking-wider text-gray-500">
-                                <tr><th className="px-4 py-3">SKU</th><th className="px-4 py-3">Container</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">ETA</th><th className="px-4 py-3 text-right">Qty</th></tr>
+                        <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                            <thead className="bg-gray-50/50 border-b border-gray-200/50 sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
+                                <tr className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-xs uppercase tracking-wider">
+                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">SKU</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Container</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">ETA</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Qty</th>
+                                </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100/50">
                                 {paginatedTableData.map(row => (
-                                    <tr key={row.id} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors">
-                                        <td className="px-4 py-3 font-mono font-bold text-gray-700">{row.sku}</td>
-                                        <td className="px-4 py-3 text-indigo-600 font-medium">{row.containerId}</td>
-                                        <td className="px-4 py-3"><span className={`px-2 py-1 rounded border text-[10px] uppercase font-bold ${getStatusStyle(row.status)}`}>{row.status}</span></td>
-                                        <td className="px-4 py-3 text-gray-600">{row.eta || <span className="text-gray-400 italic">Pending</span>}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-gray-800">{row.quantity}</td>
+                                    <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                        <td className="px-4 py-4 font-mono font-bold text-gray-700">{row.sku}</td>
+                                        <td className="px-4 py-4 text-indigo-600 font-medium">{row.containerId}</td>
+                                        <td className="px-4 py-4"><span className={`px-2 py-1 rounded border text-[10px] uppercase font-bold ${getStatusStyle(row.status)}`}>{row.status}</span></td>
+                                        <td className="px-4 py-4 text-gray-600">{row.eta || <span className="text-gray-400 italic">Pending</span>}</td>
+                                        <td className="px-4 py-4 text-right font-bold text-gray-800">{row.quantity}</td>
                                     </tr>
                                 ))}
                                 {filteredTableData.length === 0 && (

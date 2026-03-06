@@ -41,7 +41,6 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
   const [activeTab, setActiveTab] = useState<Tab>('performance');
   const [sort, setSort] = useState<SortState<PlatformSortKey>>({ key: 'revenue', dir: 'desc' });
   const [selectedPlatformKey, setSelectedPlatformKey] = useState<string | null>(null);
-  const [isAuditVisible, setIsAuditVisible] = useState(false);
 
   // Time Window State
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('30D');
@@ -61,6 +60,7 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
 
   // Alert Rules State
   const [alertRules, setAlertRules] = useState<Tab3AlertRules>(getTab3AlertRules());
+  const [isAuditVisible, setIsAuditVisible] = useState(false);
 
   // Date Window Calculation
   const dateWindow = useMemo(() => {
@@ -605,7 +605,7 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
             { key: 'ad-groups', label: 'Ad Groups', icon: BarChart2 },
           ]}
           activeTab={activeTab}
-          onChange={(key) => setActiveTab(key as Tab)}
+          onChange={(key) => { setActiveTab(key as Tab); setIsAuditVisible(false); }}
           size="sm"
         />
 
@@ -632,20 +632,20 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
           <div className="flex bg-gray-100 p-1 rounded-lg">
             <button
               onClick={() => setReturnDateBasis('refundDate')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-3 h-8 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <Clock className="w-3 h-3" />
               Refund Date
             </button>
             <button
               onClick={() => setReturnDateBasis('orderDate')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-3 h-8 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <Calendar className="w-3 h-3" />
               Order Date
             </button>
           </div>
-          <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+          <label className="flex items-center h-8 gap-2 px-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
             <input
               type="checkbox"
               checked={deductRefunds}
@@ -657,14 +657,16 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
               <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
             </div>
           </label>
-          <button
-            onClick={() => setIsAuditVisible(v => !v)}
-            className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-            title="Toggle Audit Panel"
-          >
-            <Activity className="w-4 h-4" />
-            Audit{isAuditVisible ? ': On' : ''}
-          </button>
+          {(activeTab === 'performance' || activeTab === 'overview' || activeTab === 'roi') && (
+            <button
+              onClick={() => setIsAuditVisible(v => !v)}
+              className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+              title="Toggle Audit Panel"
+            >
+              <Activity className="w-4 h-4" />
+              Audit{isAuditVisible ? ': On' : ''}
+            </button>
+          )}
         </>)}
       </ContextBar>
 

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { MetricCard } from '../../productManagement/parts/MetricCard';
 import { Megaphone, PieChart, Zap, Target, Trophy, Coins, Database, Wallet, HelpCircle } from 'lucide-react';
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip as RechartsTooltip, Cell, ReferenceLine, ReferenceArea } from 'recharts';
@@ -9,6 +9,7 @@ import { formatMoney, formatPct } from '../../../utils/format';
 import { PlatformFeesRoi, PlatformSortKey } from '../platformManagement.types';
 import { PricingRules, PlatformConfig } from '../../../types';
 import AuditPanel from '../../AuditPanel';
+import { FilterBar } from '../../common/FilterBar';
 
 interface FeesAndRoiTabProps {
     roiData: PlatformFeesRoi[];
@@ -31,7 +32,6 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
             {isAuditVisible && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                     <AuditPanel
@@ -165,23 +165,23 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200/50 text-[10px] uppercase tracking-wider">
+                        <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
                             <tr>
                                 <SortableHeader label="Platform" sortKey="name" sort={sort} onChange={setSort as any} themeColor={themeColor} />
                                 <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort as any} themeColor={themeColor} align="right" />
-                                <th className="px-4 py-3 text-right">Profit (Gross)</th>
+                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Profit (Gross)</th>
                                 <SortableHeader label="Margin %" sortKey="margin" sort={sort} onChange={setSort as any} themeColor={themeColor} align="right" />
-                                <th className="px-4 py-3 text-right">Ad Spend</th>
-                                <th className="px-4 py-3 text-right">TACoS %</th>
-                                <th className="px-4 py-3 text-right bg-green-50/30">Net Profit</th>
-                                <th className="px-4 py-3 text-right bg-green-50/30">ROI After Ads</th>
+                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Ad Spend</th>
+                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">TACoS %</th>
+                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right bg-green-50/30">Net Profit</th>
+                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right bg-green-50/30">ROI After Ads</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100/50">
                             {sortRows(roiData, sort as any, (row: any, key: string) => row[key] || 0).map((d: any) => {
                                 const isCostBased = pricingRules[d.platform]?.pricingControl === 'PLATFORM_COST_BASED';
                                 return (
-                                    <tr key={d.platform} className="even:bg-gray-50/20 hover:bg-gray-100/40 transition-colors">
+                                    <tr key={d.platform} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors">
                                         <td className="p-4 font-bold text-gray-900">{d.platform}</td>
                                         <td className="p-4 text-right font-medium">
                                             {formatMoney(d.revenue, 0)}

@@ -12,6 +12,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
     const [sku, setSku] = useState('');
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [platform, setPlatform] = useState('Manual');
     const [oldPrice, setOldPrice] = useState('');
     const [newPrice, setNewPrice] = useState('');
     const [error, setError] = useState('');
@@ -55,6 +56,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
             sku: selectedProduct.sku,
             productName: selectedProduct.name,
             date,
+            platform,
             oldPrice: oldPriceNum,
             newPrice: newPriceNum,
         });
@@ -70,7 +72,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                 </div>
                 <div className="p-6 space-y-4">
                     {error && <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm">{error}</div>}
-                    
+
                     <div>
                         <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Product SKU</label>
                         <div className="relative">
@@ -93,19 +95,34 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
 
                     {selectedProduct && (
                         <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg animate-in fade-in">
-                            <div className="text-xs text-gray-500 flex items-center gap-1"><Tag className="w-3 h-3"/>Product Name</div>
+                            <div className="text-xs text-gray-500 flex items-center gap-1"><Tag className="w-3 h-3" />Product Name</div>
                             <p className="font-medium text-gray-800">{selectedProduct.name}</p>
                         </div>
                     )}
 
-                    <div>
-                        <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Change Date</label>
-                        <input
-                            type="date"
-                            value={date}
-                            onChange={e => setDate(e.target.value)}
-                            className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Change Date</label>
+                            <input
+                                type="date"
+                                value={date}
+                                onChange={e => setDate(e.target.value)}
+                                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Platform</label>
+                            <select
+                                value={platform}
+                                onChange={e => setPlatform(e.target.value)}
+                                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-indigo-500 bg-white"
+                            >
+                                <option value="Manual">Manual</option>
+                                <option value="eBay">eBay</option>
+                                <option value="Amazon">Amazon</option>
+                                <option value="Shopify">Shopify</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -140,11 +157,11 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                     </div>
                 </div>
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium">Cancel</button>
+                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
                     <button
                         onClick={handleSubmit}
                         disabled={!selectedProduct}
-                        className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
                     >
                         <Save className="w-4 h-4" />
                         Lodge Change

@@ -91,7 +91,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
         const headers = rows[0].map(h => String(h).trim().toLowerCase());
         const skuIdx = headers.indexOf('sku');
         const priceIdx = headers.indexOf('price');
-        
+
         // Image URL Column Detection (Optional)
         const imageIdx = headers.findIndex(h => h.includes('image') || h === 'pic' || h === 'picture' || h === 'url');
 
@@ -171,7 +171,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                 }
             }
         });
-        
+
         imageCount = validItems.filter(i => i.imageUrl).length;
 
         setStats({
@@ -187,7 +187,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
     // NEW: Computed property for displaying ONLY changed items in the table
     const displayedChanges = useMemo(() => {
         if (!parsedItems) return [];
-        
+
         // Lookup map for current product prices
         const priceMap = new Map<string, number>();
         products.forEach(p => {
@@ -196,10 +196,10 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
 
         return parsedItems.filter(item => {
             if (item.status !== 'valid') return false;
-            
+
             const skuUpper = item.sku.toUpperCase().trim();
             let oldPrice = priceMap.get(skuUpper);
-            
+
             // Mirror suffix fallback logic
             if (oldPrice === undefined) {
                 const stripped = skuUpper.replace(/[-_]UK$/i, '');
@@ -210,13 +210,13 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
             if (oldPrice === undefined || oldPrice === 0) return false;
             return Math.abs(item.caPrice - oldPrice) > 0.02;
         }).map(item => {
-             const skuUpper = item.sku.toUpperCase().trim();
-             let oldPrice = priceMap.get(skuUpper);
-             if (oldPrice === undefined) {
-                 const stripped = skuUpper.replace(/[-_]UK$/i, '');
-                 oldPrice = priceMap.get(stripped);
-             }
-             return { ...item, oldPrice };
+            const skuUpper = item.sku.toUpperCase().trim();
+            let oldPrice = priceMap.get(skuUpper);
+            if (oldPrice === undefined) {
+                const stripped = skuUpper.replace(/[-_]UK$/i, '');
+                oldPrice = priceMap.get(stripped);
+            }
+            return { ...item, oldPrice };
         });
     }, [parsedItems, products]);
 
@@ -237,9 +237,9 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                             <Calendar className="w-4 h-4 text-indigo-600" />
                             Report Date
                         </label>
-                        <input 
-                            type="date" 
-                            value={reportDate} 
+                        <input
+                            type="date"
+                            value={reportDate}
                             onChange={(e) => setReportDate(e.target.value)}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                         />
@@ -346,8 +346,8 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                                         ) : (
                                             <tr>
                                                 <td colSpan={4} className="p-8 text-center text-gray-400 italic">
-                                                    {validItems.length > 0 
-                                                        ? "Prices in file match current database values." 
+                                                    {validItems.length > 0
+                                                        ? "Prices in file match current database values."
                                                         : "No valid SKU data parsed from file."}
                                                 </td>
                                             </tr>
@@ -367,11 +367,11 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                 </div>
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors font-medium">Cancel</button>
+                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
                     {validItems.length > 0 && (
                         <button
                             onClick={() => onConfirm(validItems, reportDate)}
-                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md transition-colors font-medium"
+                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors"
                         >
                             Update Prices & Images
                         </button>

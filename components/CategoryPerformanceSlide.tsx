@@ -4,7 +4,7 @@ import { Product, PriceLog, CategoryPolicy, RefundLog } from '../types';
 import { aggregateCategoryData, MainCategoryData, SubCategoryData, CategoryMetric } from '../services/categoryAgg';
 import { getPolicyForProduct, upsertCategoryPolicy, getCategoryPolicies } from '../services/categoryPolicyService';
 import { asDateKey, addDaysToDateKey, isDateKeyBetween } from '../services/dateUtils';
-import { DollarSign, PieChart, Megaphone, ChevronRight, Layers, LayoutGrid, Coins, Target, Save, AlertCircle, Upload, X, TrendingUp, TrendingDown, Package, Table, ShoppingCart, Repeat } from 'lucide-react';
+import { DollarSign, PieChart, Megaphone, ChevronRight, Layers, LayoutGrid, Coins, Target, Save, AlertCircle, Upload, X, TrendingUp, TrendingDown, Package, Table, Repeat } from 'lucide-react';
 import { SelectFilter } from './common/SelectFilter';
 import { scaleLinear } from 'd3-scale';
 import { Treemap, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
@@ -182,6 +182,19 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const getCellValue = React.useCallback((cat: MainCategoryData, plat: string): number => {
+        const m = plat === 'All' ? cat.total : cat.platforms[plat]; if (!m) return 0;
+        if (mode === 'ABSOLUTE') return metric === 'REVENUE' ? m.revenue : metric === 'PROFIT' ? m.profit : metric === 'MARGIN' ? m.margin : m.tacos;
+        let value = 0, prevValue = 0;
+        switch (metric) {
+            case 'REVENUE': value = m.revenue; prevValue = m.prevRevenue; break;
+            case 'PROFIT': value = m.profit; prevValue = m.prevProfit; break;
+            case 'MARGIN': value = m.margin; prevValue = m.prevMargin; break;
+            case 'TACOS': value = m.tacos; prevValue = m.prevTacos; break;
+        }
+        return value - prevValue;
+    }, [mode, metric]);
+
     const { categories, platforms } = useMemo(() => {
         const baseAgg = aggregateCategoryData(products, priceHistoryMap, dateRange);
         if (!deductRefunds) return baseAgg;
@@ -328,18 +341,7 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
         const match = allPolicies.find(p => p.mainCategory === mainCat && !p.subCategory && !p.platform); return match?.targetMarginPct ?? null;
     };
 
-    const getCellValue = (cat: MainCategoryData, plat: string): number => {
-        const m = plat === 'All' ? cat.total : cat.platforms[plat]; if (!m) return 0;
-        if (mode === 'ABSOLUTE') return metric === 'REVENUE' ? m.revenue : metric === 'PROFIT' ? m.profit : metric === 'MARGIN' ? m.margin : m.tacos;
-        let value = 0, prevValue = 0;
-        switch (metric) {
-            case 'REVENUE': value = m.revenue; prevValue = m.prevRevenue; break;
-            case 'PROFIT': value = m.profit; prevValue = m.prevProfit; break;
-            case 'MARGIN': value = m.margin; prevValue = m.prevMargin; break;
-            case 'TACOS': value = m.tacos; prevValue = m.prevTacos; break;
-        }
-        return value - prevValue;
-    };
+
 
     const colorScaleDomain = useMemo(() => {
         let min = Infinity, max = -Infinity;
@@ -459,17 +461,17 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                     {viewMode === 'MATRIX' ? (
                         <div className="relative">
                             <table className="w-full text-sm text-left border-collapse">
-                                <thead className="bg-custom-glass backdrop-blur-sm text-gray-500 font-bold sticky top-0 z-30 text-xs uppercase shadow-sm">
+                                <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-xs uppercase tracking-wider sticky top-0 z-30 backdrop-blur-sm shadow-sm transition-colors">
                                     <tr>
-                                        <th className="p-3 border-b border-r border-white/10 min-w-[150px] bg-custom-glass z-40 sticky left-0">Category</th>
-                                        <th className="p-3 border-b border-white/10 text-center border-r">Total</th>
-                                        {platforms.map(p => <th key={p} className="p-3 border-b border-white/10 text-center min-w-[100px]">{p}</th>)}
+                                        <th className="p-3 border-b border-r border-gray-200/50 min-w-[150px] bg-gray-50/50 z-40 sticky left-0 font-semibold">Category</th>
+                                        <th className="p-3 border-b border-gray-200/50 text-center border-r font-semibold">Total</th>
+                                        {platforms.map(p => <th key={p} className="p-3 border-b border-gray-200/50 text-center min-w-[100px] font-semibold">{p}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {categories.map(cat => (
-                                        <tr key={cat.name} className="divide-x divide-white/10 border-b border-white/5 group">
-                                            <td className="p-3 font-bold text-gray-700 sticky left-0 bg-custom-glass z-20 border-r border-white/10 group-hover:bg-white/5 transition-colors"><div className="flex items-center gap-2"><Layers className={`w-3 h-3 ${selectedCell?.category === cat.name ? 'text-indigo-600' : 'text-gray-400'}`} /><div className="flex flex-col"><span className="text-xs truncate max-w-[120px] text-gray-800">{cat.name}</span><span className="text-[9px] text-gray-500 font-medium">{kpiStats.skuCounts[cat.name] || 0} SKUs</span></div></div></td>
+                                        <tr key={cat.name} className="divide-x divide-gray-100/50 border-b border-gray-100/50 group even:bg-gray-50/10">
+                                            <td className="p-3 font-bold text-gray-700 sticky left-0 bg-gray-50/50 z-20 border-r border-gray-200/50 group-hover:bg-gray-100/50 transition-colors"><div className="flex items-center gap-2"><Layers className={`w-3 h-3 ${selectedCell?.category === cat.name ? 'text-indigo-600' : 'text-gray-400'}`} /><div className="flex flex-col"><span className="text-xs truncate max-w-[120px] text-gray-800">{cat.name}</span><span className="text-[9px] text-gray-500 font-medium">{kpiStats.skuCounts[cat.name] || 0} SKUs</span></div></div></td>
                                             <td className={`p-0 relative cursor-pointer hover:ring-2 hover:ring-indigo-400 ${selectedCell?.category === cat.name && selectedCell?.platform === 'All' ? 'ring-2 ring-indigo-500 z-20' : ''}`} onClick={() => setSelectedCell({ category: cat.name, platform: 'All' })}>{<CellRenderer cat={cat} plat="All" getCellValue={getCellValue} colorScale={colorScale} resolveTargetMargin={resolveTargetMargin} metric={metric} mode={mode} />}</td>
                                             {platforms.map(plat => <td key={plat} className={`p-0 relative cursor-pointer hover:ring-2 hover:ring-indigo-400 ${selectedCell?.category === cat.name && selectedCell?.platform === plat ? 'ring-2 ring-indigo-500 z-20' : ''}`} onClick={() => cat.platforms[plat] && cat.platforms[plat].revenue > 0 && setSelectedCell({ category: cat.name, platform: plat })}>{<CellRenderer cat={cat} plat={plat} getCellValue={getCellValue} colorScale={colorScale} resolveTargetMargin={resolveTargetMargin} metric={metric} mode={mode} />}</td>)}
                                         </tr>
@@ -498,9 +500,26 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                                     </div>
                                 </div>
                                 <div className="p-2">
-                                    <table className="w-full text-xs text-left"><thead className="text-gray-500 font-bold border-b border-white/10 sticky top-0 bg-custom-glass backdrop-blur-sm"><tr><SortableHeader sortKey="name" label="Subcat" sort={drilldownSort} onChange={setDrilldownSort} className="py-2 pl-2" /><SortableHeader sortKey="revenue" label="Rev" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="py-2" /><SortableHeader sortKey="margin" label="Margin" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="py-2" /><SortableHeader sortKey="tacos" label="TACoS" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="py-2 pr-2" /></tr></thead><tbody className="divide-y divide-white/5">
-                                        {drilldownData.map(sub => (<tr key={sub.name} className="hover:bg-white/5"><td className="py-2 pl-2 font-medium text-gray-700 truncate max-w-[100px]">{sub.name}</td><td className="py-2 text-right">£{sub.metric.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td><td className={`py-2 text-right font-semibold ${sub.metric.margin < resolveTargetMargin(selectedCell.category, sub.name, selectedCell.platform === 'All' ? undefined : selectedCell.platform)! ? 'text-red-500' : 'text-emerald-600'}`}>{sub.metric.margin.toFixed(1)}%</td><td className="py-2 text-right pr-2">{sub.metric.tacos.toFixed(1)}%</td></tr>))}
-                                    </tbody></table>
+                                    <table className="w-full text-xs text-left">
+                                        <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-[10px] uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
+                                            <tr>
+                                                <SortableHeader sortKey="name" label="Subcat" sort={drilldownSort} onChange={setDrilldownSort} className="px-4 py-2" />
+                                                <SortableHeader sortKey="revenue" label="Rev" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="px-4 py-2" />
+                                                <SortableHeader sortKey="margin" label="Margin" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="px-4 py-2" />
+                                                <SortableHeader sortKey="tacos" label="TACoS" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="px-4 py-2" />
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100/50">
+                                            {drilldownData.map(sub => (
+                                                <tr key={sub.name} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors">
+                                                    <td className="px-4 py-2 font-medium text-gray-700 truncate max-w-[100px]">{sub.name}</td>
+                                                    <td className="px-4 py-2 text-right">£{sub.metric.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                                                    <td className={`px-4 py-2 text-right font-semibold ${sub.metric.margin < resolveTargetMargin(selectedCell.category, sub.name, selectedCell.platform === 'All' ? undefined : selectedCell.platform)! ? 'text-red-500' : 'text-emerald-600'}`}>{sub.metric.margin.toFixed(1)}%</td>
+                                                    <td className="px-4 py-2 text-right">{sub.metric.tacos.toFixed(1)}%</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         )}

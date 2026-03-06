@@ -70,7 +70,7 @@ const ManualCostChangeModal: React.FC<ManualCostChangeModalProps> = ({ products,
                 </div>
                 <div className="p-6 space-y-4">
                     {error && <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm">{error}</div>}
-                    
+
                     <div>
                         <label className="text-xs font-medium text-gray-500 uppercase block mb-1">Product SKU</label>
                         <div className="relative">
@@ -93,7 +93,7 @@ const ManualCostChangeModal: React.FC<ManualCostChangeModalProps> = ({ products,
 
                     {selectedProduct && (
                         <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg animate-in fade-in">
-                            <div className="text-xs text-gray-500 flex items-center gap-1"><Tag className="w-3 h-3"/>Product Name</div>
+                            <div className="text-xs text-gray-500 flex items-center gap-1"><Tag className="w-3 h-3" />Product Name</div>
                             <p className="font-medium text-gray-800">{selectedProduct.name}</p>
                         </div>
                     )}
@@ -140,11 +140,11 @@ const ManualCostChangeModal: React.FC<ManualCostChangeModalProps> = ({ products,
                     </div>
                 </div>
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium">Cancel</button>
+                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
                     <button
                         onClick={handleSubmit}
                         disabled={!selectedProduct}
-                        className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
                     >
                         <Save className="w-4 h-4" />
                         Lodge Change

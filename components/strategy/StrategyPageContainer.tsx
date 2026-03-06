@@ -399,7 +399,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
 
                     if (bucketIdx !== -1) {
                         // Overwrite if multiple changes in same week - assumes latest change defines the week's state
-                        weeklyChanges[bucketIdx] = change.changeType;
+                        weeklyChanges[bucketIdx] = (change.changeType as string) || null;
                     }
                 });
 
@@ -522,7 +522,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             data = data.filter(item => {
                 const matchesTerm = (term: string) => {
                     const t = term.toLowerCase();
-                    return item.sku.toLowerCase().includes(t) || item.productName.toLowerCase().includes(t);
+                    return item.sku.toLowerCase().includes(t) || (item.productName || '').toLowerCase().includes(t);
                 };
                 if (searchTags.length > 0) return searchTags.some(tag => matchesTerm(tag));
                 return matchesTerm(searchQuery);
@@ -546,7 +546,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             data = data.filter(item => {
                 const matchesTerm = (term: string) => {
                     const t = term.toLowerCase();
-                    return item.sku.toLowerCase().includes(t) || item.productName.toLowerCase().includes(t);
+                    return item.sku.toLowerCase().includes(t) || (item.productName || '').toLowerCase().includes(t);
                 };
                 if (searchTags.length > 0) return searchTags.some(tag => matchesTerm(tag));
                 return matchesTerm(searchQuery);
@@ -577,7 +577,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
             data = data.filter(item => {
                 const matchesTerm = (term: string) => {
                     const t = term.toLowerCase();
-                    return item.sku.toLowerCase().includes(t) || item.productName.toLowerCase().includes(t);
+                    return item.sku.toLowerCase().includes(t) || (item.productName || '').toLowerCase().includes(t);
                 };
                 if (searchTags.length > 0) return searchTags.some(tag => matchesTerm(tag));
                 return matchesTerm(searchQuery);
@@ -657,16 +657,16 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
         if (type === 'price') {
             headers = ['Date', 'SKU', 'Product Name', 'Change Type', 'Change %', 'Old Price', 'New Price', 'Pre-Change Avg Daily Vel', 'Post-Change Avg Daily Vel', 'Vel Impact %'];
             rows = historyTableData.map(row => [
-                row.date, clean(row.sku), clean(row.productName), row.changeType,
-                row.percentChange.toFixed(2) + '%', row.oldPrice.toFixed(2), row.newPrice.toFixed(2),
+                row.date, clean(row.sku), clean(row.productName || ''), row.changeType,
+                (row.percentChange || 0).toFixed(2) + '%', row.oldPrice.toFixed(2), row.newPrice.toFixed(2),
                 row.preVel.toFixed(2), row.postVel.toFixed(2), row.velocityChange.toFixed(1) + '%'
             ]);
             filename = `price_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
         } else if (type === 'cost') {
             headers = ['Date', 'SKU', 'Product Name', 'Change Type', 'Change %', 'Old Cost', 'New Cost'];
             rows = costHistoryTableData.map(row => [
-                row.date, clean(row.sku), clean(row.productName), row.changeType,
-                row.percentChange.toFixed(2) + '%', row.oldCost.toFixed(2), row.newCost.toFixed(2),
+                row.date, clean(row.sku), clean(row.productName || ''), row.changeType,
+                (row.percentChange || 0).toFixed(2) + '%', row.oldCost.toFixed(2), row.newCost.toFixed(2),
             ]);
             filename = `cost_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
         } else if (type === 'inventory') {
@@ -694,10 +694,10 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
             <div className="flex flex-wrap gap-4 items-center justify-between">
                 <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
-                    <button onClick={() => setActiveTab('ENGINE')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ENGINE' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Strategy Simulator</button>
-                    <button onClick={() => setActiveTab('HISTORY')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><History className="w-4 h-4" />Price Change Log</button>
-                    <button onClick={() => setActiveTab('COST_HISTORY')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Cost Change Log</button>
-                    <button onClick={() => setActiveTab('INVENTORY_HISTORY')} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'INVENTORY_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Database className="w-4 h-4" />Inventory Change Log</button>
+                    <button onClick={() => { setActiveTab('ENGINE'); setIsAuditPanelVisible(false); }} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ENGINE' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Strategy Simulator</button>
+                    <button onClick={() => { setActiveTab('HISTORY'); setIsAuditPanelVisible(false); }} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><History className="w-4 h-4" />Price Change Log</button>
+                    <button onClick={() => { setActiveTab('COST_HISTORY'); setIsAuditPanelVisible(false); }} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Cost Change Log</button>
+                    <button onClick={() => { setActiveTab('INVENTORY_HISTORY'); setIsAuditPanelVisible(false); }} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'INVENTORY_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Database className="w-4 h-4" />Inventory Change Log</button>
                 </div>
 
             </div>
@@ -721,18 +721,18 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                         onCustomEndChange={setCustomEnd}
                         onCustomApply={() => { setSelectedWindow('Custom'); setCurrentPage(1); }}
                     >
-                        <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                        <label className="flex items-center h-8 gap-2 px-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
                             <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300" />
                             <div className="flex items-center gap-1.5">
                                 <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
                                 <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
                             </div>
                         </label>
-                        <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title="Toggle Reconciliation Panel"><Activity className="w-4 h-4" />Audit: {isAuditPanelVisible ? 'On' : 'Off'}</button>
-                        <button onClick={() => setIncludeIncoming(!includeIncoming)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold border transition-all shadow-sm text-sm ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title={includeIncoming ? "Including Incoming Stock in Runway Calc" : "Excluding Incoming Stock (Conservative Mode)"}><Ship className="w-4 h-4" />{includeIncoming ? 'Incoming Included' : 'Incoming Excluded'}</button>
-                        <button onClick={() => setIsConfigOpen(!isConfigOpen)} className={`px-4 py-2 rounded-lg font-medium border flex items-center gap-2 transition-all text-sm ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Settings className="w-4 h-4" />{isConfigOpen ? 'Hide Rules' : 'Edit Rules'}</button>
+                        <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title="Toggle Reconciliation Panel"><Activity className="w-4 h-4" />Audit: {isAuditPanelVisible ? 'On' : 'Off'}</button>
+                        <button onClick={() => setIncludeIncoming(!includeIncoming)} className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${includeIncoming ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title={includeIncoming ? "Including Incoming Stock in Runway Calc" : "Excluding Incoming Stock (Conservative Mode)"}><Ship className="w-4 h-4" />{includeIncoming ? 'Incoming Included' : 'Incoming Excluded'}</button>
+                        <button onClick={() => setIsConfigOpen(!isConfigOpen)} className={`px-3 h-8 rounded-lg font-bold border flex items-center gap-2 transition-all text-xs ${isConfigOpen ? 'bg-gray-100 text-gray-900 border-gray-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Settings className="w-4 h-4" />{isConfigOpen ? 'Hide Rules' : 'Edit Rules'}</button>
                         <div className="relative">
-                            <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition-colors shadow-sm"><Download className="w-4 h-4" />Export Matrix</button>
+                            <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="px-3 h-8 text-xs font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm flex items-center gap-2 transition-colors"><Download className="w-4 h-4" />Export Matrix</button>
                             {isExportMenuOpen && createPortal(
                                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}><div className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20" onClick={e => e.stopPropagation()}><div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50"><h3 className="font-bold text-gray-900">Export Strategy</h3><button onClick={() => setIsExportMenuOpen(false)} className="p-1 hover:bg-gray-200/50 rounded-full transition-colors"><X className="w-4 h-4 text-gray-500" /></button></div><div className="p-2"><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div><button onClick={() => handleExport('All')} className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between group rounded-lg transition-colors"><span className="font-medium">Standard (Master SKUs)</span><ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600" /></button><div className="my-2 border-t border-gray-100/50"></div><div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div><div className="max-h-60 overflow-y-auto">{uniquePlatforms.map(platform => (<button key={platform} onClick={() => handleExport(platform)} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50/50 flex items-center justify-between rounded-lg transition-colors"><span>{platform}</span><span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">Alias Mode</span></button>))}{uniquePlatforms.length === 0 && (<div className="px-4 py-2 text-xs text-gray-400 italic">No platforms detected</div>)}</div></div></div></div>, document.body
                             )}
@@ -797,8 +797,8 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="text-xs text-gray-500">Showing <strong>{historyTableData.length}</strong> records</div>
-                                    <button onClick={() => handleHistoryExport('price')} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm transition-colors"><Download className="w-3.5 h-3.5" /> Export Log</button>
-                                    <button onClick={() => setIsManualLodgeOpen(true)} className="px-3 py-1.5 bg-indigo-600 text-white border border-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition-colors"><Plus className="w-3.5 h-3.5" /> Lodge Manual Change</button>
+                                    <button onClick={() => handleHistoryExport('price')} className="px-3 h-8 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm transition-colors"><Download className="w-3.5 h-3.5" /> Export Log</button>
+                                    <button onClick={() => setIsManualLodgeOpen(true)} className="px-3 h-8 bg-indigo-600 text-white border border-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition-colors"><Plus className="w-3.5 h-3.5" /> Lodge Manual Change</button>
                                 </div>
                             </div>
                         </div>
@@ -869,8 +869,8 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="text-xs text-gray-500">Showing <strong>{costHistoryTableData.length}</strong> records</div>
-                                    <button onClick={() => handleHistoryExport('cost')} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm transition-colors"><Download className="w-3.5 h-3.5" /> Export Log</button>
-                                    <button onClick={() => setIsManualCostLodgeOpen(true)} className="px-3 py-1.5 bg-indigo-600 text-white border border-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition-colors"><Plus className="w-3.5 h-3.5" /> Lodge Manual Cost Change</button>
+                                    <button onClick={() => handleHistoryExport('cost')} className="px-3 h-8 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm transition-colors"><Download className="w-3.5 h-3.5" /> Export Log</button>
+                                    <button onClick={() => setIsManualCostLodgeOpen(true)} className="px-3 h-8 bg-indigo-600 text-white border border-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition-colors"><Plus className="w-3.5 h-3.5" /> Lodge Manual Cost Change</button>
                                 </div>
                             </div>
                         </div>
@@ -939,7 +939,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="text-xs text-gray-500">Showing <strong>{inventoryHistoryTableData.length}</strong> records</div>
-                                    <button onClick={() => handleHistoryExport('inventory')} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm transition-colors"><Download className="w-3.5 h-3.5" /> Export Log</button>
+                                    <button onClick={() => handleHistoryExport('inventory')} className="px-3 h-8 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 shadow-sm transition-colors"><Download className="w-3.5 h-3.5" /> Export Log</button>
                                 </div>
                             </div>
                         </div>
