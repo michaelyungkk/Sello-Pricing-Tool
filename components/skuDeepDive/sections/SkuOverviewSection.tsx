@@ -27,7 +27,7 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
     onScrollToSection
 }) => {
     return (
-        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
+        <div className="sello-glass rounded-xl shadow-lg overflow-hidden p-6">
             <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
                 <div className="flex items-center gap-2">
                     <div className="p-2 bg-indigo-500/10 text-indigo-600 rounded-lg">
@@ -39,16 +39,16 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                 {hasTransactions && (
                     <div className="flex items-center gap-2">
                         <span className="text-[10px] font-medium text-gray-400 uppercase mr-1 hidden sm:block select-none">Quick Access:</span>
-                        <button onClick={() => onScrollToSection('analysis')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
+                        <button onClick={() => onScrollToSection('analysis')} className="px-3 py-1.5 sello-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
                             <BarChart2 className="w-3.5 h-3.5" /> Distribution
                         </button>
-                        <button onClick={() => onScrollToSection('pricing')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
+                        <button onClick={() => onScrollToSection('pricing')} className="px-3 py-1.5 sello-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
                             <History className="w-3.5 h-3.5" /> Pricing
                         </button>
-                        <button onClick={() => onScrollToSection('ledger')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
+                        <button onClick={() => onScrollToSection('ledger')} className="px-3 py-1.5 sello-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
                             <FileText className="w-3.5 h-3.5" /> Ledger
                         </button>
-                        <button onClick={() => onScrollToSection('refunds')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
+                        <button onClick={() => onScrollToSection('refunds')} className="px-3 py-1.5 sello-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5">
                             <RotateCcw className="w-3.5 h-3.5" /> Refunds
                         </button>
                     </div>
@@ -75,12 +75,12 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                         </h1>
 
                         <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-2 text-xs text-gray-500 bg-white/10 px-2 py-1 rounded border border-custom-glass">
+                            <div className="flex items-center gap-2 text-xs text-gray-500 bg-white/10 px-2 py-1 rounded border border-white/30">
                                 <Activity className="w-3.5 h-3.5" />
                                 <span>{product.category || 'Uncategorized'}</span>
                             </div>
                             {product.subcategory && (
-                                <div className="flex items-center gap-2 text-xs text-gray-500 bg-white/10 px-2 py-1 rounded border border-custom-glass">
+                                <div className="flex items-center gap-2 text-xs text-gray-500 bg-white/10 px-2 py-1 rounded border border-white/30">
                                     <Activity className="w-3.5 h-3.5" />
                                     <span>{product.subcategory}</span>
                                 </div>
@@ -156,21 +156,21 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                         </div>
 
                         {/* Row 2 - Summary Statistics */}
-                        <div className="col-span-2 sm:col-span-1 p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
+                        <div className="col-span-2 sm:col-span-1 p-3 sello-glass rounded-xl">
                             <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">CA Reference Price</span>
                             <div className="text-lg font-bold text-purple-600 font-mono">
                                 {formatMoney(product.caPrice)}
                             </div>
                         </div>
 
-                        <div className="col-span-2 sm:col-span-1 p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
+                        <div className="col-span-2 sm:col-span-1 p-3 sello-glass rounded-xl">
                             <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">All-Time Sales</span>
                             <div className="text-lg font-bold text-gray-800">
                                 {formatMoney(allTimeSales, 0)}
                             </div>
                         </div>
 
-                        <div className="col-span-2 sm:col-span-1 p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom group relative cursor-help">
+                        <div className="col-span-2 sm:col-span-1 p-3 sello-glass rounded-xl group relative cursor-help">
                             <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">Lifetime Net Margin</span>
                             <div className={`text-lg font-bold ${allTimeMarginStats.pct >= 15 ? 'text-emerald-600' : allTimeMarginStats.pct > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                 {formatPct(allTimeMarginStats.pct, 1)}
@@ -191,7 +191,7 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                         </div>
 
                         {/* Return & Refund Stats - Stacked for column economy */}
-                        <div className="col-span-2 sm:col-span-1 p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom flex flex-col justify-between">
+                        <div className="col-span-2 sm:col-span-1 p-3 sello-glass rounded-xl flex flex-col justify-between">
                             <div className="flex flex-col gap-1">
                                 <div className="flex justify-between items-center group relative cursor-help">
                                     <span className="text-[9px] text-gray-500 font-medium">Return QTY %</span>
