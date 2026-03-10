@@ -138,7 +138,7 @@ const ProductRow = React.memo(({
     const isHighReturns = product.returnRate !== undefined && product.returnRate > 5;
 
     return (
-        <tr key={product.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group text-sm border-b border-gray-100/50 last:border-none">
+        <tr key={product.id} >
             <td className="px-4 py-4 text-center w-[80px]">
                 <div className="grid grid-cols-2 gap-1.5 w-fit mx-auto">
                     {onDeepDive && (
@@ -468,7 +468,7 @@ const FamilyGridView = ({
     };
 
     return (
-        <tbody className="divide-y divide-gray-100/50">
+        <tbody >
             {familiesWithProducts.families.map(({ family, items }) => {
                 const totalStock = items.reduce((sum, p) => sum + (p.stockLevel || 0), 0);
                 const avgVelocity = items.reduce((sum, p) => sum + (p.averageDailySales || 0), 0) / (items.length || 1);
@@ -520,7 +520,7 @@ const FamilyGridView = ({
                             <ProductRow
                                 key={p.id}
                                 product={p}
-                                themeColor={themeColor}
+                               
                                 onEditAliases={onEditAliases}
                                 onEditTags={onEditTags}
                                 onViewShipments={onViewShipments}
@@ -553,7 +553,7 @@ const FamilyGridView = ({
                         <ProductRow
                             key={p.id}
                             product={p}
-                            themeColor={themeColor}
+                           
                             onEditAliases={onEditAliases}
                             onEditTags={onEditTags}
                             onViewShipments={onViewShipments}
@@ -877,7 +877,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
     return (
         <div className="space-y-4">
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col xl:flex-row items-center justify-between gap-4 relative overflow-hidden backdrop-blur-custom">
+            <div className="sello-glass p-4 rounded-xl flex flex-col xl:flex-row items-center justify-between gap-4 relative overflow-hidden">
                 <div className="flex items-center justify-between w-full xl:w-auto gap-6">
                     <div className="flex items-center gap-2">
                         <List className="w-5 h-5 text-gray-400" />
@@ -917,7 +917,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                     {isExportMenuOpen && createPortal(
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setIsExportMenuOpen(false)}>
                             <div
-                                className="bg-custom-glass-modal backdrop-blur-custom-modal rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-white/20"
+                                className="sello-glass rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200"
                                 onClick={e => e.stopPropagation()}
                             >
                                 <div className="p-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50">
@@ -963,7 +963,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                 </div>
             </div>
 
-            <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg flex flex-col backdrop-blur-custom relative z-20">
+            <div className="sello-glass rounded-xl flex flex-col relative z-20">
                 <div className="p-4 space-y-4">
                     <div className="flex flex-col lg:flex-row gap-4">
                         <div className="flex-1 min-w-[250px]">
@@ -972,7 +972,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                 onTagsChange={(tags) => { setSearchTags(tags); setCurrentPage(1); }}
                                 onInputChange={(val) => { setSearchQuery(val); setCurrentPage(1); }}
                                 placeholder="Search SKUs or Name..."
-                                themeColor={themeColor}
+                               
                             />
                         </div>
 
@@ -983,7 +983,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                 value={brandFilter}
                                 onChange={(e: any) => { setBrandFilter(e.target.value); setCurrentPage(1); }}
                                 options={uniqueBrands}
-                                themeColor={themeColor}
+                               
                             />
                             <FilterDropdown
                                 label="Category"
@@ -991,7 +991,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                 value={mainCatFilter}
                                 onChange={(e: any) => { setMainCatFilter(e.target.value); setCurrentPage(1); }}
                                 options={uniqueMainCats}
-                                themeColor={themeColor}
+                               
                             />
                             <FilterDropdown
                                 label="Subcat"
@@ -999,7 +999,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                 value={subCatFilter}
                                 onChange={(e: any) => { setSubCatFilter(e.target.value); setCurrentPage(1); }}
                                 options={uniqueSubCats}
-                                themeColor={themeColor}
+                               
                             />
                             <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-opacity-50" style={{ '--tw-ring-color': themeColor } as React.CSSProperties}>
                                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
@@ -1048,7 +1048,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                     selected={platformFilters}
                                     onChange={(selected: string[]) => { setPlatformFilters(selected); setCurrentPage(1); }}
                                     options={uniquePlatforms}
-                                    themeColor={themeColor}
+                                   
                                 />
                                 <FilterDropdown
                                     label="Manager"
@@ -1056,7 +1056,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                     value={managerFilter}
                                     onChange={(e: any) => { setManagerFilter(e.target.value); setCurrentPage(1); }}
                                     options={uniqueManagers}
-                                    themeColor={themeColor}
+                                   
                                 />
 
                                 <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden h-[38px]">
@@ -1121,32 +1121,32 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                 </div>
             )}
 
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-separate border-spacing-0">
+            <div className="sello-glass rounded-xl overflow-hidden">
+                <div className="sello-table-scroll">
+                    <table className="sello-table">
                         <thead className="sticky top-0 z-10">
-                            <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-semibold backdrop-blur-sm shadow-sm transition-colors">
-                                <th className="px-4 py-3 font-semibold text-center w-[80px] text-xs uppercase text-gray-600 tracking-wider">Actions</th>
-                                <SortableHeader label="Product" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} className="min-w-[250px]" />
-                                <SortableHeader label="Optimal Ref." sortKey="optimalPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
-                                <SortableHeader label="Last Week" sortKey="oldPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
-                                <SortableHeader label={isContextFiltered ? "Current (Filt.)" : "Current"} sortKey="currentPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
-                                <SortableHeader label="CA Price" sortKey="caPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
-                                <SortableHeader label="Inventory" sortKey="stockLevel" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[120px]" />
-                                <SortableHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[140px]" />
-                                <SortableHeader label="Returns" sortKey="returnRate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
+                            <tr >
+                                <th style={{textAlign:"center",width:80}}>Actions</th>
+                                <SortableHeader label="Product" sortKey="sku" sort={sortConfig} onChange={setSortConfig} style={{minWidth:250}} />
+                                <SortableHeader label="Optimal Ref." sortKey="optimalPrice" sort={sortConfig} onChange={setSortConfig} align="right" style={{width:110}} />
+                                <SortableHeader label="Last Week" sortKey="oldPrice" sort={sortConfig} onChange={setSortConfig} align="right" style={{width:110}} />
+                                <SortableHeader label={isContextFiltered ? "Current (Filt.)" : "Current"} sortKey="currentPrice" sort={sortConfig} onChange={setSortConfig} align="right" style={{width:110}} />
+                                <SortableHeader label="CA Price" sortKey="caPrice" sort={sortConfig} onChange={setSortConfig} align="right" style={{width:100}} />
+                                <SortableHeader label="Inventory" sortKey="stockLevel" sort={sortConfig} onChange={setSortConfig} align="right" style={{width:120}} />
+                                <SortableHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" sort={sortConfig} onChange={setSortConfig} align="right" style={{width:140}} />
+                                <SortableHeader label="Returns" sortKey="returnRate" sort={sortConfig} onChange={setSortConfig} align="right" style={{width:100}} />
                                 <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[120px]" title="All-time ad spend and ACOS. ACOS = Ad Spend / Revenue × 100">
                                     Ad Spend / ACOS
                                 </th>
                             </tr>
                         </thead>
                         {viewMode === 'LIST' ? (
-                            <tbody className="divide-y divide-gray-100/50">
+                            <tbody >
                                 {paginatedProducts.map((product) =>
                                     <ProductRow
                                         key={product.id}
                                         product={product}
-                                        themeColor={themeColor}
+                                       
                                         onEditAliases={onEditAliases}
                                         onEditTags={onEditTags}
                                         onViewShipments={onViewShipments}
@@ -1181,7 +1181,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                             <FamilyGridView
                                 products={filteredProducts}
                                 skuFamilies={skuFamilies}
-                                themeColor={themeColor}
+                               
                                 collapsedFamilies={collapsedFamilies}
                                 setCollapsedFamilies={setCollapsedFamilies}
                                 onEditAliases={onEditAliases}

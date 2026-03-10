@@ -728,7 +728,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
             {/* Builder Section (Top) */}
             {showBuilder && (
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 shrink-0 transition-all">
+                <div className="sello-glass rounded-xl p-4 shrink-0 transition-all">
                     <div className="grid grid-cols-12 gap-6">
                         {/* Source Palette */}
                         <div className="col-span-4 border-r border-gray-100 pr-6 space-y-4">
@@ -935,7 +935,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             <div
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={onDropFilter}
-                className="bg-white border border-gray-200 rounded-lg p-2 flex items-center gap-3 shrink-0 shadow-sm"
+                className="sello-glass rounded-lg p-2 flex items-center gap-3 shrink-0 shadow-sm"
             >
                 <div className="flex items-center gap-2 px-2 border-r border-gray-100">
                     <Filter className="w-4 h-4 text-gray-400" />
@@ -1034,7 +1034,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             </div>
 
             {/* Table Container */}
-            <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col relative p-4">
+            <div className="flex-1 sello-glass rounded-xl overflow-hidden flex flex-col relative p-4">
                 {needsGeneration && !isGenerating && !reportResult && (
                     <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
                         <button
@@ -1067,8 +1067,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             </div>
                         </div>
                     ) : (
-                        <table className="w-full text-left border-collapse min-w-full table-auto">
-                            <thead className="bg-gray-50 text-gray-600 text-[10px] uppercase font-bold sticky top-0 z-20 shadow-sm">
+                        <table className="sello-table min-w-full table-auto border-collapse">
+                            <thead className="sticky top-0 z-20 shadow-sm">
                                 <tr>
                                     {reportResult.rowHeaders.map((rh, idx) => (
                                         <th key={rh} rowSpan={2} className="sticky left-0 z-30 bg-gray-100 border-b border-r border-gray-200 px-4 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: idx * 160 }}>
@@ -1139,16 +1139,16 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                     ))}
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100 bg-white">
+                            <tbody>
                                 {processedData?.map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50 transition-colors group">
+                                    <tr key={idx} className="group">
                                         {row.rowKeyParts.map((part: string, pIdx: number) => {
                                             const dim = reportResult.rowHeaders[pIdx];
                                             const meta = row.metadata[dim];
 
                                             if (dim === 'sku' && meta) {
                                                 return (
-                                                    <td key={pIdx} className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-100 px-4 py-4 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px]" style={{ left: pIdx * 160 }}>
+                                                    <td key={pIdx} className="sticky left-0 z-10 bg-white border-r border-gray-100 px-4 py-4 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px]" style={{ left: pIdx * 160 }}>
                                                         <div className="flex items-center gap-2 truncate">
                                                             <span className="font-bold text-gray-900 font-mono text-xs truncate">{meta.sku}</span>
                                                             <GradeBadge gradeLevel={meta.gradeLevel} />
@@ -1159,7 +1159,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             }
 
                                             return (
-                                                <td key={pIdx} className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-100 px-4 py-4 text-xs font-bold text-gray-900 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: pIdx * 160 }}>
+                                                <td key={pIdx} className="sticky left-0 z-10 bg-white border-r border-gray-100 px-4 py-4 text-xs font-bold text-gray-900 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: pIdx * 160 }}>
                                                     {part}
                                                 </td>
                                             );
