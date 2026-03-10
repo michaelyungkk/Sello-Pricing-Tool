@@ -160,7 +160,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
 
     return (
         <div className="space-y-4 h-full flex flex-col">
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between z-40">
+            <div className="sello-glass p-4 rounded-xl shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between z-40">
                 <div className="flex-1 w-full flex items-center gap-3">
                     <div className="flex-1">
                         <TagSearchInput
@@ -211,23 +211,23 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                     <Download className="w-4 h-4" /> Export CSV
                 </button>
             </div>
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-auto flex-1">
-                <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+            <div className="sello-glass rounded-xl shadow-lg overflow-auto flex-1">
+                <table className="sello-table border-separate border-spacing-0">
                     <thead className="sticky top-0 z-20">
-                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
-                            <th className="px-4 py-3 sticky left-0 z-30 bg-gray-50/80 backdrop-blur-sm min-w-[150px] border-r border-gray-200/50">Product Reference</th>
-                            <th className="px-4 py-3 sticky left-[150px] z-30 bg-gray-50/80 backdrop-blur-sm w-[80px] text-right border-r border-gray-200/50">CA Price</th>
+                        <tr className="">
+                            <th className="px-4 py-3 sticky left-0 z-30 min-w-[150px] border-r border-gray-200/50">Product Reference</th>
+                            <th className="px-4 py-3 sticky left-[150px] z-30 w-[80px] text-right border-r border-gray-200/50">CA Price</th>
                             {platforms.map(p => <th key={p} className="px-4 py-3 text-center min-w-[120px] font-semibold text-gray-600 uppercase tracking-wider">{p}</th>)}
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100/50">
+                    <tbody className="">
                         {paginatedProducts.map(p => (
-                            <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
-                                <td className="px-4 py-4 sticky left-0 bg-white border-r border-gray-100/50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors group-hover:bg-gray-50/50">
+                            <tr key={p.id} className="group">
+                                <td className="px-4 py-4 sticky left-0 bg-white border-r border-gray-100/50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                     <div className="font-mono font-bold text-gray-900 truncate max-w-[134px]">{p.sku}</div>
                                     <div className="text-[10px] text-gray-500 truncate max-w-[134px]">{p.name}</div>
                                 </td>
-                                <td className="px-4 py-4 sticky left-[150px] bg-white text-right font-medium text-purple-600 border-r border-gray-100/50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors group-hover:bg-gray-50/50">
+                                <td className="px-4 py-4 sticky left-[150px] bg-white text-right font-medium text-purple-600 border-r border-gray-100/50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                     {p.caPrice ? `£${p.caPrice.toFixed(2)}` : '-'}
                                 </td>
                                 {platforms.map(platform => {
@@ -288,7 +288,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                     </tbody>
                 </table>
                 {filtered.length > itemsPerPage && (
-                    <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6 sticky bottom-0">
+                    <div className="sello-table-footer sticky bottom-0">
                         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                             <div className="flex items-center gap-4">
                                 <p className="text-sm text-gray-700">
