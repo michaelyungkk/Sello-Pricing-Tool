@@ -992,17 +992,24 @@ export const useAppState = () => {
             const latestDateInDb = latestRes.latestDate;
             const totalInDb = latestRes.totalRows;
 
-            // Step 2: Filter to only new transactions
+            // Step 2: Determine which transactions to push.
+            // Use row count as the primary signal — if local has more rows than DB,
+            // push ALL local transactions (ON CONFLICT DO UPDATE handles deduplication).
+            // Date-only filtering was unreliable: it skipped records with dates before
+            // the DB's latest date that were never pushed (late imports, backdated entries).
             const allTransactions = salesHistory || [];
-            const newTransactions = latestDateInDb
-                ? allTransactions.filter(tx => {
-                    const txDate = (tx.date || '').split('T')[0];
-                    return txDate >= latestDateInDb;
-                })
-                : allTransactions;
+            const localTotal = allTransactions.length;
+            const newTransactions = (totalInDb === 0 || localTotal > totalInDb)
+                ? allTransactions
+                : latestDateInDb
+                    ? allTransactions.filter(tx => {
+                        const txDate = (tx.date || '').split('T')[0];
+                        return txDate >= latestDateInDb;
+                    })
+                    : allTransactions;
 
             console.log(`[push] DB has ${totalInDb} rows up to ${latestDateInDb || 'none'}`);
-            console.log(`[push] local total: ${allTransactions.length}, sending: ${newTransactions.length}`);
+            console.log(`[push] local total: ${localTotal}, sending: ${newTransactions.length} (${localTotal > totalInDb ? 'full sync — local ahead of DB' : 'incremental'})`);
 
             // Step 3: Calculate total chunks for progress
             const CHUNK_SIZE = 50;
