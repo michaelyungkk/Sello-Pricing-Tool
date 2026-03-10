@@ -297,10 +297,10 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex justify-center gap-1.5 flex-wrap min-w-[100px]">
-                          {isRevWarning && <span className=style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#fee2e2",color:"#991b1b",border:"1px solid #fca5a5"}}>Drop</span>}
-                          {isMarginCritical && <span className=style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a"}}>Margin</span>}
-                          {isTacosHigh && <span className=style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#ede9fe",color:"#6d28d9",border:"1px solid #c4b5fd"}}>Ads</span>}
-                          {row.current.unitsSold === 0 && <span className=style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#f3f4f6",color:"#6b7280",border:"1px solid #e5e7eb"}}>Dormant</span>}
+                          {isRevWarning && <span style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#fee2e2",color:"#991b1b",border:"1px solid #fca5a5"}}>Drop</span>}
+                          {isMarginCritical && <span style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a"}}>Margin</span>}
+                          {isTacosHigh && <span style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#ede9fe",color:"#6d28d9",border:"1px solid #c4b5fd"}}>Ads</span>}
+                          {row.current.unitsSold === 0 && <span style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#f3f4f6",color:"#6b7280",border:"1px solid #e5e7eb"}}>Dormant</span>}
                         </div>
                       </td>
                     </tr>
