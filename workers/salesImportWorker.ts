@@ -3,6 +3,13 @@ import { Product, PricingRules, HistoryPayload } from '../types';
 import { asDateKeyNaive } from '../services/dateUtils';
 import { getCanonicalSku } from '../services/skuNormalization';
 
+// Parse a YYYY-MM-DD string as LOCAL midnight (not UTC) so date comparisons
+// are not shifted by the Melbourne UTC+11 offset.
+function dateKeyToLocal(key: string): Date {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
+
 interface ColumnMapping {
     sku: string;
     qty: string;
@@ -89,8 +96,8 @@ self.onmessage = (e: MessageEvent) => {
         const discoveredPlatforms = new Set<string>();
         let orderIdsDetectedCount = 0;
 
-        let minDate = new Date();
-        let maxDate = new Date(0);
+        let minDate = new Date(9999, 11, 31); // far future
+        let maxDate = new Date(0);            // far past
         let hasDates = false;
 
         const shipmentLogs: any[] = [];
@@ -230,7 +237,13 @@ self.onmessage = (e: MessageEvent) => {
 
             if (catIdx !== -1 && row[catIdx]) item.category = String(row[catIdx]).trim();
 
-            const dLog = (dateIdx !== -1 && row[dateIdx]) ? new Date(row[dateIdx]) : new Date();
+            const dLog = (() => {
+                if (dateIdx !== -1 && row[dateIdx]) {
+                    const dk = asDateKeyNaive(row[dateIdx]);
+                    if (dk) return dateKeyToLocal(dk);
+                }
+                return new Date();
+            })();
             if (qty === 1 && serviceName && postageCost > 0) {
                 shipmentLogs.push({
                     id: Math.random().toString(36).substr(2, 9),
@@ -252,7 +265,7 @@ self.onmessage = (e: MessageEvent) => {
 
             if (dateKey) {
                 hasDates = true;
-                const d = new Date(dateKey);
+                const d = dateKeyToLocal(dateKey);
                 if (d < minDate) minDate = d;
                 if (d > maxDate) maxDate = d;
 
