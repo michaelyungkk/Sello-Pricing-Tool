@@ -55,9 +55,15 @@ export default async (req: Request) => {
         }
 
         const rows = transactions.map((tx: any) => {
+            // Composite key must match salesImportWorker.ts dailyKey exactly:
+            // sku|date|platform|orderId  (or sku|date|platform if no orderId)
+            // This ensures DB dedup aligns with how records are bucketed in memory.
+            // Old key (sku|orderId) was missing date+platform, causing collisions.
+            const date = (tx.date || '').split('T')[0];
+            const platform = tx.platform || 'General';
             const dedupKey = tx.orderId
-                ? `${tx.sku}|${tx.orderId}`
-                : `${tx.sku}|${(tx.date || '').split('T')[0]}|${tx.platform || 'General'}`;
+                ? `${tx.sku}|${date}|${platform}|${tx.orderId}`
+                : `${tx.sku}|${date}|${platform}`;
             return {
                 id: tx.id || dedupKey,
                 sku: tx.sku,
