@@ -338,7 +338,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                 <div className="p-6 flex-1 overflow-y-auto relative">
                     {isProcessing && step !== 'preview' && (
-                        <div className="absolute inset-0 z-20 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
+                        <div className="absolute inset-0 z-30 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                             <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
                             <h3 className="text-xl font-bold text-gray-900">Processing Data</h3>
                             <p className="text-gray-500 text-center mt-2">
@@ -348,7 +348,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     )}
 
                     {isResetConfirmOpen && (
-                        <div className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
+                        <div className="absolute inset-0 z-20 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                             <div className="bg-red-50 p-4 rounded-full mb-6">
                                 <AlertCircle className="w-12 h-12 text-red-600" />
                             </div>
@@ -384,18 +384,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 onClick={() => fileInputRef.current?.click()}
                             >
                                 <input ref={fileInputRef} type="file" className="hidden" accept=".csv, .xlsx" onChange={handleFileChange} />
-                                {isProcessing ? (
-                                    <div className="flex flex-col items-center animate-in fade-in zoom-in">
-                                        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-3" />
-                                        <p className="font-medium text-indigo-600">Auto-detecting Columns...</p>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <Upload className="w-10 h-10 text-gray-400 mb-4" />
-                                        <p className="font-medium text-gray-700">Click to upload Transaction Report</p>
-                                        <p className="text-sm text-gray-500 mt-1">Supports CSV or Excel from ERP</p>
-                                    </>
-                                )}
+                                <Upload className="w-10 h-10 text-gray-400 mb-4" />
+                                <p className="font-medium text-gray-700">Click to upload Transaction Report</p>
+                                <p className="text-sm text-gray-500 mt-1">Supports CSV or Excel from ERP</p>
                                 {error && <p className="text-red-500 mt-4 text-sm flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {error}</p>}
                             </div>
                         </div>
