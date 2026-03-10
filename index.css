@@ -1,0 +1,528 @@
+/* ═══════════════════════════════════════════════════════
+   SELLO v4 DESIGN SYSTEM
+   Single source of truth for all design tokens.
+   All components reference these variables.
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Glass surfaces ── */
+  --glass-bg:        rgba(255, 255, 255, 0.88);
+  --glass-border:    rgba(255, 255, 255, 0.50);
+  --glass-blur:      blur(14px);
+  --glass-head-bg:   rgba(249, 250, 251, 0.80);
+  --glass-row-even:  rgba(249, 250, 251, 0.28);
+  --glass-row-hover: rgba(243, 244, 246, 0.65);
+  --glass-divider:   rgba(229, 231, 235, 0.55);
+
+  /* ── Theme ── */
+  --theme:    #4f46e5;
+  --theme-10: rgba(79, 70, 229, 0.10);
+  --theme-20: rgba(79, 70, 229, 0.20);
+
+  /* ── Column group tints (header darker / cell lighter) ── */
+  --col-blue:    rgba(219, 234, 254, 0.16);   /* td data cells  */
+  --col-green:   rgba(209, 250, 229, 0.16);   /* td data cells  */
+  --col-red:     rgba(254, 226, 226, 0.13);   /* td data cells  */
+  --col-blue-h:  rgba(219, 234, 254, 0.38);   /* th headers     */
+  --col-green-h: rgba(209, 250, 229, 0.38);   /* th headers     */
+  --col-red-h:   rgba(254, 226, 226, 0.32);   /* th headers     */
+
+  /* ── Metric colours ──
+     Rule: RED for negatives only. PURPLE for CA price only.
+     Everything else dark gray — column tint carries meaning.
+  ── */
+  --c-neg:  #dc2626;   /* red-600   — negative values ONLY     */
+  --c-ca:   #7c3aed;   /* purple-600 — CA price ONLY           */
+  --c-num:  #374151;   /* gray-700  — all other numeric values */
+  --c-dim:  #9ca3af;   /* gray-400  — secondary / empty        */
+
+  /* ── Shadows / shape ── */
+  --shadow: 0 4px 28px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  --radius: 14px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   GLASS SURFACE
+   ═══════════════════════════════════════════════════════ */
+.sello-glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TABLE SHELL
+   ═══════════════════════════════════════════════════════ */
+
+/* Outer container (glass, rounded, shadow) */
+.sello-table-wrap {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* Scrollable viewport */
+.sello-table-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+/* Base table */
+.sello-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ── thead ── */
+.sello-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.sello-table thead tr {
+  background: var(--glass-head-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-divider);
+}
+
+.sello-table th {
+  padding: 9px 14px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--c-dim);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s, color 0.1s;
+  text-align: left;
+}
+
+.sello-table th:hover {
+  color: var(--theme);
+  background: rgba(79, 70, 229, 0.04);
+}
+
+.sello-table th.sorted {
+  color: var(--theme);
+  background: var(--theme-10);
+}
+
+.sello-table th.r { text-align: right; }
+.sello-table th.c { text-align: center; }
+
+/* Column group tint — headers (darker) */
+.sello-table th.col-blue  { background: var(--col-blue-h); }
+.sello-table th.col-green { background: var(--col-green-h); }
+.sello-table th.col-red   { background: var(--col-red-h); }
+
+.sello-table th.col-blue:hover  { background: rgba(219, 234, 254, 0.52); }
+.sello-table th.col-green:hover { background: rgba(209, 250, 229, 0.52); }
+.sello-table th.col-red:hover   { background: rgba(254, 226, 226, 0.44); }
+
+.sello-table th.col-blue.sorted  { background: rgba(219, 234, 254, 0.60); color: #1d4ed8; }
+.sello-table th.col-green.sorted { background: rgba(209, 250, 229, 0.60); color: #065f46; }
+.sello-table th.col-red.sorted   { background: rgba(254, 226, 226, 0.55); color: #991b1b; }
+
+/* CA price header */
+.sello-table th.col-ca { color: var(--c-ca); }
+.sello-table th.col-ca:hover { background: rgba(124, 58, 237, 0.05); }
+
+/* Sticky product column */
+.sello-table th.pin {
+  position: sticky;
+  left: 0;
+  z-index: 25;
+  background: var(--glass-head-bg);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: 2px 0 6px -2px rgba(0, 0, 0, 0.06);
+}
+
+/* ── tbody ── */
+.sello-table tbody tr {
+  border-bottom: 1px solid var(--glass-divider);
+  transition: background 0.08s;
+}
+
+.sello-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.sello-table tbody tr:nth-child(even) {
+  background: var(--glass-row-even);
+}
+
+.sello-table tbody tr:hover {
+  background: var(--glass-row-hover) !important;
+}
+
+/* Row state overrides */
+.sello-table tbody tr.row-warn { background: rgba(251, 191, 36, 0.06) !important; }
+.sello-table tbody tr.row-neg  { background: rgba(254, 226, 226, 0.10) !important; }
+.sello-table tbody tr.row-sel  { background: rgba(79, 70, 229, 0.05) !important; }
+
+/* ── td ── */
+.sello-table td {
+  padding: 9px 14px;
+  color: #374151;
+  white-space: nowrap;
+  vertical-align: middle;
+  font-size: 12px;
+}
+
+.sello-table td.r { text-align: right; }
+.sello-table td.c { text-align: center; }
+
+/* Column group tint — cells (lighter) */
+.sello-table td.col-blue  { background: var(--col-blue); }
+.sello-table td.col-green { background: var(--col-green); }
+.sello-table td.col-red   { background: var(--col-red); }
+
+/* Sticky product column */
+.sello-table td.pin {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: inherit;
+  box-shadow: 2px 0 6px -2px rgba(0, 0, 0, 0.06);
+}
+
+/* ═══════════════════════════════════════════════════════
+   METRIC VALUE — all share identical font base
+   Only colour differs.
+   ═══════════════════════════════════════════════════════ */
+.v-num,
+.v-neg,
+.v-ca,
+.v-dim {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.v-num { color: var(--c-num); }          /* all values default    */
+.v-neg { color: var(--c-neg); }          /* negative ONLY — red   */
+.v-ca  { color: var(--c-ca); }           /* CA price ONLY — purple*/
+.v-dim { color: var(--c-dim); font-weight: 400; } /* empty / dash  */
+
+/* Important value (grand total row etc.) */
+.v-bold { font-weight: 800 !important; }
+
+/* Tooltip underline hint */
+.v-hint {
+  border-bottom: 1px dotted rgba(0, 0, 0, 0.18);
+  cursor: help;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FILTER BAR
+   ═══════════════════════════════════════════════════════ */
+.sello-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  border-bottom: 1px solid var(--glass-divider);
+}
+
+/* Search input */
+.sello-search-wrap {
+  position: relative;
+}
+
+.sello-search-wrap svg {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 13px;
+  height: 13px;
+  color: var(--c-dim);
+  pointer-events: none;
+}
+
+.sello-search-input {
+  padding: 5px 11px 5px 29px;
+  font-size: 11px;
+  font-family: 'Inter', sans-serif;
+  border: 1px solid rgba(209, 213, 219, 0.7);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.65);
+  color: #374151;
+  width: 168px;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.sello-search-input:focus {
+  border-color: var(--theme);
+  box-shadow: 0 0 0 3px var(--theme-10);
+}
+
+/* Pill group */
+.sello-pill-group {
+  display: flex;
+  background: rgba(243, 244, 246, 0.85);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid rgba(229, 231, 235, 0.5);
+}
+
+.sello-pill {
+  padding: 4px 11px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.12s;
+  background: transparent;
+  color: #6b7280;
+}
+
+.sello-pill.active {
+  background: white;
+  color: var(--theme);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.10);
+}
+
+/* Toggle / icon buttons */
+.sello-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(209, 213, 219, 0.8);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  background: white;
+  color: #6b7280;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+
+.sello-btn:hover {
+  background: #f9fafb;
+}
+
+.sello-btn.active {
+  background: rgba(243, 244, 246, 0.9);
+  color: #374151;
+  border-color: transparent;
+}
+
+.sello-btn.primary {
+  background: var(--theme-10);
+  color: var(--theme);
+  border-color: var(--theme-20);
+}
+
+.sello-btn.primary:hover {
+  background: var(--theme-20);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TABLE FOOTER (summary bar)
+   ═══════════════════════════════════════════════════════ */
+.sello-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--glass-divider);
+  background: var(--glass-head-bg);
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.sello-table-footer .summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sello-table-footer .summary-divider {
+  color: var(--c-dim);
+}
+
+.sello-table-footer strong {
+  color: #111827;
+  font-weight: 700;
+}
+
+/* Pagination */
+.sello-pagination {
+  display: flex;
+  gap: 3px;
+}
+
+.sello-page-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  color: #6b7280;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sello-page-btn:hover {
+  background: var(--theme-10);
+  color: var(--theme);
+  border-color: var(--theme-20);
+}
+
+.sello-page-btn.active {
+  background: var(--theme);
+  color: white;
+  border-color: var(--theme);
+}
+
+.sello-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ═══════════════════════════════════════════════════════
+   BADGE SYSTEM
+   ═══════════════════════════════════════════════════════ */
+.sello-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  line-height: 16px;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Grade badges */
+.badge-g12  { background: rgba(236, 253, 245, 0.9); color: #047857; border-color: rgba(167, 243, 208, 0.8); }
+.badge-g3   { background: rgba(240, 249, 255, 0.9); color: #0369a1; border-color: rgba(186, 230, 253, 0.8); }
+.badge-g4   { background: rgba(255, 251, 235, 0.9); color: #b45309; border-color: rgba(253, 230, 138, 0.8); }
+.badge-g5   { background: rgba(255, 241, 242, 0.9); color: #be123c; border-color: rgba(254, 205, 211, 0.8); }
+
+/* Status badges */
+.badge-green  { background: rgba(236, 253, 245, 0.9); color: #047857; border-color: rgba(167, 243, 208, 0.7); }
+.badge-red    { background: rgba(254, 242, 242, 0.9); color: #b91c1c; border-color: rgba(254, 202, 202, 0.7); }
+.badge-amber  { background: rgba(255, 251, 235, 0.9); color: #b45309; border-color: rgba(253, 230, 138, 0.7); }
+.badge-blue   { background: rgba(219, 234, 254, 0.9); color: #1d4ed8; border-color: rgba(147, 197, 253, 0.7); }
+.badge-indigo { background: var(--theme-10); color: var(--theme); border-color: var(--theme-20); }
+.badge-gray   { background: rgba(249, 250, 251, 0.9); color: #6b7280; border-color: rgba(229, 231, 235, 0.7); }
+.badge-purple { background: rgba(245, 243, 255, 0.9); color: #7c3aed; border-color: rgba(221, 214, 254, 0.7); }
+.badge-orange { background: rgba(255, 237, 213, 0.9); color: #c2410c; border-color: rgba(253, 186, 116, 0.7); }
+
+/* Action badges */
+.badge-increase { background: rgba(236, 253, 245, 0.9); color: #047857; border-color: rgba(167, 243, 208, 0.7); }
+.badge-decrease { background: rgba(254, 242, 242, 0.9); color: #b91c1c; border-color: rgba(254, 202, 202, 0.7); }
+.badge-maintain { background: rgba(249, 250, 251, 0.9); color: #9ca3af; border-color: rgba(229, 231, 235, 0.7); }
+
+/* Runway badges */
+.badge-run-ok   { background: rgba(236, 253, 245, 0.9); color: #047857; border-color: rgba(167, 243, 208, 0.7); }
+.badge-run-warn { background: rgba(255, 251, 235, 0.9); color: #b45309; border-color: rgba(253, 230, 138, 0.7); }
+.badge-run-crit { background: rgba(254, 242, 242, 0.9); color: #b91c1c; border-color: rgba(254, 202, 202, 0.7); }
+.badge-run-over { background: rgba(255, 247, 237, 0.9); color: #c2410c; border-color: rgba(253, 186, 116, 0.7); }
+
+/* Platform badges */
+.badge-amazon { background: rgba(254, 243, 199, 0.9); color: #92400e; border-color: rgba(252, 211, 77, 0.7); }
+.badge-ebay   { background: rgba(219, 234, 254, 0.9); color: #1e40af; border-color: rgba(147, 197, 253, 0.7); }
+.badge-etsy   { background: rgba(255, 237, 213, 0.9); color: #9a3412; border-color: rgba(253, 186, 116, 0.7); }
+
+/* ═══════════════════════════════════════════════════════
+   INLINE TABLE ACTION BUTTONS
+   ═══════════════════════════════════════════════════════ */
+.sello-row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  border: 1px solid rgba(209, 213, 219, 0.8);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  background: white;
+  color: #6b7280;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.12s;
+}
+
+.sello-row-btn:hover {
+  background: var(--theme-10);
+  color: var(--theme);
+  border-color: var(--theme-20);
+}
+
+.sello-row-btn.danger:hover {
+  background: rgba(254, 242, 242, 0.9);
+  color: #b91c1c;
+  border-color: rgba(254, 202, 202, 0.7);
+}
+
+/* Deep-dive icon button */
+.sello-dd-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  border: 1px solid rgba(209, 213, 219, 0.7);
+  background: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.12s;
+  color: var(--c-dim);
+}
+
+.sello-dd-btn:hover {
+  background: var(--theme-10);
+  color: var(--theme);
+  border-color: var(--theme-20);
+}
+
+/* ═══════════════════════════════════════════════════════
+   PRICE CHANGE ARROWS
+   ═══════════════════════════════════════════════════════ */
+.arr-up { color: #374151; }   /* increase — dark, neutral */
+.arr-dn { color: var(--c-neg); }  /* decrease — red */
+.arr-nt { color: #e5e7eb; }   /* no change — light gray */
