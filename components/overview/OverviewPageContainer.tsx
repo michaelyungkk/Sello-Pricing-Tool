@@ -548,8 +548,8 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                             <AlertCard title="Prevent Stockout" count={alerts.stock.length} icon={Ship} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Only Items with Arriving Stock" />
                             <AlertCard title="Clear Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc={`>£200 Value, 0 Sales`} />
                         </div>
-                        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass flex flex-col min-h-[400px]">
-                            <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
+                        <div className="sello-glass rounded-xl shadow-lg flex flex-col min-h-[400px]">
+                            <div className="p-4 border-b border-white/40 bg-gray-50/50 flex justify-between items-center">
                                 <div className="flex items-center gap-4">
                                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
                                         {selectedAlert === 'margin' ? (
@@ -570,28 +570,28 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                 </div>
                                 <button onClick={() => { }} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"><Download className="w-4 h-4" /></button>
                             </div>
-                            <div className="flex-1 overflow-auto">
-                                <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                            <div className="flex-1 sello-table-scroll">
+                                <table className="sello-table border-separate border-spacing-0">
                                     <thead className="sticky top-0 z-20">
                                         {selectedAlert === 'margin' ? (
-                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                        <tr className="">
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="text-purple-600" />
-                                                <SortableHeader label="Actual Margin" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Recent Qty" sortKey="qtySold" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} tint="ca" align="right" />
+                                                <SortableHeader label="Actual Margin" sortKey="margin" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Recent Qty" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} align="right" />
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Cause</th>
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">Recommend</th>
                                             </tr>
                                         ) : selectedAlert === 'velocity' ? (
-                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                        <tr className="">
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <SortableHeader label="Drop #" sortKey="volumeDrop" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Drop %" sortKey="volumeDrop" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Period Qty" sortKey="qtySold" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <SortableHeader label="Drop #" sortKey="volumeDrop" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Drop %" sortKey="volumeDrop" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Period Qty" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right group/header relative">
                                                     <div className="flex items-center justify-end gap-1 cursor-help">
                                                         Baseline Qty
@@ -606,18 +606,18 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                         </div>
                                                     </div>
                                                 </th>
-                                                <SortableHeader label="Price" sortKey="price" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                <SortableHeader label="Price" sortKey="price" sort={sort} onChange={setSort} align="right" />
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Hist. Price</th>
-                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Price Adj." sortKey="priceChanges" sort={sort} onChange={setSort} themeColor={themeColor} align="center" />
+                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Price Adj." sortKey="priceChanges" sort={sort} onChange={setSort} align="center" />
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">CTA / Justification</th>
                                             </tr>
                                         ) : selectedAlert === 'stock' ? (
-                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                        <tr className="">
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <SortableHeader label="Runway (Days)" sortKey="runway" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Lead Time" sortKey="leadTime" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <SortableHeader label="Runway (Days)" sortKey="runway" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Lead Time" sortKey="leadTime" sort={sort} onChange={setSort} align="right" />
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right group/header relative">
                                                     <div className="flex items-center justify-end gap-1 cursor-help">
                                                         Global Velocity
@@ -632,32 +632,32 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                         </div>
                                                     </div>
                                                 </th>
-                                                <SortableHeader label="Stock (Min 2)" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                <SortableHeader label="Stock (Min 2)" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">Action / Continuity Strategy</th>
                                             </tr>
                                         ) : selectedAlert === 'dead' ? (
-                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                        <tr className="">
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <SortableHeader label="Inventory Units" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Inventory Value" sortKey="inventoryValue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Days Since Sale" sortKey="daysSinceLastSale" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <SortableHeader label="Inventory Units" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Inventory Value" sortKey="inventoryValue" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Days Since Sale" sortKey="daysSinceLastSale" sort={sort} onChange={setSort} align="right" />
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Median Demand</th>
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">Action</th>
                                             </tr>
                                         ) : (
-                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                                        <tr className="">
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Action</th>
-                                                <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
+                                                <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} />
                                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Signals</th>
-                                                <SortableHeader label="Price (Inc VAT)" sortKey="price" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Sales" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Net Margin %" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                <SortableHeader label="Price (Inc VAT)" sortKey="price" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Sales" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Net Margin %" sortKey="margin" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
                                             </tr>
                                         )}
                                     </thead>
-                                    <tbody className="divide-y divide-gray-100/50">
+                                    <tbody>
                                         {paginatedData.map(p => {
                                             if (selectedAlert === 'velocity') {
                                                 const priceDiff = p.displayPrice - p.historicalMedianPrice;
@@ -677,7 +677,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                 }
 
                                                 return (
-                                                    <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                                    <tr key={p.id} className="group">
                                                         <td className="p-4 text-center">
                                                             <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
                                                                 <Search className="w-4 h-4" />
@@ -757,7 +757,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                             if (selectedAlert === 'stock') {
                                                 const isArrivalDriven = p.daysToArrival < 999;
                                                 return (
-                                                    <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                                    <tr key={p.id} className="group">
                                                         <td className="p-4 text-center">
                                                             <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
                                                                 <Search className="w-4 h-4" />
@@ -808,7 +808,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                                 else if (p.gradeLevel && p.gradeLevel >= 4) cta = "Bundle";
 
                                                 return (
-                                                    <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                                    <tr key={p.id} className="group">
                                                         <td className="p-4 text-center">
                                                             <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
                                                                 <Search className="w-4 h-4" />
@@ -841,7 +841,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                             }
 
                                             return (
-                                                <tr key={p.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
+                                                <tr key={p.id} className="group">
                                                     {selectedAlert === 'margin' ? (
                                                         <>
                                                             <td className="p-4 text-center">
@@ -940,13 +940,13 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                                 desc="Total Advertising Cost of Sales"
                             />
                         </div>
-                        <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[500px]">
+                        <div className="sello-glass p-5 rounded-xl shadow-sm flex flex-col h-[500px]">
                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-600" /> Financial Performance</h3>
                             <div className="flex-1 min-0"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={financialStats.chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" /><XAxis dataKey="day" tick={{ fontSize: 10 }} /><YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Revenue', angle: -90, position: 'insideLeft', style: { fill: '#93c5fd', fontWeight: 'bold', fontSize: 12 } }} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={(val) => `£${val.toLocaleString()}`} label={{ value: 'Profit & Ads', angle: 90, position: 'insideRight', style: { fill: '#8b5cf6', fontWeight: 'bold', fontSize: 12 } }} /><RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} formatter={(value: number) => '£' + value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /><Legend wrapperStyle={{ fontSize: '12px' }} /><Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#93c5fd" barSize={20} radius={[4, 4, 0, 0]} /><Line yAxisId="right" type="monotone" dataKey="ads" name="Ad Spend" stroke="#8b5cf6" strokeWidth={2} dot={false} /><Line yAxisId="right" type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={2} dot={false} /></ComposedChart></ResponsiveContainer></div>
                         </div>
                     </div>
                 )}
-                {activeTab === 'map' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope.length === 1 ? platformScope[0] : 'All'} themeColor={themeColor} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
+                {activeTab === 'map' && (<div className="animate-in fade-in slide-in-from-bottom-4 duration-300 h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope.length === 1 ? platformScope[0] : 'All'} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
                 {activeTab === 'categories' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-4 pb-24 h-auto">
 
@@ -970,7 +970,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
                             products={products}
                             priceHistoryMap={priceHistoryMap}
                             dateRange={dateRange}
-                            themeColor={themeColor}
+                           
                             refundHistory={refundHistory}
                             deductRefunds={deductRefunds}
                         />
@@ -979,7 +979,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
             </div>
 
             {totalPages > 1 && activeTab === 'actions' && (
-                <div className="bg-white/50 px-4 py-3 border-t border-gray-100 flex items-center justify-between mt-auto">
+                <div className="sello-table-footer mt-auto">
                     <p className="text-xs text-gray-500">Showing page {currentPage} of {totalPages}</p>
                     <div className="flex gap-1">
                         <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 border rounded disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
