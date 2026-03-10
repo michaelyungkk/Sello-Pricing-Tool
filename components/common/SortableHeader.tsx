@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react';
 import { SortState, toggleSort } from '../../utils/tableSort';
@@ -9,7 +8,10 @@ interface SortableHeaderProps<K extends string> {
   sort: SortState<K>;
   onChange: (nextSort: SortState<K>) => void;
   align?: 'left' | 'right' | 'center';
+  /** v4 column tint: 'blue' | 'green' | 'red' | 'ca' */
+  tint?: 'blue' | 'green' | 'red' | 'ca';
   className?: string;
+  /** @deprecated use tint instead */
   themeColor?: string;
 }
 
@@ -19,39 +21,54 @@ export function SortableHeader<K extends string>({
   sort,
   onChange,
   align = 'left',
+  tint,
   className = '',
-  themeColor = '#6366f1'
 }: SortableHeaderProps<K>) {
   const isActive = sort?.key === sortKey;
   const dir = sort?.dir;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const next = toggleSort(sort, sortKey);
-    onChange(next);
+    onChange(toggleSort(sort, sortKey));
   };
+
+  const tintClass = tint
+    ? tint === 'ca'
+      ? 'col-ca'
+      : `col-${tint}`
+    : '';
+
+  const alignClass = align === 'right' ? 'r' : align === 'center' ? 'c' : '';
+  const sortedClass = isActive ? 'sorted' : '';
 
   return (
     <th
-      className={`px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100/50 transition-colors text-${align} ${className}`}
+      className={`${alignClass} ${tintClass} ${sortedClass} ${className}`.trim()}
       onClick={handleClick}
       role="columnheader"
       aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-      style={isActive ? { backgroundColor: `${themeColor}12` } : {}}
     >
-      <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
+      <div
+        className={`flex items-center gap-1 ${
+          align === 'right'
+            ? 'justify-end'
+            : align === 'center'
+            ? 'justify-center'
+            : 'justify-start'
+        }`}
+      >
         <span>{label}</span>
-        <div className="flex flex-col flex-shrink-0">
+        <span className="flex-shrink-0 opacity-40" style={{ lineHeight: 0 }}>
           {isActive ? (
             dir === 'asc' ? (
-              <ChevronUp className="w-3 h-3" style={{ color: themeColor }} />
+              <ChevronUp style={{ width: 10, height: 10, opacity: 1, color: 'var(--theme)' }} />
             ) : (
-              <ChevronDown className="w-3 h-3" style={{ color: themeColor }} />
+              <ChevronDown style={{ width: 10, height: 10, opacity: 1, color: 'var(--theme)' }} />
             )
           ) : (
-            <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-50" />
+            <ArrowUpDown style={{ width: 10, height: 10 }} />
           )}
-        </div>
+        </span>
       </div>
     </th>
   );
