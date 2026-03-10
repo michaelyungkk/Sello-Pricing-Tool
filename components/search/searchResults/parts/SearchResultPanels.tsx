@@ -39,7 +39,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
     
     if (data.results.length === 0) {
       return (
-        <div className="text-center py-20 bg-custom-glass rounded-xl border border-custom-glass">
+        <div className="sello-glass rounded-xl text-center py-20">
           <h3 className="text-lg font-bold text-gray-800">No Results Found</h3>
           <p className="text-gray-500 mt-2">Your query did not return any results. Try adjusting the filters above.</p>
         </div>
@@ -92,7 +92,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
             const productForGroup = groupBy === 'sku' ? liveProductMap.get(group.key) : null;
 
             return (
-              <div key={group.key} className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+              <div key={group.key} className="sello-glass rounded-xl overflow-hidden">
                 <div
                   className={`w-full p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors cursor-pointer select-text ${expandedGroup === group.key ? 'bg-gray-50/30' : ''}`}
                   onClick={(e) => handleGroupToggle(group.key, e)}
@@ -125,14 +125,14 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                         {context.isTrend ? (
                             <div className="flex flex-col items-end">
                                 <span className="font-bold text-gray-900 text-sm">{formatNumber(group.totalQty)}</span>
-                                <div className={`flex items-center gap-1 text-xs font-bold ${volDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                <div className="v-num" style={{color:volDiff<0?'#dc2626':'#059669',display:'flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700}}>
                                     {volDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
                                     {volDiff > 0 ? '+' : ''}{formatNumber(volDiff)} ({volDiffPct.toFixed(1)}%)
                                 </div>
                             </div>
                         ) : (
                             <div className="flex flex-col items-end">
-                                <div className={`font-bold text-lg ${context.isVolume ? 'text-indigo-700' : 'text-gray-800'}`}>
+                                <div className="v-num v-bold" style={{fontSize:18,color:context.isVolume?'#4f46e5':'#111827'}}>
                                     {formatNumber(group.totalQty)}
                                 </div>
                                 {volumeBadge}
@@ -149,7 +149,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                         {context.isTrend ? (
                             <div className="flex flex-col items-end">
                                 <span className="font-bold text-gray-900 text-sm">{formatMoney(group.totalRevenue, 0)}</span>
-                                <div className={`flex items-center gap-1 text-xs font-bold ${revDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                <div className="v-num" style={{color:revDiff<0?'#dc2626':'#059669',display:'flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700}}>
                                     {revDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
                                     {revDiff > 0 ? '+' : '-'}{formatMoney(Math.abs(revDiff), 0)} ({revDiffPct.toFixed(1)}%)
                                 </div>
@@ -399,35 +399,35 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                             {isSubExpanded && (
                                                 <div className="px-6 pb-4 animate-in fade-in slide-in-from-top-1">
                                                     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
-                                                        <table className="w-full text-xs text-left">
-                                                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
+                                                        <table className="sello-table">
+                                                            <thead >
                                                                 {context.isReturn ? (
                                                                     <tr>
-                                                                        <th className="p-2 pl-3">Date</th>
-                                                                        <th className="p-2 text-right">Refund Amount</th>
-                                                                        <th className="p-2 text-right">Qty</th>
-                                                                        <th className="p-2">Reason / Note</th>
-                                                                        <th className="p-2 text-right">Platform</th>
+                                                                        <th>Date</th>
+                                                                        <th className="r">Refund Amount</th>
+                                                                        <th className="r">Qty</th>
+                                                                        <th>Reason / Note</th>
+                                                                        <th className="r">Platform</th>
                                                                     </tr>
                                                                 ) : (
                                                                     <tr>
-                                                                        <th className="p-2 pl-3">Date</th>
-                                                                        <th className="p-2 text-right">Unit Price</th>
+                                                                        <th>Date</th>
+                                                                        <th className="r col-blue">Unit Price</th>
                                                                         <th className="p-2 text-right">
                                                                             {context.isInventory || context.isAged ? 'Velocity' : 'Qty'}
                                                                         </th>
                                                                         <th className="p-2 text-right">
                                                                             {context.isInventory || context.isAged ? 'Est. Daily Rev' : 'Revenue'}
                                                                         </th>
-                                                                        {(context.isAd || context.isMargin || context.isOrganic) && <th className="p-2 text-right">Ad Spend</th>}
-                                                                        {context.isAd && <th className="p-2 text-right">TACoS</th>}
-                                                                        {context.isOrganic && <th className="p-2 text-right">Organic % (Ads)</th>}
-                                                                        {(context.isInventory || context.isAged) && <th className="p-2 text-right">Stock</th>}
-                                                                        {context.isAged && <th className="p-2 text-right">Aged Qty</th>}
-                                                                        {context.isAged && <th className="p-2 text-right">Aged %</th>}
-                                                                        {!context.isAged && context.isInventory && <th className="p-2 text-right">Stock Cover</th>}
-                                                                        {context.isTrend && <th className="p-2 text-right">Trend</th>}
-                                                                        {context.isPostcode && <th className="p-2 text-right">Postcode</th>}
+                                                                        {(context.isAd || context.isMargin || context.isOrganic) && <th className="r">Ad Spend</th>}
+                                                                        {context.isAd && <th className="r">TACoS</th>}
+                                                                        {context.isOrganic && <th className="r">Organic % (Ads)</th>}
+                                                                        {(context.isInventory || context.isAged) && <th className="r">Stock</th>}
+                                                                        {context.isAged && <th className="r">Aged Qty</th>}
+                                                                        {context.isAged && <th className="r">Aged %</th>}
+                                                                        {!context.isAged && context.isInventory && <th className="r">Stock Cover</th>}
+                                                                        {context.isTrend && <th className="r">Trend</th>}
+                                                                        {context.isPostcode && <th className="r">Postcode</th>}
                                                                         <th className="p-2 text-right">Profit</th>
                                                                         <th className="p-2 text-right">Margin %</th>
                                                                         <th className="p-2 text-right">Share %</th>
