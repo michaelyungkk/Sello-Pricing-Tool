@@ -428,7 +428,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             {activeSection === 'nomination' ? (
                 <div className="space-y-6">
                     {/* Meta Editor Card */}
-                    <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm">
+                    <div className="sello-glass p-6 rounded-xl">
                         <div className="flex justify-between items-start mb-6">
                             <div>
                                 <h2 className="text-2xl font-bold text-gray-900">{promo.name}</h2>
@@ -479,21 +479,21 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                             </div>
                         )}
 
-                        <table className="w-full text-left text-sm whitespace-nowrap bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                            <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200 uppercase text-[10px] tracking-wider">
+                        <table className="sello-table">
+                            <thead >
                                 <tr>
-                                    <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                    <th className="p-4 text-right">Baseline Price</th>
-                                    <th className="p-4">{isSkuScope ? 'Discount Type' : 'Rule Status'}</th>
-                                    <th className="p-4 text-right">{isSkuScope ? 'Value' : ''}</th>
-                                    <th className="p-4 text-right">Effective Promo Price</th>
-                                    <th className="p-4 text-right">Proj. Margin</th>
-                                    <th className="p-4 text-right w-10"></th>
+                                    <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} />
+                                    <th className="r">Baseline Price</th>
+                                    <th>{isSkuScope ? 'Discount Type' : 'Rule Status'}</th>
+                                    <th className="r">{isSkuScope ? 'Value' : ''}</th>
+                                    <th className="r col-ca">Effective Promo Price</th>
+                                    <th className="r col-green">Proj. Margin</th>
+                                    <th className="r" style={{width:40}}></th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody >
                                 {sortedItems.map((item: any) => (
-                                    <tr key={item.sku} className="hover:bg-gray-50 transition-colors group">
+                                    <tr key={item.sku} >
                                         <td className="p-4">
                                             <div className="flex items-center gap-1">
                                                 <div className="font-bold text-gray-900">{item.sku}</div>
@@ -557,7 +557,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                     </tr>
                                 ))}
                                 {(!promo?.items || promo.items.length === 0) && (
-                                    <tr><td colSpan={7} className="p-12 text-center text-gray-400 italic">No SKUs nominated for this campaign.</td></tr>
+                                    <tr><td colSpan={7} style={{padding:48,textAlign:"center",color:"#9ca3af",fontStyle:"italic"}}>No SKUs nominated for this campaign.</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -762,7 +762,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             {isUploadOpen && (
                 <PromoUploadModal
                     products={products}
-                    themeColor={themeColor}
+                   
                     onClose={() => setIsUploadOpen(false)}
                     onConfirm={(items, mode) => {
                         const newItems: PromotionItem[] = items.map((i: any) => {

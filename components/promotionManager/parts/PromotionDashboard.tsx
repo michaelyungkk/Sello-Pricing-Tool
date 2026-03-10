@@ -200,7 +200,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                   <MetricCard title="Completed" value={performanceStats.endedCount} icon={Archive} color="blue" />
                   <MetricCard
                       title="Avg Lift (Ended)"
-                      value={performanceStats.hasLifts ? <span className={performanceStats.avgLift > 0 ? 'text-emerald-600' : performanceStats.avgLift < 0 ? 'text-red-500' : 'text-gray-800'}>{formatPct(performanceStats.avgLift * 100)}</span> : '—'}
+                      value={performanceStats.hasLifts ? <span className={performanceStats.avgLift > 0 ? 'v-num' : performanceStats.avgLift < 0 ? 'v-neg' : 'v-num'}>{formatPct(performanceStats.avgLift * 100)}</span> : '—'}
                       icon={TrendingUp}
                       color="indigo"
                       desc={performanceStats.hasLifts ? `Max: ${formatPct(performanceStats.bestLift * 100)} · Pos: ${formatPct(performanceStats.positivePct)}` : undefined}
@@ -208,7 +208,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                 </div>
             </div>
 
-            <div className="flex justify-between items-center bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
+            <div className="sello-glass p-4 rounded-xl flex justify-between items-center">
                 <div>
                     <h3 className="text-lg font-bold text-gray-900">Active Campaigns</h3>
                     <p className="text-sm text-gray-500">Manage sales events and pricing overrides.</p>
@@ -233,25 +233,25 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                 </div>
             </div>
 
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
-                <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-white/10 text-gray-500 font-bold border-b border-custom-glass">
+            <div className="sello-glass rounded-xl overflow-hidden">
+                <table className="sello-table">
+                    <thead >
                         <tr>
-                            <SortableHeader label="Campaign Name" sortKey="name" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="Platform" sortKey="platform" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="Dates" sortKey="startDate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <th className="p-4">Scope</th>
-                            <SortableHeader label="Items" sortKey="items" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Lift" sortKey="lift" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Status" sortKey="status" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="center" />
-                            <th className="p-4 text-right">Actions</th>
+                            <SortableHeader label="Campaign Name" sortKey="name" sort={sortConfig} onChange={setSortConfig} />
+                            <SortableHeader label="Platform" sortKey="platform" sort={sortConfig} onChange={setSortConfig} />
+                            <SortableHeader label="Dates" sortKey="startDate" sort={sortConfig} onChange={setSortConfig} />
+                            <th>Scope</th>
+                            <SortableHeader label="Items" sortKey="items" sort={sortConfig} onChange={setSortConfig} align="right" />
+                            <SortableHeader label="Lift" sortKey="lift" sort={sortConfig} onChange={setSortConfig} align="right" />
+                            <SortableHeader label="Status" sortKey="status" sort={sortConfig} onChange={setSortConfig} align="center" />
+                            <th className="r">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100/50">
+                    <tbody >
                         {sortedPromotions.map((promo: any) => (
                             <tr 
                                 key={promo.id} 
-                                className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors cursor-pointer group"
+                                style={{cursor:"pointer"}}
                                 onClick={() => onSelectPromo(promo.id)}
                             >
                                 <td className="p-4 font-bold text-gray-900">
@@ -270,7 +270,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                                     {formatDate(promo.startDate)} - {formatDate(promo.endDate)}
                                     <button 
                                         onClick={(e) => { e.stopPropagation(); setEditingPromo(promo); }}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-gray-200 rounded-lg text-gray-400 hover:text-indigo-600 hover:border-indigo-300 shadow-sm opacity-0 group-hover:opacity-100 transition-all"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-gray-200 rounded-lg text-gray-400 hover:text-indigo-600 hover:border-indigo-300 shadow-sm opacity-0 transition-all"
                                         title="Edit Schedule"
                                     >
                                         <Edit2 className="w-3 h-3" />
@@ -318,7 +318,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                     onClose={() => setIsCreateOpen(false)}
                     onCreate={onCreateEvent}
                     platforms={pricingRules ? Object.keys(pricingRules) : []}
-                    themeColor={themeColor}
+                   
                 />
             )}
 
@@ -327,7 +327,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                     promo={editingPromo}
                     onClose={() => setEditingPromo(null)}
                     onSave={handleUpdateSchedule}
-                    themeColor={themeColor}
+                   
                 />
             )}
         </div>
