@@ -2,6 +2,41 @@ import { PriceLog } from '../types';
 
 const BASE = '/.netlify/functions';
 
+// Netlify function body limit is 6MB. We stay well under by trimming
+// history arrays (audit logs) to the most recent entries before pushing.
+// Products + config alone are ~1-2MB; histories can grow to 10MB+ unchecked.
+const MAX_HISTORY_RECORDS = 500;
+const MAX_PAYLOAD_BYTES   = 5 * 1024 * 1024; // 5MB hard ceiling
+
+function trimSnapshot(snapshot: Record<string, any>): Record<string, any> {
+    const trimmed = { ...snapshot };
+
+    // Trim unbounded audit history arrays to most recent N records
+    if (Array.isArray(trimmed.priceChangeHistory)) {
+        trimmed.priceChangeHistory = trimmed.priceChangeHistory.slice(0, MAX_HISTORY_RECORDS);
+    }
+    if (Array.isArray(trimmed.costChangeHistory)) {
+        trimmed.costChangeHistory = trimmed.costChangeHistory.slice(0, MAX_HISTORY_RECORDS);
+    }
+    if (Array.isArray(trimmed.inventoryChangeHistory)) {
+        trimmed.inventoryChangeHistory = trimmed.inventoryChangeHistory.slice(0, MAX_HISTORY_RECORDS);
+    }
+
+    // Verify final payload is under limit
+    const json = JSON.stringify(trimmed);
+    const bytes = new TextEncoder().encode(json).length;
+    if (bytes > MAX_PAYLOAD_BYTES) {
+        console.warn(`[pushSnapshot] payload ${(bytes / 1024 / 1024).toFixed(2)}MB still large after trim — stripping histories entirely`);
+        trimmed.priceChangeHistory    = [];
+        trimmed.costChangeHistory     = [];
+        trimmed.inventoryChangeHistory = [];
+    }
+
+    const finalBytes = new TextEncoder().encode(JSON.stringify(trimmed)).length;
+    console.log(`[pushSnapshot] payload size: ${(finalBytes / 1024 / 1024).toFixed(2)}MB`);
+    return trimmed;
+}
+
 export async function verifyPassword(password: string):
     Promise<{ valid: boolean; error?: string }> {
     try {
@@ -17,10 +52,11 @@ export async function verifyPassword(password: string):
 export async function pushSnapshot(password: string, snapshot: object):
     Promise<{ success: boolean; pushedAt?: string; error?: string }> {
     try {
+        const safe = trimSnapshot(snapshot as Record<string, any>);
         const res = await fetch(`${BASE}/db-push`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password, snapshot })
+            body: JSON.stringify({ password, snapshot: safe })
         });
         return await res.json();
     } catch { return { success: false, error: 'Network error' }; }
@@ -124,6 +160,7 @@ export async function initDatabase():
         return await res.json();
     } catch { return { success: false, error: 'Network error' }; }
 }
+
 export async function getLatestTransactionDate():
     Promise<{ success: boolean; latestDate: string | null; totalRows: number; error?: string }> {
     try {
@@ -151,6 +188,7 @@ export async function pullTransactionPage(
         return { success: false, error: 'Network error' };
     }
 }
+
 export async function checkVersion():
     Promise<{ success: boolean; lastPushAt: string | null; error?: string }> {
     try {
