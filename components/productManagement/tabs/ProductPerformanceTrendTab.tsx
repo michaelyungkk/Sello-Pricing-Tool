@@ -30,7 +30,7 @@ const SummaryCard = ({ title, sku, delta, value, type }: any) => {
   const bgClass = type === 'pos' ? 'bg-green-50' : type === 'neg' ? 'bg-red-50' : 'bg-indigo-50';
 
   return (
-    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex items-start justify-between min-w-0">
+    <div className="sello-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start justify-between min-w-0">
       <div className="min-w-0 flex-1">
         <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1 truncate tracking-wider">{title}</span>
         <div className="font-bold text-gray-900 truncate text-sm font-mono">
@@ -190,8 +190,8 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
           <BcgMatrix data={trendData} onDeepDive={onDeepDive} />
         </div>
       ) : (
-        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
-          <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
+        <div className="sello-glass rounded-xl overflow-hidden">
+          <div style={{padding:"12px 16px",borderBottom:"1px solid var(--glass-divider)",background:"var(--glass-head-bg)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div className="flex items-center gap-3">
               <Trophy className="w-5 h-5 text-amber-500" />
               <div>
@@ -221,29 +221,29 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
               </div>
             </div>
           </div>
-          <div className="overflow-x-auto pb-20">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
+          <div className="sello-table-scroll" style={{paddingBottom:80}}>
+            <table className="sello-table">
+              <thead >
                 <tr>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                  <SortableHeader label="Product SKU" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                  <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <SortableHeader label="Quality (Refunds)" sortKey="refund" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Flags</th>
+                  <th style={{textAlign:"center"}}>Detail</th>
+                  <SortableHeader label="Product SKU" sortKey="sku" sort={sort} onChange={setSort} />
+                  <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
+                  <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} align="right" />
+                  <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={sort} onChange={setSort} align="right" />
+                  <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={sort} onChange={setSort} align="right" />
+                  <SortableHeader label="Quality (Refunds)" sortKey="refund" sort={sort} onChange={setSort} align="right" />
+                  <th style={{textAlign:"center"}}>Flags</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100/50">
+              <tbody >
                 {sortedData.slice(0, 50).map((row) => {
                   const isRevWarning = row.deltas.revenueDeltaPct !== null && row.deltas.revenueDeltaPct <= -20;
                   const isMarginCritical = row.current.marginPct < 5;
                   const isTacosHigh = row.current.tacosPct !== null && row.current.tacosPct > 25;
 
                   return (
-                    <tr key={row.sku} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
-                      <td className="p-4 text-center">
+                    <tr key={row.sku} >
+                      <td style={{textAlign:"center"}}>
                         <button
                           onClick={() => onDeepDive(row.sku)}
                           className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-gray-200 shadow-none hover:shadow-sm transition-colors"
@@ -259,13 +259,13 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                         </div>
                         <div className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-wider truncate max-w-[200px]">{row.name}</div>
                       </td>
-                      <td className={`p-4 text-right transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}>
+                      <td className="r col-blue" style={{background:isRevWarning?"rgba(254,226,226,0.2)":undefined}}>
                         <div className="flex flex-col items-end">
                           <span className="font-bold text-gray-900">{formatMoney(row.current.revenue, 0)}</span>
                           <TrendDeltaPill value={row.deltas.revenueDeltaPct} />
                         </div>
                       </td>
-                      <td className="p-4 text-right font-medium">
+                      <td className="r col-green">
                         <div className="flex flex-col items-end">
                           <span className={`font-bold ${row.current.netProfit >= 0 ? 'text-gray-700' : 'text-red-500'}`}>
                             {formatMoney(row.current.netProfit, 0)}
@@ -273,7 +273,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                           <TrendDeltaPill value={row.deltas.netProfitDeltaPct} />
                         </div>
                       </td>
-                      <td className={`p-4 text-right transition-colors ${isMarginCritical ? 'bg-amber-50/30' : ''}`}>
+                      <td className="r" style={{background:isMarginCritical?"rgba(254,243,199,0.2)":undefined}}>
                         <div className="flex flex-col items-end">
                           <span className={`font-black ${row.current.marginPct < 15 ? 'text-amber-500' : 'text-emerald-600'}`}>
                             {formatPct(row.current.marginPct)}
@@ -281,26 +281,26 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                           <TrendDeltaPill value={row.deltas.marginDeltaPp} isPp />
                         </div>
                       </td>
-                      <td className={`p-4 text-right transition-colors ${isTacosHigh ? 'bg-purple-50/30' : ''}`}>
+                      <td className="r" style={{background:isTacosHigh?"rgba(237,233,254,0.2)":undefined}}>
                         <div className="flex flex-col items-end">
-                          <span className="font-medium text-gray-700">
+                          <span className="v-num">
                             {row.current.tacosPct !== null ? formatPct(row.current.tacosPct) : '—'}
                           </span>
                           <TrendDeltaPill value={row.deltas.tacosDeltaPp} isPp invert />
                         </div>
                       </td>
-                      <td className="p-4 text-right transition-colors">
+                      <td className="r">
                         <div className="flex flex-col items-end">
-                          <span className="font-medium text-gray-700">{formatPct(row.current.refundRatePct)}</span>
+                          <span className="v-num">{formatPct(row.current.refundRatePct)}</span>
                           <TrendDeltaPill value={row.deltas.refundRateDeltaPp} isPp invert />
                         </div>
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex justify-center gap-1.5 flex-wrap min-w-[100px]">
-                          {isRevWarning && <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-red-100 text-red-800 border border-red-200 shadow-xs">Drop</span>}
-                          {isMarginCritical && <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200 shadow-xs">Margin</span>}
-                          {isTacosHigh && <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-100 text-purple-800 border border-purple-200 shadow-xs">Ads</span>}
-                          {row.current.unitsSold === 0 && <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-gray-100 text-gray-500 border border-gray-200 shadow-xs">Dormant</span>}
+                          {isRevWarning && <span className=style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#fee2e2",color:"#991b1b",border:"1px solid #fca5a5"}}>Drop</span>}
+                          {isMarginCritical && <span className=style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a"}}>Margin</span>}
+                          {isTacosHigh && <span className=style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#ede9fe",color:"#6d28d9",border:"1px solid #c4b5fd"}}>Ads</span>}
+                          {row.current.unitsSold === 0 && <span className=style={{padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700,textTransform:"uppercase",background:"#f3f4f6",color:"#6b7280",border:"1px solid #e5e7eb"}}>Dormant</span>}
                         </div>
                       </td>
                     </tr>

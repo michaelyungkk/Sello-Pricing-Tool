@@ -26,7 +26,6 @@ interface ReturnsAndRefundsTabProps {
 
 type ViewMode = 'reason' | 'product' | 'partner';
 
-// Helper for fast date checking (avoids new Date() overhead in tight loops)
 const isIsoDateInRange = (isoDate: string, start: string, end: string) => {
     if (!isoDate) return false;
     const datePart = isoDate.length > 10 ? isoDate.substring(0, 10) : isoDate;
@@ -34,17 +33,9 @@ const isIsoDateInRange = (isoDate: string, start: string, end: string) => {
 };
 
 export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
-    refundHistory = [],
-    products,
-    themeColor,
-    pricingRules,
-    onDeepDive,
-    priceHistoryMap = new Map(),
-    startDate,
-    endDate,
-    onAnalyzeCarrier
+    refundHistory = [], products, themeColor, pricingRules, onDeepDive,
+    priceHistoryMap = new Map(), startDate, endDate, onAnalyzeCarrier
 }) => {
-    // State for filters and view mode
     const [isAuditVisible, setIsAuditVisible] = useState(false);
     const [platformScope, setPlatformScope] = useState<string>('All');
     const [mainCategoryScope, setMainCategoryScope] = useState<string>('All');
@@ -52,492 +43,216 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     const [includeResends, setIncludeResends] = useState(true);
     const [viewMode, setViewMode] = useState<ViewMode>('reason');
     const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
-
-    // Sort state for the main detail table
     const [sortConfig, setSortConfig] = useState<SortState<string>>({ key: 'totalValue', dir: 'desc' });
-
-    // Sort state for the triage table
     const [triageSortConfig, setTriageSortConfig] = useState<SortState<string>>({ key: 'refundValue', dir: 'desc' });
-
-    // Expanded Carrier Row State
     const [expandedPartner, setExpandedPartner] = useState<string | null>(null);
     const [showSourceRecords, setShowSourceRecords] = useState<string | null>(null);
-
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
     const productLookup = useMemo(() => new Map(products.map(p => [p.sku, p])), [products]);
-
     const platformOptions = useMemo(() => Object.keys(pricingRules), [pricingRules]);
+    const mainCategories = useMemo(() => { const cats = new Set<string>(); products.forEach(p => { if (p.category) cats.add(p.category); }); return Array.from(cats).sort(); }, [products]);
+    const subCategories = useMemo(() => { const subs = new Set<string>(); products.forEach(p => { if (mainCategoryScope === 'All' || p.category === mainCategoryScope) { if (p.subcategory) subs.add(p.subcategory); } }); return Array.from(subs).sort(); }, [products, mainCategoryScope]);
 
-    // Derived category lists
-    const mainCategories = useMemo(() => {
-        const cats = new Set<string>();
-        products.forEach(p => { if (p.category) cats.add(p.category); });
-        return Array.from(cats).sort();
-    }, [products]);
-
-    const subCategories = useMemo(() => {
-        const subs = new Set<string>();
-        products.forEach(p => {
-            if (mainCategoryScope === 'All' || p.category === mainCategoryScope) {
-                if (p.subcategory) subs.add(p.subcategory);
-            }
-        });
-        return Array.from(subs).sort();
-    }, [products, mainCategoryScope]);
-
-    // Derive Order Context Map: OrderID -> { platform, partner, service, date }
     const orderContextMap = useMemo(() => {
         const map = new Map<string, { platform: string; partner?: string; service?: string; date: string }>();
-        priceHistoryMap.forEach((logs) => {
-            for (let i = 0; i < logs.length; i++) {
-                const p = logs[i];
-                if (p.orderId) {
-                    const dKey = p.date.substring(0, 10); // Fast extraction
-                    map.set(p.orderId, {
-                        platform: p.platform || 'Unknown',
-                        partner: p.logisticPartner,
-                        service: p.logisticService,
-                        date: dKey
-                    });
-                }
+        priceHistoryMap.forEach(logs => {
+            for (const p of logs) {
+                if (p.orderId) map.set(p.orderId, { platform: p.platform || 'Unknown', partner: p.logisticPartner, service: p.logisticService, date: p.date.substring(0, 10) });
             }
         });
         return map;
     }, [priceHistoryMap]);
 
-    // Sales aggregation for KPI context
     const salesStats = useMemo(() => {
-        const salesMap = new Map<string, number>();
-        const revenueMap = new Map<string, number>();
-        const productMap = new Map<string, { name: string }>();
-
-        const targetSkus = new Set<string>();
-        const isCatFilterActive = mainCategoryScope !== 'All' || subCategoryScope !== 'All';
-
-        if (isCatFilterActive) {
-            products.forEach(p => {
-                if (mainCategoryScope !== 'All' && p.category !== mainCategoryScope) return;
-                if (subCategoryScope !== 'All' && p.subcategory !== subCategoryScope) return;
-                targetSkus.add(p.sku);
-            });
+        const salesMap = new Map<string, number>(); const revenueMap = new Map<string, number>(); const productMap = new Map<string, { name: string }>();
+        const targetSkus = new Set<string>(); const isCatFilterActive = mainCategoryScope !== 'All' || subCategoryScope !== 'All';
+        if (isCatFilterActive) products.forEach(p => { if (mainCategoryScope !== 'All' && p.category !== mainCategoryScope) return; if (subCategoryScope !== 'All' && p.subcategory !== subCategoryScope) return; targetSkus.add(p.sku); });
+        for (const sku of (isCatFilterActive ? targetSkus : priceHistoryMap.keys())) {
+            const logs = priceHistoryMap.get(sku); if (!logs) continue;
+            const product = productLookup.get(sku); if (!product) continue;
+            let skuSales = 0, skuRev = 0; const ef = Number(product.extraFreight) || 0;
+            for (const log of logs) { if (platformScope !== 'All' && log.platform !== platformScope) continue; if (isIsoDateInRange(log.date, startDate, endDate)) { skuSales += log.velocity; skuRev += log.velocity * (log.price + ef); } }
+            if (skuSales > 0 || skuRev > 0) { salesMap.set(sku, skuSales); revenueMap.set(sku, skuRev * VAT_MULTIPLIER); productMap.set(sku, { name: product.name }); }
         }
-
-        const iterator = isCatFilterActive ? targetSkus : priceHistoryMap.keys();
-
-        for (const sku of iterator) {
-            const logs = priceHistoryMap.get(sku);
-            if (!logs) continue;
-
-            const product = productLookup.get(sku);
-            if (!product) continue;
-
-            let skuPeriodSales = 0;
-            let skuPeriodRevenue = 0;
-            const extraFreight = Number(product.extraFreight) || 0;
-
-            for (let i = 0; i < logs.length; i++) {
-                const log = logs[i];
-                if (platformScope !== 'All' && log.platform !== platformScope) continue;
-
-                if (isIsoDateInRange(log.date, startDate, endDate)) {
-                    skuPeriodSales += log.velocity;
-                    skuPeriodRevenue += (log.velocity * (log.price + extraFreight));
-                }
-            }
-
-            if (skuPeriodSales > 0 || skuPeriodRevenue > 0) {
-                salesMap.set(sku, skuPeriodSales);
-                revenueMap.set(sku, skuPeriodRevenue * VAT_MULTIPLIER);
-                productMap.set(sku, { name: product.name });
-            }
-        }
-
         return { salesMap, revenueMap, productMap };
     }, [priceHistoryMap, products, startDate, endDate, platformScope, mainCategoryScope, subCategoryScope, productLookup]);
 
-    // Main data processing
-    const {
-        byReason,
-        byProduct,
-        byPartner,
-        triageOverview,
-        topGripingPartner
-    } = useMemo(() => {
-        // Internal helper to resolve order context, handling Resend suffixes
+    const { byReason, byProduct, byPartner, triageOverview, topGripingPartner } = useMemo(() => {
         const resolveOrderContext = (r: RefundLog) => {
             if (!r.orderId) return null;
-            // 1. Direct Lookup
-            let ctx = orderContextMap.get(r.orderId);
-            if (ctx) return ctx;
-
-            // 2. Import-Mapped Resend Base
-            if (r.resendBaseOrderId) {
-                ctx = orderContextMap.get(r.resendBaseOrderId);
-                if (ctx) return ctx;
-            }
-
-            // 3. Dynamic Regex (Catch cases like "DUX...-resend")
-            // Matches -resend, _resend at end of string, case insensitive
-            const resendMatch = r.orderId.match(/^(.*)[-_]resend$/i);
-            if (resendMatch) {
-                ctx = orderContextMap.get(resendMatch[1]);
-            }
+            let ctx = orderContextMap.get(r.orderId); if (ctx) return ctx;
+            if (r.resendBaseOrderId) { ctx = orderContextMap.get(r.resendBaseOrderId); if (ctx) return ctx; }
+            const m = r.orderId.match(/^(.*)[-_]resend$/i); if (m) ctx = orderContextMap.get(m[1]);
             return ctx || null;
         };
-
         const filteredRefunds = refundHistory.filter(r => {
             const context = resolveOrderContext(r);
-
-            let dKey: string | null = null;
-            if (returnDateBasis === 'orderDate' && context) {
-                dKey = context.date;
-            } else {
-                dKey = r.date.substring(0, 10);
-            }
-
+            const dKey = returnDateBasis === 'orderDate' && context ? context.date : r.date.substring(0, 10);
             if (!dKey || dKey < startDate || dKey > endDate) return false;
-
             const pName = r.platform || context?.platform || 'Unknown';
             if (platformScope !== 'All' && pName !== platformScope) return false;
-
             const isResend = r.orderType === 'resend' || (r.id && r.id.toLowerCase().includes('resend'));
             if (!includeResends && isResend) return false;
-
             if (mainCategoryScope !== 'All' || subCategoryScope !== 'All') {
                 if (!r.sku || r.sku.toLowerCase() === 'freight') return false;
-                const p = productLookup.get(r.sku);
-                if (!p) return false;
+                const p = productLookup.get(r.sku); if (!p) return false;
                 if (mainCategoryScope !== 'All' && p.category !== mainCategoryScope) return false;
                 if (subCategoryScope !== 'All' && p.subcategory !== subCategoryScope) return false;
             }
-
             return true;
         });
-
-        const totalValue = filteredRefunds.reduce((sum, r) => sum + ((Number(r.amount) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER), 0);
+        const totalValue = filteredRefunds.reduce((s, r) => s + ((Number(r.amount) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER), 0);
         const totalCount = filteredRefunds.length;
-
-        const triageOverview = buildRefundOverview(filteredRefunds, {
-            salesMap: salesStats.salesMap,
-            revenueMap: salesStats.revenueMap,
-            productMap: salesStats.productMap,
-            dateBasis: returnDateBasis,
-            orderDateMap: orderContextMap ? new Map(Array.from(orderContextMap.entries()).map(([k, v]) => [k, v.date])) : undefined
-        });
-
-        // Aggregation Maps
+        const triageOverview = buildRefundOverview(filteredRefunds, { salesMap: salesStats.salesMap, revenueMap: salesStats.revenueMap, productMap: salesStats.productMap, dateBasis: returnDateBasis, orderDateMap: orderContextMap ? new Map(Array.from(orderContextMap.entries()).map(([k, v]) => [k, v.date])) : undefined });
         const reasonMap = new Map<string, { totalValue: number, count: number, skus: Set<string> }>();
-        const partnerMap = new Map<string, {
-            totalValue: number,
-            count: number,
-            skus: Set<string>,
-            reasons: Map<string, number>,
-            services: Map<string, { count: number, value: number }>,
-            records: RefundLog[] // Track source records
-        }>();
-
+        const partnerMap = new Map<string, { totalValue: number, count: number, skus: Set<string>, reasons: Map<string, number>, services: Map<string, { count: number, value: number }>, records: RefundLog[] }>();
         const prodMap = new Map<string, { totalValue: number, count: number, reasons: Map<string, number> }>();
-
         for (const r of filteredRefunds) {
             const rowVal = (Number(r.amount) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER;
             const rawReason = r.reason || r.platformReason || r.customerReason || 'Unknown Reason';
-            const meta = parseReturnsReason(rawReason);
-            const rKey = meta.description || meta.short;
-
-            // 1. Reason Grouping
+            const meta = parseReturnsReason(rawReason); const rKey = meta.description || meta.short;
             if (!reasonMap.has(rKey)) reasonMap.set(rKey, { totalValue: 0, count: 0, skus: new Set() });
-            const rEntry = reasonMap.get(rKey)!;
-            rEntry.totalValue += rowVal;
-            rEntry.count++;
-            rEntry.skus.add(r.sku);
-
-            // 2. Partner Grouping
-            const context = resolveOrderContext(r);
-            const pKey = context?.partner || r.logisticPartner || 'Unattributed Carrier';
-
+            const rEntry = reasonMap.get(rKey)!; rEntry.totalValue += rowVal; rEntry.count++; rEntry.skus.add(r.sku);
+            const context = resolveOrderContext(r); const pKey = context?.partner || r.logisticPartner || 'Unattributed Carrier';
             if (!partnerMap.has(pKey)) partnerMap.set(pKey, { totalValue: 0, count: 0, skus: new Set(), reasons: new Map(), services: new Map(), records: [] });
-            const pEntry = partnerMap.get(pKey)!;
-            pEntry.totalValue += rowVal;
-            pEntry.count++;
-            pEntry.skus.add(r.sku);
-            pEntry.reasons.set(rKey, (pEntry.reasons.get(rKey) || 0) + 1);
-            pEntry.records.push(r); // Push raw record
-
-            // Service Breakdown
+            const pEntry = partnerMap.get(pKey)!; pEntry.totalValue += rowVal; pEntry.count++; pEntry.skus.add(r.sku); pEntry.reasons.set(rKey, (pEntry.reasons.get(rKey) || 0) + 1); pEntry.records.push(r);
             const serviceKey = context?.service || 'Unknown Service';
             if (!pEntry.services.has(serviceKey)) pEntry.services.set(serviceKey, { count: 0, value: 0 });
-            const sStats = pEntry.services.get(serviceKey)!;
-            sStats.count++;
-            sStats.value += rowVal;
-
-            // 3. Product Grouping
+            const sStats = pEntry.services.get(serviceKey)!; sStats.count++; sStats.value += rowVal;
             if (!prodMap.has(r.sku)) prodMap.set(r.sku, { totalValue: 0, count: 0, reasons: new Map() });
-            const prEntry = prodMap.get(r.sku)!;
-            prEntry.totalValue += rowVal;
-            prEntry.count++;
-            prEntry.reasons.set(rKey, (prEntry.reasons.get(rKey) || 0) + 1);
+            const prEntry = prodMap.get(r.sku)!; prEntry.totalValue += rowVal; prEntry.count++; prEntry.reasons.set(rKey, (prEntry.reasons.get(rKey) || 0) + 1);
         }
-
         const byReason = Array.from(reasonMap.entries()).map(([reason, data]) => ({ reason, ...data }));
-        const byProduct = Array.from(prodMap.entries()).map(([sku, data]) => {
-            const topReason = [...data.reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
-            return { sku, ...data, topReason };
-        });
+        const byProduct = Array.from(prodMap.entries()).map(([sku, data]) => { const topReason = [...data.reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'; return { sku, ...data, topReason }; });
         const byPartner = Array.from(partnerMap.entries()).map(([partner, data]) => {
             const topReason = [...data.reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
-            const countShare = totalCount > 0 ? (data.count / totalCount) * 100 : 0;
-            const valueShare = totalValue > 0 ? (data.totalValue / totalValue) * 100 : 0;
-
-            const servicesBreakdown = Array.from(data.services.entries())
-                .map(([name, stats]) => ({
-                    name,
-                    ...stats,
-                    share: data.count > 0 ? (stats.count / data.count) * 100 : 0
-                }))
-                .sort((a, b) => b.count - a.count);
-
-            return { partner, ...data, topReason, countShare, valueShare, servicesBreakdown };
+            return { partner, ...data, topReason, countShare: totalCount > 0 ? (data.count / totalCount) * 100 : 0, valueShare: totalValue > 0 ? (data.totalValue / totalValue) * 100 : 0, servicesBreakdown: Array.from(data.services.entries()).map(([name, stats]) => ({ name, ...stats, share: data.count > 0 ? (stats.count / data.count) * 100 : 0 })).sort((a, b) => b.count - a.count) };
         });
-
-        const topGripingPartner = byPartner.sort((a, b) => b.count - a.count)[0];
-
-        return {
-            byReason, byProduct, byPartner, triageOverview,
-            topGripingPartner
-        };
+        const topGripingPartner = [...byPartner].sort((a, b) => b.count - a.count)[0];
+        return { byReason, byProduct, byPartner, triageOverview, topGripingPartner };
     }, [refundHistory, startDate, endDate, platformScope, mainCategoryScope, subCategoryScope, productLookup, includeResends, returnDateBasis, orderContextMap, salesStats]);
 
-    // Data for the Detail Explorer view
     const currentTableData = useMemo(() => {
-        let data: any[] = [];
-        if (viewMode === 'reason') data = byReason;
-        else if (viewMode === 'product') data = byProduct;
-        else data = byPartner;
-
-        const getValue = (row: any, key: string) => row[key];
-        return sortRows(data, sortConfig, getValue);
+        const data: any[] = viewMode === 'reason' ? byReason : viewMode === 'product' ? byProduct : byPartner;
+        return sortRows(data, sortConfig, (row, key) => row[key]);
     }, [byReason, byProduct, byPartner, viewMode, sortConfig]);
 
-    const sortedTriageRows = useMemo(() => {
-        const getValue = (row: any, key: string) => {
-            if (key === 'refundQty') return row.refundQty;
-            if (key === 'refundValue') return row.refundValue;
-            if (key === 'refundRate') return row.refundRate || 0;
-            if (key === 'refundRateValue') return row.refundRateValue || 0;
-            return row[key];
-        };
-        return sortRows(triageOverview.skuRows, triageSortConfig, getValue);
-    }, [triageOverview.skuRows, triageSortConfig]);
-
+    const sortedTriageRows = useMemo(() => sortRows(triageOverview.skuRows, triageSortConfig, (row, key) => row[key] || 0), [triageOverview.skuRows, triageSortConfig]);
     const paginatedData = currentTableData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     const totalPages = Math.ceil(currentTableData.length / itemsPerPage);
-
-    const handleDeepDiveClick = (sku: string) => {
-        if (!sku || sku === 'Unknown' || sku === 'Freight') return;
-        onDeepDive(sku);
-    };
-
-    const togglePartnerExpand = (partner: string) => {
-        setExpandedPartner(prev => prev === partner ? null : partner);
-        // Reset record view when collapsing/expanding
-        setShowSourceRecords(null);
-    };
+    const togglePartnerExpand = (partner: string) => { setExpandedPartner(prev => prev === partner ? null : partner); setShowSourceRecords(null); };
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 pb-12">
             <FilterBar
-                showAudit
-                auditActive={isAuditVisible}
-                onAuditToggle={() => setIsAuditVisible(v => !v)}
+                showAudit auditActive={isAuditVisible} onAuditToggle={() => setIsAuditVisible(v => !v)}
                 multiSelects={[
-                    {
-                        key: 'platform',
-                        label: 'Platform',
-                        icon: MapIcon,
-                        options: platformOptions,
-                        selected: platformScope === 'All' ? [] : [platformScope],
-                        onChange: (selected) => setPlatformScope(selected.length > 0 ? selected[0] : 'All')
-                    },
-                    {
-                        key: 'mainCategory',
-                        label: 'Main Category',
-                        icon: Layers,
-                        options: mainCategories,
-                        selected: mainCategoryScope === 'All' ? [] : [mainCategoryScope],
-                        onChange: (selected) => { setMainCategoryScope(selected.length > 0 ? selected[0] : 'All'); setSubCategoryScope('All'); }
-                    },
-                    {
-                        key: 'subCategory',
-                        label: 'Sub Category',
-                        icon: GitMerge,
-                        options: subCategories,
-                        selected: subCategoryScope === 'All' ? [] : [subCategoryScope],
-                        onChange: (selected) => setSubCategoryScope(selected.length > 0 ? selected[0] : 'All')
-                    }
+                    { key: 'platform', label: 'Platform', icon: MapIcon, options: platformOptions, selected: platformScope === 'All' ? [] : [platformScope], onChange: sel => setPlatformScope(sel.length > 0 ? sel[0] : 'All') },
+                    { key: 'mainCategory', label: 'Main Category', icon: Layers, options: mainCategories, selected: mainCategoryScope === 'All' ? [] : [mainCategoryScope], onChange: sel => { setMainCategoryScope(sel.length > 0 ? sel[0] : 'All'); setSubCategoryScope('All'); } },
+                    { key: 'subCategory', label: 'Sub Category', icon: GitMerge, options: subCategories, selected: subCategoryScope === 'All' ? [] : [subCategoryScope], onChange: sel => setSubCategoryScope(sel.length > 0 ? sel[0] : 'All') }
                 ]}
-                pillGroup={{
-                    options: [
-                        { key: 'refundDate', label: 'Refund Date' },
-                        { key: 'orderDate', label: 'Order Date' }
-                    ],
-                    active: returnDateBasis,
-                    onChange: (key) => setReturnDateBasis(key as ReturnDateBasis)
-                }}
-                toggles={[
-                    {
-                        key: 'includeResends',
-                        label: 'Include Resends',
-                        active: includeResends,
-                        onChange: setIncludeResends
-                    }
-                ]}
+                pillGroup={{ options: [{ key: 'refundDate', label: 'Refund Date' }, { key: 'orderDate', label: 'Order Date' }], active: returnDateBasis, onChange: key => setReturnDateBasis(key as ReturnDateBasis) }}
+                toggles={[{ key: 'includeResends', label: 'Include Resends', active: includeResends, onChange: setIncludeResends }]}
             />
 
             {isAuditVisible && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                    <AuditPanel
-                        title="Returns & Refunds Audit"
-                        startKey={startDate}
-                        endKey={endDate}
-                        rows={triageOverview.skuRows}
-                        getDateKey={() => null}
-                        getRevenue={(row: any) => row.refundValue}
-                        getQty={(row: any) => row.refundQty}
-                        getProfit={() => 0}
-                        getAdSpend={() => 0}
-                    />
+                    <AuditPanel title="Returns & Refunds Audit" startKey={startDate} endKey={endDate}
+                        rows={triageOverview.skuRows} getDateKey={() => null}
+                        getRevenue={(row: any) => row.refundValue} getQty={(row: any) => row.refundQty}
+                        getProfit={() => 0} getAdSpend={() => 0} />
                 </div>
             )}
 
-            {/* Refund Triage KPI Section */}
-            <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    <MetricCard
-                        title="Refund Cases"
-                        value={triageOverview.kpis.totalRefundCount.toLocaleString()}
-                        icon={RotateCcw}
-                        color="orange"
-                        desc="Unique requests"
-                    />
-                    <MetricCard
-                        title="Loss Value"
-                        value={formatMoney(triageOverview.kpis.totalRefundValue)}
-                        icon={DollarSign}
-                        color="red"
-                        desc="Inc VAT & Freight"
-                    />
-                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase">Return Rate (Qty)</span>
-                            <Package className="w-4 h-4 text-indigo-500" />
-                        </div>
-                        <div className="text-2xl font-bold text-gray-900">
-                            {triageOverview.kpis.refundRateQty !== null ? formatPct(triageOverview.kpis.refundRateQty) : '—'}
-                        </div>
-                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Units vs Sold</div>
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <MetricCard title="Refund Cases" value={triageOverview.kpis.totalRefundCount.toLocaleString()} icon={RotateCcw} color="orange" desc="Unique requests" />
+                <MetricCard title="Loss Value" value={formatMoney(triageOverview.kpis.totalRefundValue)} icon={DollarSign} color="red" desc="Inc VAT & Freight" />
+                <div className="sello-glass p-4 rounded-xl flex flex-col justify-between">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Return Rate (Qty)</span>
+                        <Package style={{ width: 16, height: 16, color: '#4f46e5' }} />
                     </div>
-
-                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase">Return Rate (Val)</span>
-                            <DollarSign className="w-4 h-4 text-rose-500" />
-                        </div>
-                        <div className="text-2xl font-bold text-gray-900">
-                            {triageOverview.kpis.refundRateValue !== null ? formatPct(triageOverview.kpis.refundRateValue) : '—'}
-                        </div>
-                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Value vs Revenue</div>
-                    </div>
-
-                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between group">
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase">Worst Carrier</span>
-                            <TruckIcon className="w-4 h-4 text-indigo-500" />
-                        </div>
-                        <div className="text-xl font-bold text-gray-900 truncate" title={topGripingPartner?.partner}>
-                            {topGripingPartner?.partner || 'N/A'}
-                        </div>
-                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">
-                            {topGripingPartner ? `${topGripingPartner.count} complaints` : 'Complaints Source'}
-                        </div>
-                    </div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>{triageOverview.kpis.refundRateQty !== null ? formatPct(triageOverview.kpis.refundRateQty) : '—'}</div>
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4, textTransform: 'uppercase', fontWeight: 700 }}>Units vs Sold</div>
                 </div>
-
-                {/* SKU Alerts Table */}
-                <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg flex flex-col max-h-[500px] backdrop-blur-custom">
-                    <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
-                        <h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-2">
-                            <AlertTriangle className="w-4 h-4 text-red-500" />
-                            SKU Alerts
-                        </h4>
+                <div className="sello-glass p-4 rounded-xl flex flex-col justify-between">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Return Rate (Val)</span>
+                        <DollarSign style={{ width: 16, height: 16, color: '#f43f5e' }} />
                     </div>
-                    <div className="overflow-auto flex-1">
-                        <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
-                            <thead className="sticky top-0 z-10">
-                                <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                    <SortableHeader label="SKU / Product" sortKey="sku" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} />
-                                    <SortableHeader label="Return QTY" sortKey="refundQty" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Return QTY%" sortKey="refundRate" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Return AMT" sortKey="refundValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Return AMT%" sortKey="refundRateValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Top Reason</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Flags</th>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>{triageOverview.kpis.refundRateValue !== null ? formatPct(triageOverview.kpis.refundRateValue) : '—'}</div>
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4, textTransform: 'uppercase', fontWeight: 700 }}>Value vs Revenue</div>
+                </div>
+                <div className="sello-glass p-4 rounded-xl flex flex-col justify-between">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Worst Carrier</span>
+                        <TruckIcon style={{ width: 16, height: 16, color: '#4f46e5' }} />
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={topGripingPartner?.partner}>{topGripingPartner?.partner || 'N/A'}</div>
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4, textTransform: 'uppercase', fontWeight: 700 }}>{topGripingPartner ? `${topGripingPartner.count} complaints` : 'Complaints Source'}</div>
+                </div>
+            </div>
+
+            {/* SKU Alerts Table */}
+            <div className="sello-glass rounded-xl overflow-hidden" style={{ maxHeight: 500, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--glass-divider)', background: 'var(--glass-head-bg)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h4 style={{ fontWeight: 700, fontSize: 13, color: '#1f2937', display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase' }}>
+                        <AlertTriangle style={{ width: 14, height: 14, color: '#dc2626' }} />SKU Alerts
+                    </h4>
+                </div>
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                    <div className="sello-table-scroll">
+                        <table className="sello-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ textAlign: 'center', width: 40 }}>Detail</th>
+                                    <SortableHeader label="SKU / Product" sortKey="sku" sort={triageSortConfig} onChange={setTriageSortConfig} />
+                                    <SortableHeader label="Return QTY" sortKey="refundQty" sort={triageSortConfig} onChange={setTriageSortConfig} align="right" />
+                                    <SortableHeader label="Return QTY%" sortKey="refundRate" sort={triageSortConfig} onChange={setTriageSortConfig} tint="red" align="right" />
+                                    <SortableHeader label="Return AMT" sortKey="refundValue" sort={triageSortConfig} onChange={setTriageSortConfig} tint="red" align="right" />
+                                    <SortableHeader label="Return AMT%" sortKey="refundRateValue" sort={triageSortConfig} onChange={setTriageSortConfig} tint="red" align="right" />
+                                    <th>Top Reason</th>
+                                    <th>Flags</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100/50">
-                                {sortedTriageRows.length > 0 ? (
-                                    sortedTriageRows.map((row: any) => {
-                                        const isInvalidSku = !row.sku || row.sku === 'Unknown' || row.sku === 'Freight';
-                                        return (
-                                            <tr key={row.sku} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
-                                                <td className="px-4 py-4 text-center">
-                                                    <button
-                                                        onClick={() => !isInvalidSku && handleDeepDiveClick(row.sku)}
-                                                        className={`p-1.5 rounded-lg transition-colors ${isInvalidSku ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
-                                                        disabled={isInvalidSku}
-                                                        title="Deep Dive SKU"
-                                                    >
-                                                        <Search className="w-4 h-4" />
-                                                    </button>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{row.sku}</div>
-                                                    <div className="text-[10px] text-gray-500 truncate max-w-[200px]">{row.title}</div>
-                                                </td>
-                                                <td className="px-4 py-4 text-right font-bold text-gray-800">{row.refundQty}</td>
-                                                <td className="px-4 py-4 text-right font-mono">
-                                                    {row.refundRate !== null
-                                                        ? <span className="text-gray-600">{row.refundRate.toFixed(1)}%</span>
-                                                        : <span className="text-gray-300">-</span>
-                                                    }
-                                                </td>
-                                                <td className="px-4 py-4 text-right font-bold text-gray-800">{formatMoney(row.refundValue)}</td>
-                                                <td className="px-4 py-4 text-right font-mono">
-                                                    {row.refundRateValue !== null
-                                                        ? <span className="text-gray-600">{(row.refundRateValue || 0).toFixed(1)}%</span>
-                                                        : <span className="text-gray-300">-</span>
-                                                    }
-                                                </td>
-                                                <td className="px-4 py-4 text-gray-600 truncate max-w-[180px]" title={parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}>
-                                                    {parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}
-                                                    {row.topReasons[0] && <span className="text-gray-400 ml-1 text-xs">({row.topReasons[0].count})</span>}
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="flex gap-1 flex-wrap">
-                                                        {row.flags.map((flag: string) => (
-                                                            <span key={flag} className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] rounded border border-red-200 font-bold uppercase whitespace-nowrap">
-                                                                {flag}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )
-                                    })
-                                ) : (
-                                    <tr><td colSpan={9} className="p-8 text-center text-gray-400 italic">No refund alerts found for this selection.</td></tr>
+                            <tbody>
+                                {sortedTriageRows.length > 0 ? sortedTriageRows.map((row: any) => {
+                                    const isInvalidSku = !row.sku || row.sku === 'Unknown' || row.sku === 'Freight';
+                                    return (
+                                        <tr key={row.sku}>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <button onClick={() => !isInvalidSku && handleDeepDiveClick(row.sku)}
+                                                    style={{ padding: 6, borderRadius: 6, color: isInvalidSku ? '#d1d5db' : '#9ca3af', cursor: isInvalidSku ? 'not-allowed' : 'pointer', display: 'inline-flex' }}
+                                                    className={isInvalidSku ? '' : 'hover:text-indigo-600'} disabled={isInvalidSku} title="Deep Dive SKU">
+                                                    <Search style={{ width: 14, height: 14 }} />
+                                                </button>
+                                            </td>
+                                            <td>
+                                                <div style={{ fontWeight: 700, fontSize: 12, color: '#111827' }}>{row.sku}</div>
+                                                <div style={{ fontSize: 10, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{row.title}</div>
+                                            </td>
+                                            <td className="r"><span className="v-num v-bold">{row.refundQty}</span></td>
+                                            <td className="r col-red"><span className="v-num">{row.refundRate !== null ? `${row.refundRate.toFixed(1)}%` : <span className="v-dim">—</span>}</span></td>
+                                            <td className="r col-red"><span className="v-neg v-bold">{formatMoney(row.refundValue)}</span></td>
+                                            <td className="r col-red"><span className="v-num">{row.refundRateValue !== null ? `${(row.refundRateValue || 0).toFixed(1)}%` : <span className="v-dim">—</span>}</span></td>
+                                            <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}>
+                                                <span style={{ fontSize: 11, color: '#6b7280' }}>{parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}</span>
+                                                {row.topReasons[0] && <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 4 }}>({row.topReasons[0].count})</span>}
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                                                    {row.flags.map((flag: string) => (
+                                                        <span key={flag} style={{ padding: '1px 6px', background: '#fee2e2', color: '#b91c1c', fontSize: 9, borderRadius: 3, border: '1px solid #fca5a5', fontWeight: 700, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{flag}</span>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                }) : (
+                                    <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontStyle: 'italic' }}>No refund alerts found for this selection.</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -545,202 +260,163 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                 </div>
             </div>
 
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
-                <div className="p-4 border-b border-custom-glass flex justify-between items-center bg-gray-50/50">
-                    <h3 className="font-bold text-gray-800 text-sm uppercase">Refund Details Explorer</h3>
-                    <div className="flex bg-white border border-gray-200 p-0.5 rounded-lg">
-                        <button onClick={() => setViewMode('reason')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'reason' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                            <Info className="w-3.5 h-3.5" /> By Reason
-                        </button>
-                        <button onClick={() => setViewMode('product')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'product' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                            <Package className="w-3.5 h-3.5" /> By Product
-                        </button>
-                        <button onClick={() => setViewMode('partner')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'partner' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                            <TruckIcon className="w-3.5 h-3.5" /> By Carrier
-                        </button>
+            {/* Refund Details Explorer */}
+            <div className="sello-glass rounded-xl overflow-hidden">
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--glass-divider)', background: 'var(--glass-head-bg)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ fontWeight: 700, fontSize: 13, color: '#1f2937', textTransform: 'uppercase' }}>Refund Details Explorer</h3>
+                    <div style={{ display: 'flex', background: 'rgba(255,255,255,0.7)', border: '1px solid var(--glass-divider)', padding: 3, borderRadius: 8 }}>
+                        {(['reason', 'product', 'partner'] as ViewMode[]).map((mode, i) => (
+                            <button key={mode} onClick={() => setViewMode(mode)}
+                                style={{ padding: '5px 10px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s', background: viewMode === mode ? 'rgba(79,70,229,0.1)' : 'transparent', color: viewMode === mode ? '#4f46e5' : '#6b7280' }}>
+                                {i === 0 ? <Info style={{ width: 12, height: 12 }} /> : i === 1 ? <Package style={{ width: 12, height: 12 }} /> : <TruckIcon style={{ width: 12, height: 12 }} />}
+                                {mode === 'reason' ? 'By Reason' : mode === 'product' ? 'By Product' : 'By Carrier'}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
-                <div className="p-6">
-                    <div className="overflow-auto border border-gray-100 rounded-lg max-h-[400px]">
-                        <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
-                            <thead className="sticky top-0 z-10">
+                <div style={{ padding: 24 }}>
+                    <div style={{ border: '1px solid var(--glass-divider)', borderRadius: 8, overflow: 'auto', maxHeight: 400 }}>
+                        <table className="sello-table" style={{ borderRadius: 0 }}>
+                            <thead>
                                 {viewMode === 'reason' ? (
-                                    <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
-                                        <SortableHeader label="Reason" sortKey="reason" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">SKUs Affected</th>
+                                    <tr>
+                                        <SortableHeader label="Reason" sortKey="reason" sort={sortConfig} onChange={setSortConfig} />
+                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} align="right" />
+                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} tint="red" align="right" />
+                                        <th className="r">SKUs Affected</th>
                                     </tr>
                                 ) : viewMode === 'product' ? (
-                                    <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
-                                        <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Top Reason</th>
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right w-12">Action</th>
+                                    <tr>
+                                        <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} />
+                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} align="right" />
+                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} tint="red" align="right" />
+                                        <th>Top Reason</th>
+                                        <th className="r" style={{ width: 48 }}>Action</th>
                                     </tr>
                                 ) : (
-                                    <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
-                                        <th className="w-8"></th>
-                                        <SortableHeader label="Logistic Partner" sortKey="partner" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                        <SortableHeader label="Complaint Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Share %" sortKey="countShare" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Loss Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Primary Issue</th>
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Action</th>
+                                    <tr>
+                                        <th style={{ width: 32 }}></th>
+                                        <SortableHeader label="Logistic Partner" sortKey="partner" sort={sortConfig} onChange={setSortConfig} />
+                                        <SortableHeader label="Complaints" sortKey="count" sort={sortConfig} onChange={setSortConfig} align="right" />
+                                        <SortableHeader label="Share %" sortKey="countShare" sort={sortConfig} onChange={setSortConfig} align="right" />
+                                        <SortableHeader label="Loss Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} tint="red" align="right" />
+                                        <th>Primary Issue</th>
+                                        <th className="r">Action</th>
                                     </tr>
                                 )}
                             </thead>
-                            <tbody className="divide-y divide-gray-100/50">
+                            <tbody>
                                 {paginatedData.map((item: any) => {
                                     const isInvalidSku = viewMode === 'product' && (!item.sku || item.sku === 'Unknown' || item.sku === 'Freight');
                                     const isPartnerExpanded = viewMode === 'partner' && expandedPartner === item.partner;
-
                                     return (
                                         <React.Fragment key={viewMode === 'reason' ? item.reason : viewMode === 'product' ? item.sku : item.partner}>
-                                            <tr className={`even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors cursor-pointer ${isPartnerExpanded ? 'bg-indigo-50/20 border-l-2 border-indigo-500' : ''}`} onClick={() => viewMode === 'partner' && togglePartnerExpand(item.partner)}>
+                                            <tr style={{ background: isPartnerExpanded ? 'var(--theme-10)' : undefined, borderLeft: isPartnerExpanded ? '2px solid var(--theme)' : undefined, cursor: viewMode === 'partner' ? 'pointer' : undefined }}
+                                                onClick={() => viewMode === 'partner' && togglePartnerExpand(item.partner)}>
                                                 {viewMode === 'reason' ? (
                                                     <>
-                                                        <td className="px-4 py-4 font-medium text-gray-700 truncate max-w-xs" title={item.reason}>{item.reason}</td>
-                                                        <td className="px-4 py-4 text-right font-mono">{item.count}</td>
-                                                        <td className="px-4 py-4 text-right font-mono font-bold text-red-600">£{item.totalValue.toFixed(2)}</td>
-                                                        <td className="px-4 py-4 text-right font-mono">{item.skus.size}</td>
+                                                        <td style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.reason}><span style={{ fontSize: 12, color: '#374151' }}>{item.reason}</span></td>
+                                                        <td className="r"><span className="v-num">{item.count}</span></td>
+                                                        <td className="r col-red"><span className="v-neg v-bold">{formatMoney(item.totalValue)}</span></td>
+                                                        <td className="r"><span className="v-num">{item.skus.size}</span></td>
                                                     </>
                                                 ) : viewMode === 'product' ? (
                                                     <>
-                                                        <td className="px-4 py-4">
-                                                            <div className="font-mono font-bold text-gray-800">{item.sku}</div>
-                                                            <div className="text-gray-500 truncate max-w-[150px]">{productLookup.get(item.sku)?.name || ''}</div>
+                                                        <td>
+                                                            <div style={{ fontWeight: 700, fontSize: 12, color: '#111827' }}>{item.sku}</div>
+                                                            <div style={{ fontSize: 11, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{productLookup.get(item.sku)?.name || ''}</div>
                                                         </td>
-                                                        <td className="px-4 py-4 text-right font-mono">{item.count}</td>
-                                                        <td className="px-4 py-4 text-right font-mono font-bold text-red-600">£{item.totalValue.toFixed(2)}</td>
-                                                        <td className="px-4 py-4 truncate max-w-[150px] text-gray-600">
-                                                            {parseReturnsReason(item.topReason).description || item.topReason}
-                                                        </td>
-                                                        <td className="px-4 py-4 text-right">
-                                                            <button
-                                                                onClick={() => !isInvalidSku && handleDeepDiveClick(item.sku)}
-                                                                className={`p-1.5 bg-white border rounded transition-all ${isInvalidSku ? 'opacity-20 grayscale cursor-not-allowed' : 'border-gray-200 hover:border-indigo-300 text-gray-400 hover:text-indigo-600'}`}
-                                                            >
-                                                                <Search className="w-3.5 h-3.5" />
+                                                        <td className="r"><span className="v-num">{item.count}</span></td>
+                                                        <td className="r col-red"><span className="v-neg v-bold">{formatMoney(item.totalValue)}</span></td>
+                                                        <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ fontSize: 11, color: '#6b7280' }}>{parseReturnsReason(item.topReason).description || item.topReason}</span></td>
+                                                        <td className="r">
+                                                            <button onClick={() => !isInvalidSku && handleDeepDiveClick(item.sku)}
+                                                                style={{ padding: 6, border: '1px solid', borderRadius: 4, borderColor: isInvalidSku ? '#e5e7eb' : '#e5e7eb', background: '#fff', cursor: isInvalidSku ? 'not-allowed' : 'pointer', opacity: isInvalidSku ? 0.3 : 1, display: 'inline-flex', color: '#9ca3af' }}
+                                                                className={isInvalidSku ? '' : 'hover:border-indigo-300 hover:text-indigo-600'}>
+                                                                <Search style={{ width: 12, height: 12 }} />
                                                             </button>
                                                         </td>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <td className="px-4 py-4 text-center cursor-pointer">
-                                                            {isPartnerExpanded ? <ChevronDown className="w-4 h-4 text-indigo-500" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                                                        </td>
-                                                        <td className="px-4 py-4 font-bold text-gray-800 cursor-pointer">{item.partner}</td>
-                                                        <td className="px-4 py-4 text-right font-mono">{item.count}</td>
-                                                        <td className="px-4 py-4 text-right font-mono text-gray-600">
-                                                            <div className="flex items-center justify-end gap-2">
-                                                                <span>{item.countShare.toFixed(1)}%</span>
-                                                                <div className="w-12 h-1 bg-gray-100 rounded-full overflow-hidden">
-                                                                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${item.countShare}%` }}></div>
+                                                        <td style={{ textAlign: 'center' }}>{isPartnerExpanded ? <ChevronDown style={{ width: 14, height: 14, color: '#4f46e5' }} /> : <ChevronRight style={{ width: 14, height: 14, color: '#9ca3af' }} />}</td>
+                                                        <td><span style={{ fontWeight: 700, fontSize: 12, color: '#111827' }}>{item.partner}</span></td>
+                                                        <td className="r"><span className="v-num">{item.count}</span></td>
+                                                        <td className="r">
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                                                                <span className="v-num">{item.countShare.toFixed(1)}%</span>
+                                                                <div style={{ width: 48, height: 4, background: '#f3f4f6', borderRadius: 2, overflow: 'hidden' }}>
+                                                                    <div style={{ height: '100%', background: '#4f46e5', width: `${item.countShare}%` }} />
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="px-4 py-4 text-right font-mono font-bold text-red-600">£{item.totalValue.toFixed(2)}</td>
-                                                        <td className="px-4 py-4 text-gray-600 truncate max-w-[200px]">
-                                                            {item.topReason}
-                                                        </td>
-                                                        <td className="px-4 py-4 text-right">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); onAnalyzeCarrier(item.partner); }}
-                                                                className="p-1.5 bg-white border border-gray-200 rounded hover:border-indigo-300 text-gray-400 hover:text-indigo-600 transition-colors"
-                                                                title="Analyze Carrier Performance on Map"
-                                                            >
-                                                                <MapIcon className="w-3.5 h-3.5" />
+                                                        <td className="r col-red"><span className="v-neg v-bold">{formatMoney(item.totalValue)}</span></td>
+                                                        <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ fontSize: 11, color: '#6b7280' }}>{item.topReason}</span></td>
+                                                        <td className="r">
+                                                            <button onClick={e => { e.stopPropagation(); onAnalyzeCarrier(item.partner); }}
+                                                                style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 4, background: '#fff', cursor: 'pointer', display: 'inline-flex', color: '#9ca3af' }}
+                                                                className="hover:border-indigo-300 hover:text-indigo-600" title="Analyze Carrier">
+                                                                <MapIcon style={{ width: 12, height: 12 }} />
                                                             </button>
                                                         </td>
                                                     </>
                                                 )}
                                             </tr>
                                             {isPartnerExpanded && viewMode === 'partner' && (
-                                                <tr className="bg-gray-50/50">
-                                                    <td colSpan={7} className="p-4">
-                                                        <div className="flex flex-col gap-4">
-                                                            <div className="bg-white rounded border border-gray-200 shadow-sm overflow-hidden">
-                                                                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 text-[10px] font-bold uppercase text-gray-500 flex justify-between">
+                                                <tr style={{ background: 'rgba(249,250,251,0.5)' }}>
+                                                    <td colSpan={7} style={{ padding: 16 }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                                            {/* Service Breakdown */}
+                                                            <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                                                                <div style={{ padding: '6px 12px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#6b7280', display: 'flex', justifyContent: 'space-between' }}>
                                                                     <span>Service Breakdown for {item.partner}</span>
-                                                                    <span>Breakdown based on imported transaction log</span>
+                                                                    <span>From imported transaction log</span>
                                                                 </div>
-                                                                 <table className="w-full text-xs text-left border-separate border-spacing-0">
-                                                                    <thead className="bg-gray-50/80 text-gray-600 font-semibold border-b border-gray-200/50 uppercase tracking-wider transition-colors sticky top-0 z-10 backdrop-blur-sm">
-                                                                         <tr>
-                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Service Name</th>
-                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Refunds</th>
-                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Share %</th>
-                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Value</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                     <tbody className="divide-y divide-gray-100/50">
-                                                                        {item.servicesBreakdown.length > 0 ? (
-                                                                            item.servicesBreakdown.map((srv: any, idx: number) => (
-                                                                                <tr key={idx} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors">
-                                                                                    <td className="px-4 py-2 font-mono text-gray-700">{srv.name || 'Unknown / Not Mapped'}</td>
-                                                                                    <td className="px-4 py-2 text-right font-bold">{srv.count}</td>
-                                                                                    <td className="px-4 py-2 text-right text-gray-500">{srv.share.toFixed(1)}%</td>
-                                                                                    <td className="px-4 py-2 text-right text-red-600">£{srv.value.toFixed(2)}</td>
-                                                                                </tr>
-                                                                            ))
-                                                                        ) : (
-                                                                            <tr><td colSpan={4} className="px-4 py-4 text-center text-gray-400 italic">No service detail available. Re-import Sales Report to capture logistics names.</td></tr>
-                                                                        )}
+                                                                <table className="sello-table" style={{ borderRadius: 0 }}>
+                                                                    <thead><tr><th>Service Name</th><th className="r">Refunds</th><th className="r">Share %</th><th className="r col-red">Value</th></tr></thead>
+                                                                    <tbody>
+                                                                        {item.servicesBreakdown.length > 0 ? item.servicesBreakdown.map((srv: any, idx: number) => (
+                                                                            <tr key={idx}>
+                                                                                <td><span className="v-dim">{srv.name || 'Unknown / Not Mapped'}</span></td>
+                                                                                <td className="r"><span className="v-num v-bold">{srv.count}</span></td>
+                                                                                <td className="r"><span className="v-num">{srv.share.toFixed(1)}%</span></td>
+                                                                                <td className="r col-red"><span className="v-neg">{formatMoney(srv.value)}</span></td>
+                                                                            </tr>
+                                                                        )) : <tr><td colSpan={4} style={{ padding: '12px 16px', textAlign: 'center', color: '#9ca3af', fontStyle: 'italic', fontSize: 11 }}>No service detail available. Re-import Sales Report.</td></tr>}
                                                                     </tbody>
                                                                 </table>
                                                             </div>
-
-                                                            {/* Source Records Inspector */}
-                                                            <div className="bg-white rounded border border-gray-200 shadow-sm overflow-hidden">
-                                                                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex justify-between items-center cursor-pointer hover:bg-gray-100"
-                                                                    onClick={() => setShowSourceRecords(showSourceRecords === item.partner ? null : item.partner)}>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <FileSearch className="w-3.5 h-3.5 text-gray-500" />
-                                                                        <span className="text-[10px] font-bold uppercase text-gray-600">Inspect Contributing Records ({item.records.length})</span>
+                                                            {/* Source Records */}
+                                                            <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                                                                <div style={{ padding: '6px 12px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                                                                    className="hover:bg-gray-100" onClick={() => setShowSourceRecords(showSourceRecords === item.partner ? null : item.partner)}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                        <FileSearch style={{ width: 12, height: 12, color: '#6b7280' }} />
+                                                                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#374151' }}>Inspect Contributing Records ({item.records.length})</span>
                                                                     </div>
-                                                                    <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showSourceRecords === item.partner ? 'rotate-180' : ''}`} />
+                                                                    <ChevronDown style={{ width: 12, height: 12, color: '#9ca3af', transform: showSourceRecords === item.partner ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                                                 </div>
-
                                                                 {showSourceRecords === item.partner && (
-                                                                    <div className="max-h-60 overflow-y-auto">
+                                                                    <div style={{ maxHeight: 240, overflowY: 'auto' }}>
                                                                         {item.partner === 'Unattributed Carrier' && (
-                                                                            <div className="px-3 py-2 bg-amber-50 text-[10px] text-amber-700 border-b border-amber-100 flex items-start gap-2">
-                                                                                <AlertTriangle className="w-3.5 h-3.5 mt-0.5" />
-                                                                                <div>
-                                                                                    <strong>Diagnosis:</strong> These refunds could not be linked to a known carrier.
-                                                                                    <ul className="list-disc pl-3 mt-1 space-y-0.5">
-                                                                                        <li>Check if the <strong>Order ID</strong> exists in your imported Sales History.</li>
-                                                                                        <li>Check if the Sales History has a <strong>Logistic Partner</strong> column mapped.</li>
-                                                                                    </ul>
-                                                                                </div>
+                                                                            <div style={{ padding: '8px 12px', background: '#fffbeb', fontSize: 10, color: '#92400e', borderBottom: '1px solid #fde68a', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                                                                <AlertTriangle style={{ width: 12, height: 12, marginTop: 1, flexShrink: 0 }} />
+                                                                                <div><strong>Diagnosis:</strong> These refunds could not be linked to a known carrier. Check if the Order ID exists in imported Sales History and that Logistic Partner column is mapped.</div>
                                                                             </div>
                                                                         )}
-                                                                         <table className="w-full text-xs text-left border-separate border-spacing-0">
-                                                                            <thead className="bg-gray-50/80 text-gray-600 font-semibold border-b border-gray-200/50 uppercase tracking-wider transition-colors sticky top-0 z-10 backdrop-blur-sm">
-                                                                                 <tr>
-                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Date</th>
-                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Order ID</th>
-                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">SKU</th>
-                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Refund Amt</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody className="divide-y divide-gray-100/50">
+                                                                        <table className="sello-table" style={{ borderRadius: 0 }}>
+                                                                            <thead><tr><th>Date</th><th>Order ID</th><th>SKU</th><th className="r col-red">Refund Amt</th></tr></thead>
+                                                                            <tbody>
                                                                                 {item.records.slice(0, 100).map((rec: RefundLog, rIdx: number) => (
-                                                                                    <tr key={rec.id || rIdx} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors">
-                                                                                        <td className="px-4 py-2 font-mono text-gray-600">{new Date(rec.date).toLocaleDateString()}</td>
-                                                                                        <td className="px-4 py-2 font-mono text-indigo-600 font-medium select-all cursor-text flex items-center gap-1">
-                                                                                            {rec.orderId || '—'}
-                                                                                        </td>
-                                                                                        <td className="px-4 py-2 font-mono text-gray-600">{rec.sku}</td>
-                                                                                        <td className="px-4 py-2 text-right text-gray-800">£{((rec.amount || 0) + (rec.freightAmount || 0)).toFixed(2)}</td>
+                                                                                    <tr key={rec.id || rIdx}>
+                                                                                        <td><span className="v-dim">{new Date(rec.date).toLocaleDateString()}</span></td>
+                                                                                        <td><span className="v-num" style={{ color: '#4f46e5', userSelect: 'all', cursor: 'text' }}>{rec.orderId || '—'}</span></td>
+                                                                                        <td><span className="v-dim">{rec.sku}</span></td>
+                                                                                        <td className="r col-red"><span className="v-neg">{formatMoney((rec.amount || 0) + (rec.freightAmount || 0))}</span></td>
                                                                                     </tr>
                                                                                 ))}
-                                                                                {item.records.length > 100 && (
-                                                                                    <tr><td colSpan={4} className="px-3 py-2 text-center text-gray-400 italic">...and {item.records.length - 100} more</td></tr>
-                                                                                )}
+                                                                                {item.records.length > 100 && <tr><td colSpan={4} style={{ padding: '8px 12px', textAlign: 'center', color: '#9ca3af', fontStyle: 'italic', fontSize: 11 }}>...and {item.records.length - 100} more</td></tr>}
                                                                             </tbody>
                                                                         </table>
                                                                     </div>
@@ -758,15 +434,17 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                     </div>
                 </div>
                 {totalPages > 1 && (
-                    <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-end">
-                        <div className="flex gap-1">
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 border rounded-lg bg-white text-xs font-bold disabled:opacity-50">Prev</button>
-                            <span className="px-3 py-1.5 text-xs text-gray-500 flex items-center">Page {currentPage} of {totalPages}</span>
-                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 border rounded-lg bg-white text-xs font-bold disabled:opacity-50">Next</button>
+                    <div className="sello-table-footer">
+                        <span style={{ fontSize: 12, color: '#6b7280' }}>Page {currentPage} of {totalPages}</span>
+                        <div className="sello-pagination">
+                            <button className="sello-page-btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                            <button className="sello-page-btn" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
                         </div>
                     </div>
                 )}
             </div>
         </div>
     );
+
+    function handleDeepDiveClick(sku: string) { if (!sku || sku === 'Unknown' || sku === 'Freight') return; onDeepDive(sku); }
 };

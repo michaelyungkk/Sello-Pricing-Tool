@@ -530,14 +530,14 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                             setSortRules={setSortRules}
                             availableColumns={visibleColumns}
                             platforms={selectedPlatforms}
-                            themeColor={themeColor}
+                           
                         />
                         <MultiSelectDropdown
                             label="Columns"
                             options={availableColumns}
                             selected={visibleColumns}
                             onChange={setVisibleColumns}
-                            themeColor={themeColor}
+                           
                             icon={Settings2}
                         />
                         <button
@@ -585,20 +585,20 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
             )}
 
             {/* Table */}
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex-1 flex flex-col backdrop-blur-custom relative z-0">
+            <div className="sello-glass rounded-xl overflow-hidden flex-1 flex flex-col relative z-0">
                 <div className="overflow-auto flex-1 relative">
-                    <table className="w-full text-sm text-left whitespace-nowrap border-separate border-spacing-0">
+                    <table className="sello-table">
                         <thead className="sticky top-0 z-20">
-                            <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm transition-colors">
+                            <tr >
                                 {/* Sticky SKU Column */}
-                                        <th className="px-4 py-3 sticky left-0 z-30 bg-gray-50/80 border-b border-r border-gray-200/50 min-w-[200px]" onClick={(e) => handleSort('sku', e)}>
+                                        <th className="sticky left-0 z-30" style={{minWidth:200,borderRight:"1px solid var(--glass-divider)"}} onClick={(e) => handleSort('sku', e)}>
                                     <div className="flex items-center justify-between cursor-pointer">
                                         SKU
                                         {getSortIndicator('sku')}
                                     </div>
                                 </th>
                                 {/* Total Column */}
-                                <th className="px-4 py-3 border-b border-r border-gray-200/50 text-right bg-gray-50/80 min-w-[80px]" onClick={(e) => handleSort('totalQty', e)}>
+                                <th className="r" style={{borderRight:"1px solid var(--glass-divider)",minWidth:80}} onClick={(e) => handleSort('totalQty', e)}>
                                     <div className="flex items-center justify-end cursor-pointer">
                                         Total QTY
                                         {getSortIndicator('totalQty')}
@@ -623,8 +623,8 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                     </React.Fragment>
                                 ))}
                             </tr>
-                            <tr className="bg-gray-50/80 border-b border-gray-200/30 text-[10px] uppercase tracking-wider text-gray-500 font-semibold backdrop-blur-sm transition-colors">
-                                <th className="px-4 py-2 sticky left-0 z-30 bg-gray-50/80 border-r border-gray-200/50 border-b border-gray-200/30 h-8"></th>
+                            <tr >
+                                <th className="sticky left-0 z-30" style={{borderRight:"1px solid var(--glass-divider)",height:32}}></th>
                                 <th className="px-4 py-2 border-r border-gray-200/50 bg-gray-50/80 border-b border-gray-200/30 h-8"></th>
                                 {selectedPlatforms.map(p => (
                                     <React.Fragment key={`${p}-sub`}>
@@ -648,18 +648,18 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100/50">
+                        <tbody >
                             {processedData.length > 0 ? (
                                 processedData.map((row) => (
                                     <tr
                                         key={row.id}
-                                        className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group"
+                                        
                                         onMouseEnter={(e) => { setHoveredRow(row); setCursorPos({ x: e.clientX, y: e.clientY }); }}
                                         onMouseMove={(e) => setCursorPos({ x: e.clientX, y: e.clientY })}
                                         onMouseLeave={() => setHoveredRow(null)}
                                     >
                                         {/* Sticky SKU Cell */}
-                                        <td className="px-4 py-3 sticky left-0 z-10 bg-white border-r border-gray-100/50 group-hover:bg-gray-50/50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors">
+                                        <td className="sticky left-0 z-10" style={{borderRight:"1px solid var(--glass-divider)"}}>
                                             <div className="flex items-center gap-2">
                                                 <span className="font-bold text-gray-900 font-mono text-xs">{row.sku}</span>
                                                 <GradeBadge gradeLevel={row.gradeLevel} />

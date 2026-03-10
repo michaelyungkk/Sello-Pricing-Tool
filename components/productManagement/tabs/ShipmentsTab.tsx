@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product } from '../../../types';
-import { Ship, CheckCircle, AlertCircle } from 'lucide-react';
+import { Ship, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TagSearchInput } from '../../TagSearchInput';
 
 interface ShipmentsTabProps {
@@ -31,7 +31,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
                 });
             }
         });
-        return Object.values(map).sort((a:any, b:any) => {
+        return Object.values(map).sort((a: any, b: any) => {
             if (!a.eta && !b.eta) return 0;
             if (!a.eta) return 1;
             if (!b.eta) return -1;
@@ -45,16 +45,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
             if (p.shipments) {
                 const aliases = p.channels.flatMap(c => c.skuAlias ? c.skuAlias.split(',') : []).map(a => a.trim().toLowerCase());
                 p.shipments.forEach(s => {
-                    items.push({ 
-                        id: `${p.sku}-${s.containerId}`, 
-                        sku: p.sku, 
-                        name: p.name, 
-                        containerId: s.containerId, 
-                        status: s.status, 
-                        eta: s.eta, 
-                        quantity: s.quantity,
-                        aliases 
-                    });
+                    items.push({ id: `${p.sku}-${s.containerId}`, sku: p.sku, name: p.name, containerId: s.containerId, status: s.status, eta: s.eta, quantity: s.quantity, aliases });
                 });
             }
         });
@@ -66,124 +57,119 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
         return allShipmentItems.filter(item => {
             const checkTerm = (term: string) => {
                 const t = term.toLowerCase();
-                return item.containerId.toLowerCase().includes(t) || 
-                       item.sku.toLowerCase().includes(t) ||
-                       (item.aliases && item.aliases.some((a: string) => a.includes(t)));
+                return item.containerId.toLowerCase().includes(t) || item.sku.toLowerCase().includes(t) || (item.aliases && item.aliases.some((a: string) => a.includes(t)));
             };
-            const matchesTag = searchTags.length > 0 && searchTags.some(tag => checkTerm(tag));
-            const matchesInput = inputValue.trim().length > 0 && checkTerm(inputValue);
-            return matchesTag || matchesInput;
+            return (searchTags.length > 0 && searchTags.some(tag => checkTerm(tag))) || (inputValue.trim().length > 0 && checkTerm(inputValue));
         });
     }, [allShipmentItems, searchTags, inputValue]);
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTags, inputValue]);
-    
-    const paginatedTableData = useMemo(() => {
-        return filteredTableData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    }, [filteredTableData, currentPage, itemsPerPage]);
+    useEffect(() => { setCurrentPage(1); }, [searchTags, inputValue]);
 
+    const paginatedTableData = useMemo(() => filteredTableData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredTableData, currentPage]);
     const totalPages = Math.ceil(filteredTableData.length / itemsPerPage);
 
     const foundTagsCount = useMemo(() => {
         if (searchTags.length === 0) return 0;
-        const lowerTags = searchTags.map(t => t.toLowerCase().trim());
-        return lowerTags.filter(tag => 
-            allShipmentItems.some(item => 
-                item.sku.toLowerCase().includes(tag) || 
-                item.containerId.toLowerCase().includes(tag) ||
-                (item.aliases && item.aliases.some((a: string) => a.includes(tag)))
-            )
+        return searchTags.map(t => t.toLowerCase().trim()).filter(tag =>
+            allShipmentItems.some(item => item.sku.toLowerCase().includes(tag) || item.containerId.toLowerCase().includes(tag) || (item.aliases && item.aliases.some((a: string) => a.includes(tag))))
         ).length;
     }, [searchTags, allShipmentItems]);
 
     const getStatusStyle = (status: string) => {
-        if (!status) return 'bg-gray-100 text-gray-800 border-gray-200';
+        if (!status) return { background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' };
         const s = status.toLowerCase();
-        if (s.includes('shipped') && !s.includes('to be')) return 'bg-blue-100 text-blue-800 border-blue-200';
-        if (s.includes('arrived') || s.includes('delivered') || s.includes('cleared')) return 'bg-green-100 text-green-800 border-green-200';
-        if (s.includes('pending') || s.includes('to be')) return 'bg-amber-100 text-amber-800 border-amber-200';
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        if (s.includes('shipped') && !s.includes('to be')) return { background: '#dbeafe', color: '#1e40af', border: '1px solid #bfdbfe' };
+        if (s.includes('arrived') || s.includes('delivered') || s.includes('cleared')) return { background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0' };
+        if (s.includes('pending') || s.includes('to be')) return { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' };
+        return { background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' };
     };
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm">
-                <label className="text-[10px] font-medium text-gray-400 uppercase block mb-2 tracking-wide">Filter Shipments</label>
-                <TagSearchInput 
-                    tags={searchTags}
-                    onTagsChange={updateTags}
-                    onInputChange={setInputValue}
-                    placeholder="Search SKUs, Aliases, or Container IDs..."
-                    themeColor={themeColor}
-                />
+            <div className="sello-glass p-4 rounded-xl">
+                <label style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Filter Shipments</label>
+                <TagSearchInput tags={searchTags} onTagsChange={updateTags} onInputChange={setInputValue}
+                    placeholder="Search SKUs, Aliases, or Container IDs..." themeColor={themeColor} />
             </div>
+
             {(searchTags.length > 0 || inputValue.trim().length > 0) ? (
                 <div className="space-y-3">
                     {searchTags.length > 0 && (
-                        <div className="flex items-center justify-between px-1">
-                            <div className={`text-xs font-medium px-3 py-1.5 rounded-lg border inline-flex items-center gap-2 shadow-sm ${foundTagsCount === searchTags.length ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                                {foundTagsCount === searchTags.length ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                                <span>Found shipments for <strong>{foundTagsCount}</strong> of <strong>{searchTags.length}</strong> searched items</span>
+                        <div className="flex items-center px-1">
+                            <div style={{
+                                fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 8, border: '1px solid',
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                background: foundTagsCount === searchTags.length ? '#f0fdf4' : '#fffbeb',
+                                color: foundTagsCount === searchTags.length ? '#166534' : '#92400e',
+                                borderColor: foundTagsCount === searchTags.length ? '#bbf7d0' : '#fde68a',
+                            }}>
+                                {foundTagsCount === searchTags.length ? <CheckCircle style={{ width: 14, height: 14 }} /> : <AlertCircle style={{ width: 14, height: 14 }} />}
+                                Found shipments for <strong>{foundTagsCount}</strong> of <strong>{searchTags.length}</strong> searched items
                             </div>
                         </div>
                     )}
-                    <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
-                        <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
-                            <thead className="bg-gray-50/50 border-b border-gray-200/50 sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
-                                <tr className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-xs uppercase tracking-wider">
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">SKU</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Container</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">ETA</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Qty</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100/50">
-                                {paginatedTableData.map(row => (
-                                    <tr key={row.id} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors group">
-                                        <td className="px-4 py-4 font-mono font-bold text-gray-700">{row.sku}</td>
-                                        <td className="px-4 py-4 text-indigo-600 font-medium">{row.containerId}</td>
-                                        <td className="px-4 py-4"><span className={`px-2 py-1 rounded border text-[10px] uppercase font-bold ${getStatusStyle(row.status)}`}>{row.status}</span></td>
-                                        <td className="px-4 py-4 text-gray-600">{row.eta || <span className="text-gray-400 italic">Pending</span>}</td>
-                                        <td className="px-4 py-4 text-right font-bold text-gray-800">{row.quantity}</td>
-                                    </tr>
-                                ))}
-                                {filteredTableData.length === 0 && (
+                    <div className="sello-glass rounded-xl overflow-hidden">
+                        <div className="sello-table-scroll">
+                            <table className="sello-table">
+                                <thead>
                                     <tr>
-                                        <td colSpan={5} className="p-8 text-center text-gray-400">
-                                            No shipments found matching your search.
-                                        </td>
+                                        <th>SKU</th>
+                                        <th>Container</th>
+                                        <th>Status</th>
+                                        <th className="col-blue">ETA</th>
+                                        <th className="r">Qty</th>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
-                         {filteredTableData.length > 0 && (
-                            <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6">
-                                <div className="flex gap-2">
-                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 bg-white border rounded text-xs text-gray-600 font-medium disabled:opacity-50">Prev</button>
-                                    <span className="text-xs text-gray-500 pt-1 font-medium">Page {currentPage} of {totalPages}</span>
-                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 bg-white border rounded text-xs text-gray-600 font-medium disabled:opacity-50">Next</button>
+                                </thead>
+                                <tbody>
+                                    {paginatedTableData.map(row => (
+                                        <tr key={row.id}>
+                                            <td><span className="v-num v-bold">{row.sku}</span></td>
+                                            <td><span className="v-num" style={{ color: '#4f46e5' }}>{row.containerId}</span></td>
+                                            <td>
+                                                <span style={{ ...getStatusStyle(row.status), padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', display: 'inline-block' }}>
+                                                    {row.status}
+                                                </span>
+                                            </td>
+                                            <td className="col-blue"><span className="v-num">{row.eta || <span className="v-dim">Pending</span>}</span></td>
+                                            <td className="r"><span className="v-num v-bold">{row.quantity}</span></td>
+                                        </tr>
+                                    ))}
+                                    {filteredTableData.length === 0 && (
+                                        <tr><td colSpan={5} style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>No shipments found matching your search.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        {filteredTableData.length > 0 && totalPages > 1 && (
+                            <div className="sello-table-footer">
+                                <span style={{ fontSize: 12, color: '#6b7280' }}>Page {currentPage} of {totalPages}</span>
+                                <div className="sello-pagination">
+                                    <button className="sello-page-btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft style={{ width: 14, height: 14 }} /></button>
+                                    <button className="sello-page-btn" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight style={{ width: 14, height: 14 }} /></button>
                                 </div>
                             </div>
-                         )}
+                        )}
                     </div>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {containerMap.map((c:any) => (
-                        <div key={c.id} className="bg-custom-glass rounded-xl border border-custom-glass shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
-                            <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-start">
+                    {containerMap.map((c: any) => (
+                        <div key={c.id} className="sello-glass rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+                            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--glass-divider)', background: 'rgba(249,250,251,0.5)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <div>
-                                    <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm"><Ship className="w-4 h-4 text-indigo-600"/>{c.id}</h3>
-                                    <div className="text-[10px] text-gray-500 mt-1 font-medium uppercase tracking-wide">ETA: {c.eta || 'Pending'}</div>
+                                    <h3 style={{ fontWeight: 700, fontSize: 13, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <Ship style={{ width: 14, height: 14, color: '#4f46e5' }} />{c.id}
+                                    </h3>
+                                    <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>ETA: {c.eta || 'Pending'}</div>
                                 </div>
-                                <span className={`text-[9px] font-bold px-2 py-1 rounded border uppercase ${getStatusStyle(c.status)}`}>{c.status}</span>
+                                <span style={{ ...getStatusStyle(c.status), fontSize: 9, fontWeight: 700, padding: '3px 6px', borderRadius: 4, textTransform: 'uppercase' }}>{c.status}</span>
                             </div>
-                            <div className="p-4 flex-1 space-y-1 max-h-40 overflow-y-auto">
-                                {c.items.map((item:any, idx:number) => (
-                                    <div key={idx} className="flex justify-between text-xs py-1 border-b border-gray-50 last:border-0"><span className="font-mono text-gray-600 font-medium">{item.sku}</span><span className="font-bold text-gray-800">{item.qty}</span></div>
+                            <div style={{ padding: 16, flex: 1, maxHeight: 160, overflowY: 'auto' }}>
+                                {c.items.map((item: any, idx: number) => (
+                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, paddingBottom: 4, marginBottom: 4, borderBottom: '1px solid var(--glass-divider)' }}>
+                                        <span className="v-dim">{item.sku}</span>
+                                        <span className="v-num v-bold">{item.qty}</span>
+                                    </div>
                                 ))}
                             </div>
                         </div>
