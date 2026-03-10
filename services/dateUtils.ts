@@ -5,12 +5,8 @@ export const APP_TIMEZONE = 'Australia/Melbourne' as const;
 
 /**
  * Formats a Date object into a stable "YYYY-MM-DD" string in the Melbourne timezone.
- * Uses 'en-CA' locale which reliably produces the YYYY-MM-DD format.
- * @param date The Date object to format.
- * @returns A "YYYY-MM-DD" string.
  */
 export function formatDateKeyMelbourne(date: Date): string {
-  // Using en-CA locale is a reliable way to get YYYY-MM-DD format.
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: APP_TIMEZONE,
     year: 'numeric',
@@ -20,62 +16,111 @@ export function formatDateKeyMelbourne(date: Date): string {
 }
 
 /**
+ * Converts an Excel date serial number to a JS Date.
+ * Excel epoch is December 30, 1899. Serial 1 = Jan 1 1900.
+ * Excel also has a leap year bug (falsely treats 1900 as leap),
+ * so serials > 59 need to subtract 1.
+ */
+function excelSerialToDate(serial: number): Date {
+  const excelEpoch = new Date(Date.UTC(1899, 11, 30)); // Dec 30, 1899 UTC
+  const days = serial > 59 ? serial - 1 : serial;     // correct for Excel leap year bug
+  const ms = days * 24 * 60 * 60 * 1000;
+  return new Date(excelEpoch.getTime() + ms);
+}
+
+/**
+ * Returns true if a number looks like a plausible Excel date serial.
+ * Valid range: 1 (Jan 1 1900) to ~55000 (year ~2050).
+ * Numbers like 45123 = a real date; numbers like 45 (milliseconds) would be 1970.
+ */
+function looksLikeExcelSerial(n: number): boolean {
+  return Number.isInteger(n) && n > 1 && n < 60000;
+}
+
+/**
  * Coerces various date-like inputs into a standardized "YYYY-MM-DD" string key.
- * @param input A Date, a string, or null/undefined.
- * @returns A "YYYY-MM-DD" string or null if the input is invalid.
  */
 export function asDateKey(input: Date | string | null | undefined): string | null {
-  if (!input) {
-    return null;
-  }
+  if (!input) return null;
+
   if (input instanceof Date) {
     return formatDateKeyMelbourne(input);
   }
   if (typeof input === 'string') {
-    // Check if it's already in the correct format
-    if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-      return input;
-    }
-    // Attempt to parse other string formats
+    if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
     const d = new Date(input);
-    if (!isNaN(d.getTime())) {
-      return formatDateKeyMelbourne(d);
-    }
+    if (!isNaN(d.getTime())) return formatDateKeyMelbourne(d);
   }
   return null;
 }
 
 /**
- * Use for parsing uploaded spreadsheets. Spreadsheet datetimes are treated as ‘as-is’ and must not be timezone-shifted.
- * Extracts YYYY-MM-DD using local time methods.
+ * Use for parsing uploaded spreadsheets.
+ *
+ * Handles three cases that come out of xlsx.read():
+ *   1. JS Date object  — xlsx parsed the cell correctly (cellDates: true, proper format)
+ *   2. Excel serial number (integer ~1–60000) — cell was unformatted or generic in ERP export;
+ *      this is the 1970-01-01 bug: new Date(45123) = 45 seconds after epoch, not a real date.
+ *   3. String — ISO string, DD/MM/YYYY, or other text formats.
  */
 export function asDateKeyNaive(input: unknown): string | null {
-  if (input === null || input === undefined || input === '') {
-    return null;
-  }
+  if (input === null || input === undefined || input === '') return null;
 
-  let d: Date;
+  // Case 1: Already a proper JS Date from xlsx cellDates parsing
   if (input instanceof Date) {
-    d = input;
-  } else if (typeof input === 'string' || typeof input === 'number') {
-    d = new Date(input);
-  } else {
+    if (isNaN(input.getTime())) return null;
+    const y = input.getFullYear();
+    const m = String(input.getMonth() + 1).padStart(2, '0');
+    const d = String(input.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // Case 2: Raw Excel serial number — the 1970-01-01 bug
+  // xlsx passes this through as a plain number when cell format is unrecognised
+  if (typeof input === 'number') {
+    if (looksLikeExcelSerial(input)) {
+      const date = excelSerialToDate(input);
+      if (!isNaN(date.getTime())) {
+        const y = date.getUTCFullYear();
+        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(date.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+    }
+    // Not a valid serial — give up
     return null;
   }
 
-  if (isNaN(d.getTime())) return null;
+  // Case 3: String — try common formats
+  if (typeof input === 'string') {
+    const s = input.trim();
+    if (!s) return null;
 
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+    // DD/MM/YYYY (common ERP format)
+    const dmyMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (dmyMatch) {
+      const [, d, mo, y] = dmyMatch;
+      return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
+    // ISO string or other parseable formats
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear();
+      const mo = String(parsed.getMonth() + 1).padStart(2, '0');
+      const d = String(parsed.getDate()).padStart(2, '0');
+      return `${y}-${mo}-${d}`;
+    }
+  }
+
+  return null;
 }
 
 /**
- * Resolves the date key for a return record. 
- * Sanity Check: 
- * - 'refundDate' (default): Attributes returns to the day they were processed. Good for reconciling bank statements.
- * - 'orderDate': Attributes returns back to the original sale date. Good for identifying "bad batches" or quality issues in specific order periods.
+ * Resolves the date key for a return record.
  */
 export function getReturnDateKey(
   row: RefundLog,
@@ -90,58 +135,24 @@ export function getReturnDateKey(
   return asDateKey(row.date);
 }
 
-/**
- * Compares two "YYYY-MM-DD" date keys lexicographically.
- * @param a The first date key.
- * @param b The second date key.
- * @returns -1 if a < b, 0 if a === b, 1 if a > b.
- */
 export function compareDateKeys(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
-/**
- * Checks if a date key is inclusively between a start and end date key.
- * @param d The date key to check.
- * @param start The start date key of the range.
- * @param end The end date key of the range.
- * @returns True if d is between start and end (inclusive).
- */
 export function isDateKeyBetween(d: string, start: string, end: string): boolean {
   return d >= start && d <= end;
 }
 
-/**
- * Adds or subtracts days from a "YYYY-MM-DD" date key, maintaining timezone correctness.
- * It treats the input date key as a UTC date to perform safe arithmetic, then formats
- * the result back into the Melbourne timezone.
- * @param dateKey The starting date key in "YYYY-MM-DD" format.
- * @param days The number of days to add (can be negative).
- * @returns A new "YYYY-MM-DD" string.
- */
 export function addDaysToDateKey(dateKey: string, days: number): string {
-  // By passing 'YYYY-MM-DD', new Date() correctly interprets it as midnight UTC.
   const d = new Date(dateKey);
-  // Use UTC methods to avoid local timezone interference during calculation.
   d.setUTCDate(d.getUTCDate() + days);
-  // Format the resulting date back into the target Melbourne timezone.
   return formatDateKeyMelbourne(d);
 }
 
-/**
- * Gets the current date as a "YYYY-MM-DD" string in the Melbourne timezone.
- * @param now Optional reference date. Defaults to the current time.
- * @returns Today's date key.
- */
 export function getTodayKeyMelbourne(now: Date = new Date()): string {
   return formatDateKeyMelbourne(now);
 }
 
-/**
- * Gets yesterday's date as a "YYYY-MM-DD" string in the Melbourne timezone.
- * @param now Optional reference date. Defaults to the current time.
- * @returns Yesterday's date key.
- */
 export function getYesterdayKeyMelbourne(now: Date = new Date()): string {
   const todayKey = getTodayKeyMelbourne(now);
   return addDaysToDateKey(todayKey, -1);
