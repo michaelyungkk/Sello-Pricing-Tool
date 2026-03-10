@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GradeBadge } from '../../GradeBadge';
 import { FilterBar } from '../../common/FilterBar';
 import { SortableHeader } from '../../common/SortableHeader';
@@ -57,6 +57,8 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
   skuFamilies = [],
   products = [],
 }) => {
+
+  const [activeFamilyTooltip, setActiveFamilyTooltip] = useState<string | null>(null);
 
   const getRunwayBin = (days: number, stockLevel: number, leadTime: number) => {
     if (stockLevel <= 0) return { label: 'Out of Stock', cls: 'sello-badge badge-run-crit' };
@@ -157,7 +159,11 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                           if (!family) return null;
                           const siblings = family.memberSkus.filter(s => s !== row.sku);
                           return (
-                            <div className="group relative" style={{ marginLeft: 2 }}>
+                            <div
+                              style={{ marginLeft: 2, position: 'relative' }}
+                              onMouseEnter={() => setActiveFamilyTooltip(row.sku)}
+                              onMouseLeave={() => setActiveFamilyTooltip(null)}
+                            >
                               <div style={{
                                 width: 17, height: 17, borderRadius: 4,
                                 background: 'var(--theme-10)', border: '1px solid var(--theme-20)',
@@ -171,8 +177,10 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                 position: 'absolute', bottom: '100%', left: 0, marginBottom: 8,
                                 width: 280, padding: 12, background: '#111827', color: 'white',
                                 fontSize: 11, borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-                                opacity: 0, pointerEvents: 'none', zIndex: 100,
-                              }} className="group-hover:opacity-100 transition-opacity duration-150">
+                                opacity: activeFamilyTooltip === row.sku ? 1 : 0,
+                                pointerEvents: 'none', zIndex: 100,
+                                transition: 'opacity 150ms',
+                              }}>
                                 <div style={{ fontWeight: 700, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: 6 }}>
                                   <Layers style={{ width: 12, height: 12, color: '#818cf8' }} />
                                   Family: {family.name}
