@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatSmartMoney } from '../utils/format';
 import { Product, AnalysisResult } from '../types';
 import StockChart from './StockChart';
 import { Check, AlertTriangle, X, TrendingUp, TrendingDown, WifiOff } from 'lucide-react';
@@ -88,7 +89,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ product, analysis, isLoad
                   <p className="text-sm font-medium" style={{ color: themeColor }}>{t('analysis_recommended_action')}</p>
                   <div className="flex items-center gap-3 mt-1">
                     <div>
-                      <span className="text-2xl font-bold text-gray-900">£{analysis.recommendedPrice.toFixed(2)}</span>
+                      <span className="text-2xl font-bold text-gray-900">{formatSmartMoney(analysis.recommendedPrice)}</span>
                       <span className="text-xs text-gray-500 ml-2">{t('currently_price', { price: currentPriceWithVat.toFixed(2) })}</span>
                     </div>
                   </div>

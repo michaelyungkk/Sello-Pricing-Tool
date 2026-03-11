@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Trophy, BellRing, X, Settings, Plus, Layers, TrendingUp, RotateCcw, BarChart as BarChartIcon, ArrowUpRight, ArrowDownRight, Activity, Check, ChevronDown, Minus, Medal, Info, ArrowUp, ArrowDown, LayoutGrid, Maximize2, Sparkles, Search } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, ReferenceArea, BarChart, Bar, Cell, ReferenceLine, AreaChart, Area } from 'recharts';
-import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
+import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { Tab3AlertRules } from '../../../services/platformAlertRules';
 import { PlatformTrendData } from '../../../services/platformTrendAgg';
 import { Flag } from '../platformManagement.types';
@@ -56,7 +56,7 @@ const SummaryCard = ({ title, platform, delta, value, type }: { title: string, p
     const bgClass = type === 'pos' ? 'bg-green-50' : type === 'neg' ? 'bg-red-50' : 'bg-indigo-50';
 
     return (
-        <div className="sello-glass p-3.5 rounded-xl flex items-start justify-between min-w-0">
+        <div className="bg-custom-glass backdrop-blur-custom p-3.5 rounded-xl border border-custom-glass shadow-sm flex items-start justify-between min-w-0">
             <div className="min-w-0 flex-1">
                 <span className="text-[10px] font-medium text-gray-400 uppercase block mb-1 truncate">{title}</span>
                 <div className="font-medium text-gray-900 truncate text-sm">
@@ -68,7 +68,7 @@ const SummaryCard = ({ title, platform, delta, value, type }: { title: string, p
                             {delta > 0 ? '+' : ''}{delta.toFixed(1)}%
                         </>
                     ) : value !== undefined ? (
-                        formatMoney(value, 0)
+                        formatSmartMoney(value)
                     ) : '—'}
                 </div>
             </div>
@@ -360,7 +360,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                             if (trendMetric === 'AVG_ORDER_VALUE') delta = platformTrend.deltas.avgOrderValueDeltaPct;
                         }
                         return (
-                            <div key={i} className={`flex items-center justify-between gap-4 transition-opacity ${hoveredPlatform && hoveredPlatform !== platformName ? 'opacity-30' : 'opacity-100'}`}><div className="flex items-center gap-2 min-w-0"><div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} /><span className="text-[11px] font-medium truncate opacity-90">{platformName}</span></div><div className="flex items-center gap-2 shrink-0"><span className="text-[11px] font-mono font-medium">{trendMetric === 'MARGIN_PCT' ? value.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(value) : formatMoney(value, 0)}</span>{delta !== null && isFinite(delta) && (<span className={`text-[9px] font-medium px-1 rounded-sm ${delta >= 0 ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>{trendMetric === 'MARGIN_PCT' ? (delta > 0 ? '+' : '') : (delta > 0 ? '↑' : '↓')}{Math.abs(delta).toFixed(0)}{trendMetric === 'MARGIN_PCT' ? 'pp' : '%'}</span>)}</div></div>
+                            <div key={i} className={`flex items-center justify-between gap-4 transition-opacity ${hoveredPlatform && hoveredPlatform !== platformName ? 'opacity-30' : 'opacity-100'}`}><div className="flex items-center gap-2 min-w-0"><div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} /><span className="text-[11px] font-medium truncate opacity-90">{platformName}</span></div><div className="flex items-center gap-2 shrink-0"><span className="text-[11px] font-mono font-medium">{trendMetric === 'MARGIN_PCT' ? value.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(value) : formatSmartMoney(value)}</span>{delta !== null && isFinite(delta) && (<span className={`text-[9px] font-medium px-1 rounded-sm ${delta >= 0 ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>{trendMetric === 'MARGIN_PCT' ? (delta > 0 ? '+' : '') : (delta > 0 ? '↑' : '↓')}{Math.abs(delta).toFixed(0)}{trendMetric === 'MARGIN_PCT' ? 'pp' : '%'}</span>)}</div></div>
                         );
                     })}
                 </div>
@@ -412,8 +412,8 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                 </div>
             </div>
 
-            <div className="sello-glass rounded-xl overflow-hidden">
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--glass-divider)",background:"var(--glass-head-bg)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+                <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <Trophy className="w-5 h-5 text-amber-500" />
                         <div>
@@ -426,25 +426,25 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                         {isAlertRulesOpen && (<div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"><div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h4 className="font-bold text-gray-900 text-sm">Alert Thresholds</h4><button onClick={() => setIsAlertRulesOpen(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="space-y-4"><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Revenue Drop Threshold (%)</label><input type="number" value={alertRules.revenueDropPctThreshold} onChange={e => setAlertRules({ ...alertRules, revenueDropPctThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Low Margin Threshold (%)</label><input type="number" value={alertRules.marginLowThreshold} onChange={e => setAlertRules({ ...alertRules, marginLowThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">High TACoS Threshold (%)</label><input type="number" value={alertRules.tacosHighThreshold} onChange={e => setAlertRules({ ...alertRules, tacosHighThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div></div><div className="mt-6 flex gap-2"><button onClick={() => setIsAlertRulesOpen(false)} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-medium text-xs">Save</button></div></div>)}
                     </div>
                 </div>
-                <div className="sello-table-scroll">
-                    <table className="sello-table">
-                        <thead >
+                <div className="overflow-x-auto">
+                    <table className="tbl w-full text-left text-sm whitespace-nowrap">
+                        <thead className="sticky top-0">
                             <tr>
-                                <SortableHeader label="Rank" sortKey="rank" sort={tableSort} onChange={setTableSort} align="center" style={{width:40}} />
-                                <SortableHeader label="Platform Performance" sortKey="name" sort={tableSort} onChange={setTableSort} />
-                                <SortableHeader label="Revenue" sortKey="revenue" sort={tableSort} onChange={setTableSort} align="right" />
-                                <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={tableSort} onChange={setTableSort} align="right" />
-                                <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={tableSort} onChange={setTableSort} align="right" />
-                                <SortableHeader label="Quality (Refunds)" sortKey="refunds" sort={tableSort} onChange={setTableSort} align="right" />
-                                <th style={{textAlign:"center"}}>Risk Analysis</th>
+                                <SortableHeader label="Rank" sortKey="rank" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="center" className="w-10" />
+                                <SortableHeader label="Platform Performance" sortKey="name" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" />
+                                <SortableHeader label="Revenue" sortKey="revenue" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
+                                <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
+                                <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
+                                <SortableHeader label="Quality (Refunds)" sortKey="refunds" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
+                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Risk Analysis</th>
                             </tr>
                         </thead>
-                        <tbody >
+                        <tbody>
                             {portfolioAverages && (
-                                <tr style={{background:"var(--theme-10)",borderBottom:"1px solid rgba(79,70,229,0.15)"}}>
+                                <tr className="bg-indigo-50/50 border-b border-indigo-100 shadow-inner">
                                     <td className="px-4 py-3 text-center"><Activity className="w-4 h-4 text-indigo-400 mx-auto" /></td>
                                     <td className="px-4 py-3"><div className="font-black text-indigo-900 text-xs italic">PORTFOLIO AVERAGE</div></td>
-                                    <td className="px-4 py-3 text-right"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatMoney(portfolioAverages.revenue, 0)}</span><TrendDeltaPill value={portfolioAverages.revenueDelta} /></div></td>
+                                    <td className="px-4 py-3 text-right"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatSmartMoney(portfolioAverages.revenue)}</span><TrendDeltaPill value={portfolioAverages.revenueDelta} /></div></td>
                                     <td className="px-4 py-3 text-right"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatPct(portfolioAverages.margin)}</span><TrendDeltaPill value={portfolioAverages.marginDelta} isPp /></div></td>
                                     <td className="px-4 py-3 text-right"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatPct(portfolioAverages.tacos)}</span><TrendDeltaPill value={portfolioAverages.tacosDelta} isPp invert /></div></td>
                                     <td className="px-4 py-3 text-right"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatPct(portfolioAverages.refundRate)}</span><TrendDeltaPill value={portfolioAverages.refundRateDelta} isPp invert /></div></td>
@@ -470,12 +470,12 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                 if (isRefundHigh) flags.push({ label: "High Returns", style: "bg-orange-100 text-orange-800 border-orange-200", tooltip: "Quality/Fulfillment issues detected" });
                                 if (row.current.netProfit < 0) flags.push({ label: "Bleeding", style: "bg-red-900 text-white border-red-950 shadow-sm", tooltip: "Operating at a net loss" });
                                 return (
-                                    <tr key={row.platform} style={{cursor:"pointer",background:hoveredPlatform===row.platform?"var(--theme-10)":undefined}} onMouseEnter={() => setHoveredPlatform(row.platform)} onMouseLeave={() => setHoveredPlatform(null)}>
+                                    <tr key={row.platform} className={`cursor-pointer ${hoveredPlatform === row.platform ? 'bg-indigo-50/40 ring-1 ring-inset ring-indigo-200' : ''}`} onMouseEnter={() => setHoveredPlatform(row.platform)} onMouseLeave={() => setHoveredPlatform(null)}>
                                         <td className="p-4 text-center"><div className="flex flex-col items-center gap-0.5"><div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-black border border-gray-200">{row.currentPos}</div>{row.shift !== 0 ? (<div className={`text-[8px] font-black flex items-center ${row.shift > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{row.shift > 0 ? <ArrowUp className="w-2 h-2" /> : <ArrowDown className="w-2 h-2" />}{Math.abs(row.shift)}</div>) : <Minus className="w-2 h-2 text-gray-300" />}</div></td>
                                         <td className="p-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white shadow-sm" style={{ backgroundColor: rule?.color || '#6366f1' }}>{row.platform[0]}</div><div className="flex flex-col"><div className="font-bold text-gray-900 text-sm leading-none">{row.platform}</div><div className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-wider">{rule?.manager || 'Unassigned'}</div></div></div></td>
                                         <td className={`p-4 text-right transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}>
                                             <div className="flex flex-col items-end">
-                                                <span className="font-bold text-gray-900">{formatMoney(row.current.revenue, 0)}</span>
+                                                <span className="font-bold text-gray-900">{formatSmartMoney(row.current.revenue)}</span>
                                                 {isCostBased && <span className="text-[8px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded border border-slate-200 cursor-help" title="Cost-based Revenue">Cost Basis</span>}
                                                 <TrendDeltaPill value={revDelta} />
                                             </div>
@@ -492,8 +492,8 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                 </div>
             </div>
 
-            <div className="sello-glass rounded-xl overflow-hidden">
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--glass-divider)",background:"var(--glass-head-bg)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div className="flex items-center gap-2"><Settings className="w-4 h-4 text-indigo-500" /><h4 className="font-bold text-gray-800 text-sm">Chart Configuration</h4></div><button onClick={() => setIsGroupCreatorOpen(!isGroupCreatorOpen)} className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-white text-gray-600 border-gray-200 hover:border-gray-300 transition-all flex items-center gap-1"><Plus className="w-3 h-3" /> Create Group</button></div>
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
+                <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center"><div className="flex items-center gap-2"><Settings className="w-4 h-4 text-indigo-500" /><h4 className="font-bold text-gray-800 text-sm">Chart Configuration</h4></div><button onClick={() => setIsGroupCreatorOpen(!isGroupCreatorOpen)} className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-white text-gray-600 border-gray-200 hover:border-gray-300 transition-all flex items-center gap-1"><Plus className="w-3 h-3" /> Create Group</button></div>
                 <div className="p-6">
                     {isGroupCreatorOpen && (<div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 animate-in fade-in slide-in-from-top-2 mb-6"><div className="flex gap-4 mb-3"><div className="flex-1"><label className="text-[10px] font-medium text-indigo-400 uppercase block mb-1">Group Name</label><input type="text" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="e.g. Amazon Combined" className="w-full text-sm border border-indigo-200 rounded-md px-3 py-1.5 bg-white" /></div></div><div className="mb-4"><label className="text-[10px] font-medium text-indigo-400 uppercase block mb-1">Select Platforms</label><div className="flex flex-wrap gap-2">{uniquePlatforms.map((p: string) => <button key={p} onClick={() => toggleNewGroupPlatform(p)} className={`px-2 py-1 text-xs rounded border transition-all ${newGroupPlatforms.includes(p) ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}>{p}</button>)}</div></div><div className="flex justify-end gap-2"><button onClick={() => setIsGroupCreatorOpen(false)} className="text-xs text-gray-500 px-3 py-1.5">Cancel</button><button onClick={handleCreateGroup} disabled={!newGroupName || newGroupPlatforms.length < 2} className="text-xs bg-indigo-600 text-white font-medium px-4 py-1.5 rounded-md disabled:opacity-50">Save Group</button></div></div>)}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
@@ -622,7 +622,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                                         case 'AVG_ORDER_VALUE': val = platData?.current.avgOrderValue || 0; break;
                                                         case 'UNITS_SOLD': val = platData?.current.unitsSold || 0; break;
                                                     }
-                                                    return trendMetric === 'MARGIN_PCT' ? val.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(val) : formatMoney(val, 0);
+                                                    return trendMetric === 'MARGIN_PCT' ? val.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(val) : formatSmartMoney(val);
                                                 })()}
                                             </div>
                                         </div>
@@ -643,7 +643,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                                             const val = payload[0].value as number;
                                                             return (
                                                                 <div className="bg-gray-900 text-white px-2 py-1 rounded text-[10px] font-bold">
-                                                                    {trendMetric === 'MARGIN_PCT' ? val.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(val) : formatMoney(val, 0)}
+                                                                    {trendMetric === 'MARGIN_PCT' ? val.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(val) : formatSmartMoney(val)}
                                                                 </div>
                                                             );
                                                         }
@@ -673,8 +673,8 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                 </div>
             </div>
 
-            <div className="sello-glass rounded-xl overflow-hidden mt-6">
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--glass-divider)",background:"var(--glass-head-bg)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div className="flex items-center gap-2"><BarChartIcon className="w-4 h-4 text-indigo-500" /><h3 className="font-bold text-gray-800 text-sm uppercase tracking-wide">{metricLabels[trendMetric]} Comparison by Platform</h3></div></div>
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden mt-6">
+                <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center"><div className="flex items-center gap-2"><BarChartIcon className="w-4 h-4 text-indigo-500" /><h3 className="font-bold text-gray-800 text-sm uppercase tracking-wide">{metricLabels[trendMetric]} Comparison by Platform</h3></div></div>
                 <div className="p-6 h-[400px]">
                     {barChartData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
@@ -698,13 +698,13 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                                     <div className="flex justify-between gap-6">
                                                         <span className="text-gray-400">Current:</span>
                                                         <span className="font-mono font-medium text-white">
-                                                            {trendMetric === 'MARGIN_PCT' ? currVal.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(currVal) : formatMoney(currVal)}
+                                                            {trendMetric === 'MARGIN_PCT' ? currVal.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(currVal) : formatSmartMoney(currVal)}
                                                         </span>
                                                     </div>
                                                     <div className="flex justify-between gap-6">
                                                         <span className="text-gray-400">Prior:</span>
                                                         <span className="font-mono font-medium text-blue-300">
-                                                            {trendMetric === 'MARGIN_PCT' ? priorVal.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(priorVal) : formatMoney(priorVal)}
+                                                            {trendMetric === 'MARGIN_PCT' ? priorVal.toFixed(1) + '%' : trendMetric === 'UNITS_SOLD' ? formatNumber(priorVal) : formatSmartMoney(priorVal)}
                                                         </span>
                                                     </div>
                                                     {(currentItem || priorItem) && (

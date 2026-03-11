@@ -1,5 +1,6 @@
 
 import React, { useState, useRef } from 'react';
+import { formatSmartMoney } from '../utils/format';
 import { Upload, X, Check, AlertCircle, Loader2, RotateCcw, Info, Link as LinkIcon, FileQuestion, Filter, Trash2, FileText, MessageSquare } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { RefundLog } from '../types';
@@ -361,7 +362,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                                     <div className="text-xs text-red-600 font-medium uppercase">Refunds Found</div>
                                 </div>
                                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                    <div className="text-2xl font-bold text-gray-700">£{stats.totalValue.toFixed(2)}</div>
+                                    <div className="text-2xl font-bold text-gray-700">{formatSmartMoney(stats.totalValue)}</div>
                                     <div className="text-xs text-gray-600 font-medium uppercase">Total Value (Inc VAT)</div>
                                 </div>
                             </div>

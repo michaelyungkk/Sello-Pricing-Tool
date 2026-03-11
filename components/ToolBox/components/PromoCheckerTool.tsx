@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
+import { formatSmartMoney } from '../../../utils/format';
 import { Upload, X, Check, AlertCircle, Loader2, CheckSquare, ShieldCheck, Tag, Filter, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product, PromotionItem } from '../../../types';
@@ -338,8 +339,8 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                         </div>
                     </div>
                     <div className="max-h-96 overflow-y-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100/80 text-gray-500 font-semibold sticky top-0 z-10">
+                        <table className="tbl tbl-compact w-full text-sm text-left">
+                            <thead className="sticky top-0">
                                 <tr>
                                     <th className="p-3">Platform SKU (Target)</th>
                                     <th className="p-3">Uploaded SKU</th>
@@ -349,7 +350,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                                     <th className="p-3">Info</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100/50">
+                            <tbody>
                                 {results.map((item, idx) => (
                                     <tr key={idx} className={item.status === 'On Promotion' ? 'bg-amber-50/30' : item.status === 'Skipped' ? 'bg-gray-50 text-gray-400' : ''}>
                                         <td className="p-3 font-mono font-bold text-indigo-700">
@@ -360,7 +361,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                                             {item.matchedVia && item.status !== 'Skipped' && <span className="ml-2 text-[10px] border rounded px-1">Alias</span>}
                                         </td>
                                         <td className="p-3 font-mono text-xs">{item.masterSku}</td>
-                                        <td className="p-3 text-right font-mono">£{item.price.toFixed(2)}</td>
+                                        <td className="p-3 text-right font-mono">{formatSmartMoney(item.price)}</td>
                                         <td className="p-3">
                                             {item.status === 'Safe to Update' ? (
                                                 <span className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-bold text-green-700 bg-green-100 rounded-full border border-green-200">

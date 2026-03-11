@@ -189,15 +189,15 @@ export const DataNormalizationSection: React.FC<DataNormalizationSectionProps> =
                     </div>
 
                     <div className="flex-1 overflow-y-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="sticky top-0 bg-gray-50 z-10">
+                        <table className="tbl w-full text-left border-collapse">
+                            <thead className="sticky top-0">
                                 <tr>
                                     <th className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Raw Value</th>
                                     <th className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">Target Value</th>
                                     <th className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 w-10"></th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50">
+                            <tbody>
                                 {Object.entries(currentMap).length === 0 ? (
                                     <tr>
                                         <td colSpan={3} className="px-4 py-12 text-center text-gray-400 text-sm italic">
@@ -206,7 +206,7 @@ export const DataNormalizationSection: React.FC<DataNormalizationSectionProps> =
                                     </tr>
                                 ) : (
                                     Object.entries(currentMap).map(([raw, target]) => (
-                                        <tr key={raw} className="group hover:bg-gray-50 transition-colors">
+                                        <tr key={raw} className="group">
                                             <td className="px-4 py-3 text-sm text-gray-600 font-mono">{raw}</td>
                                             <td className="px-4 py-3 text-sm font-medium text-gray-900">{target}</td>
                                             <td className="px-4 py-3">

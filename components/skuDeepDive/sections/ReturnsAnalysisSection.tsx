@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { RotateCcw, Calendar, Brain, CloudOff, Sparkles, Smile, MessageSquare, AlertTriangle, Hash, ExternalLink, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
-import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
+import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { parseReturnsReason } from '../../../services/returnsReasonCodes';
 import ReturnsReasonTimelineChart from '../returns/ReturnsReasonTimelineChart';
 import { KeywordCloud } from '../parts/KeywordCloud';
@@ -129,7 +129,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-[10px] font-bold text-gray-500 uppercase">Total Freight Refunded (Inc VAT)</span>
                                     </div>
-                                    <div className="text-xl font-bold text-gray-700">{formatMoney(refundAnalysis.totalFreight * VAT_MULTIPLIER)}</div>
+                                    <div className="text-xl font-bold text-gray-700">{formatSmartMoney(refundAnalysis.totalFreight * VAT_MULTIPLIER)}</div>
                                 </div>
                                 </div>
 
@@ -152,7 +152,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                                     <span className="font-medium text-gray-700 truncate max-w-[150px]" title={r.reason}>{r.reason}</span>
                                                     <div className="text-right">
                                                         <div className="font-bold text-red-600">{r.count}</div>
-                                                        <div className="text-[10px] text-gray-400">{formatMoney(r.value, 0)}</div>
+                                                        <div className="text-[10px] text-gray-400">{formatSmartMoney(r.value)}</div>
                                                     </div>
                                                 </div>
                                             ))}
@@ -257,8 +257,8 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                             <span className="text-[10px] text-gray-400 font-bold uppercase italic">* Aligned with chart history</span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left text-xs">
-                                <thead className="bg-white/10 text-gray-500 font-semibold border-b border-custom-glass sticky top-0 z-10 whitespace-nowrap">
+                            <table className="tbl w-full text-left text-xs">
+                                <thead className="sticky top-0 whitespace-nowrap">
                                     <tr>
                                         <SortableHeader label="Date" sortKey="date" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
                                         <SortableHeader label="Order ID" sortKey="orderId" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
@@ -269,7 +269,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                         <th className="p-3 text-right">Comments</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-50">
+                                <tbody>
                                     {paginatedRefunds.length > 0 ? (
                                         paginatedRefunds.map((r: any, i: number) => {
                                             const reasonMeta = parseReturnsReason(r.platformReason || r.reason);
@@ -281,7 +281,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                             const isFallbackDate = returnDateBasis === 'orderDate' && !displayDateKey && r.date;
                                             
                                             return (
-                                                <tr key={`${r.id || 'ref'}-${i}`} className="hover:bg-gray-50/80 transition-colors">
+                                                <tr key={`${r.id || 'ref'}-${i}`} className="">
                                                     <td className="p-3 font-mono opacity-80 whitespace-nowrap">
                                                         {displayDateKey ? new Date(displayDateKey).toLocaleDateString('en-GB') : (r.date ? new Date(r.date).toLocaleDateString('en-GB') : '-')}
                                                         {isFallbackDate && <span className="text-red-400 ml-1 text-[9px] font-bold" title="Order date unavailable, using refund date">*</span>}
@@ -300,7 +300,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                                         </span>
                                                     </td>
                                                     <td className="p-3 text-right font-bold text-gray-900 whitespace-nowrap">{r.quantity}</td>
-                                                    <td className="p-3 text-right font-bold text-red-600 whitespace-nowrap">{formatMoney(displayAmount)}</td>
+                                                    <td className="p-3 text-right font-bold text-red-600 whitespace-nowrap">{formatSmartMoney(displayAmount)}</td>
                                                     <td className="p-3 whitespace-normal min-w-[150px]">
                                                         <div className="flex flex-col">
                                                             <span className="font-bold text-gray-700">{reasonMeta.short}</span>

@@ -3,7 +3,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { Activity, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts';
-import { formatMoney } from '../../../utils/format';
+import { formatMoney, formatSmartMoney } from '../../../utils/format';
 
 export const calculateQuantiles = (data: number[]) => {
     if (data.length === 0) return null;
@@ -291,7 +291,7 @@ export const BoxPlot = ({ title, stats7, stats30, stats90, format, color = '#636
                 <div className="mt-auto pt-2 border-t border-gray-100 bg-orange-50/50 -m-4 mt-2 px-4 py-2 rounded-b-xl">
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-600 font-medium">Ad-Only Spend (7d):</span>
-                        <span className="font-bold text-orange-700">{formatMoney(adOnly7)}</span>
+                        <span className="font-bold text-orange-700">{formatSmartMoney(adOnly7)}</span>
                     </div>
                 </div>
             )}

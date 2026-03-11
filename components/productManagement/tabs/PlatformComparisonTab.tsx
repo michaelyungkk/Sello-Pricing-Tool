@@ -6,7 +6,7 @@ import { FilterBar } from '../../common/FilterBar';
 import { Columns, ChevronDown, CheckSquare, Square, Download, GripVertical, Settings2, ArrowUp, ArrowDown, Plus, Trash2, ListFilter, Trophy } from 'lucide-react';
 import { asDateKey, isDateKeyBetween } from '../../../services/dateUtils';
 import { calcRevenue, calcProfit, calcUnits } from '../../../services/metrics';
-import { formatPct, formatNumber, formatMoney } from '../../../utils/format';
+import { formatPct, formatNumber, formatMoney, formatSmartMoney } from '../../../utils/format';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { GradeBadge } from '../../GradeBadge';
 import AuditPanel from '../../AuditPanel';
@@ -211,7 +211,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
     dateWindow
 }) => {
     const [isAuditVisible, setIsAuditVisible] = useState(false);
-    const [searchTags] = useState<string[]>([]);
+    const [searchTags, setSearchTags] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
 
@@ -473,7 +473,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         if (!winner) return null;
 
         let displayVal = '';
-        if (metric === 'revenue' || metric === 'profit' || metric === 'avgPrice') displayVal = formatMoney(maxVal, 0);
+        if (metric === 'revenue' || metric === 'profit' || metric === 'avgPrice') displayVal = formatSmartMoney(maxVal);
         else if (metric === 'pm' || metric === 'share') displayVal = formatPct(maxVal);
         else displayVal = formatNumber(maxVal);
 
@@ -511,9 +511,10 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                 showAudit
                 auditActive={isAuditVisible}
                 onAuditToggle={() => setIsAuditVisible(v => !v)}
-                searchValue={searchQuery}
-                onSearchChange={setSearchQuery}
-                searchPlaceholder="Search SKU or Product Name..."
+                searchTags={searchTags}
+                onSearchTagsChange={(tags) => { setSearchTags(tags); }}
+                onSearchChange={(val) => { setSearchQuery(val); }}
+                searchPlaceholder="Search SKU or Product Name…"
                 multiSelects={[
                     {
                         key: 'platform',
@@ -530,14 +531,14 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                             setSortRules={setSortRules}
                             availableColumns={visibleColumns}
                             platforms={selectedPlatforms}
-                           
+                            themeColor={themeColor}
                         />
                         <MultiSelectDropdown
                             label="Columns"
                             options={availableColumns}
                             selected={visibleColumns}
                             onChange={setVisibleColumns}
-                           
+                            themeColor={themeColor}
                             icon={Settings2}
                         />
                         <button
@@ -585,20 +586,20 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
             )}
 
             {/* Table */}
-            <div className="sello-glass rounded-xl overflow-hidden flex-1 flex flex-col relative z-0">
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex-1 flex flex-col backdrop-blur-custom relative z-0">
                 <div className="overflow-auto flex-1 relative">
-                    <table className="sello-table">
-                        <thead className="sticky top-0 z-20">
-                            <tr >
+                    <table className="tbl w-full text-sm text-left whitespace-nowrap border-separate border-spacing-0">
+                        <thead className="sticky top-0">
+                            <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
                                 {/* Sticky SKU Column */}
-                                        <th className="sticky left-0 z-30" style={{minWidth:200,borderRight:"1px solid var(--glass-divider)"}} onClick={(e) => handleSort('sku', e)}>
+                                        <th className="px-4 py-3 sticky left-0 z-30 bg-gray-50/80 border-b border-r border-gray-200/50 min-w-[200px]" onClick={(e) => handleSort('sku', e)}>
                                     <div className="flex items-center justify-between cursor-pointer">
                                         SKU
                                         {getSortIndicator('sku')}
                                     </div>
                                 </th>
                                 {/* Total Column */}
-                                <th className="r" style={{borderRight:"1px solid var(--glass-divider)",minWidth:80}} onClick={(e) => handleSort('totalQty', e)}>
+                                <th className="px-4 py-3 border-b border-r border-gray-200/50 text-right bg-gray-50/80 min-w-[80px]" onClick={(e) => handleSort('totalQty', e)}>
                                     <div className="flex items-center justify-end cursor-pointer">
                                         Total QTY
                                         {getSortIndicator('totalQty')}
@@ -623,8 +624,8 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                     </React.Fragment>
                                 ))}
                             </tr>
-                            <tr >
-                                <th className="sticky left-0 z-30" style={{borderRight:"1px solid var(--glass-divider)",height:32}}></th>
+                            <tr className="bg-gray-50/80 border-b border-gray-200/30 text-[10px] uppercase tracking-wider text-gray-500 font-semibold backdrop-blur-sm">
+                                <th className="px-4 py-2 sticky left-0 z-30 bg-gray-50/80 border-r border-gray-200/50 border-b border-gray-200/30 h-8"></th>
                                 <th className="px-4 py-2 border-r border-gray-200/50 bg-gray-50/80 border-b border-gray-200/30 h-8"></th>
                                 {selectedPlatforms.map(p => (
                                     <React.Fragment key={`${p}-sub`}>
@@ -648,18 +649,18 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                 ))}
                             </tr>
                         </thead>
-                        <tbody >
+                        <tbody>
                             {processedData.length > 0 ? (
                                 processedData.map((row) => (
                                     <tr
                                         key={row.id}
-                                        
+                                        className="group"
                                         onMouseEnter={(e) => { setHoveredRow(row); setCursorPos({ x: e.clientX, y: e.clientY }); }}
                                         onMouseMove={(e) => setCursorPos({ x: e.clientX, y: e.clientY })}
                                         onMouseLeave={() => setHoveredRow(null)}
                                     >
                                         {/* Sticky SKU Cell */}
-                                        <td className="sticky left-0 z-10" style={{borderRight:"1px solid var(--glass-divider)"}}>
+                                        <td className="px-4 py-3 sticky left-0 z-10 bg-white border-r border-gray-100/50 group-hover:bg-gray-50/50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-bold text-gray-900 font-mono text-xs">{row.sku}</span>
                                                 <GradeBadge gradeLevel={row.gradeLevel} />
@@ -710,17 +711,17 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                                     )}
                                                     {visibleColumns.includes('avgPrice') && (
                                                         <td className="px-4 py-3 text-right text-[10px] text-gray-600 border-r border-gray-50" style={bgStyle}>
-                                                            {hasActivity ? `£${row[`${p}_avgPrice`].toFixed(2)}` : '-'}
+                                                            {hasActivity ? formatSmartMoney(row[`${p}_avgPrice`]) : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('revenue') && (
                                                         <td className="px-4 py-3 text-right text-[10px] text-indigo-600 font-medium border-r border-gray-50" style={bgStyle}>
-                                                            {hasActivity ? formatMoney(row[`${p}_revenue`], 0) : '-'}
+                                                            {hasActivity ? formatSmartMoney(row[`${p}_revenue`]) : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('profit') && (
                                                         <td className={`px-4 py-3 text-right text-[10px] font-bold border-r border-gray-100/50 ${row[`${p}_profit`] >= 0 ? 'text-emerald-600' : 'text-red-500'}`} style={bgStyle}>
-                                                            {hasActivity ? formatMoney(row[`${p}_profit`], 0) : '-'}
+                                                            {hasActivity ? formatSmartMoney(row[`${p}_profit`]) : '-'}
                                                         </td>
                                                     )}
                                                 </React.Fragment>

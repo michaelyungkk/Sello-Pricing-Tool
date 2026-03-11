@@ -223,7 +223,96 @@ const App: React.FC = () => {
 
     return (
         <>
-            <style>{` html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity ?? 90) / 100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity ?? 90) / 100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur ?? 10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur ?? 10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity ?? 15) / 100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur ?? 10) + 4)}px); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } `}</style>
+            <style>{` html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity ?? 90) / 100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity ?? 90) / 100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur ?? 10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur ?? 10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity ?? 15) / 100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur ?? 10) + 4)}px); --glass-header-bg: rgba(249,250,251,0.72); --glass-row-even: rgba(249,250,251,0.30); --glass-row-hover: rgba(243,244,246,0.60); --glass-divider: rgba(229,231,235,0.55); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } .tbl thead { position: sticky; top: 0; z-index: 20; background: var(--glass-header-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #9ca3af; box-shadow: 0 1px 0 rgba(229,231,235,0.55); } .tbl thead th { padding: 10px 16px; border-bottom: 1px solid var(--glass-divider); white-space: nowrap; } .tbl tbody tr { border-bottom: 1px solid var(--glass-divider); transition: background 0.1s; } .tbl tbody tr:last-child { border-bottom: none; } .tbl tbody tr:nth-child(even) { background: var(--glass-row-even); } .tbl tbody tr:hover { background: var(--glass-row-hover); } .tbl tbody td { padding: 10px 16px; font-size: 12px; } .tbl-compact thead th { padding: 8px 12px; font-size: 9px; } .tbl-compact tbody td { padding: 7px 12px; font-size: 11px; } .tbl-pin-col { position: sticky; left: 0; z-index: 10; background: var(--glass-header-bg); box-shadow: 2px 0 6px -2px rgba(0,0,0,0.06); } .tbl tbody tr .tbl-pin-col { background: var(--glass-bg); } .tbl tbody tr:hover .tbl-pin-col { background: var(--glass-row-hover); }
+
+/* ── COLUMN TINTS ── */
+.tbl thead th.cb { background: rgba(219,234,254,0.38); } .tbl thead th.cb:hover { background: rgba(219,234,254,0.52); }
+.tbl thead th.cg { background: rgba(209,250,229,0.38); } .tbl thead th.cg:hover { background: rgba(209,250,229,0.52); }
+.tbl thead th.cr { background: rgba(254,226,226,0.32); } .tbl thead th.cr:hover { background: rgba(254,226,226,0.44); }
+.tbl thead th.cp { color: #7c3aed; } .tbl thead th.cp:hover { background: rgba(124,58,237,0.05); }
+.tbl tbody td.cb { background: rgba(219,234,254,0.16); }
+.tbl tbody td.cg { background: rgba(209,250,229,0.16); }
+.tbl tbody td.cr { background: rgba(254,226,226,0.13); }
+.tbl thead th.r { text-align: right; } .tbl thead th.c { text-align: center; }
+.tbl tbody td.r { text-align: right; } .tbl tbody td.c { text-align: center; }
+
+/* ── TH HOVER & SORTED STATE ── */
+.tbl thead th { cursor: pointer; user-select: none; transition: background 0.1s, color 0.1s; }
+.tbl thead th:hover { color: #4f46e5; background: rgba(79,70,229,0.04); }
+.tbl thead th.sorted { color: #4f46e5; background: rgba(79,70,229,0.10); }
+.tbl thead th.sorted .ico { opacity: 1; color: #4f46e5; }
+
+/* ── SORTABLE HEADER WRAPPER ── */
+.sw { display: inline-flex; align-items: center; gap: 4px; }
+.sw.r { flex-direction: row-reverse; }
+.sw.c { justify-content: center; }
+.ico { width: 10px; height: 10px; opacity: 0.3; flex-shrink: 0; display: inline-block; vertical-align: middle; }
+
+/* ── VALUE CLASSES ── */
+.v-pos, .v-neg, .v-ca, .v-num, .v-cost, .v-warn, .v-rev { font-family: monospace; font-size: 11px; font-weight: 700; }
+.v-pos  { color: #111827; }
+.v-neg  { color: #dc2626; }
+.v-warn { color: #b45309; }
+.v-rev  { color: #111827; }
+.v-ca   { color: #7c3aed; }
+.v-cost { color: #374151; }
+.v-num  { color: #374151; }
+.v-dim  { color: #9ca3af; font-family: monospace; font-size: 11px; }
+.v-dotted { border-bottom: 1px dotted rgba(0,0,0,0.18); cursor: help; }
+
+/* ── BADGE SYSTEM ── */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; border: 1px solid; font-size: 9.5px; font-weight: 700; white-space: nowrap; line-height: 16px; }
+.b-green  { background: rgba(236,253,245,0.9); color: #047857; border-color: rgba(167,243,208,0.7); }
+.b-red    { background: rgba(254,242,242,0.9); color: #b91c1c; border-color: rgba(254,202,202,0.7); }
+.b-amber  { background: rgba(255,251,235,0.9); color: #b45309; border-color: rgba(253,230,138,0.7); }
+.b-blue   { background: rgba(219,234,254,0.9); color: #1d4ed8; border-color: rgba(147,197,253,0.7); }
+.b-indigo { background: rgba(79,70,229,0.10);  color: #4f46e5; border-color: rgba(79,70,229,0.20); }
+.b-gray   { background: rgba(249,250,251,0.9); color: #6b7280; border-color: rgba(229,231,235,0.7); }
+.b-orange { background: rgba(255,237,213,0.9); color: #c2410c; border-color: rgba(253,186,116,0.7); }
+.b-purple { background: rgba(245,243,255,0.9); color: #7c3aed; border-color: rgba(221,214,254,0.7); }
+.a-inc { background: rgba(236,253,245,0.9); color: #047857; border-color: rgba(167,243,208,0.7); }
+.a-dec { background: rgba(254,242,242,0.9); color: #b91c1c; border-color: rgba(254,202,202,0.7); }
+.a-mnt { background: rgba(249,250,251,0.9); color: #9ca3af; border-color: rgba(229,231,235,0.7); }
+.r-ok   { background: rgba(236,253,245,0.9); color: #047857; border-color: rgba(167,243,208,0.7); }
+.r-warn { background: rgba(255,251,235,0.9); color: #b45309; border-color: rgba(253,230,138,0.7); }
+.r-crit { background: rgba(254,242,242,0.9); color: #b91c1c; border-color: rgba(254,202,202,0.7); }
+.r-over { background: rgba(255,247,237,0.9); color: #c2410c; border-color: rgba(253,186,116,0.7); }
+
+/* ── ROW STATE CLASSES ── */
+.tbl tbody tr.tr-warn { background: rgba(251,191,36,0.06) !important; }
+.tbl tbody tr.tr-neg  { background: rgba(254,226,226,0.10) !important; }
+.tbl tbody tr.tr-sel  { background: rgba(79,70,229,0.05)  !important; }
+.tbl tbody tr.tr-ad   { background: rgba(255,237,213,0.10) !important; }
+
+/* ── INLINE ACTION BUTTONS ── */
+.tbtn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 7px; border: 1px solid rgba(209,213,219,0.8); font-size: 10px; font-weight: 700; cursor: pointer; background: white; color: #6b7280; font-family: inherit; transition: all 0.12s; }
+.tbtn:hover { background: rgba(79,70,229,0.10); color: #4f46e5; border-color: rgba(79,70,229,0.20); }
+.tbtn.del:hover { background: rgba(254,242,242,0.9); color: #b91c1c; border-color: rgba(254,202,202,0.7); }
+
+/* ── PRODUCT COLUMN STRUCTURES ── */
+.prod-normal { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.prod-normal .row1 { display: flex; align-items: center; gap: 5px; }
+.prod-normal .sku { font-size: 13px; font-weight: 800; color: #111827; letter-spacing: -0.2px; white-space: nowrap; }
+.prod-normal .pname { font-size: 11px; color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.prod-detail { display: flex; flex-direction: column; gap: 3px; min-width: 220px; }
+.prod-detail .row1 { display: flex; align-items: center; gap: 5px; }
+.prod-detail .sku { font-size: 13px; font-weight: 800; color: #111827; letter-spacing: -0.2px; }
+.prod-detail .pname { font-size: 11px; color: #9ca3af; max-width: 220px; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+.prod-detail .tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 1px; }
+.tag { font-size: 9.5px; padding: 1px 7px; border-radius: 20px; background: rgba(241,245,249,0.9); color: #64748b; border: 1px solid rgba(226,232,240,0.8); white-space: nowrap; }
+.gb { display: inline-flex; align-items: center; padding: 0 5px; border-radius: 20px; border: 1px solid; font-size: 9.5px; font-weight: 700; line-height: 16px; flex-shrink: 0; }
+.g12 { background: rgba(236,253,245,0.9); color: #047857; border-color: rgba(167,243,208,0.8); }
+.g3  { background: rgba(240,249,255,0.9); color: #0369a1; border-color: rgba(186,230,253,0.8); }
+.g4  { background: rgba(255,251,235,0.9); color: #b45309; border-color: rgba(253,230,138,0.8); }
+.g5  { background: rgba(255,241,242,0.9); color: #be123c; border-color: rgba(254,205,211,0.8); }
+.dd-btn { width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0; border: 1px solid rgba(209,213,219,0.7); background: white; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.12s; color: #9ca3af; }
+.dd-btn:hover { background: rgba(79,70,229,0.10); color: #4f46e5; border-color: rgba(79,70,229,0.20); }
+.dd-btn svg { width: 12px; height: 12px; }
+
+/* ── RUNWAY WRAP ── */
+.rwrap { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.vel { font-size: 10px; color: #9ca3af; }
+`}</style>
             <div className="h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent overflow-hidden">
                 {userProfile.ambientGlass && <div className="fixed inset-0 z-[1] pointer-events-none transition-all duration-500 bg-custom-ambient backdrop-blur-custom-ambient" />}
                 <aside className={`w-60 border-r border-custom-glass hidden md:flex flex-col fixed h-full z-40 shadow-sm transition-all duration-300 bg-custom-glass`}>
@@ -732,6 +821,7 @@ const App: React.FC = () => {
                                 products={products}
                                 priceHistory={salesHistory}
                                 refundHistory={refundHistory}
+                                pricingRules={pricingRules}
                             />
                         </div>
                         <div style={{ display: currentView === 'settings' ? 'block' : 'none' }}>

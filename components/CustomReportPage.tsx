@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
-import { Product, PriceLog, RefundLog } from '../types';
+import React, { useState, useMemo, useRef } from 'react';
+import { Product, PriceLog, RefundLog, PricingRules } from '../types';
 import { getReportLayouts, saveReportLayout, ReportLayout } from '../services/persistenceService';
 import {
     Layout,
@@ -26,7 +26,7 @@ import {
     Square,
     Search,
 } from 'lucide-react';
-import { formatMoney, formatPct, formatNumber } from '../utils/format';
+import { formatMoney, formatSmartMoney, formatPct, formatNumber } from '../utils/format';
 import { GradeBadge } from './GradeBadge';
 import { SelectFilter } from './common/SelectFilter';
 import * as XLSX from 'xlsx';
@@ -38,6 +38,38 @@ interface CustomReportPageProps {
     products: Product[];
     priceHistory: PriceLog[];
     refundHistory: RefundLog[];
+    pricingRules: PricingRules;
+}
+
+/** Derive a badge style from a hex colour stored in pricingRules */
+function platformBadgeStyle(hex: string): React.CSSProperties {
+    // Parse hex → rgb
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return {
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 8px',
+        borderRadius: 20,
+        border: `1px solid rgba(${r},${g},${b},0.45)`,
+        background: `rgba(${r},${g},${b},0.12)`,
+        color: hex,
+        fontSize: 9.5,
+        fontWeight: 700,
+        whiteSpace: 'nowrap' as const,
+        lineHeight: '16px',
+    };
+}
+
+/** Fallback colour for unknown platform */
+function getPlatformHex(platform: string, rules: PricingRules): string {
+    if (rules[platform]?.color) return rules[platform].color;
+    const l = platform.toLowerCase();
+    if (l.includes('amazon')) return '#b45309';
+    if (l.includes('ebay'))   return '#1d4ed8';
+    if (l.includes('etsy'))   return '#9a3412';
+    return '#6b7280';
 }
 
 const DIMENSIONS = [
@@ -95,7 +127,8 @@ interface CustomMetric {
 export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     products,
     priceHistory,
-    refundHistory
+    refundHistory,
+    pricingRules,
 }) => {
     // --- STATE ---
     const [rowDims, setRowDims] = useState<string[]>(['sku']);
@@ -124,6 +157,13 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     } | null>(null);
     const [needsGeneration, setNeedsGeneration] = useState(true);
     const [showBuilder, setShowBuilder] = useState(true);
+    const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+    const [skuSearchTags, setSkuSearchTags] = useState<string[]>([]);
+    const [skuSearchInput, setSkuSearchInput] = useState('');
+    const [colOrder, setColOrder] = useState<string[]>([]);
+    const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+    const dragColRef = useRef<string | null>(null);
+    const dragOverColRef = useRef<string | null>(null);
 
     // Auto-generate report when changes occur and report already exists
     // REMOVED: Auto-refresh disabled per user request
@@ -567,6 +607,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                 colHeaders,
                 rowHeaders: effectiveRowDims
             });
+            setColOrder(colHeaders.map((ch: any) => ch.id));
             setIsGenerating(false);
             setNeedsGeneration(false);
         }, 100);
@@ -576,6 +617,23 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         if (!reportResult) return null;
 
         let rows = [...reportResult.rows];
+
+        // Apply SKU tag search (matches against any row key part)
+        if (skuSearchTags.length > 0 || skuSearchInput.trim()) {
+            rows = rows.filter(row => {
+                const keyStr = (row.rowKey || row.rowKeyParts?.join(' ') || '').toLowerCase();
+                const skuMeta = row.metadata?.sku;
+                const skuName = (skuMeta?.name || '').toLowerCase();
+                if (skuSearchTags.length > 0) {
+                    return skuSearchTags.some(tag => {
+                        const t = tag.toLowerCase();
+                        return keyStr.includes(t) || skuName.includes(t);
+                    });
+                }
+                const q = skuSearchInput.trim().toLowerCase();
+                return keyStr.includes(q) || skuName.includes(q);
+            });
+        }
 
         // Apply Filters
         if (filters.length > 0) {
@@ -610,7 +668,43 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         }
 
         return rows;
-    }, [reportResult, filters, sortRules]);
+    }, [reportResult, filters, sortRules, skuSearchTags, skuSearchInput]);
+
+    // Ordered col headers — respects user drag-reorder
+    const orderedColHeaders = useMemo(() => {
+        if (!reportResult) return [];
+        if (colOrder.length === 0) return reportResult.colHeaders;
+        const map = new Map(reportResult.colHeaders.map((ch: any) => [ch.id, ch]));
+        const ordered = colOrder.map(id => map.get(id)).filter(Boolean);
+        // append any new cols not yet in colOrder
+        reportResult.colHeaders.forEach((ch: any) => { if (!colOrder.includes(ch.id)) ordered.push(ch); });
+        return ordered;
+    }, [reportResult, colOrder]);
+
+    const handleColDragStart = (colId: string) => { dragColRef.current = colId; };
+    const handleColDragOver = (e: React.DragEvent, colId: string) => {
+        e.preventDefault();
+        dragOverColRef.current = colId;
+        setDragOverCol(colId);
+    };
+    const handleColDrop = () => {
+        setDragOverCol(null);
+        const from = dragColRef.current;
+        const to = dragOverColRef.current;
+        if (!from || !to || from === to) return;
+        setColOrder(prev => {
+            const order = prev.length > 0 ? [...prev] : orderedColHeaders.map((ch: any) => ch.id);
+            const fromIdx = order.indexOf(from);
+            const toIdx = order.indexOf(to);
+            if (fromIdx < 0 || toIdx < 0) return prev;
+            const next = [...order];
+            next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, from);
+            return next;
+        });
+        dragColRef.current = null;
+        dragOverColRef.current = null;
+    };
 
     const getUniqueValues = (field: string) => {
         const values = new Set<string>();
@@ -695,7 +789,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 <FolderOpen className="w-4 h-4" />
                                 Load
                             </button>
-                            <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 hidden group-hover:block animate-in slide-in-from-top-1">
+                            <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all animate-in slide-in-from-top-1">
                                 {savedLayouts.map(layout => (
                                     <button
                                         key={layout.id}
@@ -728,7 +822,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
             {/* Builder Section (Top) */}
             {showBuilder && (
-                <div className="sello-glass rounded-xl p-4 shrink-0 transition-all">
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 shrink-0 transition-all">
                     <div className="grid grid-cols-12 gap-6">
                         {/* Source Palette */}
                         <div className="col-span-4 border-r border-gray-100 pr-6 space-y-4">
@@ -935,7 +1029,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             <div
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={onDropFilter}
-                className="sello-glass rounded-lg p-2 flex items-center gap-3 shrink-0 shadow-sm"
+                className="bg-white border border-gray-200 rounded-lg p-2 flex items-center gap-3 shrink-0 shadow-sm"
             >
                 <div className="flex items-center gap-2 px-2 border-r border-gray-100">
                     <Filter className="w-4 h-4 text-gray-400" />
@@ -992,34 +1086,42 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                     ))}
 
                     {/* Add Filter Dropdown */}
-                    <div className="relative group">
-                        <button className="flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold hover:bg-indigo-100 transition-colors">
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsFilterMenuOpen(v => !v)}
+                            className="flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold hover:bg-indigo-100 transition-colors"
+                        >
                             <Plus className="w-3 h-3" />
                             Add Filter
                         </button>
-                        <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 hidden group-hover:block animate-in slide-in-from-top-1">
-                            <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Dimensions</div>
-                            {DIMENSIONS.map(d => (
-                                <button
-                                    key={d.id}
-                                    onClick={() => handleAddFilter(d.id, 'dim')}
-                                    className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded"
-                                >
-                                    {d.label}
-                                </button>
-                            ))}
-                            <div className="border-t border-gray-100 my-1"></div>
-                            <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Metrics</div>
-                            {METRICS.map(m => (
-                                <button
-                                    key={m.id}
-                                    onClick={() => handleAddFilter(m.id, 'metric')}
-                                    className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded"
-                                >
-                                    {m.label}
-                                </button>
-                            ))}
-                        </div>
+                        {isFilterMenuOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setIsFilterMenuOpen(false)} />
+                                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 animate-in slide-in-from-top-1">
+                                    <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Dimensions</div>
+                                    {DIMENSIONS.map(d => (
+                                        <button
+                                            key={d.id}
+                                            onClick={() => { handleAddFilter(d.id, 'dim'); setIsFilterMenuOpen(false); }}
+                                            className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded"
+                                        >
+                                            {d.label}
+                                        </button>
+                                    ))}
+                                    <div className="border-t border-gray-100 my-1"></div>
+                                    <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Metrics</div>
+                                    {METRICS.map(m => (
+                                        <button
+                                            key={m.id}
+                                            onClick={() => { handleAddFilter(m.id, 'metric'); setIsFilterMenuOpen(false); }}
+                                            className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded"
+                                        >
+                                            {m.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {pendingFilters.length > 0 && (
@@ -1034,7 +1136,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             </div>
 
             {/* Table Container */}
-            <div className="flex-1 sello-glass rounded-xl overflow-hidden flex flex-col relative p-4">
+            <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col relative p-4">
                 {needsGeneration && !isGenerating && !reportResult && (
                     <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
                         <button
@@ -1067,11 +1169,11 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             </div>
                         </div>
                     ) : (
-                        <table className="sello-table min-w-full table-auto border-collapse">
-                            <thead className="sticky top-0 z-20 shadow-sm">
+                        <table className="tbl w-full text-left border-collapse min-w-full table-auto">
+                            <thead className="sticky top-0 z-20">
                                 <tr>
                                     {reportResult.rowHeaders.map((rh, idx) => (
-                                        <th key={rh} rowSpan={2} className="sticky left-0 z-30 bg-gray-100 border-b border-r border-gray-200 px-4 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: idx * 160 }}>
+                                        <th key={rh} rowSpan={2} className="sticky left-0 z-30 bg-[var(--glass-header-bg)] backdrop-blur-[12px] border-b border-r border-[rgba(229,231,235,0.55)] px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest w-[160px] min-w-[160px] max-w-[160px] truncate shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]" style={{ left: idx * 160 }}>
                                             <div className="flex items-center justify-between cursor-pointer w-full">
                                                 <div className="flex items-center gap-2" onClick={() => handleSort(rh)}>
                                                     <span className="truncate">{getDimLabel(rh)}</span>
@@ -1091,52 +1193,85 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             </div>
                                         </th>
                                     ))}
-                                    {reportResult.colHeaders.map(ch => (
-                                        <th key={ch.id} colSpan={metrics.length} className="px-4 py-3 text-center border-b border-r border-gray-200 bg-indigo-50/50 text-[10px] font-bold text-indigo-700 uppercase tracking-wider whitespace-nowrap">
-                                            {ch.label}
-                                        </th>
-                                    ))}
-                                    <th colSpan={metrics.length} className="px-4 py-3 text-center border-b border-gray-200 bg-gray-100 text-[10px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                                    {orderedColHeaders.map((ch: any, chIdx: number) => {
+                                        const hex = getPlatformHex(ch.label, pricingRules);
+                                        return (
+                                            <th
+                                                key={ch.id}
+                                                colSpan={metrics.length}
+                                                className="c"
+                                                draggable
+                                                onDragStart={() => handleColDragStart(ch.id)}
+                                                onDragOver={e => handleColDragOver(e, ch.id)}
+                                                onDragLeave={() => setDragOverCol(null)}
+                                                onDrop={handleColDrop}
+                                                style={{ borderLeft: dragOverCol === ch.id ? '2px solid var(--theme)' : '1px solid var(--glass-divider)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', cursor: 'grab', userSelect: 'none', opacity: dragColRef.current === ch.id ? 0.4 : 1, transition: 'border-color 0.1s' }}
+                                            >
+                                                <span style={platformBadgeStyle(hex)}>{ch.label}</span>
+                                            </th>
+                                        );
+                                    })}
+                                    <th colSpan={metrics.length} className="c" style={{ borderLeft: '2px solid rgba(79,70,229,0.15)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', color: '#4f46e5', fontWeight: 800 }}>
                                         Grand Total
                                     </th>
                                 </tr>
                                 <tr>
-                                    {reportResult.colHeaders.map(ch => (
-                                        metrics.map(m => (
-                                            <th
-                                                key={`${ch.id}_${m.id}`}
-                                                onClick={(e) => handleSort(`${ch.id}_${m.id}`, e)}
-                                                className="px-4 py-2 text-right border-b border-r border-gray-100 bg-white text-[9px] font-bold text-gray-400 uppercase cursor-pointer hover:bg-gray-50 transition-colors min-w-[120px] whitespace-nowrap"
-                                            >
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <div className="flex flex-col items-end">
-                                                        <span>{getMetricLabel(m.metricId)}</span>
-                                                        <span className="text-[7px] opacity-60">({m.timeRange})</span>
+                                    {orderedColHeaders.map((ch: any, chIdx: number) => (
+                                        metrics.map((m, mIdx) => {
+                                            const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
+                                                : m.metricId === 'profit' || m.metricId === 'margin' || m.metricId === 'roi' ? 'cg'
+                                                : m.metricId === 'refund_rate' || m.metricId === 'refund_value' ? 'cr'
+                                                : '';
+                                            const isSorted = sortRules[0]?.key === `${ch.id}_${m.id}`;
+                                            return (
+                                                <th
+                                                    key={`${ch.id}_${m.id}`}
+                                                    onClick={(e) => handleSort(`${ch.id}_${m.id}`, e)}
+                                                    className={`r ${colClass} ${isSorted ? 'sorted' : ''}`}
+                                                    style={{ borderLeft: mIdx === 0 ? '1px solid var(--glass-divider)' : undefined, minWidth: 80 }}
+                                                >
+                                                    <div className="sw r" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                            <span>{getMetricLabel(m.metricId)}</span>
+                                                            <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                                                {isSorted && sortRules[0].dir === 'asc'
+                                                                    ? <path d="M5 12l7-7 7 7"/>
+                                                                    : <path d="M7 15l5 5 5-5M7 9l5-5 5 5"/>}
+                                                            </svg>
+                                                        </div>
+                                                        <span style={{ fontSize: 8, opacity: 0.4, lineHeight: 1 }}>{m.timeRange}</span>
                                                     </div>
-                                                    {sortRules[0]?.key === `${ch.id}_${m.id}` && (
-                                                        sortRules[0].dir === 'asc' ? <ArrowUp className="w-2.5 h-2.5 text-indigo-600" /> : <ArrowDown className="w-2.5 h-2.5 text-indigo-600" />
-                                                    )}
+                                                </th>
+                                            );
+                                        })
+                                    ))}
+                                    {metrics.map((m, mIdx) => {
+                                        const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
+                                            : m.metricId === 'profit' || m.metricId === 'margin' || m.metricId === 'roi' ? 'cg'
+                                            : m.metricId === 'refund_rate' || m.metricId === 'refund_value' ? 'cr'
+                                            : '';
+                                        const isSorted = sortRules[0]?.key === `total_${m.id}`;
+                                        return (
+                                            <th
+                                                key={`total_${m.id}`}
+                                                onClick={(e) => handleSort(`total_${m.id}`, e)}
+                                                className={`r ${colClass} ${isSorted ? 'sorted' : ''}`}
+                                                style={{ borderLeft: mIdx === 0 ? '2px solid rgba(79,70,229,0.15)' : undefined, minWidth: 80 }}
+                                            >
+                                                <div className="sw r" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                        <span>{getMetricLabel(m.metricId)}</span>
+                                                        <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                                            {isSorted && sortRules[0].dir === 'asc'
+                                                                ? <path d="M5 12l7-7 7 7"/>
+                                                                : <path d="M7 15l5 5 5-5M7 9l5-5 5 5"/>}
+                                                        </svg>
+                                                    </div>
+                                                    <span style={{ fontSize: 8, opacity: 0.4, lineHeight: 1 }}>{m.timeRange}</span>
                                                 </div>
                                             </th>
-                                        ))
-                                    ))}
-                                    {metrics.map(m => (
-                                        <th
-                                            key={`total_${m.id}`}
-                                            onClick={(e) => handleSort(`total_${m.id}`, e)}
-                                            className="px-4 py-2 text-right border-b border-gray-100 bg-gray-50 text-[9px] font-bold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 transition-colors min-w-[120px] whitespace-nowrap"
-                                        >
-                                            <div className="flex items-center justify-end gap-1">
-                                                <div className="flex flex-col items-end">
-                                                    <span>{getMetricLabel(m.metricId)}</span>
-                                                    <span className="text-[7px] opacity-60">({m.timeRange})</span>
-                                                </div>
-                                                {sortRules[0]?.key === `total_${m.id}` && (
-                                                    sortRules[0].dir === 'asc' ? <ArrowUp className="w-2.5 h-2.5 text-indigo-600" /> : <ArrowDown className="w-2.5 h-2.5 text-indigo-600" />
-                                                )}
-                                            </div>
-                                        </th>
-                                    ))}
+                                        );
+                                    })}
                                 </tr>
                             </thead>
                             <tbody>
@@ -1148,7 +1283,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
                                             if (dim === 'sku' && meta) {
                                                 return (
-                                                    <td key={pIdx} className="sticky left-0 z-10 bg-white border-r border-gray-100 px-4 py-4 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px]" style={{ left: pIdx * 160 }}>
+                                                    <td key={pIdx} className="sticky left-0 z-10 bg-[var(--glass-bg)] group-hover:bg-[var(--glass-row-hover)] border-r border-[rgba(229,231,235,0.55)] px-4 py-[10px] shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px]" style={{ left: pIdx * 160 }}>
                                                         <div className="flex items-center gap-2 truncate">
                                                             <span className="font-bold text-gray-900 font-mono text-xs truncate">{meta.sku}</span>
                                                             <GradeBadge gradeLevel={meta.gradeLevel} />
@@ -1159,60 +1294,56 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             }
 
                                             return (
-                                                <td key={pIdx} className="sticky left-0 z-10 bg-white border-r border-gray-100 px-4 py-4 text-xs font-bold text-gray-900 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: pIdx * 160 }}>
+                                                <td key={pIdx} className="sticky left-0 z-10 bg-[var(--glass-bg)] group-hover:bg-[var(--glass-row-hover)] border-r border-[rgba(229,231,235,0.55)] px-4 py-[10px] text-xs font-bold text-gray-900 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: pIdx * 160 }}>
                                                     {part}
                                                 </td>
                                             );
                                         })}
-                                        {reportResult.colHeaders.map(ch => (
-                                            metrics.map(m => {
+                                        {orderedColHeaders.map((ch: any, chIdx: number) => (
+                                            metrics.map((m, mIdx) => {
                                                 const val = row[`${ch.id}_${m.id}`];
                                                 const mConfig = getMetricConfig(m.metricId);
-
-                                                let cellClass = "px-4 py-4 text-right text-xs font-medium border-r border-gray-50";
-                                                if (m.metricId === 'margin' || m.metricId === 'roi' || m.metricId === 'profit') {
-                                                    if (val < 0) cellClass += " text-red-600 bg-red-50/50";
-                                                    else if (val >= 15 && m.metricId !== 'profit') cellClass += " text-green-600 bg-green-50/50";
-                                                    else if (val >= 0) cellClass += " text-gray-700";
-                                                } else {
-                                                    cellClass += " text-gray-600";
-                                                }
+                                                const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
+                                                    : m.metricId === 'profit' || m.metricId === 'margin' || m.metricId === 'roi' ? 'cg'
+                                                    : m.metricId === 'refund_rate' || m.metricId === 'refund_value' ? 'cr'
+                                                    : '';
+                                                const isNeg = typeof val === 'number' && val < 0;
+                                                const isEmpty = val === 0 && mConfig?.type !== 'percent';
+                                                const formatted = isEmpty ? null
+                                                    : mConfig?.type === 'currency' ? formatSmartMoney(val)
+                                                    : mConfig?.type === 'percent' ? formatPct(val)
+                                                    : formatNumber(val);
 
                                                 return (
-                                                    <td key={`${ch.id}_${m.id}`} className={cellClass}>
-                                                        {val === 0 && mConfig?.type !== 'percent' ? (
-                                                            <span className="text-gray-300">-</span>
-                                                        ) : (
-                                                            mConfig?.type === 'currency' ? formatMoney(val, 0) :
-                                                                mConfig?.type === 'percent' ? formatPct(val) :
-                                                                    formatNumber(val)
-                                                        )}
+                                                    <td key={`${ch.id}_${m.id}`} className={`r ${colClass}`} style={{ borderLeft: mIdx === 0 ? '1px solid var(--glass-divider)' : undefined }}>
+                                                        {isEmpty
+                                                            ? <span className="v-dim">—</span>
+                                                            : <span className={isNeg ? 'v-neg' : 'v-num'}>{formatted}</span>
+                                                        }
                                                     </td>
                                                 );
                                             })
                                         ))}
-                                        {metrics.map(m => {
+                                        {metrics.map((m, mIdx) => {
                                             const val = row[`total_${m.id}`];
                                             const mConfig = getMetricConfig(m.metricId);
-
-                                            let cellClass = "px-4 py-4 text-right text-xs font-bold bg-gray-50/30";
-                                            if (m.metricId === 'margin' || m.metricId === 'roi' || m.metricId === 'profit') {
-                                                if (val < 0) cellClass += " text-red-600";
-                                                else if (val >= 15 && m.metricId !== 'profit') cellClass += " text-green-600";
-                                                else cellClass += " text-gray-900";
-                                            } else {
-                                                cellClass += " text-gray-900";
-                                            }
+                                            const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
+                                                : m.metricId === 'profit' || m.metricId === 'margin' || m.metricId === 'roi' ? 'cg'
+                                                : m.metricId === 'refund_rate' || m.metricId === 'refund_value' ? 'cr'
+                                                : '';
+                                            const isNeg = typeof val === 'number' && val < 0;
+                                            const isEmpty = val === 0 && mConfig?.type !== 'percent';
+                                            const formatted = isEmpty ? null
+                                                : mConfig?.type === 'currency' ? formatSmartMoney(val)
+                                                : mConfig?.type === 'percent' ? formatPct(val)
+                                                : formatNumber(val);
 
                                             return (
-                                                <td key={`total_${m.id}`} className={cellClass}>
-                                                    {val === 0 && mConfig?.type !== 'percent' ? (
-                                                        <span className="text-gray-300">-</span>
-                                                    ) : (
-                                                        mConfig?.type === 'currency' ? formatMoney(val, 0) :
-                                                            mConfig?.type === 'percent' ? formatPct(val) :
-                                                                formatNumber(val)
-                                                    )}
+                                                <td key={`total_${m.id}`} className={`r ${colClass}`} style={{ borderLeft: mIdx === 0 ? '2px solid rgba(79,70,229,0.15)' : undefined, fontWeight: 800 }}>
+                                                    {isEmpty
+                                                        ? <span className="v-dim">—</span>
+                                                        : <span className={isNeg ? 'v-neg' : 'v-num'} style={{ fontWeight: 800 }}>{formatted}</span>
+                                                    }
                                                 </td>
                                             );
                                         })}

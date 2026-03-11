@@ -110,7 +110,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
                     )}
                     <div className="sello-glass rounded-xl overflow-hidden">
                         <div className="sello-table-scroll">
-                            <table className="sello-table">
+                            <table className="tbl sello-table">
                                 <thead>
                                     <tr>
                                         <th>SKU</th>

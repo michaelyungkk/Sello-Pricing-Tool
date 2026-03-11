@@ -5,7 +5,7 @@ import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Cartes
 import { PriceChangeHistoryPanel } from '../../strategy/PriceChangeHistoryPanel';
 import { OptimalPriceCard } from '../parts/OptimalPriceCard';
 import { Product, PriceLog } from '../../../types';
-import { formatMoney } from '../../../utils/format';
+import { formatMoney, formatSmartMoney } from '../../../utils/format';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { asDateKey, addDaysToDateKey } from '../../../services/dateUtils';
 
@@ -262,7 +262,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                         <div className="flex flex-wrap items-center gap-4 w-full animate-in fade-in duration-200">
                                             <span className="font-medium text-gray-900 bg-white px-2 py-0.5 rounded shadow-sm border border-gray-200">{hoveredBubble.period}</span>
                                             <div className="h-4 w-px bg-gray-300 hidden sm:block"></div>
-                                            <span className="text-gray-600">Band: <strong>{hoveredBubble.delta > 0 ? '+' : ''}£{hoveredBubble.delta.toFixed(2)}</strong></span>
+                                            <span className="text-gray-600">Band: <strong>{hoveredBubble.delta > 0 ? '+' : ''}{formatSmartMoney(hoveredBubble.delta)}</strong></span>
                                             <span className="text-gray-600">Avg Selling Price: <strong>£{hoveredBubble.tooltipPrice}</strong></span>
                                             <span className="text-gray-600">Vol: <strong className="text-gray-900">{hoveredBubble.totalQty}</strong></span>
                                         </div>
@@ -349,15 +349,15 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                     </div>
 
                     <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden h-[420px] overflow-y-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0">
+                        <table className="tbl w-full text-sm text-left">
+                            <thead className="sticky top-0">
                                 <tr>
                                     <th className="p-3">Price Point</th>
                                     <th className="p-3 text-right">Total Qty</th>
                                     <th className="p-3 text-right">Share %</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody>
                                 {priceVolumeAnalysis.pointsTable.map((pt: any, i: number) => {
                                     const isLowest = minPricePoint !== null && pt.price === minPricePoint;
                                     const isHighest = maxPricePoint !== null && pt.price === maxPricePoint;
@@ -365,11 +365,11 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                     const sharePct = totalVolume > 0 ? (pt.qty / totalVolume) * 100 : 0;
 
                                     return (
-                                        <tr key={i} className={`hover:bg-gray-50 ${isOptimal ? 'bg-indigo-50 border-l-4 border-indigo-500' : isLowest ? 'bg-amber-50/30' : isHighest ? 'bg-indigo-50/30' : ''}`}>
+                                        <tr key={i} className={`${isOptimal ? 'bg-indigo-50 border-l-4 border-indigo-500' : isLowest ? 'bg-amber-50/30' : isHighest ? 'bg-indigo-50/30' : ''}`}>
                                             <td className="p-3 font-mono font-bold text-gray-700">
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center gap-2">
-                                                        £{pt.price.toFixed(2)}
+                                                        {formatSmartMoney(pt.price)}
                                                         {isOptimal && (
                                                             <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold uppercase tracking-wide flex items-center gap-1">
                                                                 <Tag className="w-2.5 h-2.5" /> Optimal
@@ -430,8 +430,8 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                         </div>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left whitespace-nowrap">
-                            <thead className="bg-white/10 text-[10px] text-gray-400 font-bold uppercase tracking-wider border-b border-gray-100">
+                        <table className="tbl w-full text-sm text-left whitespace-nowrap">
+                            <thead>
                                 <tr>
                                     <th className="px-6 py-3">Sibling SKU</th>
                                     <th className="px-6 py-3">Product Name</th>
@@ -439,7 +439,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                     <th className="px-6 py-3 text-right">Last Updated</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody>
                                 <tr className="bg-indigo-50/30">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
@@ -451,7 +451,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                         <div className="text-xs text-gray-900 font-medium truncate max-w-[300px]" title="Current product">This Product</div>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <span className="font-mono font-bold text-indigo-700">{formatMoney(currentPrice)}</span>
+                                        <span className="font-mono font-bold text-indigo-700">{formatSmartMoney(currentPrice)}</span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">
@@ -461,13 +461,13 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                     </td>
                                 </tr>
                                 {siblings.map((sib) => (
-                                    <tr key={sib.sku} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={sib.sku} className="">
                                         <td className="px-6 py-4 font-mono text-gray-600">{sib.sku}</td>
                                         <td className="px-6 py-4">
                                             <div className="text-xs text-gray-600 truncate max-w-[300px]" title={sib.name}>{sib.name}</div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <span className="font-mono font-bold text-gray-900">{formatMoney(sib.currentPrice * VAT_MULTIPLIER)}</span>
+                                            <span className="font-mono font-bold text-gray-900">{formatSmartMoney(sib.currentPrice * VAT_MULTIPLIER)}</span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">

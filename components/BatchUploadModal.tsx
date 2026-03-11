@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
+import { formatSmartMoney } from '../utils/format';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, Database, Coins, TrendingUp, TrendingDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
@@ -409,7 +410,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                                                 {item.agedStock !== undefined ? item.agedStock : '-'}
                                             </div>
                                             <div className="w-24 text-right font-mono text-sm text-gray-600">
-                                                {item.cost !== undefined ? `£${item.cost.toFixed(2)}` : '-'}
+                                                {item.cost !== undefined ? formatSmartMoney(item.cost) : '-'}
                                             </div>
                                         </div>
                                     ))}

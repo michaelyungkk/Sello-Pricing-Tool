@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ReferenceLine, ReferenceArea, Cell, LabelList } from 'recharts';
 import { ProductTrendData } from '../../../services/productTrendAgg';
-import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
+import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { Search, Info, Filter, MousePointerClick, Scale, DollarSign, Percent, Plus, Minus, RotateCcw } from 'lucide-react';
 
 interface BcgMatrixProps {
@@ -254,7 +254,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                     <div className="space-y-1">
                         <div className="flex justify-between gap-4">
                             <span className="text-gray-500">Revenue:</span>
-                            <span className="font-mono font-bold text-indigo-600">{formatMoney(d.current.revenue, 0)}</span>
+                            <span className="font-mono font-bold text-indigo-600">{formatSmartMoney(d.current.revenue)}</span>
                         </div>
                         <div className="flex justify-between gap-4">
                             <span className="text-gray-500">Margin:</span>
@@ -269,7 +269,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                          <div className="flex justify-between gap-4">
                             <span className="text-gray-500">Net Profit:</span>
                             <span className={`font-mono font-bold ${d.current.netProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {formatMoney(d.current.netProfit, 0)}
+                                {formatSmartMoney(d.current.netProfit)}
                             </span>
                         </div>
                     </div>

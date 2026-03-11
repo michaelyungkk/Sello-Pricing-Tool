@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Trophy, ChevronRight, Hash, Database, Wallet, Info } from 'lucide-react';
-import { formatMoney, formatPct, formatNumber } from '../../../utils/format';
+import { formatMoney, formatSmartMoney, formatPct, formatNumber } from '../../../utils/format';
 import { PlatformSummary } from '../platformManagement.types';
 import { PlatformConfig } from '../../../types';
 
@@ -53,12 +53,12 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
                                 </span>
                             )}
                         </span>
-                        <div className="text-sm font-bold text-gray-900 leading-none">{formatMoney(summary.revenue, 0)}</div>
+                        <div className="text-sm font-bold text-gray-900 leading-none">{formatSmartMoney(summary.revenue)}</div>
                     </div>
                     <div className="space-y-0.5 text-right bg-indigo-50/50 -m-1 p-1 rounded">
                         <span className="text-[10px] font-medium text-indigo-500 uppercase tracking-wide">Net Profit</span>
                         <div className={`text-sm font-bold leading-none ${summary.netProfit >= 0 ? 'text-indigo-700' : 'text-red-600'}`}>
-                            {formatMoney(summary.netProfit, 0)}
+                            {formatSmartMoney(summary.netProfit)}
                         </div>
                     </div>
                 </div>
@@ -81,7 +81,7 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
                     <div className="space-y-0.5">
                         <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Ad Spend</span>
-                        <div className="text-sm font-bold text-orange-600 leading-none">{formatMoney(summary.adSpend, 0)}</div>
+                        <div className="text-sm font-bold text-orange-600 leading-none">{formatSmartMoney(summary.adSpend)}</div>
                     </div>
                     <div className="space-y-0.5 text-right">
                         <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Units</span>
@@ -103,7 +103,7 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
                     )}
                     <span className="ml-1">
                         <Wallet className="w-2 h-2 shrink-0 inline mr-0.5" />
-                        Gross: {formatMoney(summary.profit, 0)}
+                        Gross: {formatSmartMoney(summary.profit)}
                     </span>
                 </div>
             </div>

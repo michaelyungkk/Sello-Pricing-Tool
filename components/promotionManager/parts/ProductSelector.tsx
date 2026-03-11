@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Product, PromotionEvent, PromotionItem } from '../../../types';
 import { TagSearchInput } from '../../TagSearchInput';
 import { ArrowLeft, Check, Minus } from 'lucide-react';
+import { formatSmartMoney } from '../../../utils/format';
 
 interface ProductSelectorProps {
     products: Product[];
@@ -112,8 +113,8 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
             </div>
 
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden max-h-[60vh] overflow-y-auto">
-                <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 font-bold border-b border-gray-200 text-gray-500 uppercase text-[10px] tracking-wider sticky top-0 z-10">
+                <table className="tbl w-full text-left text-sm">
+                    <thead className="sticky top-0">
                         <tr>
                             <th className="p-4 w-10">
                                 <div 
@@ -130,11 +131,11 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
                             <th className="p-4 text-right">Daily Vel.</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody>
                         {filteredProducts.map(p => (
                             <tr 
                                 key={p.sku} 
-                                className={`group hover:bg-gray-50 cursor-pointer ${selectedSkus.has(p.sku) ? 'bg-indigo-50/30' : ''}`}
+                                className={`group cursor-pointer ${selectedSkus.has(p.sku) ? 'bg-indigo-50/30' : ''}`}
                                 onClick={() => handleRowClick(p.sku)}
                             >
                                 <td className="p-4">
@@ -146,7 +147,7 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
                                     <div className="font-bold text-gray-900">{p.sku}</div>
                                     <div className="text-xs text-gray-500 truncate max-w-[300px]">{p.name}</div>
                                 </td>
-                                <td className="p-4 text-right font-mono text-indigo-600 font-bold">£{p.caPrice?.toFixed(2) || '0.00'}</td>
+                                <td className="p-4 text-right font-mono text-indigo-600 font-bold">{p.caPrice ? formatSmartMoney(p.caPrice) : '—'}</td>
                                 <td className="p-4 text-right text-gray-500 font-mono">{p.stockLevel}</td>
                                 <td className="p-4 text-right text-gray-500 font-mono">{(p.averageDailySales || 0).toFixed(1)}</td>
                             </tr>

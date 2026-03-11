@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
+import { formatSmartMoney } from '../utils/format';
 import { Product, PricingRules, HistoryPayload } from '../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search, Hash } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -324,8 +325,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
@@ -338,7 +339,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                 <div className="p-6 flex-1 overflow-y-auto relative">
                     {isProcessing && step !== 'preview' && (
-                        <div className="absolute inset-0 z-30 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
+                        <div className="absolute inset-0 z-20 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                             <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
                             <h3 className="text-xl font-bold text-gray-900">Processing Data</h3>
                             <p className="text-gray-500 text-center mt-2">
@@ -348,7 +349,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     )}
 
                     {isResetConfirmOpen && (
-                        <div className="absolute inset-0 z-20 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
+                        <div className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                             <div className="bg-red-50 p-4 rounded-full mb-6">
                                 <AlertCircle className="w-12 h-12 text-red-600" />
                             </div>
@@ -378,22 +379,31 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     )}
 
                     {step === 'upload' && (
-                        <div className="space-y-6 animate-in fade-in duration-300">
+                        <div className="space-y-6">
                             <div
                                 className="border-2 border-dashed border-gray-300 rounded-xl p-10 flex flex-col items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer"
                                 onClick={() => fileInputRef.current?.click()}
                             >
                                 <input ref={fileInputRef} type="file" className="hidden" accept=".csv, .xlsx" onChange={handleFileChange} />
-                                <Upload className="w-10 h-10 text-gray-400 mb-4" />
-                                <p className="font-medium text-gray-700">Click to upload Transaction Report</p>
-                                <p className="text-sm text-gray-500 mt-1">Supports CSV or Excel from ERP</p>
+                                {isProcessing ? (
+                                    <div className="flex flex-col items-center animate-in fade-in zoom-in">
+                                        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-3" />
+                                        <p className="font-medium text-indigo-600">Auto-detecting Columns...</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <Upload className="w-10 h-10 text-gray-400 mb-4" />
+                                        <p className="font-medium text-gray-700">Click to upload Transaction Report</p>
+                                        <p className="text-sm text-gray-500 mt-1">Supports CSV or Excel from ERP</p>
+                                    </>
+                                )}
                                 {error && <p className="text-red-500 mt-4 text-sm flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {error}</p>}
                             </div>
                         </div>
                     )}
 
                     {step === 'mapping' && (
-                        <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                        <div className="space-y-6">
                             <div className="flex items-center justify-between">
                                 <p className="text-sm text-gray-600">We couldn&apos;t auto-match everything. Please confirm columns.</p>
                                 <button
@@ -452,7 +462,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     )}
 
                     {step === 'resolution' && (
-                        <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                        <div className="space-y-6">
                             <div className="flex items-center gap-3 p-4 bg-indigo-50 text-indigo-700 rounded-xl border border-indigo-100">
                                 <HelpCircle className="w-5 h-5 flex-shrink-0" />
                                 <div className="text-sm">
@@ -462,15 +472,15 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                             </div>
 
                             <div className="max-h-[50vh] overflow-y-auto border border-gray-200 rounded-xl">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 text-gray-500 font-medium sticky top-0 shadow-sm z-10">
+                                <table className="tbl tbl-compact w-full text-sm text-left">
+                                    <thead className="sticky top-0">
                                         <tr>
                                             <th className="p-3">Unknown Code (In File)</th>
                                             <th className="p-3 text-center">Qty / Orders</th>
                                             <th className="p-3">Map to Master SKU</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-100">
+                                    <tbody>
                                         {(Object.entries(unknownSkus) as [string, { count: number, revenue: number, masterSku: string | null }][]).map(([fileSku, data]) => (
                                             <tr key={fileSku}>
                                                 <td className="p-3 font-mono text-xs text-gray-700">{fileSku}</td>
@@ -520,7 +530,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     )}
 
                     {step === 'preview' && previewData && (
-                        <div className="space-y-6 animate-in zoom-in duration-300">
+                        <div className="space-y-6">
                             <div className="grid grid-cols-4 gap-4 text-center">
                                 <div className="p-4 bg-green-50 rounded-xl border border-green-100">
                                     <div className="text-2xl font-bold text-green-700">{previewData.stats.matchedSkus}</div>
@@ -559,8 +569,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                             </div>
 
                             <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 text-gray-500 font-bold sticky top-0">
+                                <table className="tbl tbl-compact w-full text-sm text-left">
+                                    <thead className="sticky top-0">
                                         <tr>
                                             <th className="p-3">SKU</th>
                                             <th className="p-3 text-right">Old Vel.</th>
@@ -569,7 +579,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                             <th className="p-3 text-right">Unit Fees</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-100">
+                                    <tbody>
                                         {previewData.updates.slice(0, 50).map((u: any, i: number) => {
                                             const totalFees = (u.sellingFee || 0) + (u.adsFee || 0) + (u.postage || 0) + (u.wmsFee || 0);
                                             return (
@@ -577,9 +587,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                                     <td className="p-3 font-mono text-xs">{u.sku}</td>
                                                     <td className="p-3 text-right text-gray-400">{u.previousDailySales?.toFixed(1) || '-'}</td>
                                                     <td className="p-3 text-right font-bold text-indigo-600">{u.averageDailySales.toFixed(1)}</td>
-                                                    <td className="p-3 text-right">£{(u.currentPrice || 0).toFixed(2)}</td>
+                                                    <td className="p-3 text-right">{formatSmartMoney((u.currentPrice || 0))}</td>
                                                     <td className="p-3 text-right text-xs text-gray-500">
-                                                        {totalFees > 0 ? `£${totalFees.toFixed(2)}` : '-'}
+                                                        {totalFees > 0 ? formatSmartMoney(totalFees) : '-'}
                                                     </td>
                                                 </tr>
                                             );

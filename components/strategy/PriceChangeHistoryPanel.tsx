@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { PriceChangeRecord } from '../../types';
 import { ChevronDown, ChevronRight, History, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
-import { formatMoney } from '../../utils/format';
+import { formatMoney, formatSmartMoney } from '../../utils/format';
 import { asDateKey } from '../../services/dateUtils';
 
 interface PriceChangeHistoryPanelProps {
@@ -72,7 +72,7 @@ export const PriceChangeHistoryPanel: React.FC<PriceChangeHistoryPanelProps> = (
             {!isExpanded && (
                 <p className="text-xs text-gray-500 mt-0.5">
                     {latest 
-                        ? `Last change: ${new Date(latest.date).toLocaleDateString('en-GB')} • ${formatMoney(latest.oldPrice)} → ${formatMoney(latest.newPrice)}`
+                        ? `Last change: ${new Date(latest.date).toLocaleDateString('en-GB')} • ${formatSmartMoney(latest.oldPrice)} → ${formatSmartMoney(latest.newPrice)}`
                         : "No price changes recorded"
                     }
                 </p>
@@ -92,8 +92,8 @@ export const PriceChangeHistoryPanel: React.FC<PriceChangeHistoryPanelProps> = (
                  </div>
              ) : (
                  <div className="overflow-x-auto">
-                     <table className="w-full text-left text-xs whitespace-nowrap">
-                         <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100">
+                     <table className="tbl w-full text-left text-xs whitespace-nowrap">
+                         <thead>
                              <tr>
                                  <th className="p-3 pl-4">Date/Time</th>
                                  <th className="p-3">Platform</th>
@@ -105,12 +105,12 @@ export const PriceChangeHistoryPanel: React.FC<PriceChangeHistoryPanelProps> = (
                                  <th className="p-3 pr-4 text-right">Source</th>
                              </tr>
                          </thead>
-                         <tbody className="divide-y divide-gray-100">
+                         <tbody>
                              {relevantHistory.map(record => {
                                  const delta = record.newPrice - record.oldPrice;
                                  const isIncrease = delta > 0;
                                  return (
-                                     <tr key={record.id} className="hover:bg-gray-50/50">
+                                     <tr key={record.id} className="">
                                          <td className="p-3 pl-4 font-mono text-gray-600">
                                              {new Date(record.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                          </td>
@@ -126,16 +126,16 @@ export const PriceChangeHistoryPanel: React.FC<PriceChangeHistoryPanelProps> = (
                                              </span>
                                          </td>
                                          <td className="p-3 text-right text-gray-500 line-through">
-                                             {formatMoney(record.oldPrice)}
+                                             {formatSmartMoney(record.oldPrice)}
                                          </td>
                                          <td className="p-3 text-center text-gray-400">
                                              <ArrowRight className="w-3 h-3 mx-auto" />
                                          </td>
                                          <td className="p-3 text-right font-bold text-gray-900">
-                                             {formatMoney(record.newPrice)}
+                                             {formatSmartMoney(record.newPrice)}
                                          </td>
                                          <td className={`p-3 text-right font-bold ${isIncrease ? 'text-green-600' : 'text-red-600'}`}>
-                                             {isIncrease ? '+' : ''}{formatMoney(delta)} ({isIncrease ? '+' : ''}{record.percentChange.toFixed(1)}%)
+                                             {isIncrease ? '+' : ''}{formatSmartMoney(delta)} ({isIncrease ? '+' : ''}{record.percentChange.toFixed(1)}%)
                                          </td>
                                          <td className="p-3 pr-4 text-right">
                                              <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">

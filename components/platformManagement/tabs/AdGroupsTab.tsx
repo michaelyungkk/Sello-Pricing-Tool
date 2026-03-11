@@ -21,7 +21,7 @@ import {
     History
 } from 'lucide-react';
 import { AdGroup, SkuFamily, Product, PricingRules } from '../../../types';
-import { formatMoney } from '../../../utils/format';
+import { formatMoney, formatSmartMoney } from '../../../utils/format';
 import { MetricCard } from '../../productManagement/parts/MetricCard';
 import { FilterBar } from '../../common/FilterBar';
 
@@ -64,6 +64,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
     // Filters
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchTags, setSearchTags] = useState<string[]>([]);
     const [platformFilter, setPlatformFilter] = useState('All Platforms');
     const [statusFilter, setStatusFilter] = useState('All Status');
 
@@ -129,9 +130,12 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
     const filteredAndSortedGroups = useMemo(() => {
         let result = adGroups.filter(g => {
-            const matchesSearch = !searchQuery ||
-                g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                g.memberSkus.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
+            const matchesTerm = (term: string) =>
+                g.name.toLowerCase().includes(term.toLowerCase()) ||
+                g.memberSkus.some(s => s.toLowerCase().includes(term.toLowerCase()));
+            const matchesSearch = searchTags.length > 0
+                ? searchTags.some(t => matchesTerm(t))
+                : !searchQuery || matchesTerm(searchQuery);
             const matchesPlatform = platformFilter === 'All Platforms' || g.platform === platformFilter;
             const matchesStatus = statusFilter === 'All Status' || getStatus(g) === statusFilter;
             return matchesSearch && matchesPlatform && matchesStatus;
@@ -156,7 +160,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
         });
 
         return result;
-    }, [adGroups, searchQuery, platformFilter, statusFilter, sort, todayStr]);
+    }, [adGroups, searchQuery, searchTags, platformFilter, statusFilter, sort, todayStr]);
 
     const filteredProducts = useMemo(() => {
         if (!skuSearch) return products.slice(0, 50);
@@ -294,11 +298,11 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
     const renderStatusBadge = (status: string) => {
         switch (status) {
             case 'Ongoing':
-                return <span style={{padding:'1px 6px',background:'#d1fae5',color:'#065f46',border:'1px solid #a7f3d0',borderRadius:999,fontSize:10,fontWeight:700}}>Ongoing</span>;
+                return <span className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-[10px] font-bold">Ongoing</span>;
             case 'Ended':
-                return <span style={{padding:'1px 6px',background:'#f3f4f6',color:'#6b7280',border:'1px solid #e5e7eb',borderRadius:999,fontSize:10,fontWeight:700}}>Ended</span>;
+                return <span className="px-2 py-0.5 bg-gray-50 text-gray-500 border border-gray-200 rounded-full text-[10px] font-bold">Ended</span>;
             case 'Scheduled':
-                return <span style={{padding:'1px 6px',background:'#dbeafe',color:'#1e40af',border:'1px solid #bfdbfe',borderRadius:999,fontSize:10,fontWeight:700}}>Scheduled</span>;
+                return <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-[10px] font-bold">Scheduled</span>;
             default:
                 return null;
         }
@@ -365,9 +369,10 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
             {/* Filters Bar */}
             <FilterBar
-                searchValue={searchQuery}
-                onSearchChange={setSearchQuery}
-                searchPlaceholder="Search by group name or SKU..."
+                searchTags={searchTags}
+                onSearchTagsChange={(tags) => { setSearchTags(tags); }}
+                onSearchChange={(val) => { setSearchQuery(val); }}
+                searchPlaceholder="Search by group name or SKU…"
                 multiSelects={[
                     {
                         key: 'platform',
@@ -390,7 +395,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
             />
 
             {/* Table Container */}
-            <div className="sello-glass rounded-xl overflow-hidden relative">
+            <div className="bg-custom-glass backdrop-blur-custom rounded-xl shadow-sm border border-custom-glass overflow-hidden relative">
                 {/* Bulk Actions Bar */}
                 {selectedIds.size > 0 && (
                     <div className="absolute top-0 left-0 right-0 h-14 bg-indigo-600 px-6 flex items-center justify-between text-white z-20 animate-in slide-in-from-top duration-300">
@@ -423,11 +428,11 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                     </div>
                 )}
 
-                <div className="sello-table-scroll">
-                    <table className="sello-table">
-                        <thead >
+                <div className="overflow-x-auto">
+                    <table className="tbl w-full text-left text-sm">
+                        <thead>
                             <tr>
-                                <th style={{width:40}}>
+                                <th className="p-4 w-10">
                                     <input
                                         type="checkbox"
                                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
@@ -444,8 +449,8 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                         <ArrowUpDown className={`w-3 h-3 ${sort.key === 'name' ? 'text-indigo-600' : 'text-gray-300'}`} />
                                     </div>
                                 </th>
-                                <th>Member SKUs</th>
-                                <th>Platform</th>
+                                <th className="p-4">Member SKUs</th>
+                                <th className="p-4">Platform</th>
                                 <th
                                     className="p-4 cursor-pointer hover:text-indigo-600 transition-colors"
                                     onClick={() => handleSort('status')}
@@ -464,14 +469,14 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                         <ArrowUpDown className={`w-3 h-3 ${sort.key === 'dateRange' ? 'text-indigo-600' : 'text-gray-300'}`} />
                                     </div>
                                 </th>
-                                <th className="r">Actions</th>
+                                <th className="p-4 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody >
+                        <tbody>
                             {filteredAndSortedGroups.length > 0 ? filteredAndSortedGroups.map(group => {
                                 const isSelected = selectedIds.has(group.id);
                                 return (
-                                    <tr key={group.id} style={{background:isSelected?"var(--theme-10)":undefined}}>
+                                    <tr key={group.id} className={`${isSelected ? 'bg-indigo-50/30' : ''}`}>
                                         <td className="p-4">
                                             <input
                                                 type="checkbox"

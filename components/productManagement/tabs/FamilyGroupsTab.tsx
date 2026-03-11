@@ -170,7 +170,7 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
             {/* SECTION 2: Confirmed Family Groups */}
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="tbl w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-gray-50 border-bottom border-gray-200">
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Family Name</th>
@@ -179,7 +179,7 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody>
                             {skuFamilies.length === 0 ? (
                                 <tr>
                                     <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
@@ -196,7 +196,7 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                 </tr>
                             ) : (
                                 skuFamilies.map(family => (
-                                    <tr key={family.id} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={family.id} className="">
                                         <td className="px-6 py-4">
                                             <span className="font-semibold text-gray-900">{family.name}</span>
                                         </td>

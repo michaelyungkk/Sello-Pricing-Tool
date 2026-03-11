@@ -2,7 +2,7 @@
 import React from 'react';
 import { Layers, Package, MapPin, TrendingDown, TrendingUp, Info, ChevronDown, ChevronRight, ArrowRight } from 'lucide-react';
 import { GradeBadge } from '../../../GradeBadge';
-import { formatNumber, formatMoney, formatPct } from '../../../../utils/format';
+import { formatNumber, formatMoney, formatSmartMoney, formatPct } from '../../../../utils/format';
 import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct } from '../../../../services/metrics';
 import { ThresholdConfig } from '../../../../services/thresholdsConfig';
 import { Product } from '../../../../types';
@@ -39,7 +39,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
     
     if (data.results.length === 0) {
       return (
-        <div className="sello-glass rounded-xl text-center py-20">
+        <div className="text-center py-20 bg-custom-glass rounded-xl border border-custom-glass">
           <h3 className="text-lg font-bold text-gray-800">No Results Found</h3>
           <p className="text-gray-500 mt-2">Your query did not return any results. Try adjusting the filters above.</p>
         </div>
@@ -92,7 +92,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
             const productForGroup = groupBy === 'sku' ? liveProductMap.get(group.key) : null;
 
             return (
-              <div key={group.key} className="sello-glass rounded-xl overflow-hidden">
+              <div key={group.key} className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
                 <div
                   className={`w-full p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors cursor-pointer select-text ${expandedGroup === group.key ? 'bg-gray-50/30' : ''}`}
                   onClick={(e) => handleGroupToggle(group.key, e)}
@@ -125,14 +125,14 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                         {context.isTrend ? (
                             <div className="flex flex-col items-end">
                                 <span className="font-bold text-gray-900 text-sm">{formatNumber(group.totalQty)}</span>
-                                <div className="v-num" style={{color:volDiff<0?'#dc2626':'#059669',display:'flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700}}>
+                                <div className={`flex items-center gap-1 text-xs font-bold ${volDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                     {volDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
                                     {volDiff > 0 ? '+' : ''}{formatNumber(volDiff)} ({volDiffPct.toFixed(1)}%)
                                 </div>
                             </div>
                         ) : (
                             <div className="flex flex-col items-end">
-                                <div className="v-num v-bold" style={{fontSize:18,color:context.isVolume?'#4f46e5':'#111827'}}>
+                                <div className={`font-bold text-lg ${context.isVolume ? 'text-indigo-700' : 'text-gray-800'}`}>
                                     {formatNumber(group.totalQty)}
                                 </div>
                                 {volumeBadge}
@@ -148,17 +148,17 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                         
                         {context.isTrend ? (
                             <div className="flex flex-col items-end">
-                                <span className="font-bold text-gray-900 text-sm">{formatMoney(group.totalRevenue, 0)}</span>
-                                <div className="v-num" style={{color:revDiff<0?'#dc2626':'#059669',display:'flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700}}>
+                                <span className="font-bold text-gray-900 text-sm">{formatSmartMoney(group.totalRevenue)}</span>
+                                <div className={`flex items-center gap-1 text-xs font-bold ${revDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                     {revDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-                                    {revDiff > 0 ? '+' : '-'}{formatMoney(Math.abs(revDiff), 0)} ({revDiffPct.toFixed(1)}%)
+                                    {revDiff > 0 ? '+' : '-'}{formatSmartMoney(Math.abs(revDiff), 0)} ({revDiffPct.toFixed(1)}%)
                                 </div>
                             </div>
                         ) : (
                             <div className="font-bold text-lg text-gray-800">
                                 {context.isInventory || context.isAged
                                     ? `${(group.globalVelocity || 0).toFixed(1)}/day`
-                                    : formatMoney(group.totalRevenue, 0)
+                                    : formatSmartMoney(group.totalRevenue)
                                 }
                             </div>
                         )}
@@ -212,7 +212,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                             {context.isMargin ? (
                                 <div className="flex flex-col items-end">
                                     <div className={`font-bold text-lg ${group.totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>
-                                        {formatMoney(group.totalProfit, 0)}
+                                        {formatSmartMoney(group.totalProfit)}
                                     </div>
                                     <div className={`text-xs flex items-center gap-1 ${group.weightedMargin !== null && group.weightedMargin < thresholds.marginBelowTargetPct ? 'text-red-400' : 'text-gray-400'}`} title="Net Profit / Revenue. Shows '—' if no revenue recorded.">
                                         {formatPct(group.weightedMargin)} 
@@ -354,7 +354,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                             <div className="text-right">
                                                                 <div className="text-xs text-gray-400">Rev. Trend</div>
                                                                 <div className={`text-xs font-bold ${subRevDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                                                    {subRevDiff > 0 ? '+' : ''}£{Math.abs(subRevDiff).toFixed(0)} ({subRevDiffPct.toFixed(0)}%)
+                                                                    {subRevDiff > 0 ? '+' : ''}{formatSmartMoney(Math.abs(subRevDiff))} ({subRevDiffPct.toFixed(0)}%)
                                                                 </div>
                                                             </div>
                                                         </>
@@ -366,12 +366,12 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                             </div>
                                                             <div className="text-right">
                                                                 <div className="text-xs text-gray-400">Revenue</div>
-                                                                <div className="text-sm font-medium text-gray-700">{formatMoney(sub.totalRevenue, 0)}</div>
+                                                                <div className="text-sm font-medium text-gray-700">{formatSmartMoney(sub.totalRevenue)}</div>
                                                             </div>
                                                             {(context.isMargin || context.isAd || context.isOrganic) && (
                                                                 <div className="text-right">
                                                                     <div className="text-xs text-gray-400">Ad Spent</div>
-                                                                    <div className="text-sm font-medium text-orange-700">{formatMoney(sub.totalAdSpend, 0)}</div>
+                                                                    <div className="text-sm font-medium text-orange-700">{formatSmartMoney(sub.totalAdSpend)}</div>
                                                                 </div>
                                                             )}
                                                             <div className="text-right w-24">
@@ -386,7 +386,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                                 }`}>
                                                                     {context.isAd ? formatPct(sub.tacos) :
                                                                      context.isOrganic ? (sub.organicShare !== null ? `${sub.organicShare.toFixed(1)}%` : <span className="text-xs text-gray-400 font-medium">N/A</span>) :
-                                                                     context.isMargin ? formatMoney(sub.totalProfit, 0) :
+                                                                     context.isMargin ? formatSmartMoney(sub.totalProfit) :
                                                                      `${sub.contribution.toFixed(1)}%`}
                                                                 </span>
                                                             </div>
@@ -399,42 +399,42 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                             {isSubExpanded && (
                                                 <div className="px-6 pb-4 animate-in fade-in slide-in-from-top-1">
                                                     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
-                                                        <table className="sello-table">
-                                                            <thead >
+                                                        <table className="tbl w-full text-xs text-left">
+                                                            <thead>
                                                                 {context.isReturn ? (
                                                                     <tr>
-                                                                        <th>Date</th>
-                                                                        <th className="r">Refund Amount</th>
-                                                                        <th className="r">Qty</th>
-                                                                        <th>Reason / Note</th>
-                                                                        <th className="r">Platform</th>
+                                                                        <th className="p-2 pl-3">Date</th>
+                                                                        <th className="p-2 text-right">Refund Amount</th>
+                                                                        <th className="p-2 text-right">Qty</th>
+                                                                        <th className="p-2">Reason / Note</th>
+                                                                        <th className="p-2 text-right">Platform</th>
                                                                     </tr>
                                                                 ) : (
                                                                     <tr>
-                                                                        <th>Date</th>
-                                                                        <th className="r col-blue">Unit Price</th>
+                                                                        <th className="p-2 pl-3">Date</th>
+                                                                        <th className="p-2 text-right">Unit Price</th>
                                                                         <th className="p-2 text-right">
                                                                             {context.isInventory || context.isAged ? 'Velocity' : 'Qty'}
                                                                         </th>
                                                                         <th className="p-2 text-right">
                                                                             {context.isInventory || context.isAged ? 'Est. Daily Rev' : 'Revenue'}
                                                                         </th>
-                                                                        {(context.isAd || context.isMargin || context.isOrganic) && <th className="r">Ad Spend</th>}
-                                                                        {context.isAd && <th className="r">TACoS</th>}
-                                                                        {context.isOrganic && <th className="r">Organic % (Ads)</th>}
-                                                                        {(context.isInventory || context.isAged) && <th className="r">Stock</th>}
-                                                                        {context.isAged && <th className="r">Aged Qty</th>}
-                                                                        {context.isAged && <th className="r">Aged %</th>}
-                                                                        {!context.isAged && context.isInventory && <th className="r">Stock Cover</th>}
-                                                                        {context.isTrend && <th className="r">Trend</th>}
-                                                                        {context.isPostcode && <th className="r">Postcode</th>}
+                                                                        {(context.isAd || context.isMargin || context.isOrganic) && <th className="p-2 text-right">Ad Spend</th>}
+                                                                        {context.isAd && <th className="p-2 text-right">TACoS</th>}
+                                                                        {context.isOrganic && <th className="p-2 text-right">Organic % (Ads)</th>}
+                                                                        {(context.isInventory || context.isAged) && <th className="p-2 text-right">Stock</th>}
+                                                                        {context.isAged && <th className="p-2 text-right">Aged Qty</th>}
+                                                                        {context.isAged && <th className="p-2 text-right">Aged %</th>}
+                                                                        {!context.isAged && context.isInventory && <th className="p-2 text-right">Stock Cover</th>}
+                                                                        {context.isTrend && <th className="p-2 text-right">Trend</th>}
+                                                                        {context.isPostcode && <th className="p-2 text-right">Postcode</th>}
                                                                         <th className="p-2 text-right">Profit</th>
                                                                         <th className="p-2 text-right">Margin %</th>
                                                                         <th className="p-2 text-right">Share %</th>
                                                                     </tr>
                                                                 )}
                                                             </thead>
-                                                            <tbody className="divide-y divide-gray-100">
+                                                            <tbody>
                                                                 {sub.items
                                                                     .filter((item: any) => context.isReturn ? item.type === 'REFUND' : true)
                                                                     .slice(0, 50) 
@@ -453,7 +453,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                                             {context.isReturn ? (
                                                                                 <>
                                                                                     <td className="p-2 text-right font-medium text-red-600">
-                                                                                        -{formatMoney(Math.abs(tx.refundAmount || tx.profit || 0))}
+                                                                                        -{formatSmartMoney(Math.abs(tx.refundAmount || tx.profit || 0))}
                                                                                     </td>
                                                                                     <td className="p-2 text-right font-bold text-gray-800">{tx.velocity}</td>
                                                                                     <td className="p-2 text-gray-600 truncate max-w-[200px]" title={tx.platformReason || tx.customerReason || tx.reason}>
@@ -467,16 +467,16 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                                                         {tx.type === 'AD_COST' ? (
                                                                                             <span className="text-[9px] bg-orange-50 text-orange-700 px-1 rounded border border-orange-100 uppercase font-bold">Ad Spend</span>
                                                                                         ) : (
-                                                                                            formatMoney(Math.abs(tx.price || 0))
+                                                                                            formatSmartMoney(Math.abs(tx.price || 0))
                                                                                         )}
                                                                                     </td>
                                                                                     <td className="p-2 text-right text-gray-900 font-bold">
                                                                                         {context.isInventory || context.isAged ? tx.velocity.toFixed(3) : formatNumber(tx.velocity)}
                                                                                     </td>
-                                                                                    <td className="p-2 text-right text-gray-700">{formatMoney(tx.revenue)}</td>
+                                                                                    <td className="p-2 text-right text-gray-700">{formatSmartMoney(tx.revenue)}</td>
                                                                                     {(context.isAd || context.isMargin || context.isOrganic) && (
                                                                                         <td className="p-2 text-right text-orange-700">
-                                                                                            {tx.adsSpend > 0 ? formatMoney(tx.adsSpend) : '-'}
+                                                                                            {tx.adsSpend > 0 ? formatSmartMoney(tx.adsSpend) : '-'}
                                                                                         </td>
                                                                                     )}
                                                                                     {context.isAd && (
@@ -531,7 +531,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                                                     )}
                                                                                     
                                                                                     <td className={`p-2 text-right font-medium ${tx.profit < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                                                                        {formatMoney(tx.profit)}
+                                                                                        {formatSmartMoney(tx.profit)}
                                                                                     </td>
                                                                                     <td className="p-2 text-right font-bold">
                                                                                         {tx.type === 'REFUND' ? (

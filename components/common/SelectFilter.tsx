@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Search, CheckSquare, Square, Check } from 'lucide-react';
+import { ChevronDown, Search, CheckSquare, Square, Check, X } from 'lucide-react';
 
 export interface SelectFilterProps {
     /** Label shown in the left badge of the trigger */
@@ -52,11 +52,23 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
     themeColor = '#4f46e5',
 }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTags, setSearchTags] = useState<string[]>([]);
+    const [searchInput, setSearchInput] = useState('');
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const triggerRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const currentSelected = selected || [];
+
+    const addTags = (raw: string) => {
+        const tags = raw.split(/[,\n\t\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+        setSearchTags(prev => [...prev, ...tags.filter(t => !prev.includes(t))]);
+        setSearchInput('');
+    };
+
+    const removeTag = (tag: string) => setSearchTags(prev => prev.filter(t => t !== tag));
+
+    const clearSearch = () => { setSearchTags([]); setSearchInput(''); };
 
     // Position the portal dropdown below the trigger
     const openDropdown = () => {
@@ -76,7 +88,7 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
                 dropdownRef.current && !dropdownRef.current.contains(target)
             ) {
                 setIsOpen(false);
-                setSearchTerm('');
+                clearSearch();
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -90,7 +102,7 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
             } else {
                 onChange([option]);
                 setIsOpen(false);
-                setSearchTerm('');
+                clearSearch();
             }
         } else {
             if (currentSelected.includes(option)) {
@@ -108,8 +120,18 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
             ? currentSelected[0]
             : `${currentSelected.length} Selected`;
 
+    // Filter options by active tag chips + current partial input
+    const allTerms = [
+        ...searchTags.map(t => t.toLowerCase()),
+        ...searchInput.split(/[,\n\t\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean),
+    ];
+
     const filteredOptions = options
-        ? options.filter(opt => opt.toLowerCase().includes(searchTerm.toLowerCase()))
+        ? options.filter(opt => {
+            if (allTerms.length === 0) return true;
+            const lower = opt.toLowerCase();
+            return allTerms.some(t => lower.includes(t));
+        })
         : [];
 
     return (
@@ -118,7 +140,7 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
             <div ref={triggerRef} className="relative">
                 <div
                     className="flex items-center border rounded-lg bg-white overflow-hidden cursor-pointer h-8"
-                    onClick={() => isOpen ? (setIsOpen(false), setSearchTerm('')) : openDropdown()}
+                    onClick={() => isOpen ? (setIsOpen(false), clearSearch()) : openDropdown()}
                     style={{ borderColor: isOpen ? themeColor : '#d1d5db' }}
                 >
                     <div className="flex items-center gap-1 px-2 py-1 bg-gray-50 border-r border-gray-200 min-w-fit h-full">
@@ -139,19 +161,62 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
                     className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] overflow-hidden animate-in fade-in zoom-in duration-100"
                     style={{ top: dropdownPos.top, left: dropdownPos.left }}
                 >
-                    {/* Header: search + actions */}
+                    {/* Header: tag chip search + actions */}
                     <div className="p-2 border-b border-gray-100 space-y-2">
-                        <div className="relative">
-                            <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                        <div
+                            className="sello-tag-input"
+                            style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+                            onClick={() => searchInputRef.current?.focus()}
+                        >
+                            <Search style={{ width: 12, height: 12, color: '#9ca3af', flexShrink: 0 }} />
+                            {searchTags.map(tag => (
+                                <span key={tag} className="sello-tag-chip">
+                                    {tag}
+                                    <button onClick={e => { e.stopPropagation(); removeTag(tag); }}>
+                                        <X style={{ width: 9, height: 9 }} />
+                                    </button>
+                                </span>
+                            ))}
                             <input
+                                ref={searchInputRef}
                                 type="text"
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                placeholder="Search..."
-                                className="w-full pl-7 pr-2 py-1 text-[10px] border border-gray-200 rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-indigo-500 transition-all"
+                                value={searchInput}
+                                onChange={e => setSearchInput(e.target.value)}
+                                placeholder={searchTags.length === 0 ? 'Search or paste SKUs…' : ''}
                                 autoFocus
                                 onClick={e => e.stopPropagation()}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (searchInput.trim()) {
+                                            addTags(searchInput);
+                                        } else if (filteredOptions.length > 0) {
+                                            if (singleSelect) {
+                                                onChange([filteredOptions[0]]);
+                                                setIsOpen(false); clearSearch();
+                                            } else {
+                                                const toAdd = filteredOptions.filter(o => !currentSelected.includes(o));
+                                                onChange([...currentSelected, ...toAdd]);
+                                                clearSearch();
+                                            }
+                                        }
+                                    } else if (e.key === 'Backspace' && !searchInput && searchTags.length > 0) {
+                                        setSearchTags(t => t.slice(0, -1));
+                                    }
+                                }}
+                                onPaste={e => {
+                                    e.preventDefault();
+                                    addTags(e.clipboardData.getData('text'));
+                                }}
                             />
+                            {(searchTags.length > 0 || searchInput) && (
+                                <button
+                                    onClick={e => { e.stopPropagation(); clearSearch(); }}
+                                    style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: '#9ca3af', flexShrink: 0, marginLeft: 'auto' }}
+                                >
+                                    <X style={{ width: 11, height: 11 }} />
+                                </button>
+                            )}
                         </div>
                         <div className="flex justify-between">
                             {!singleSelect && (
@@ -166,8 +231,7 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
                             >Clear</button>
                         </div>
                     </div>
-
-                    {/* Options list */}
+                                        {/* Options list */}
                     <div className="max-h-60 overflow-y-auto p-1">
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map(opt => {

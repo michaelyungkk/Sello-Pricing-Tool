@@ -460,8 +460,8 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
 
                     {viewMode === 'MATRIX' ? (
                         <div className="relative">
-                            <table className="w-full text-sm text-left border-collapse">
-                                <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-xs uppercase tracking-wider sticky top-0 z-30 backdrop-blur-sm shadow-sm transition-colors">
+                            <table className="tbl w-full text-sm text-left border-collapse">
+                                <thead className="sticky top-0">
                                     <tr>
                                         <th className="p-3 border-b border-r border-gray-200/50 min-w-[150px] bg-gray-50/50 z-40 sticky left-0 font-semibold">Category</th>
                                         <th className="p-3 border-b border-gray-200/50 text-center border-r font-semibold">Total</th>
@@ -470,7 +470,7 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                                 </thead>
                                 <tbody>
                                     {categories.map(cat => (
-                                        <tr key={cat.name} className="divide-x divide-gray-100/50 border-b border-gray-100/50 group even:bg-gray-50/10">
+                                        <tr key={cat.name} className="divide-x divide-gray-100/50 border-b border-gray-100/50 group">
                                             <td className="p-3 font-bold text-gray-700 sticky left-0 bg-gray-50/50 z-20 border-r border-gray-200/50 group-hover:bg-gray-100/50 transition-colors"><div className="flex items-center gap-2"><Layers className={`w-3 h-3 ${selectedCell?.category === cat.name ? 'text-indigo-600' : 'text-gray-400'}`} /><div className="flex flex-col"><span className="text-xs truncate max-w-[120px] text-gray-800">{cat.name}</span><span className="text-[9px] text-gray-500 font-medium">{kpiStats.skuCounts[cat.name] || 0} SKUs</span></div></div></td>
                                             <td className={`p-0 relative cursor-pointer hover:ring-2 hover:ring-indigo-400 ${selectedCell?.category === cat.name && selectedCell?.platform === 'All' ? 'ring-2 ring-indigo-500 z-20' : ''}`} onClick={() => setSelectedCell({ category: cat.name, platform: 'All' })}>{<CellRenderer cat={cat} plat="All" getCellValue={getCellValue} colorScale={colorScale} resolveTargetMargin={resolveTargetMargin} metric={metric} mode={mode} />}</td>
                                             {platforms.map(plat => <td key={plat} className={`p-0 relative cursor-pointer hover:ring-2 hover:ring-indigo-400 ${selectedCell?.category === cat.name && selectedCell?.platform === plat ? 'ring-2 ring-indigo-500 z-20' : ''}`} onClick={() => cat.platforms[plat] && cat.platforms[plat].revenue > 0 && setSelectedCell({ category: cat.name, platform: plat })}>{<CellRenderer cat={cat} plat={plat} getCellValue={getCellValue} colorScale={colorScale} resolveTargetMargin={resolveTargetMargin} metric={metric} mode={mode} />}</td>)}
@@ -500,8 +500,8 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                                     </div>
                                 </div>
                                 <div className="p-2">
-                                    <table className="w-full text-xs text-left">
-                                        <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-[10px] uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm transition-colors">
+                                    <table className="tbl w-full text-xs text-left">
+                                        <thead className="sticky top-0">
                                             <tr>
                                                 <SortableHeader sortKey="name" label="Subcat" sort={drilldownSort} onChange={setDrilldownSort} className="px-4 py-2" />
                                                 <SortableHeader sortKey="revenue" label="Rev" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="px-4 py-2" />
@@ -509,13 +509,13 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                                                 <SortableHeader sortKey="tacos" label="TACoS" sort={drilldownSort} onChange={setDrilldownSort} align="right" className="px-4 py-2" />
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100/50">
+                                        <tbody>
                                             {drilldownData.map(sub => (
-                                                <tr key={sub.name} className="even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors">
-                                                    <td className="px-4 py-2 font-medium text-gray-700 truncate max-w-[100px]">{sub.name}</td>
-                                                    <td className="px-4 py-2 text-right">£{sub.metric.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                                                <tr key={sub.name} className="">
+                                                    <td className="px-4 py-3 font-medium text-gray-700 truncate max-w-[100px]">{sub.name}</td>
+                                                    <td className="px-4 py-3 text-right">£{sub.metric.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
                                                     <td className={`px-4 py-2 text-right font-semibold ${sub.metric.margin < resolveTargetMargin(selectedCell.category, sub.name, selectedCell.platform === 'All' ? undefined : selectedCell.platform)! ? 'text-red-500' : 'text-emerald-600'}`}>{sub.metric.margin.toFixed(1)}%</td>
-                                                    <td className="px-4 py-2 text-right">{sub.metric.tacos.toFixed(1)}%</td>
+                                                    <td className="px-4 py-3 text-right">{sub.metric.tacos.toFixed(1)}%</td>
                                                 </tr>
                                             ))}
                                         </tbody>

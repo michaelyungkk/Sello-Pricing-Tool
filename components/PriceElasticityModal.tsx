@@ -1,5 +1,6 @@
 
 import React, { useMemo } from 'react';
+import { formatSmartMoney } from '../utils/format';
 import { Product, PriceLog, PriceChangeRecord } from '../types';
 import { X, TrendingUp, TrendingDown, Activity, Calendar, ArrowRight } from 'lucide-react';
 import {
@@ -152,9 +153,9 @@ const PriceElasticityModal: React.FC<PriceElasticityModalProps> = ({ product, pr
                   <div>
                     <div className="text-xs text-gray-500 uppercase font-bold mb-1">Price Change</div>
                     <div className="flex items-center gap-3">
-                      <span className="text-gray-400 line-through text-sm">£{impactStats.oldPrice.toFixed(2)}</span>
+                      <span className="text-gray-400 line-through text-sm">{formatSmartMoney(impactStats.oldPrice)}</span>
                       <ArrowRight className="w-4 h-4 text-gray-400" />
-                      <span className="text-xl font-bold text-gray-900">£{impactStats.newPrice.toFixed(2)}</span>
+                      <span className="text-xl font-bold text-gray-900">{formatSmartMoney(impactStats.newPrice)}</span>
                     </div>
                     <div className={`text-sm font-bold ${(impactStats.priceChangePct || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {(impactStats.priceChangePct || 0) > 0 ? '+' : ''}{(impactStats.priceChangePct || 0).toFixed(1)}%

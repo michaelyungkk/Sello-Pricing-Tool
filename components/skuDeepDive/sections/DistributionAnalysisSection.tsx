@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { formatSmartMoney } from '../../../utils/format';
 import { BarChart2, Rows, LayoutGrid, Megaphone } from 'lucide-react';
 import { BoxPlot } from '../charts/BoxPlot';
 
@@ -53,7 +54,7 @@ export const DistributionAnalysisSection: React.FC<DistributionAnalysisSectionPr
                         stats7={analytics.revenue.d7}
                         stats30={analytics.revenue.d30}
                         stats90={analytics.revenue.d90}
-                        format={(v: number) => `£${v.toFixed(0)}`}
+                        format={(v: number) => formatSmartMoney(v)}
                         color="#3b82f6"
                         layout={chartLayout}
                         tooltip={tooltip}

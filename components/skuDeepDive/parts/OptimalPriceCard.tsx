@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { formatMoney } from '../../../utils/format';
+import { formatMoney, formatSmartMoney } from '../../../utils/format';
 import { TrendingUp, TrendingDown, CheckCircle } from 'lucide-react';
 
 interface OptimalPriceCardProps {
@@ -23,7 +23,7 @@ export const OptimalPriceCard: React.FC<OptimalPriceCardProps> = ({ optimalPrice
             </div>
             <div className="flex items-end justify-between">
                 <div className="text-3xl font-bold text-gray-900 tracking-tight">
-                    {formatMoney(optimalPrice)}
+                    {formatSmartMoney(optimalPrice)}
                 </div>
                 
                 {isIncrease && (
@@ -56,7 +56,7 @@ export const OptimalPriceCard: React.FC<OptimalPriceCardProps> = ({ optimalPrice
              {(isIncrease || isDecrease) && (
                 <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500 flex justify-between items-center">
                     <span className="font-medium">Current Price:</span>
-                    <span className="font-mono">{formatMoney(currentPrice)}</span>
+                    <span className="font-mono">{formatSmartMoney(currentPrice)}</span>
                 </div>
              )}
         </div>

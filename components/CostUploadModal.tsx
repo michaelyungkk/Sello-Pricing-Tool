@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { formatSmartMoney } from '../utils/format';
 import { Upload, X, FileText, Check, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useTranslation } from 'react-i18next';
@@ -163,8 +164,8 @@ const CostUploadModal: React.FC<CostUploadModalProps> = ({ onClose, onConfirm })
                                 <button onClick={() => setParsedItems(null)} className="text-sm text-gray-500 flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Reset</button>
                             </div>
                             <div className="max-h-60 overflow-y-auto border rounded-lg">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50">
+                                <table className="tbl tbl-compact w-full text-sm text-left">
+                                    <thead>
                                         <tr>
                                             <th className="p-2">SKU</th>
                                             <th className="p-2 text-right">Cost</th>
@@ -176,7 +177,7 @@ const CostUploadModal: React.FC<CostUploadModalProps> = ({ onClose, onConfirm })
                                         {validItems.slice(0, 50).map((item: any, idx) => (
                                             <tr key={idx} className="border-t">
                                                 <td className="p-2">{item.sku}</td>
-                                                <td className="p-2 text-right">{item.cost !== undefined ? `£${item.cost.toFixed(2)}` : '-'}</td>
+                                                <td className="p-2 text-right">{item.cost !== undefined ? formatSmartMoney(item.cost) : '-'}</td>
                                                 <td className="p-2 text-right text-gray-400">{item.floorPrice !== undefined ? `£${item.floorPrice}` : '-'}</td>
                                                 <td className="p-2 text-right text-gray-400">{item.ceilingPrice !== undefined ? `£${item.ceilingPrice}` : '-'}</td>
                                             </tr>

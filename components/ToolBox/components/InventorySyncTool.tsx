@@ -1214,19 +1214,19 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                             />
                         </div>
                         <div className="flex-1 overflow-y-auto p-0">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0 font-bold">
+                            <table className="tbl w-full text-sm text-left">
+                                <thead className="sticky top-0">
                                     <tr>
                                         <th className="p-3 w-1/3">Unmatched Platform SKU</th>
                                         <th className="p-3 w-1/3">Map to Master SKU</th>
                                         <th className="p-3 w-1/3 text-right">Status</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100">
+                                <tbody>
                                     {detectedMismatches.filter(s => s.toLowerCase().includes(fixerSearch.toLowerCase())).map((item, idx) => {
                                         const matched = manualMatches.get(item);
                                         return (
-                                            <tr key={idx} className={`hover:bg-gray-50 ${matched ? 'bg-green-50/50' : ''}`}>
+                                            <tr key={idx} className={`${matched ? 'bg-green-50/50' : ''}`}>
                                                 <td className="p-3 font-mono text-gray-700">{item}</td>
                                                 <td className="p-3">
                                                     {matched ? (

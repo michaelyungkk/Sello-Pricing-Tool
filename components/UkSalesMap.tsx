@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { formatSmartMoney } from '../utils/format';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
 import { Product, PriceLog, SearchChip } from '../types';
@@ -676,7 +677,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             </div>
                              <div className="bg-orange-50/70 border border-orange-100 rounded-lg p-2">
                                 <div className="text-xs text-orange-700 font-medium uppercase">Ad Spend</div>
-                                <div className="text-lg font-bold text-orange-900">£{pinnedArea.adSpend.toFixed(0)}</div>
+                                <div className="text-lg font-bold text-orange-900">{formatSmartMoney(pinnedArea.adSpend)}</div>
                             </div>
                             <div className="bg-purple-50/70 border border-purple-100 rounded-lg p-2">
                                 <div className="text-xs text-purple-700 font-medium uppercase">TACoS</div>
@@ -809,8 +810,8 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                 </div>
             </div>
             <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs whitespace-nowrap">
-                    <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50 text-[10px] uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm">
+                <table className="tbl w-full text-left text-xs whitespace-nowrap">
+                    <thead className="sticky top-0">
                         <tr>
                             <SortableHeader label="Area" sortKey="code" />
                             <SortableHeader label="Orders" sortKey="orders" align="right"/>
@@ -825,25 +826,25 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <th className="px-3 py-2 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-center w-12">Action</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100/50">
+                    <tbody>
                         {sortedTableData.map(d => {
                             const isPinned = pinnedArea && pinnedArea.code === d.code;
                             return (
                                 <React.Fragment key={d.code}>
                                     <tr 
-                                        className={`even:bg-gray-50/30 hover:bg-gray-100/50 transition-colors cursor-pointer ${isPinned ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
+                                        className={`cursor-pointer ${isPinned ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
                                         onClick={() => setPinnedArea(prev => (prev && prev.code === d.code) ? null : d)}
                                     >
                                         <td className="px-3 py-2 font-bold text-gray-800">{getAreaDisplayName(d.code)}</td>
                                         <td className="px-3 py-2 text-right font-mono">{d.orders}</td>
                                         <td className="px-3 py-2 text-right font-mono">{d.volume}</td>
-                                        <td className="px-3 py-2 text-right font-mono">£{d.revenue.toFixed(0)}</td>
-                                        <td className={`px-3 py-2 text-right font-mono font-bold ${d.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>£{d.profit.toFixed(0)}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{formatSmartMoney(d.revenue)}</td>
+                                        <td className={`px-3 py-2 text-right font-mono font-bold ${d.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>{formatSmartMoney(d.profit)}</td>
                                         <td className={`px-3 py-2 text-right font-mono font-bold ${d.margin > 15 ? 'text-green-600' : d.margin > 0 ? 'text-amber-600' : 'text-red-600'}`}>{d.margin.toFixed(1)}%</td>
                                         <td className={`px-3 py-2 text-right font-mono ${d.returnRate > 5 ? 'text-red-600' : 'text-gray-600'}`}>{d.returnRate.toFixed(1)}%</td>
                                         <td className={`px-3 py-2 text-right font-mono ${d.tacos > 15 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{d.tacos.toFixed(1)}%</td>
-                                        <td className="px-3 py-2 text-right font-mono text-gray-600">£{d.totalShippingCost.toFixed(0)}</td>
-                                        <td className={`px-3 py-2 text-right font-mono ${d.avgShippingCost > 7 ? 'text-red-600' : d.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-600'}`}>£{d.avgShippingCost.toFixed(2)}</td>
+                                        <td className="px-3 py-2 text-right font-mono text-gray-600">{formatSmartMoney(d.totalShippingCost)}</td>
+                                        <td className={`px-3 py-2 text-right font-mono ${d.avgShippingCost > 7 ? 'text-red-600' : d.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-600'}`}>{formatSmartMoney(d.avgShippingCost)}</td>
                                         <td className="px-3 py-2 text-center">
                                             <button 
                                                 onClick={(e) => {
@@ -868,13 +869,13 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                                 </td>
                                                 <td className="px-3 py-1.5 text-right font-mono">-</td>
                                                 <td className="px-3 py-1.5 text-right font-mono">{district.volume}</td>
-                                                <td className="px-3 py-1.5 text-right font-mono">£{district.revenue.toFixed(0)}</td>
-                                                <td className={`px-3 py-1.5 text-right font-mono ${district.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>£{district.profit.toFixed(0)}</td>
+                                                <td className="px-3 py-1.5 text-right font-mono">{formatSmartMoney(district.revenue)}</td>
+                                                <td className={`px-3 py-1.5 text-right font-mono ${district.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>{formatSmartMoney(district.profit)}</td>
                                                 <td className="px-3 py-1.5 text-center text-gray-300">-</td>
                                                 <td className="px-3 py-1.5 text-center text-gray-300">-</td>
                                                 <td className="px-3 py-1.5 text-center text-gray-300">-</td>
-                                                <td className="px-3 py-1.5 text-right font-mono text-gray-600">£{district.totalShippingCost.toFixed(0)}</td>
-                                                <td className="px-3 py-1.5 text-right font-mono text-gray-600">£{district.avgShippingCost.toFixed(2)}</td>
+                                                <td className="px-3 py-1.5 text-right font-mono text-gray-600">{formatSmartMoney(district.totalShippingCost)}</td>
+                                                <td className="px-3 py-1.5 text-right font-mono text-gray-600">{formatSmartMoney(district.avgShippingCost)}</td>
                                                 <td className="px-3 py-1.5 text-center"></td>
                                             </tr>
                                         ))

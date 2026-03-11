@@ -397,8 +397,8 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                             </div>
 
                             <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm max-h-[400px] overflow-y-auto">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-gray-50 text-gray-500 font-bold text-xs uppercase sticky top-0 z-10 shadow-sm">
+                                <table className="tbl tbl-compact w-full text-left text-sm">
+                                    <thead className="sticky top-0">
                                         <tr>
                                             <th className="px-4 py-3 w-1/4">Container ID</th>
                                             <th className="px-4 py-3 w-1/6">Update Type</th>
@@ -407,13 +407,13 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                                             <th className="px-4 py-3 text-right">Qty</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-100">
+                                    <tbody>
                                         {containerSummaries.map((c) => {
                                             const isStatusChanged = c.oldStatus && c.oldStatus !== c.status;
                                             const isEtaChanged = c.oldEta && c.eta !== c.oldEta;
 
                                             return (
-                                                <tr key={c.id} className={`hover:bg-gray-50 transition-colors ${c.changeType === 'DELAYED' ? 'bg-red-50/10' : ''}`}>
+                                                <tr key={c.id} className={`${c.changeType === 'DELAYED' ? 'bg-red-50/10' : ''}`}>
                                                     <td className="px-4 py-3">
                                                         <div className="font-mono font-bold text-gray-900">{c.id}</div>
                                                         <div className="text-xs text-gray-500">{c.skuCount} SKUs</div>

@@ -234,7 +234,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
             </div>
 
             <div className="sello-glass rounded-xl overflow-hidden">
-                <table className="sello-table">
+                <table className="tbl sello-table">
                     <thead >
                         <tr>
                             <SortableHeader label="Campaign Name" sortKey="name" sort={sortConfig} onChange={setSortConfig} />

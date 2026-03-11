@@ -1,10 +1,10 @@
 
 import React from 'react';
-import { Layers, Activity, Calendar, Search, Info, Rows } from 'lucide-react';
+import { Layers, Activity, Calendar, Search, Info, Rows, Settings2 } from 'lucide-react';
 import { SelectFilter } from '../../common/SelectFilter';
 import AuditPanel from '../../AuditPanel';
 import { GradeBadge } from '../../GradeBadge';
-import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
+import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { asDateKey } from '../../../services/dateUtils';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { Product } from '../../../types';
@@ -44,18 +44,35 @@ interface TransactionLedgerSectionProps {
 }
 
 export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> = ({
-    ledgerStats, platformSubtotals, paginatedTransactions,
-    filteredTransactionsLength, txLimit, setTxLimit,
-    isAuditPanelVisible, setIsAuditPanelVisible,
-    txDays, setTxDays, txFilterPlatform, setTxFilterPlatform,
-    txFilterType, setTxFilterType, platforms,
-    startKey, endKey, filteredTransactions, thresholds,
-    calcRevenue, calcUnits, calcProfit, calcAdSpend, marginPct,
-    product, adRedistributionSummary
+    ledgerStats,
+    platformSubtotals,
+    paginatedTransactions,
+    filteredTransactionsLength,
+    txLimit,
+    setTxLimit,
+    isAuditPanelVisible,
+    setIsAuditPanelVisible,
+    txDays,
+    setTxDays,
+    txFilterPlatform,
+    setTxFilterPlatform,
+    txFilterType,
+    setTxFilterType,
+    platforms,
+    startKey,
+    endKey,
+    filteredTransactions,
+    thresholds,
+    calcRevenue,
+    calcUnits,
+    calcProfit,
+    calcAdSpend,
+    marginPct,
+    product,
+    adRedistributionSummary
 }) => {
     return (
         <div className="space-y-4">
-            {/* Controls */}
             <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 mr-auto">
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -65,8 +82,11 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     </h3>
                 </div>
                 <div className="relative">
-                    <select value={txDays} onChange={e => setTxDays(Number(e.target.value))}
-                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500">
+                    <select
+                        value={txDays}
+                        onChange={e => setTxDays(Number(e.target.value))}
+                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                    >
                         <option value={7}>Last 7 Days</option>
                         <option value={14}>Last 14 Days</option>
                         <option value={30}>Last 30 Days</option>
@@ -74,13 +94,20 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     </select>
                     <Calendar className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 </div>
-                <SelectFilter label="Platform" options={platforms}
+                <SelectFilter
+                    label="Platform"
+                    options={platforms}
                     selected={txFilterPlatform === 'All' ? [] : [txFilterPlatform]}
                     onChange={sel => setTxFilterPlatform(sel.length === 0 ? 'All' : sel[0])}
-                    singleSelect allLabel="All Platforms" />
+                    singleSelect
+                    allLabel="All Platforms"
+                />
                 <div className="relative">
-                    <select value={txFilterType} onChange={e => setTxFilterType(e.target.value)}
-                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500">
+                    <select
+                        value={txFilterType}
+                        onChange={e => setTxFilterType(e.target.value)}
+                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                    >
                         <option value="All">All Types</option>
                         <option value="Sale">Sale (Price {'>'} 0)</option>
                         <option value="Ad Cost">Ad Cost (Ads {'>'} 0)</option>
@@ -88,19 +115,22 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     </select>
                     <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 </div>
-                <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border flex items-center gap-2 ${isAuditPanelVisible ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                <button
+                    onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border flex items-center gap-2 ${isAuditPanelVisible ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                >
                     <Activity className="w-4 h-4" />
                     {isAuditPanelVisible ? 'Hide Audit' : 'Audit Reconciliation'}
                 </button>
             </div>
-
             {adRedistributionSummary?.active && (
                 <p className="text-[11px] text-gray-400 flex items-center gap-1.5 -mt-2 opacity-80">
                     <Info className="w-3 h-3 flex-shrink-0" />
-                    Ad spend redistributed across family members &nbsp;·&nbsp;
-                    Raw: £{adRedistributionSummary.rawSpend.toFixed(2)} &nbsp;→&nbsp;
-                    Adjusted: £{adRedistributionSummary.adjustedSpend.toFixed(2)}
+                    Ad spend redistributed across family members
+                    &nbsp;·&nbsp;
+                    Raw: {formatSmartMoney(adRedistributionSummary.rawSpend)}
+                    &nbsp;→&nbsp;
+                    Adjusted: {formatSmartMoney(adRedistributionSummary.adjustedSpend)}
                 </p>
             )}
             <p className="text-xs text-gray-400 -mt-2">
@@ -108,19 +138,22 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             </p>
 
             {isAuditPanelVisible && (
-                <div className="sello-glass p-4 rounded-xl animate-in fade-in zoom-in-95 duration-200">
-                    <AuditPanel title="Ledger Reconciliation"
-                        startKey={startKey} endKey={endKey} rows={filteredTransactions}
+                <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm animate-in fade-in zoom-in-95 duration-200">
+                    <AuditPanel
+                        title="Ledger Reconciliation"
+                        startKey={startKey}
+                        endKey={endKey}
+                        rows={filteredTransactions}
                         getDateKey={(row: any) => asDateKey(row.date)}
                         getRevenue={(row: any) => calcRevenue(row)}
                         getQty={(row: any) => calcUnits(row)}
                         getProfit={(row: any) => calcProfit(row)}
-                        getAdSpend={(row: any) => calcAdSpend(row)} />
+                        getAdSpend={(row: any) => calcAdSpend(row)}
+                    />
                 </div>
             )}
 
-            {/* Summary stat cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 sello-glass rounded-xl text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm text-sm">
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium">Sales Rows</span>
                     <div className="text-xl font-bold text-gray-800">{ledgerStats.salesRows}</div>
@@ -136,20 +169,19 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                             <Info className="w-3 h-3 text-gray-400" />
                         </span>
                     </span>
-                    <div className="text-xl font-bold text-amber-500">{formatMoney(ledgerStats.adOnlySpend)}</div>
+                    <div className="text-xl font-bold text-amber-500">{formatSmartMoney(ledgerStats.adOnlySpend)}</div>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium">Refunds (Detected)</span>
                     <div className="text-xl font-bold text-red-500 flex items-center gap-1">
                         {ledgerStats.refundCount}
-                        {ledgerStats.refundValue > 0 && <span className="text-sm font-medium opacity-70">(-{formatMoney(ledgerStats.refundValue, 0)})</span>}
+                        {ledgerStats.refundValue > 0 && <span className="text-sm font-medium opacity-70">(-{formatSmartMoney(ledgerStats.refundValue)})</span>}
                     </div>
                 </div>
             </div>
 
-            {/* Platform subtotals */}
-            <div className="sello-glass rounded-xl overflow-hidden">
-                <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--glass-divider)' }}>
+            <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden animate-in fade-in">
+                <div className="p-3 bg-white/10 border-b border-custom-glass">
                     <h4 className="text-xs font-bold text-gray-500 uppercase">Platform Subtotals (for period)</h4>
                 </div>
                 <div className="divide-y divide-gray-100">
@@ -159,28 +191,31 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                             <div className="flex items-center justify-end gap-4 text-xs w-4/5">
                                 <div className="text-right w-20">
                                     <div className="text-gray-400">Qty Sold</div>
-                                    <div className="v-num">{formatNumber(sub.soldQty)}</div>
+                                    <div className="font-mono font-bold text-gray-700">{formatNumber(sub.soldQty)}</div>
                                 </div>
                                 <div className="text-right w-24">
                                     <div className="text-gray-400">Ad Spend</div>
-                                    <div className="v-num" style={{ color: '#d97706' }}>{formatMoney(sub.adSpend)}</div>
+                                    <div className="font-mono font-bold text-orange-600">{formatSmartMoney(sub.adSpend)}</div>
                                 </div>
                                 <div className="text-right w-24">
                                     <div className="text-gray-400">Revenue</div>
-                                    <div className="v-num" style={{ color: '#4f46e5' }}>{formatMoney(sub.revenue)}</div>
+                                    <div className="font-mono font-bold text-indigo-600">{formatSmartMoney(sub.revenue)}</div>
                                 </div>
                                 <div className="text-right w-20">
                                     <div className="text-gray-400">Sales Share %</div>
-                                    <div className="v-num">{'>'} {formatPct(sub.revenueSharePct, 1)}</div>
+                                    <div className="font-mono font-bold text-gray-700">
+                                        {'>'} {formatPct(sub.revenueSharePct, 1)}
+                                    </div>
                                 </div>
                                 <div className="text-right w-24">
                                     <div className="text-gray-400">Profit</div>
-                                    <div className={sub.profit >= 0 ? 'v-num' : 'v-neg'}>{formatMoney(sub.profit)}</div>
+                                    <div className={`font-mono font-bold ${sub.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {formatSmartMoney(sub.profit)}
+                                    </div>
                                 </div>
                                 <div className="text-right w-20">
                                     <div className="text-gray-400">Margin %</div>
-                                    <div className={`v-num ${sub.margin !== null && sub.margin >= thresholds.marginBelowTargetPct ? '' : sub.margin !== null && sub.margin >= 0 ? '' : 'v-neg'}`}
-                                        style={{ color: sub.margin !== null && sub.margin >= thresholds.marginBelowTargetPct ? '#059669' : sub.margin !== null && sub.margin >= 0 ? '#d97706' : undefined }}>
+                                    <div className={`font-mono font-bold ${sub.margin !== null && sub.margin >= thresholds.marginBelowTargetPct ? 'text-emerald-600' : sub.margin !== null && sub.margin >= 0 ? 'text-amber-500' : 'text-red-600'}`}>
                                         {formatPct(sub.margin)}
                                     </div>
                                 </div>
@@ -193,21 +228,20 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 </div>
             </div>
 
-            {/* Transaction table */}
-            <div className="sello-glass rounded-xl overflow-hidden">
-                <div className="sello-table-scroll">
-                    <table className="sello-table">
-                        <thead>
+            <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden">
+                <div className="overflow-x-auto border rounded-lg">
+                    <table className="tbl tbl-compact w-full text-xs text-left whitespace-nowrap">
+                        <thead className="sticky top-0">
                             <tr>
-                                <th>Date</th>
-                                <th>Platform</th>
-                                <th className="r col-blue">Price</th>
-                                <th className="r">Qty</th>
-                                <th className="r col-blue">Revenue</th>
-                                <th className="r col-green">Ex. Freight</th>
-                                <th className="r">Postage</th>
-                                <th className="r">Ads</th>
-                                <th className="r col-green">Margin</th>
+                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-left">Date</th>
+                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-left">Platform</th>
+                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Price</th>
+                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Qty</th>
+                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Revenue</th>
+                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Ex. Freight</th>
+                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Postage</th>
+                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Ads</th>
+                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Margin</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -216,66 +250,59 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
                                 const isZeroRev = Math.abs(tx.price * tx.velocity) < 0.01 && !isAdRow && !isRefund;
                                 const margin = marginPct(calcProfit(tx), calcRevenue(tx));
+
+                                // USE REAL DATA FROM IMPORT (WITH VAT SCALING)
                                 const totalExtraFreight = !isRefund && !isAdRow ? (tx.realExtraFreight || 0) * VAT_MULTIPLIER : 0;
                                 const totalPostage = !isRefund && !isAdRow ? (tx.realPostage || 0) * VAT_MULTIPLIER : 0;
+
                                 return (
-                                    <tr key={idx} style={{
-                                        background: isAdRow ? 'rgba(255,237,213,0.3)' : isRefund ? 'rgba(254,226,226,0.3)' : undefined,
-                                        opacity: isZeroRev ? 0.6 : 1,
-                                    }}>
-                                        <td><span className="v-dim">{new Date(tx.date).toLocaleDateString('en-GB')}</span></td>
-                                        <td>
+                                    <tr key={idx} className={`${
+                                        isAdRow ? 'bg-orange-50/40 text-orange-900' :
+                                        isRefund ? 'bg-red-50/40 text-red-900' :
+                                        isZeroRev ? 'opacity-60 bg-gray-50/30' : ''
+                                    }`}>
+                                        <td className="px-3 py-1.5 font-mono text-xs opacity-80">{new Date(tx.date).toLocaleDateString('en-GB')}</td>
+                                        <td className="px-3 py-1.5">
                                             <div className="flex flex-col">
-                                                <span style={{
-                                                    padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
-                                                    border: '1px solid',
-                                                    background: isAdRow ? '#fed7aa' : isRefund ? '#fee2e2' : '#f3f4f6',
-                                                    color: isAdRow ? '#9a3412' : isRefund ? '#991b1b' : '#4b5563',
-                                                    borderColor: isAdRow ? '#fdba74' : isRefund ? '#fca5a5' : '#e5e7eb',
-                                                    width: 'fit-content',
-                                                }}>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border w-fit ${isAdRow ? 'bg-orange-100 border-orange-200 text-orange-800' : isRefund ? 'bg-red-100 border-red-200 text-red-800' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                                     {tx.platform}
                                                 </span>
                                                 {isRefund && tx.reason && (
-                                                    <span style={{ fontSize: 9, color: '#dc2626', marginTop: 2, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.reason}</span>
+                                                    <span className="text-[9px] text-red-500 mt-0.5 max-w-[120px] truncate">{tx.reason}</span>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="r col-blue">
-                                            {isAdRow ? <span style={{ fontSize: 10, color: '#d97706', fontWeight: 700 }}>Ad Cost</span> : <span className="v-num">£{formatMoney(tx.price * VAT_MULTIPLIER, 2, '')}</span>}
+                                        <td className="px-3 py-1.5 text-right font-medium">
+                                            {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : formatSmartMoney(tx.price * VAT_MULTIPLIER)}
                                         </td>
-                                        <td className="r"><span className="v-num v-bold">{formatNumber(tx.velocity)}</span></td>
-                                        <td className="r col-blue">
-                                            <span className={isRefund ? 'v-neg' : 'v-num'} style={isZeroRev ? { color: '#9ca3af' } : undefined}>
-                                                {formatMoney(tx.price * tx.velocity * VAT_MULTIPLIER)}
-                                            </span>
+                                        <td className="px-3 py-1.5 text-right font-bold opacity-90">{formatNumber(tx.velocity)}</td>
+                                        <td className={`px-4 py-2 text-right ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
+                                            {formatSmartMoney(tx.price * tx.velocity * VAT_MULTIPLIER)}
                                         </td>
-                                        <td className="r col-green">
-                                            <span className="v-num">{totalExtraFreight > 0 ? formatMoney(totalExtraFreight) : <span className="v-dim">—</span>}</span>
+                                        <td className="px-3 py-1.5 text-right text-green-600 font-medium">
+                                            {totalExtraFreight > 0 ? formatSmartMoney(totalExtraFreight) : '-'}
                                         </td>
-                                        <td className="r">
-                                            <span className="v-num" style={{ color: '#d97706' }}>{totalPostage > 0 ? formatMoney(totalPostage) : <span className="v-dim">—</span>}</span>
+                                        <td className="px-3 py-1.5 text-right text-orange-600 font-medium">
+                                            {totalPostage > 0 ? formatSmartMoney(totalPostage) : '-'}
                                         </td>
-                                        <td className="r">
-                                            <span className="v-num" style={{ color: '#d97706' }}>{(tx.adsSpend || 0) > 0 ? formatMoney(tx.adsSpend * VAT_MULTIPLIER) : <span className="v-dim">—</span>}</span>
+                                        <td className="px-3 py-1.5 text-right text-orange-600 font-medium">
+                                            {(tx.adsSpend || 0) > 0 ? formatSmartMoney(tx.adsSpend * VAT_MULTIPLIER) : '-'}
                                         </td>
-                                        <td className="r col-green">
-                                            {!isAdRow && !isRefund
-                                                ? <span className={(margin || 0) < 10 && margin !== null ? 'v-neg' : 'v-num'}>{formatPct(margin)}</span>
-                                                : <span className="v-dim">—</span>}
+                                        <td className={`px-4 py-2 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-500' : 'text-emerald-600'}`}>
+                                            {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '—' : '-'}
                                         </td>
                                     </tr>
                                 );
                             })}
                             {paginatedTransactions.length === 0 && (
-                                <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>No transactions match filters</td></tr>
+                                <tr><td colSpan={9} className="p-8 text-center text-gray-400">No transactions match filters</td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
                 {filteredTransactionsLength >= txLimit && (
-                    <div style={{ padding: 12, textAlign: 'center', borderTop: '1px solid var(--glass-divider)' }}>
-                        <button onClick={() => setTxLimit(prev => prev + 50)} style={{ fontSize: 12, color: '#4f46e5', fontWeight: 600, cursor: 'pointer' }}>
+                    <div className="p-3 text-center border-t border-gray-100">
+                        <button onClick={() => setTxLimit(prev => prev + 50)} className="text-xs text-indigo-600 font-medium hover:underline">
                             Load More ({filteredTransactionsLength - txLimit} remaining)
                         </button>
                     </div>

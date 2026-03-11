@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { formatSmartMoney } from '../utils/format';
 import { Upload, X, Check, AlertCircle, Loader2, RefreshCw, Calendar, TrendingUp, Hash, ArrowRight, Image as ImageIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
@@ -322,8 +323,8 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                             </div>
 
                             <div className="max-h-40 overflow-y-auto border rounded-lg shadow-inner bg-gray-50/30">
-                                <table className="w-full text-xs text-left">
-                                    <thead className="bg-gray-100/80 sticky top-0 backdrop-blur-sm">
+                                <table className="tbl tbl-compact w-full text-xs text-left">
+                                    <thead className="sticky top-0">
                                         <tr>
                                             <th className="p-2 uppercase font-medium text-gray-500">SKU</th>
                                             <th className="p-2 text-right uppercase font-medium text-gray-500">Old</th>
@@ -334,13 +335,13 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                                     <tbody>
                                         {displayedChanges.length > 0 ? (
                                             displayedChanges.slice(0, 50).map((item, idx) => (
-                                                <tr key={idx} className="border-t bg-white group hover:bg-indigo-50/30 transition-colors">
+                                                <tr key={idx} className="border-t bg-white group hover:bg-indigo-50/30">
                                                     <td className="p-2 font-mono text-gray-700 font-medium">{item.sku}</td>
-                                                    <td className="p-2 text-right text-gray-400 font-mono">£{item.oldPrice?.toFixed(2)}</td>
+                                                    <td className="p-2 text-right text-gray-400 font-mono">{formatSmartMoney(item.oldPrice)}</td>
                                                     <td className="p-2 text-center text-gray-300">
                                                         <ArrowRight className="w-3 h-3 mx-auto" />
                                                     </td>
-                                                    <td className="p-2 text-right font-bold text-indigo-700 font-mono">£{item.caPrice.toFixed(2)}</td>
+                                                    <td className="p-2 text-right font-bold text-indigo-700 font-mono">{formatSmartMoney(item.caPrice)}</td>
                                                 </tr>
                                             ))
                                         ) : (

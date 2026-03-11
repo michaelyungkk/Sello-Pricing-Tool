@@ -476,15 +476,15 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                             </div>
 
                             <div className="max-h-[60vh] overflow-y-auto border border-gray-200 rounded-xl">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 text-gray-500 font-medium sticky top-0 shadow-sm z-10">
+                                <table className="tbl tbl-compact w-full text-sm text-left">
+                                    <thead className="sticky top-0">
                                         <tr>
                                             <th className="p-3 w-1/3">Platform Alias (Imported)</th>
                                             <th className="p-3 w-1/3">Matched Master SKU (Inventory)</th>
                                             <th className="p-3 w-1/6 text-right">Status</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-100">
+                                    <tbody>
                                         {rowsToDisplay.map((row, idx) => {
                                             // We need the original index to update state correctly
                                             const originalIndex = detectedRows.indexOf(row);

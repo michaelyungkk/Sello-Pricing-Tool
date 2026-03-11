@@ -999,17 +999,18 @@ export const useAppState = () => {
             // the DB's latest date that were never pushed (late imports, backdated entries).
             const allTransactions = salesHistory || [];
             const localTotal = allTransactions.length;
-            const newTransactions = (totalInDb === 0 || localTotal > totalInDb)
+            // Always use date-based incremental filter — ON CONFLICT DO UPDATE deduplicates boundary rows.
+            // We no longer fall back to full push when localTotal > totalInDb;
+            // that triggered 70k+ row pushes every sync because local always grows faster than DB count.
+            const newTransactions = (totalInDb === 0 || !latestDateInDb)
                 ? allTransactions
-                : latestDateInDb
-                    ? allTransactions.filter(tx => {
-                        const txDate = (tx.date || '').split('T')[0];
-                        return txDate >= latestDateInDb;
-                    })
-                    : allTransactions;
+                : allTransactions.filter(tx => {
+                    const txDate = (tx.date || '').split('T')[0];
+                    return txDate >= latestDateInDb;
+                });
 
             console.log(`[push] DB has ${totalInDb} rows up to ${latestDateInDb || 'none'}`);
-            console.log(`[push] local total: ${localTotal}, sending: ${newTransactions.length} (${localTotal > totalInDb ? 'full sync — local ahead of DB' : 'incremental'})`);
+            console.log(`[push] local total: ${localTotal}, sending: ${newTransactions.length} (incremental from ${latestDateInDb || 'start'})`);
 
             // Step 3: Calculate total chunks for progress
             const CHUNK_SIZE = 50;

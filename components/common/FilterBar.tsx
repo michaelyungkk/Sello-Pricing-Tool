@@ -1,10 +1,14 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, KeyboardEvent, ClipboardEvent } from 'react';
 import { Search, ChevronDown, X, Activity, SlidersHorizontal, Check } from 'lucide-react';
 
 export interface FilterBarProps {
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (val: string) => void;
+
+  // Tag search mode — when provided, search becomes a tag chip input
+  searchTags?: string[];
+  onSearchTagsChange?: (tags: string[]) => void;
 
   multiSelects?: Array<{
     key: string;
@@ -42,6 +46,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   searchPlaceholder = 'Search...',
   searchValue,
   onSearchChange,
+  searchTags,
+  onSearchTagsChange,
   multiSelects = [],
   pillGroup,
   toggles = [],
@@ -52,7 +58,44 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 }) => {
   const [openDropdownKey, setOpenDropdownKey] = useState<string | null>(null);
   const [dropdownSearch, setDropdownSearch] = useState<Record<string, string>>({});
+  const [tagInput, setTagInput] = useState('');
+  const tagInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const isTagMode = searchTags !== undefined && onSearchTagsChange !== undefined;
+
+  const handleTagKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && tagInput.trim()) {
+      e.preventDefault();
+      const newTags = tagInput.split(/[\n,\t]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+      const unique = newTags.filter(t => !searchTags!.includes(t));
+      if (unique.length > 0) onSearchTagsChange!([...searchTags!, ...unique]);
+      setTagInput('');
+      if (onSearchChange) onSearchChange('');
+    } else if (e.key === 'Backspace' && !tagInput && searchTags!.length > 0) {
+      onSearchTagsChange!(searchTags!.slice(0, -1));
+    }
+  };
+
+  const handleTagPaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text');
+    if (!text) return;
+    const newTags = text.split(/[\n,\t]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    const unique = newTags.filter(t => !searchTags!.includes(t));
+    if (unique.length > 0) onSearchTagsChange!([...searchTags!, ...unique]);
+    setTagInput('');
+    if (onSearchChange) onSearchChange('');
+  };
+
+  const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTagInput(e.target.value);
+    if (onSearchChange) onSearchChange(e.target.value);
+  };
+
+  const removeTag = (tag: string) => {
+    onSearchTagsChange!(searchTags!.filter(t => t !== tag));
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -66,15 +109,16 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (searchValue) count++;
+    if (isTagMode ? (searchTags!.length > 0 || tagInput) : searchValue) count++;
     multiSelects.forEach(m => { if (m.selected.length > 0) count++; });
     if (pillGroup && pillGroup.options.length > 0 && pillGroup.active !== pillGroup.options[0].key) count++;
     toggles.forEach(t => { if (t.active) count++; });
     return count;
-  }, [searchValue, multiSelects, pillGroup, toggles]);
+  }, [searchValue, searchTags, tagInput, isTagMode, multiSelects, pillGroup, toggles]);
 
   const handleClearAll = () => {
     if (onSearchChange) onSearchChange('');
+    if (isTagMode) { onSearchTagsChange!([]); setTagInput(''); }
     multiSelects.forEach(m => m.onChange([]));
     if (pillGroup && pillGroup.options.length > 0) pillGroup.onChange(pillGroup.options[0].key);
     toggles.forEach(t => t.onChange(false));
@@ -88,8 +132,42 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
   return (
     <div className="sello-filter-bar">
-      {/* Search */}
-      {onSearchChange && (
+      {/* Search — tag mode */}
+      {isTagMode && (
+        <div className="sello-search-wrap" onClick={() => tagInputRef.current?.focus()}>
+          <Search />
+          <div className="sello-tag-input">
+            {searchTags!.map(tag => (
+              <span key={tag} className="sello-tag-chip">
+                {tag}
+                <button onClick={e => { e.stopPropagation(); removeTag(tag); }}>
+                  <X style={{ width: 9, height: 9 }} />
+                </button>
+              </span>
+            ))}
+            <input
+              ref={tagInputRef}
+              type="text"
+              value={tagInput}
+              onChange={handleTagInputChange}
+              onKeyDown={handleTagKeyDown}
+              onPaste={handleTagPaste}
+              placeholder={searchTags!.length === 0 ? (searchPlaceholder || 'Search…') : ''}
+            />
+            {(searchTags!.length > 0 || tagInput) && (
+              <button
+                onClick={e => { e.stopPropagation(); onSearchTagsChange!([]); setTagInput(''); if (onSearchChange) onSearchChange(''); }}
+                style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: '#9ca3af', flexShrink: 0, marginLeft: 'auto' }}
+              >
+                <X style={{ width: 11, height: 11 }} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Search — plain mode */}
+      {!isTagMode && onSearchChange && (
         <div className="sello-search-wrap">
           <Search />
           <input

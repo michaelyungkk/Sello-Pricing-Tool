@@ -7,7 +7,7 @@ import { SortableHeader } from '../../common/SortableHeader';
 import { GradeBadge } from '../../GradeBadge';
 import { asDateKey, getTodayKeyMelbourne } from '../../../services/dateUtils';
 import { computePromoWindows, computePromoEffectiveness, deriveDiscountedPrice } from '../../../services/promotionAnalytics';
-import { formatMoney, formatNumber, formatPct } from '../../../utils/format';
+import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { PromoUploadModal, UploadDiscountMode } from './PromoUploadModal';
 
 // Local helper to ensure price consistency
@@ -230,11 +230,11 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             [''],
             ['FINANCIAL AGGREGATES', ''],
             ['Total Units Sold', totals.actualUnits],
-            ['Total Net Revenue', `£${totals.actualRevenue.toFixed(2)}`],
-            ['Total Net Profit', `£${totals.actualProfit.toFixed(2)}`],
+            ['Total Net Revenue', formatSmartMoney(totals.actualRevenue)],
+            ['Total Net Profit', formatSmartMoney(totals.actualProfit)],
             ['Unit Uplift vs Baseline', `+${totals.upliftUnits.toFixed(0)} units`],
-            ['Revenue Delta vs Baseline', `£${totals.upliftRevenue.toFixed(2)}`],
-            ['Profit Delta vs Baseline', `£${totals.upliftProfit.toFixed(2)}`],
+            ['Revenue Delta vs Baseline', formatSmartMoney(totals.upliftRevenue)],
+            ['Profit Delta vs Baseline', formatSmartMoney(totals.upliftProfit)],
             ['Overall ROI (Uplift/Sacrifice)', totals.upliftProfit > 0 ? 'Profitable' : 'Margin Sacrificed'],
             [''],
             ['SKU PERFORMANCE DEEP DIVE', '']
@@ -428,7 +428,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             {activeSection === 'nomination' ? (
                 <div className="space-y-6">
                     {/* Meta Editor Card */}
-                    <div className="sello-glass p-6 rounded-xl">
+                    <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm">
                         <div className="flex justify-between items-start mb-6">
                             <div>
                                 <h2 className="text-2xl font-bold text-gray-900">{promo.name}</h2>
@@ -479,21 +479,21 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                             </div>
                         )}
 
-                        <table className="sello-table">
-                            <thead >
+                        <table className="tbl w-full text-left text-sm whitespace-nowrap bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                            <thead>
                                 <tr>
-                                    <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} />
-                                    <th className="r">Baseline Price</th>
-                                    <th>{isSkuScope ? 'Discount Type' : 'Rule Status'}</th>
-                                    <th className="r">{isSkuScope ? 'Value' : ''}</th>
-                                    <th className="r col-ca">Effective Promo Price</th>
-                                    <th className="r col-green">Proj. Margin</th>
-                                    <th className="r" style={{width:40}}></th>
+                                    <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                                    <th className="p-4 text-right">Baseline Price</th>
+                                    <th className="p-4">{isSkuScope ? 'Discount Type' : 'Rule Status'}</th>
+                                    <th className="p-4 text-right">{isSkuScope ? 'Value' : ''}</th>
+                                    <th className="p-4 text-right">Effective Promo Price</th>
+                                    <th className="p-4 text-right">Proj. Margin</th>
+                                    <th className="p-4 text-right w-10"></th>
                                 </tr>
                             </thead>
-                            <tbody >
+                            <tbody>
                                 {sortedItems.map((item: any) => (
-                                    <tr key={item.sku} >
+                                    <tr key={item.sku} className="group">
                                         <td className="p-4">
                                             <div className="flex items-center gap-1">
                                                 <div className="font-bold text-gray-900">{item.sku}</div>
@@ -506,7 +506,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                             </div>
                                             <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[150px]">{item.product?.name}</div>
                                         </td>
-                                        <td className="p-4 text-right text-gray-500 font-medium">£{item.baselinePrice.toFixed(2)}</td>
+                                        <td className="p-4 text-right text-gray-500 font-medium">{formatSmartMoney(item.baselinePrice)}</td>
                                         <td className="p-4">
                                             {isSkuScope ? (
                                                 <select 
@@ -537,7 +537,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                         </td>
                                         <td className="p-4 text-right">
                                             <div className="flex flex-col items-end">
-                                                <span className="text-sm font-black text-gray-900">£{item.promoPrice.toFixed(2)}</span>
+                                                <span className="text-sm font-black text-gray-900">{formatSmartMoney(item.promoPrice)}</span>
                                                 <span className="text-[9px] font-bold text-red-500">-{item.discountPercent.toFixed(1)}% OFF</span>
                                             </div>
                                         </td>
@@ -557,7 +557,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                     </tr>
                                 ))}
                                 {(!promo?.items || promo.items.length === 0) && (
-                                    <tr><td colSpan={7} style={{padding:48,textAlign:"center",color:"#9ca3af",fontStyle:"italic"}}>No SKUs nominated for this campaign.</td></tr>
+                                    <tr><td colSpan={7} className="p-12 text-center text-gray-400 italic">No SKUs nominated for this campaign.</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -604,7 +604,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-indigo-800">Expected Revenue</span>
-                                    <span className="text-lg font-bold text-indigo-900">{formatMoney(aggregatedEffectiveness.totals.forecastUnits * (aggregatedEffectiveness.totals.baselineRevenue / (aggregatedEffectiveness.totals.baselineDailyUnits * (windows.event?.days || 1) || 1)), 0)}</span>
+                                    <span className="text-lg font-bold text-indigo-900">{formatSmartMoney(aggregatedEffectiveness.totals.forecastUnits * (aggregatedEffectiveness.totals.baselineRevenue / (aggregatedEffectiveness.totals.baselineDailyUnits * (windows.event?.days || 1) || 1)), 0)}</span>
                                 </div>
                             </div>
                             
@@ -665,11 +665,11 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="p-3 bg-gray-50 rounded-xl">
                                     <div className="text-[10px] font-bold text-gray-400 uppercase">Revenue</div>
-                                    <div className="text-lg font-bold text-gray-900">{formatMoney(aggregatedEffectiveness.totals.actualRevenue, 0)}</div>
+                                    <div className="text-lg font-bold text-gray-900">{formatSmartMoney(aggregatedEffectiveness.totals.actualRevenue)}</div>
                                 </div>
                                 <div className="p-3 bg-gray-50 rounded-xl">
                                     <div className="text-[10px] font-bold text-gray-400 uppercase">Profit</div>
-                                    <div className="text-lg font-bold text-gray-900">{formatMoney(aggregatedEffectiveness.totals.actualProfit, 0)}</div>
+                                    <div className="text-lg font-bold text-gray-900">{formatSmartMoney(aggregatedEffectiveness.totals.actualProfit)}</div>
                                 </div>
                             </div>
                             
@@ -733,13 +733,13 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100">
                                         <span className="text-xs text-gray-500">Revenue Yield Change</span>
                                         <span className={`text-sm font-black ${aggregatedEffectiveness.totals.upliftRevenue > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                            {aggregatedEffectiveness.totals.upliftRevenue > 0 ? '+' : ''}{formatMoney(aggregatedEffectiveness.totals.upliftRevenue, 0)}
+                                            {aggregatedEffectiveness.totals.upliftRevenue > 0 ? '+' : ''}{formatSmartMoney(aggregatedEffectiveness.totals.upliftRevenue)}
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center py-2 border-b border-gray-100">
                                         <span className="text-xs text-gray-500">Profit Yield Change</span>
                                         <span className={`text-sm font-black ${aggregatedEffectiveness.totals.upliftProfit > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                            {aggregatedEffectiveness.totals.upliftProfit > 0 ? '+' : ''}{formatMoney(aggregatedEffectiveness.totals.upliftProfit, 0)}
+                                            {aggregatedEffectiveness.totals.upliftProfit > 0 ? '+' : ''}{formatSmartMoney(aggregatedEffectiveness.totals.upliftProfit)}
                                         </span>
                                     </div>
                                 </div>
@@ -762,7 +762,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             {isUploadOpen && (
                 <PromoUploadModal
                     products={products}
-                   
+                    themeColor={themeColor}
                     onClose={() => setIsUploadOpen(false)}
                     onConfirm={(items, mode) => {
                         const newItems: PromotionItem[] = items.map((i: any) => {

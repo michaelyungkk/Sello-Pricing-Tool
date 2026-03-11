@@ -7,7 +7,7 @@ import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../../constants';
 import { Activity, History, Coins, Database, Ship, Settings, Download, X, ArrowRight, Calendar, RotateCcw, TrendingUp, TrendingDown, Save, Edit2, CheckCircle, Info, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../../services/dateUtils';
-import { formatMoney, formatNumber, formatPct } from '../../utils/format';
+import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../utils/format';
 import { SortState, sortRows } from '../../utils/tableSort';
 import { resolveEffectiveVelocity } from '../../services/metrics';
 
@@ -803,8 +803,8 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                             </div>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
+                            <table className="tbl w-full text-left text-sm whitespace-nowrap">
+                                <thead>
                                     <tr>
                                         <th className="p-4">Date</th>
                                         <th className="p-4">SKU</th>
@@ -816,17 +816,17 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                         <th className="p-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100/50">
+                                <tbody>
                                     {paginatedHistoryData.map((row: any) => {
                                         const isEditing = editingHistoryId === row.id;
                                         return (
-                                            <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
+                                            <tr key={row.id} className={`${isEditing ? 'bg-indigo-50/50' : ''}`}>
                                                 <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingDate} onChange={(e) => setEditingDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                                                 <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
                                                 <td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
-                                                <td className="p-4 text-right text-gray-400 line-through">£{row.oldPrice.toFixed(2)}</td>
+                                                <td className="p-4 text-right text-gray-400 line-through">{formatSmartMoney(row.oldPrice)}</td>
                                                 <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
-                                                <td className="p-4 font-bold text-gray-900">£{row.newPrice.toFixed(2)}</td>
+                                                <td className="p-4 font-bold text-gray-900">{formatSmartMoney(row.newPrice)}</td>
                                                 <td className="p-4"><div className="flex items-center justify-center gap-2 text-xs"><span className="text-gray-500 font-medium">{row.preVel.toFixed(1)}/d</span><ArrowRight className="w-3 h-3 text-gray-300" /><span className={`font-bold ${row.postVel > row.preVel ? 'text-emerald-600' : row.postVel < row.preVel ? 'text-red-500' : 'text-gray-600'}`}>{row.postVel.toFixed(1)}/d</span></div></td>
                                                 <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdatePriceChangeRecord && editingDate) { onUpdatePriceChangeRecord({ ...row, date: editingDate }); setRecentlySavedId(row.id); setTimeout(() => setRecentlySavedId(null), 2500); } setEditingHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingHistoryId(row.id); setEditingDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
                                             </tr>
@@ -875,8 +875,8 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                             </div>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
+                            <table className="tbl w-full text-left text-sm whitespace-nowrap">
+                                <thead>
                                     <tr>
                                         <th className="p-4">Date</th>
                                         <th className="p-4">SKU</th>
@@ -887,17 +887,17 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                         <th className="p-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100/50">
+                                <tbody>
                                     {paginatedCostHistoryData.map((row: any) => {
                                         const isEditing = editingCostHistoryId === row.id;
                                         return (
-                                            <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
+                                            <tr key={row.id} className={`${isEditing ? 'bg-indigo-50/50' : ''}`}>
                                                 <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingCostDate} onChange={(e) => setEditingCostDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                                                 <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
                                                 <td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
-                                                <td className="p-4 text-right text-gray-400 line-through">£{row.oldCost.toFixed(2)}</td>
+                                                <td className="p-4 text-right text-gray-400 line-through">{formatSmartMoney(row.oldCost)}</td>
                                                 <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
-                                                <td className="p-4 font-bold text-gray-900">£{row.newCost.toFixed(2)}</td>
+                                                <td className="p-4 font-bold text-gray-900">{formatSmartMoney(row.newCost)}</td>
                                                 <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdateCostChangeRecord && editingCostDate) { onUpdateCostChangeRecord({ ...row, date: editingCostDate }); setRecentlySavedCostId(row.id); setTimeout(() => setRecentlySavedCostId(null), 2500); } setEditingCostHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingCostHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedCostId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingCostHistoryId(row.id); setEditingCostDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
                                             </tr>
                                         );
@@ -944,8 +944,8 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                             </div>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-gray-50/50 text-gray-600 font-semibold border-b border-gray-200/50">
+                            <table className="tbl w-full text-left text-sm whitespace-nowrap">
+                                <thead>
                                     <tr>
                                         <th className="p-4">Date</th>
                                         <th className="p-4">SKU</th>
@@ -957,11 +957,11 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                         <th className="p-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100/50">
+                                <tbody>
                                     {paginatedInventoryHistoryData.map((row: InventoryChangeRecord) => {
                                         const isEditing = editingInventoryHistoryId === row.id;
                                         return (
-                                            <tr key={row.id} className={`even:bg-gray-50/30 hover:bg-gray-100/50 ${isEditing ? 'bg-indigo-50/50' : ''}`}>
+                                            <tr key={row.id} className={`${isEditing ? 'bg-indigo-50/50' : ''}`}>
                                                 <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingInventoryDate} onChange={(e) => setEditingInventoryDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                                                 <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
                                                 <td className="p-4 text-center text-gray-400">{row.prevStock}</td>
