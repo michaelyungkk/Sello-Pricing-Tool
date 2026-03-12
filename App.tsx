@@ -86,9 +86,9 @@ const App: React.FC = () => {
         handleAdGroupSave,
         lastRecalculationSummary,
         brandMap,
-        setBrandMap,
+        handleSaveBrandMap,
         categoryMap,
-        setCategoryMap,
+        handleSaveCategoryMap,
         deductRefunds,
         setDeductRefunds,
         uploadTimestamps,
@@ -893,8 +893,8 @@ const App: React.FC = () => {
                                 onRefreshThresholds={handleRefreshThresholds}
                                 brandMap={brandMap}
                                 categoryMap={categoryMap}
-                                onSaveBrandMap={setBrandMap}
-                                onSaveCategoryMap={setCategoryMap}
+                                onSaveBrandMap={handleSaveBrandMap}
+                                onSaveCategoryMap={handleSaveCategoryMap}
                                 headerStyle={headerStyle}
                             />
                         </div>)}
