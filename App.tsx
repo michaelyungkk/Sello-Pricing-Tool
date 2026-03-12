@@ -589,7 +589,7 @@ const App: React.FC = () => {
                     </header>
                     <div ref={mainContentRef} className="flex-1 overflow-y-auto relative p-4 md:p-8">
                         {/* Spinner shown when user navigates to a page before it has mounted */}
-                        {!mountedPages.has(currentView) && currentView !== 'overview' && (
+                        {!mountedPages.has(currentView) && currentView !== 'overview' && currentView !== 'custom-report' && (
                             <PageSpinner />
                         )}
                         {mountedPages.has('search') && (
