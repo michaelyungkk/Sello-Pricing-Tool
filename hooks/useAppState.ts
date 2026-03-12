@@ -390,6 +390,26 @@ export const useAppState = () => {
         setProducts(recalculated);
     }, [products, salesHistory, velocityLookback, pricingRules, brandMap, categoryMap]);
 
+    const handleSaveBrandMap = useCallback((newMap: AttributeMap) => {
+        setBrandMap(newMap);
+        const currentThresholds = getThresholdConfig();
+        const recalculated = recalculateProductMetrics(
+            products, priceHistoryMap, velocityLookback, currentThresholds, pricingRules, newMap, categoryMap
+        );
+        setProducts(recalculated);
+        if (isAdminMode) setIsDirty(true);
+    }, [products, priceHistoryMap, velocityLookback, pricingRules, categoryMap, isAdminMode]);
+
+    const handleSaveCategoryMap = useCallback((newMap: AttributeMap) => {
+        setCategoryMap(newMap);
+        const currentThresholds = getThresholdConfig();
+        const recalculated = recalculateProductMetrics(
+            products, priceHistoryMap, velocityLookback, currentThresholds, pricingRules, brandMap, newMap
+        );
+        setProducts(recalculated);
+        if (isAdminMode) setIsDirty(true);
+    }, [products, priceHistoryMap, velocityLookback, pricingRules, brandMap, isAdminMode]);
+
     const handleRefreshThresholds = useCallback(() => {
         const newConfig = getThresholdConfig();
         setThresholds(newConfig);
@@ -1354,8 +1374,10 @@ export const useAppState = () => {
         setPendingFamilySuggestions,
         brandMap,
         setBrandMap,
+        handleSaveBrandMap,
         categoryMap,
         setCategoryMap,
+        handleSaveCategoryMap,
         deductRefunds,
         setDeductRefunds,
         uploadTimestamps,
