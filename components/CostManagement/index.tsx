@@ -7,7 +7,7 @@ import { FeeBreakdownTable } from './sections/FeeBreakdownTable';
 import { MarginImpactTable } from './sections/MarginImpactTable';
 import { CostNotesPanel } from './sections/CostNotesPanel';
 
-const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, themeColor, headerStyle }) => {
+const CostManagementPageInner: React.FC<CostManagementPageProps> = ({ products, themeColor, headerStyle }) => {
     const {
         searchTags, setSearchTags,
         setSearch,
@@ -66,4 +66,5 @@ const CostManagementPage: React.FC<CostManagementPageProps> = ({ products, theme
     );
 };
 
+const CostManagementPage = React.memo(CostManagementPageInner);
 export default CostManagementPage;

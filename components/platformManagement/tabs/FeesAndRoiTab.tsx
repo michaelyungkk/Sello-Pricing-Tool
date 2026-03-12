@@ -1,15 +1,14 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { MetricCard } from '../../productManagement/parts/MetricCard';
-import { Megaphone, PieChart, Zap, Target, Trophy, Coins, Database, Wallet, HelpCircle } from 'lucide-react';
+import { Megaphone, PieChart, Zap, Target, Trophy, Coins } from 'lucide-react';
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip as RechartsTooltip, Cell, ReferenceLine, ReferenceArea } from 'recharts';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
-import { formatMoney, formatSmartMoney, formatPct } from '../../../utils/format';
+import { formatSmartMoney, formatPct } from '../../../utils/format';
 import { PlatformFeesRoi, PlatformSortKey } from '../platformManagement.types';
-import { PricingRules, PlatformConfig } from '../../../types';
+import { PricingRules } from '../../../types';
 import AuditPanel from '../../AuditPanel';
-import { FilterBar } from '../../common/FilterBar';
 
 interface FeesAndRoiTabProps {
     roiData: PlatformFeesRoi[];
@@ -146,7 +145,7 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                     </h3>
                     <p className="text-[10px] text-indigo-300 mb-4 opacity-90">Post-Ad Profitability ({'>'}1.0x = Safe)</p>
                     <div className="space-y-4">
-                        {filteredForLeaderboard.sort((a: any, b: any) => (b.roiAfterAds || 0) - (a.roiAfterAds || 0)).slice(0, 3).map((d: any, i: number) => (
+                        {filteredForLeaderboard.sort((a: any, b: any) => (b.roiAfterAds || 0) - (a.roiAfterAds || 0)).slice(0, 3).map((d: any, _i: number) => (
                             <div key={d.platform} className="flex items-center justify-between">
                                 <div>
                                     <div className="font-bold text-sm">{d.platform}</div>

@@ -588,18 +588,18 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
             {/* Table */}
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex-1 flex flex-col backdrop-blur-custom relative z-0">
                 <div className="overflow-auto flex-1 relative">
-                    <table className="tbl w-full text-sm text-left whitespace-nowrap border-separate border-spacing-0">
+                    <table className="sello-table">
                         <thead className="sticky top-0">
-                            <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
+                            <tr>
                                 {/* Sticky SKU Column */}
-                                        <th className="px-4 py-3 sticky left-0 z-30 bg-gray-50/80 border-b border-r border-gray-200/50 min-w-[200px]" onClick={(e) => handleSort('sku', e)}>
+                                <th className="pin" style={{ minWidth: 200 }} onClick={(e) => handleSort('sku', e)}>
                                     <div className="flex items-center justify-between cursor-pointer">
                                         SKU
                                         {getSortIndicator('sku')}
                                     </div>
                                 </th>
                                 {/* Total Column */}
-                                <th className="px-4 py-3 border-b border-r border-gray-200/50 text-right bg-gray-50/80 min-w-[80px]" onClick={(e) => handleSort('totalQty', e)}>
+                                <th className="r" style={{ minWidth: 80 }} onClick={(e) => handleSort('totalQty', e)}>
                                     <div className="flex items-center justify-end cursor-pointer">
                                         Total QTY
                                         {getSortIndicator('totalQty')}
@@ -609,7 +609,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                 {selectedPlatforms.map(p => (
                                     <React.Fragment key={p}>
                                         <th
-                                            className={`px-4 py-3 border-b border-gray-200/50 text-center bg-gray-50/80 border-r border-gray-200/50 cursor-move hover:bg-gray-100/80 transition-colors ${draggedPlatform === p ? 'opacity-50 border-dashed border-2 border-indigo-300' : ''}`}
+                                            className={`c group-start cursor-move hover:bg-gray-100/80 transition-colors ${draggedPlatform === p ? 'opacity-50 border-dashed border-2 border-indigo-300' : ''}`}
                                             colSpan={visibleColumns.length}
                                             draggable
                                             onDragStart={(e) => handleDragStart(e, p)}
@@ -624,12 +624,12 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                     </React.Fragment>
                                 ))}
                             </tr>
-                            <tr className="bg-gray-50/80 border-b border-gray-200/30 text-[10px] uppercase tracking-wider text-gray-500 font-semibold backdrop-blur-sm">
-                                <th className="px-4 py-2 sticky left-0 z-30 bg-gray-50/80 border-r border-gray-200/50 border-b border-gray-200/30 h-8"></th>
-                                <th className="px-4 py-2 border-r border-gray-200/50 bg-gray-50/80 border-b border-gray-200/30 h-8"></th>
+                            <tr>
+                                <th className="pin" style={{ height: 32 }}></th>
+                                <th style={{ height: 32 }}></th>
                                 {selectedPlatforms.map(p => (
                                     <React.Fragment key={`${p}-sub`}>
-                                        {visibleColumns.map(col => {
+                                        {visibleColumns.map((col, colIdx) => {
                                             const platformColor = pricingRules[p]?.color || '#9ca3af';
                                             const rgb = hexToRgb(platformColor);
                                             const headerBgStyle = rgb ? { backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.05)` } : {};
@@ -637,9 +637,9 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                             return (
                                                 <th
                                                     key={`${p}-${col}`}
-                                                    className="px-4 py-2 text-right border-b border-gray-200/30 bg-gray-50/30 text-gray-500 font-semibold cursor-pointer hover:bg-gray-100/50 min-w-[80px] border-r border-gray-100/50 last:border-gray-200 transition-colors uppercase text-[10px]"
+                                                    className={`r metric-sub cursor-pointer hover:bg-gray-100/50 transition-colors${colIdx === 0 ? ' group-start' : ''}`}
+                                                    style={{ minWidth: 80, ...headerBgStyle }}
                                                     onClick={(e) => handleSort(`${p}_${colConfig[col].key}`, e)}
-                                                    style={headerBgStyle}
                                                 >
                                                     {colConfig[col].label} {getSortIndicator(`${p}_${colConfig[col].key}`)}
                                                 </th>
@@ -660,7 +660,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                         onMouseLeave={() => setHoveredRow(null)}
                                     >
                                         {/* Sticky SKU Cell */}
-                                        <td className="px-4 py-3 sticky left-0 z-10 bg-white border-r border-gray-100/50 group-hover:bg-gray-50/50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors">
+                                        <td className="pin">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-bold text-gray-900 font-mono text-xs">{row.sku}</span>
                                                 <GradeBadge gradeLevel={row.gradeLevel} />
@@ -669,7 +669,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                         </td>
 
                                         {/* Total Qty */}
-                                        <td className="px-4 py-3 text-right font-bold text-gray-800 border-r border-gray-100/50 bg-gray-50/10">
+                                        <td className="r font-bold text-gray-800">
                                             {formatNumber(row.totalQty)}
                                         </td>
 
@@ -692,35 +692,35 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                             return (
                                                 <React.Fragment key={p}>
                                                     {visibleColumns.includes('qty') && (
-                                                        <td className="px-4 py-3 text-right font-medium text-gray-700 border-gray-50 text-xs border-r border-gray-100/50" style={bgStyle}>
+                                                        <td className={`r font-medium text-gray-700 text-xs${visibleColumns[0] === 'qty' ? ' group-start' : ''}`} style={bgStyle}>
                                                             {hasActivity ? qty : <span className="text-gray-300">-</span>}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('share') && (
-                                                        <td className="px-4 py-3 text-right text-[10px] text-gray-500 border-gray-50 border-r border-gray-50" style={bgStyle}>
+                                                        <td className={`r text-[10px] text-gray-500${visibleColumns[0] === 'share' ? ' group-start' : ''}`} style={bgStyle}>
                                                             {hasActivity ? `${row[`${p}_share`].toFixed(0)}%` : <span className="text-gray-300">-</span>}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('pm') && (
                                                         <td
-                                                            className={`px-4 py-3 text-right text-[10px] font-bold border-r border-gray-50 ${hasActivity ? pmClass : 'text-gray-300'}`}
+                                                            className={`r text-[10px] font-bold ${hasActivity ? pmClass : 'text-gray-300'}${visibleColumns[0] === 'pm' ? ' group-start' : ''}`}
                                                             style={hasPmBg ? {} : bgStyle}
                                                         >
                                                             {hasActivity ? `${pm.toFixed(0)}%` : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('avgPrice') && (
-                                                        <td className="px-4 py-3 text-right text-[10px] text-gray-600 border-r border-gray-50" style={bgStyle}>
+                                                        <td className={`r text-[10px] text-gray-600${visibleColumns[0] === 'avgPrice' ? ' group-start' : ''}`} style={bgStyle}>
                                                             {hasActivity ? formatSmartMoney(row[`${p}_avgPrice`]) : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('revenue') && (
-                                                        <td className="px-4 py-3 text-right text-[10px] text-indigo-600 font-medium border-r border-gray-50" style={bgStyle}>
+                                                        <td className={`r text-[10px] text-indigo-600 font-medium${visibleColumns[0] === 'revenue' ? ' group-start' : ''}`} style={bgStyle}>
                                                             {hasActivity ? formatSmartMoney(row[`${p}_revenue`]) : '-'}
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('profit') && (
-                                                        <td className={`px-4 py-3 text-right text-[10px] font-bold border-r border-gray-100/50 ${row[`${p}_profit`] >= 0 ? 'text-emerald-600' : 'text-red-500'}`} style={bgStyle}>
+                                                        <td className={`r text-[10px] font-bold ${row[`${p}_profit`] >= 0 ? 'text-emerald-600' : 'text-red-500'}${visibleColumns[0] === 'profit' ? ' group-start' : ''}`} style={bgStyle}>
                                                             {hasActivity ? formatSmartMoney(row[`${p}_profit`]) : '-'}
                                                         </td>
                                                     )}

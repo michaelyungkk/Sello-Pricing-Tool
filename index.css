@@ -54,6 +54,33 @@
 }
 
 /* ═══════════════════════════════════════════════════════
+   GLASS UTILITIES (Tailwind-compatible class names)
+   These map to the same tokens as .sello-glass but are
+   split so components can compose them with Tailwind.
+   ═══════════════════════════════════════════════════════ */
+.bg-custom-glass {
+  background: var(--glass-bg);
+}
+
+.bg-custom-glass-modal {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.backdrop-blur-custom {
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.backdrop-blur-custom-modal {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.border-custom-glass {
+  border-color: var(--glass-border);
+}
+
+/* ═══════════════════════════════════════════════════════
    TABLE SHELL
    ═══════════════════════════════════════════════════════ */
 
@@ -142,6 +169,14 @@
 .sello-table th.col-ca { color: var(--c-ca); }
 .sello-table th.col-ca:hover { background: rgba(124, 58, 237, 0.05); }
 
+/* Metric sub-headers under column groups — larger and bolder */
+.sello-table th.metric-sub {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #111827;
+  letter-spacing: 0.06em;
+}
+
 /* Sticky product column */
 .sello-table th.pin {
   position: sticky;
@@ -174,6 +209,7 @@
 .sello-table tbody tr.row-warn { background: rgba(251, 191, 36, 0.06) !important; }
 .sello-table tbody tr.row-neg  { background: rgba(254, 226, 226, 0.10) !important; }
 .sello-table tbody tr.row-sel  { background: rgba(79, 70, 229, 0.05) !important; }
+.sello-table tbody tr.row-ad   { background: rgba(255, 237, 213, 0.10) !important; }
 
 /* ── td ── */
 .sello-table td {
@@ -199,6 +235,15 @@
   z-index: 5;
   background: inherit;
   box-shadow: 2px 0 6px -2px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Column group dividers ── */
+.sello-table th.group-start {
+  border-left: 2px solid rgba(209, 213, 219, 0.7) !important;
+}
+
+.sello-table td.group-start {
+  border-left: 2px solid rgba(229, 231, 235, 0.55) !important;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -419,6 +464,16 @@
   background: var(--theme-20);
 }
 
+.sello-btn.cta {
+  background: #4f46e5;
+  color: white;
+  border-color: #4338ca;
+}
+
+.sello-btn.cta:hover {
+  background: #4338ca;
+}
+
 /* ═══════════════════════════════════════════════════════
    TABLE FOOTER (summary bar)
    ═══════════════════════════════════════════════════════ */
@@ -489,6 +544,17 @@
 .sello-page-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+.sello-per-page {
+  font-size: 11px;
+  border: 1px solid rgba(209, 213, 219, 0.7);
+  border-radius: 7px;
+  background: white;
+  padding: 3px 6px;
+  font-family: 'Inter', sans-serif;
+  color: #374151;
+  cursor: pointer;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -598,3 +664,52 @@
 .arr-up { color: #374151; }   /* increase — dark, neutral */
 .arr-dn { color: var(--c-neg); }  /* decrease — red */
 .arr-nt { color: #e5e7eb; }   /* no change — light gray */
+
+/* ═══════════════════════════════════════════════════════
+   ANIMATIONS
+   Replaces the missing tailwindcss-animate plugin.
+   Used by: animate-in, fade-in, slide-in-from-*, zoom-in
+   ═══════════════════════════════════════════════════════ */
+@keyframes animateIn {
+  from { opacity: 0; transform: var(--tw-enter-translate, translateY(0)) var(--tw-enter-scale, ); }
+  to   { opacity: 1; transform: translateY(0) translateX(0) scale(1); }
+}
+
+.animate-in {
+  animation: animateIn var(--tw-animate-duration, 0.3s) ease-out both;
+}
+
+/* Direction modifiers — set the starting transform */
+.fade-in {
+  --tw-enter-translate: translateY(0);
+}
+
+.slide-in-from-bottom-4 {
+  --tw-enter-translate: translateY(16px);
+}
+
+.slide-in-from-top-2 {
+  --tw-enter-translate: translateY(-8px);
+}
+
+.slide-in-from-top-4 {
+  --tw-enter-translate: translateY(-16px);
+}
+
+.slide-in-from-right-4 {
+  --tw-enter-translate: translateX(16px);
+}
+
+.zoom-in {
+  --tw-enter-scale: scale(0.95);
+}
+
+.zoom-in-95 {
+  --tw-enter-scale: scale(0.95);
+}
+
+/* Duration overrides */
+.duration-100 { --tw-animate-duration: 100ms; }
+.duration-200 { --tw-animate-duration: 200ms; }
+.duration-300 { --tw-animate-duration: 300ms; }
+.duration-500 { --tw-animate-duration: 500ms; }

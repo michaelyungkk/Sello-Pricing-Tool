@@ -349,12 +349,12 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                     </div>
 
                     <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden h-[420px] overflow-y-auto">
-                        <table className="tbl w-full text-sm text-left">
+                        <table className="sello-table">
                             <thead className="sticky top-0">
                                 <tr>
-                                    <th className="p-3">Price Point</th>
-                                    <th className="p-3 text-right">Total Qty</th>
-                                    <th className="p-3 text-right">Share %</th>
+                                    <th>Price Point</th>
+                                    <th className="r">Total Qty</th>
+                                    <th className="r">Share %</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -366,7 +366,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
 
                                     return (
                                         <tr key={i} className={`${isOptimal ? 'bg-indigo-50 border-l-4 border-indigo-500' : isLowest ? 'bg-amber-50/30' : isHighest ? 'bg-indigo-50/30' : ''}`}>
-                                            <td className="p-3 font-mono font-bold text-gray-700">
+                                            <td className="font-mono font-bold text-gray-700">
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center gap-2">
                                                         {formatSmartMoney(pt.price)}
@@ -395,13 +395,13 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="p-3 text-right">{pt.qty}</td>
-                                            <td className="p-3 text-right text-gray-500 font-medium">{sharePct.toFixed(1)}%</td>
+                                            <td className="r">{pt.qty}</td>
+                                            <td className="r text-gray-500 font-medium">{sharePct.toFixed(1)}%</td>
                                         </tr>
                                     );
                                 })}
                                 {priceVolumeAnalysis.pointsTable.length === 0 && (
-                                    <tr><td colSpan={3} className="p-4 text-center text-gray-400">No data</td></tr>
+                                    <tr><td colSpan={3} className="c p-4 text-gray-400">No data</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -429,31 +429,31 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                             </div>
                         </div>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="tbl w-full text-sm text-left whitespace-nowrap">
+                    <div className="sello-table-scroll">
+                        <table className="sello-table">
                             <thead>
                                 <tr>
-                                    <th className="px-6 py-3">Sibling SKU</th>
-                                    <th className="px-6 py-3">Product Name</th>
-                                    <th className="px-6 py-3 text-right">Price (Inc. VAT)</th>
-                                    <th className="px-6 py-3 text-right">Last Updated</th>
+                                    <th>Sibling SKU</th>
+                                    <th>Product Name</th>
+                                    <th className="r">Price (Inc. VAT)</th>
+                                    <th className="r">Last Updated</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr className="bg-indigo-50/30">
-                                    <td className="px-6 py-4">
+                                    <td>
                                         <div className="flex items-center gap-2">
                                             <span className="font-mono font-bold text-indigo-700">{productSku}</span>
                                             <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold uppercase">Current</span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td>
                                         <div className="text-xs text-gray-900 font-medium truncate max-w-[300px]" title="Current product">This Product</div>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    <td className="r">
                                         <span className="font-mono font-bold text-indigo-700">{formatSmartMoney(currentPrice)}</span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    <td className="r">
                                         <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">
                                             <Clock className="w-3.5 h-3.5" />
                                             Active
@@ -462,14 +462,14 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                 </tr>
                                 {siblings.map((sib) => (
                                     <tr key={sib.sku} className="">
-                                        <td className="px-6 py-4 font-mono text-gray-600">{sib.sku}</td>
-                                        <td className="px-6 py-4">
+                                        <td className="font-mono text-gray-600">{sib.sku}</td>
+                                        <td>
                                             <div className="text-xs text-gray-600 truncate max-w-[300px]" title={sib.name}>{sib.name}</div>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="r">
                                             <span className="font-mono font-bold text-gray-900">{formatSmartMoney(sib.currentPrice * VAT_MULTIPLIER)}</span>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="r">
                                             <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">
                                                 <Clock className="w-3.5 h-3.5" />
                                                 {sib.updatedAt ? new Date(sib.updatedAt).toLocaleDateString('en-GB') : 'Unknown'}
@@ -479,7 +479,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                 ))}
                                 {siblings.length === 0 && (
                                     <tr>
-                                        <td colSpan={4} className="px-6 py-8 text-center text-gray-400 italic text-xs">
+                                        <td colSpan={4} className="c p-8 text-gray-400 italic text-xs">
                                             No other active siblings found in this family.
                                         </td>
                                     </tr>

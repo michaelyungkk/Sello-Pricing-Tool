@@ -208,22 +208,22 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
                 />
                 <button
                     onClick={handleExport}
-                    className="px-3 h-8 text-xs font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm flex items-center gap-2 transition-colors"
+                    className="sello-btn"
                 >
                     <Download className="w-4 h-4" /> Export CSV
                 </button>
             </div>
 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
-                <table className="tbl w-full text-left text-sm whitespace-nowrap">
+                <table className="sello-table">
                     <thead>
                         <tr>
-                            <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="Event" sortKey="eventName" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="Platform" sortKey="platform" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="Promo Price" sortKey="promoPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Dates" sortKey="startDate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                            <SortableHeader label="Status" sortKey="status" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
+                            <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} />
+                            <SortableHeader label="Event" sortKey="eventName" sort={sortConfig} onChange={setSortConfig} />
+                            <SortableHeader label="Platform" sortKey="platform" sort={sortConfig} onChange={setSortConfig} />
+                            <SortableHeader label="Promo Price" sortKey="promoPrice" sort={sortConfig} onChange={setSortConfig} align="right" />
+                            <SortableHeader label="Dates" sortKey="startDate" sort={sortConfig} onChange={setSortConfig} />
+                            <SortableHeader label="Status" sortKey="status" sort={sortConfig} onChange={setSortConfig} />
                         </tr>
                     </thead>
                     <tbody>
@@ -231,20 +231,20 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
                             const product = productMap.get(row.sku.toUpperCase());
                             return (
                                 <tr key={row.id} className="">
-                                    <td className="p-4">
+                                    <td>
                                         <div className="flex items-center">
                                             <div className="font-bold text-gray-700">{row.sku}</div>
                                             <GradeBadge gradeLevel={product?.gradeLevel} />
                                         </div>
                                         {product && <div className="text-[10px] text-gray-500 truncate max-w-[200px] mt-0.5">{product.name}</div>}
                                     </td>
-                                    <td className="p-4 text-gray-600">{row.eventName}</td>
-                                    <td className="p-4">
+                                    <td className="text-gray-600">{row.eventName}</td>
+                                    <td>
                                         <span className="bg-gray-100/80 text-gray-700 px-2 py-1 rounded text-xs font-medium border border-gray-200">{row.platform}</span>
                                     </td>
-                                    <td className="p-4 text-right font-black" style={{ color: themeColor }}>{formatSmartMoney(row.promoPrice)}</td>
-                                    <td className="p-4 text-gray-500 text-xs">{formatDate(row.startDate)} - {formatDate(row.endDate)}</td>
-                                    <td className="p-4"><StatusBadge status={row.status} /></td>
+                                    <td className="r font-black" style={{ color: themeColor }}>{formatSmartMoney(row.promoPrice)}</td>
+                                    <td className="text-gray-500 text-xs">{formatDate(row.startDate)} - {formatDate(row.endDate)}</td>
+                                    <td><StatusBadge status={row.status} /></td>
                                 </tr>
                             );
                         })}

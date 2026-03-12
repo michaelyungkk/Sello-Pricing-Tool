@@ -338,7 +338,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto relative">
-                    {isProcessing && step !== 'preview' && (
+                    {isProcessing && step !== 'preview' && step !== 'upload' && (
                         <div className="absolute inset-0 z-20 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                             <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
                             <h3 className="text-xl font-bold text-gray-900">Processing Data</h3>

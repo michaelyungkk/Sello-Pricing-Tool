@@ -256,17 +256,17 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                             </h4>
                             <span className="text-[10px] text-gray-400 font-bold uppercase italic">* Aligned with chart history</span>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="tbl w-full text-left text-xs">
+                        <div className="sello-table-scroll">
+                            <table className="sello-table">
                                 <thead className="sticky top-0 whitespace-nowrap">
                                     <tr>
-                                        <SortableHeader label="Date" sortKey="date" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
-                                        <SortableHeader label="Order ID" sortKey="orderId" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
-                                        <SortableHeader label="Platform" sortKey="platform" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
-                                        <SortableHeader label="Qty" sortKey="quantity" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Amount" sortKey="amount" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Reason" sortKey="reason" sort={refundSort} onChange={setRefundSort} themeColor={themeColor} />
-                                        <th className="p-3 text-right">Comments</th>
+                                        <SortableHeader label="Date" sortKey="date" sort={refundSort} onChange={setRefundSort} />
+                                        <SortableHeader label="Order ID" sortKey="orderId" sort={refundSort} onChange={setRefundSort} />
+                                        <SortableHeader label="Platform" sortKey="platform" sort={refundSort} onChange={setRefundSort} />
+                                        <SortableHeader label="Qty" sortKey="quantity" sort={refundSort} onChange={setRefundSort} align="right" />
+                                        <SortableHeader label="Amount" sortKey="amount" sort={refundSort} onChange={setRefundSort} align="right" />
+                                        <SortableHeader label="Reason" sortKey="reason" sort={refundSort} onChange={setRefundSort} />
+                                        <th className="r">Comments</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -282,11 +282,11 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                             
                                             return (
                                                 <tr key={`${r.id || 'ref'}-${i}`} className="">
-                                                    <td className="p-3 font-mono opacity-80 whitespace-nowrap">
+                                                    <td className="font-mono opacity-80 whitespace-nowrap">
                                                         {displayDateKey ? new Date(displayDateKey).toLocaleDateString('en-GB') : (r.date ? new Date(r.date).toLocaleDateString('en-GB') : '-')}
                                                         {isFallbackDate && <span className="text-red-400 ml-1 text-[9px] font-bold" title="Order date unavailable, using refund date">*</span>}
                                                     </td>
-                                                    <td className="p-3 font-mono font-medium text-indigo-600 whitespace-nowrap">
+                                                    <td className="font-mono font-medium text-indigo-600 whitespace-nowrap">
                                                         {r.orderId ? (
                                                             <span className="flex items-center gap-1">
                                                                 {r.orderId}
@@ -294,20 +294,20 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                                             </span>
                                                         ) : '—'}
                                                     </td>
-                                                    <td className="p-3 whitespace-nowrap">
+                                                    <td className="whitespace-nowrap">
                                                         <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded border border-gray-200 text-[10px] font-bold">
                                                             {r.platform || 'Unknown'}
                                                         </span>
                                                     </td>
-                                                    <td className="p-3 text-right font-bold text-gray-900 whitespace-nowrap">{r.quantity}</td>
-                                                    <td className="p-3 text-right font-bold text-red-600 whitespace-nowrap">{formatSmartMoney(displayAmount)}</td>
-                                                    <td className="p-3 whitespace-normal min-w-[150px]">
+                                                    <td className="r font-bold text-gray-900 whitespace-nowrap">{r.quantity}</td>
+                                                    <td className="r font-bold text-red-600 whitespace-nowrap">{formatSmartMoney(displayAmount)}</td>
+                                                    <td className="whitespace-normal min-w-[150px]">
                                                         <div className="flex flex-col">
                                                             <span className="font-bold text-gray-700">{reasonMeta.short}</span>
                                                             <span className="text-[10px] text-gray-400">{reasonMeta.full}</span>
                                                         </div>
                                                     </td>
-                                                    <td className="p-3 text-right text-gray-400 italic whitespace-normal min-w-[200px] break-words" title={r.commentEn || r.comments || r.customerReason}>
+                                                    <td className="r text-gray-400 italic whitespace-normal min-w-[200px] break-words" title={r.commentEn || r.comments || r.customerReason}>
                                                         {r.commentEn || r.comments || r.customerReason || '—'}
                                                     </td>
                                                 </tr>
@@ -315,7 +315,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={7} className="p-10 text-center text-gray-400 italic">No refund records found for this product.</td>
+                                            <td colSpan={7} className="c p-10 text-gray-400 italic">No refund records found for this product.</td>
                                         </tr>
                                     )}
                                 </tbody>

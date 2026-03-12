@@ -17,7 +17,7 @@ import { FeesAndRoiTab } from './tabs/FeesAndRoiTab';
 import { PerformanceTrendTab } from './tabs/PerformanceTrendTab';
 import { AdGroupsTab } from './tabs/AdGroupsTab';
 import { TabSwitcher } from '../common/TabSwitcher';
-export const PlatformManagementPageContainer: React.FC<PlatformManagementPageProps> = ({
+const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps> = ({
   products = [],
   priceHistoryMap = new Map<string, PriceLog[]>(),
   refundHistory = [],
@@ -760,3 +760,5 @@ export const PlatformManagementPageContainer: React.FC<PlatformManagementPagePro
     </div>
   );
 };
+
+export const PlatformManagementPageContainer = React.memo(PlatformManagementPageContainerInner);

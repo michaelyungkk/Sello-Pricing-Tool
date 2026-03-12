@@ -1,14 +1,14 @@
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { QuickUploadMenu } from './components/QuickUploadMenu';
 
 // Components
-import { OverviewPageContainer } from './components/overview/OverviewPageContainer';
+const OverviewPageContainer = React.lazy(() => import('./components/overview/OverviewPageContainer'));
 
-import ProductManagementPage from './components/ProductManagementPage';
-import StrategyPage from './components/StrategyPage';
-import PlatformManagementPage from './components/PlatformManagementPage';
+const ProductManagementPage = React.lazy(() => import('./components/ProductManagementPage'));
+const StrategyPage = React.lazy(() => import('./components/StrategyPage'));
+const PlatformManagementPage = React.lazy(() => import('./components/PlatformManagementPage'));
 
 import {
     LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X,
@@ -19,13 +19,13 @@ import {
 
 import GlobalSearch from './components/GlobalSearch';
 import UserProfile from './components/UserProfile';
-import SearchResultsPage from './components/SearchResultsPage';
-import CostManagementPage from './components/CostManagementPage';
-import PromotionPage from './components/PromotionPage';
-import ToolboxPage from './components/ToolboxPage';
-import DefinitionsPage from './components/Definitions';
-import SettingsPage from './components/SettingsPage';
-import { CustomReportPage } from './components/CustomReportPage';
+const SearchResultsPage = React.lazy(() => import('./components/SearchResultsPage'));
+const CostManagementPage = React.lazy(() => import('./components/CostManagementPage'));
+const PromotionPage = React.lazy(() => import('./components/PromotionPage'));
+const ToolboxPage = React.lazy(() => import('./components/ToolboxPage'));
+const DefinitionsPage = React.lazy(() => import('./components/Definitions'));
+const SettingsPage = React.lazy(() => import('./components/SettingsPage'));
+const CustomReportPage = React.lazy(() => import('./components/CustomReportPage'));
 import BatchUploadModal from './components/BatchUploadModal';
 import SalesImportModal from './components/SalesImportModal';
 import SkuDetailUploadModal from './components/SkuDetailUploadModal';
@@ -38,6 +38,15 @@ import AnalysisModal from './components/AnalysisModal';
 
 import { TAX_NOTE_SHORT } from './services/taxPolicy';
 import { StrategyConfig } from './types';
+
+const PageLoader = () => (
+    <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+            <span className="text-sm font-medium text-gray-400">Loading…</span>
+        </div>
+    </div>
+);
 
 const App: React.FC = () => {
     const {
@@ -556,7 +565,9 @@ const App: React.FC = () => {
                         </div>
                     </header>
                     <div ref={mainContentRef} className="flex-1 overflow-y-auto relative p-4 md:p-8">
-                        <div style={{ display: currentView === 'search' ? 'block' : 'none' }}>
+                        <Suspense fallback={<PageLoader />}>
+                        {currentView === 'search' && (
+                            <>
                             {activeSearch ? (
                                 <SearchResultsPage
                                     data={{ results: activeSearch.results || [], query: activeSearch.query, params: activeSearch.params, id: activeSearch.id }}
@@ -579,8 +590,11 @@ const App: React.FC = () => {
                                     <p className="text-lg font-medium">{t('search_empty_state')}</p>
                                 </div>
                             )}
-                        </div>
+                            </>
+                        )}
+                        </Suspense>
                         <div style={{ display: currentView === 'overview' ? 'block' : 'none' }}>
+                        <Suspense fallback={<PageLoader />}>
                             {products.length === 0 ? (
                                 syncStatus === 'syncing' ? (
                                     <div className="flex flex-col items-center justify-center min-h-[500px]">
@@ -712,8 +726,10 @@ const App: React.FC = () => {
                                     mapJumpState={mapJumpState}
                                 />
                             )}
+                        </Suspense>
                         </div>
-                        <div style={{ display: currentView === 'products' ? 'block' : 'none' }}>
+                        <Suspense fallback={<PageLoader />}>
+                        {currentView === 'products' && (
                             <ProductManagementPage
                                 products={products}
                                 pricingRules={pricingRules}
@@ -739,8 +755,8 @@ const App: React.FC = () => {
                                 setPendingFamilySuggestions={setPendingFamilySuggestions}
                                 headerStyle={headerStyle}
                             />
-                        </div>
-                        <div style={{ display: currentView === 'platforms' ? 'block' : 'none' }}>
+                        )}
+                        {currentView === 'platforms' && (
                             <PlatformManagementPage
                                 products={products}
                                 priceHistoryMap={priceHistoryMap}
@@ -759,8 +775,8 @@ const App: React.FC = () => {
                                 lastRecalculationSummary={lastRecalculationSummary}
                                 headerStyle={headerStyle}
                             />
-                        </div>
-                        <div style={{ display: currentView === 'strategy' ? 'block' : 'none' }}>
+                        )}
+                        {currentView === 'strategy' && (
                             <StrategyPage
                                 products={products}
                                 pricingRules={pricingRules}
@@ -784,11 +800,11 @@ const App: React.FC = () => {
                                 thresholds={thresholds}
                                 skuFamilies={skuFamilies}
                             />
-                        </div>
-                        <div style={{ display: currentView === 'costs' ? 'block' : 'none' }}>
+                        )}
+                        {currentView === 'costs' && (
                             <CostManagementPage products={products} themeColor={userProfile.themeColor} headerStyle={headerStyle} />
-                        </div>
-                        <div style={{ display: currentView === 'promotions' ? 'block' : 'none' }}>
+                        )}
+                        {currentView === 'promotions' && (
                             <PromotionPage
                                 products={products}
                                 pricingRules={pricingRules}
@@ -801,8 +817,8 @@ const App: React.FC = () => {
                                 themeColor={userProfile.themeColor}
                                 headerStyle={headerStyle}
                             />
-                        </div>
-                        <div style={{ display: currentView === 'tools' ? 'block' : 'none' }}>
+                        )}
+                        {currentView === 'tools' && (
                             <ToolboxPage
                                 promotions={promotions || []}
                                 pricingRules={pricingRules}
@@ -812,19 +828,19 @@ const App: React.FC = () => {
                                 themeColor={userProfile.themeColor}
                                 headerStyle={headerStyle}
                             />
-                        </div>
-                        <div style={{ display: currentView === 'definitions' ? 'block' : 'none' }}>
+                        )}
+                        {currentView === 'definitions' && (
                             <DefinitionsPage />
-                        </div>
-                        <div style={{ display: currentView === 'custom-report' ? 'block' : 'none' }}>
+                        )}
+                        {currentView === 'custom-report' && (
                             <CustomReportPage
                                 products={products}
                                 priceHistory={salesHistory}
                                 refundHistory={refundHistory}
                                 pricingRules={pricingRules}
                             />
-                        </div>
-                        <div style={{ display: currentView === 'settings' ? 'block' : 'none' }}>
+                        )}
+                        {currentView === 'settings' && (
                             <SettingsPage
                                 currentRules={pricingRules}
                                 onSave={(newRules, newVelocity, newSearchConfig) => {
@@ -850,7 +866,8 @@ const App: React.FC = () => {
                                 onSaveCategoryMap={setCategoryMap}
                                 headerStyle={headerStyle}
                             />
-                        </div>
+                        )}
+                        </Suspense>
                     </div>
                 </main>
                 {isUploadModalOpen && (
@@ -877,7 +894,7 @@ const App: React.FC = () => {
                     isSkuDetailModalOpen && (
                         <SkuDetailUploadModal
                             products={products}
-                            onClose={() => setIsUploadModalOpen(false)}
+                            onClose={() => setIsSkuDetailModalOpen(false)}
                             onConfirm={handleSkuDetailImport}
                         />
                     )

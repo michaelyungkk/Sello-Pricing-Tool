@@ -5,9 +5,9 @@ import { ContextBar } from '../common/ContextBar';
 import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog, SkuFamily } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../../constants';
-import { Activity, History, Coins, Database, Ship, Settings, Download, X, ArrowRight, Calendar, RotateCcw, TrendingUp, TrendingDown, Save, Edit2, CheckCircle, Info, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Activity, History, Coins, Database, Ship, Settings, Download, X, ArrowRight, RotateCcw, TrendingUp, TrendingDown, Save, Edit2, CheckCircle, Info, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../../services/dateUtils';
-import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../utils/format';
+import { formatSmartMoney } from '../../utils/format';
 import { SortState, sortRows } from '../../utils/tableSort';
 import { resolveEffectiveVelocity } from '../../services/metrics';
 
@@ -15,9 +15,9 @@ import { resolveEffectiveVelocity } from '../../services/metrics';
 import { ConfigParametersPanel } from './panels/ConfigParametersPanel';
 import { AuditReconciliationPanel } from './panels/AuditReconciliationPanel';
 import { RecommendationsTable } from './panels/RecommendationsTable';
-import { PriceChangeHistoryPanel } from './PriceChangeHistoryPanel';
 import { TagSearchInput } from '../TagSearchInput'; // Keep for non-engine tabs
 import { SortableHeader } from '../common/SortableHeader'; // For history tables
+import { TabSwitcher } from '../common/TabSwitcher';
 import ManualPriceChangeModal from '../ManualPriceChangeModal';
 import ManualCostChangeModal from '../ManualCostChangeModal';
 
@@ -45,7 +45,7 @@ interface StrategyPageContainerProps {
     onManualCostChange?: (data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
 }
 
-export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
+const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
     products, pricingRules, currentConfig, onSaveConfig, themeColor,
     priceHistoryMap, refundHistory = [], deductRefunds, setDeductRefunds, promotions, priceChangeHistory = [], costChangeHistory = [],
     inventoryChangeHistory = [],
@@ -489,19 +489,19 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
     }, [isAuditPanelVisible, filteredAndSortedData, selectedWindow, customStart, customEnd, priceHistoryMap]);
 
     // History Table Data Logic (kept inline for simplicity and safety)
-    const getAvgVelocity = (sku: string, startKey: string, endKey: string) => {
-        const logs = priceHistoryMap.get(sku) || [];
-        const relevantLogs = logs.filter((l: PriceLog) => {
-            const logKey = asDateKey(l.date);
-            return logKey && isDateKeyBetween(logKey, startKey, endKey);
-        });
-        if (relevantLogs.length === 0) return 0;
-        const totalQty = relevantLogs.reduce((acc, l) => acc + l.velocity, 0);
-        const distinctDays = new Set(relevantLogs.map(l => l.date)).size;
-        return distinctDays > 0 ? totalQty / distinctDays : 0;
-    };
-
     const historyTableData = useMemo(() => {
+        const getAvgVelocity = (sku: string, startKey: string, endKey: string) => {
+            const logs = priceHistoryMap.get(sku) || [];
+            const relevantLogs = logs.filter((l: PriceLog) => {
+                const logKey = asDateKey(l.date);
+                return logKey && isDateKeyBetween(logKey, startKey, endKey);
+            });
+            if (relevantLogs.length === 0) return 0;
+            const totalQty = relevantLogs.reduce((acc, l) => acc + l.velocity, 0);
+            const distinctDays = new Set(relevantLogs.map(l => l.date)).size;
+            return distinctDays > 0 ? totalQty / distinctDays : 0;
+        };
+
         const safeArr = Array.isArray(priceChangeHistory) ? priceChangeHistory : [];
         let data = safeArr.map(change => {
             const dateKey = asDateKey(change.date);
@@ -693,12 +693,17 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
             <div className="flex flex-wrap gap-4 items-center justify-between">
-                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit overflow-x-auto no-scrollbar">
-                    <button onClick={() => { setActiveTab('ENGINE'); setIsAuditPanelVisible(false); }} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ENGINE' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Activity className="w-4 h-4" />Strategy Simulator</button>
-                    <button onClick={() => { setActiveTab('HISTORY'); setIsAuditPanelVisible(false); }} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><History className="w-4 h-4" />Price Change Log</button>
-                    <button onClick={() => { setActiveTab('COST_HISTORY'); setIsAuditPanelVisible(false); }} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'COST_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Coins className="w-4 h-4" />Cost Change Log</button>
-                    <button onClick={() => { setActiveTab('INVENTORY_HISTORY'); setIsAuditPanelVisible(false); }} className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'INVENTORY_HISTORY' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}><Database className="w-4 h-4" />Inventory Change Log</button>
-                </div>
+                <TabSwitcher
+                    tabs={[
+                        { key: 'ENGINE', label: 'Strategy Simulator', icon: Activity },
+                        { key: 'HISTORY', label: 'Price Change Log', icon: History },
+                        { key: 'COST_HISTORY', label: 'Cost Change Log', icon: Coins },
+                        { key: 'INVENTORY_HISTORY', label: 'Inventory Change Log', icon: Database },
+                    ]}
+                    activeTab={activeTab}
+                    onChange={(key) => { setActiveTab(key as 'ENGINE' | 'HISTORY' | 'COST_HISTORY' | 'INVENTORY_HISTORY'); setIsAuditPanelVisible(false); }}
+                    size="md"
+                />
 
             </div>
 
@@ -802,18 +807,18 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                 </div>
                             </div>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="tbl w-full text-left text-sm whitespace-nowrap">
+                        <div className="sello-table-scroll">
+                            <table className="sello-table">
                                 <thead>
                                     <tr>
-                                        <th className="p-4">Date</th>
-                                        <th className="p-4">SKU</th>
-                                        <th className="p-4 text-center">Change</th>
-                                        <th className="p-4 text-right">Old Price</th>
-                                        <th className="p-4 text-center"></th>
-                                        <th className="p-4 text-left">New Price</th>
-                                        <th className="p-4 text-center">Impact (7-Day Avg)</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th>Date</th>
+                                        <th>SKU</th>
+                                        <th className="c">Change</th>
+                                        <th className="r">Old Price</th>
+                                        <th className="c"></th>
+                                        <th>New Price</th>
+                                        <th className="c">Impact (7-Day Avg)</th>
+                                        <th className="r">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -821,14 +826,14 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                         const isEditing = editingHistoryId === row.id;
                                         return (
                                             <tr key={row.id} className={`${isEditing ? 'bg-indigo-50/50' : ''}`}>
-                                                <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingDate} onChange={(e) => setEditingDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                                                <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
-                                                <td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
-                                                <td className="p-4 text-right text-gray-400 line-through">{formatSmartMoney(row.oldPrice)}</td>
-                                                <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
-                                                <td className="p-4 font-bold text-gray-900">{formatSmartMoney(row.newPrice)}</td>
-                                                <td className="p-4"><div className="flex items-center justify-center gap-2 text-xs"><span className="text-gray-500 font-medium">{row.preVel.toFixed(1)}/d</span><ArrowRight className="w-3 h-3 text-gray-300" /><span className={`font-bold ${row.postVel > row.preVel ? 'text-emerald-600' : row.postVel < row.preVel ? 'text-red-500' : 'text-gray-600'}`}>{row.postVel.toFixed(1)}/d</span></div></td>
-                                                <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdatePriceChangeRecord && editingDate) { onUpdatePriceChangeRecord({ ...row, date: editingDate }); setRecentlySavedId(row.id); setTimeout(() => setRecentlySavedId(null), 2500); } setEditingHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingHistoryId(row.id); setEditingDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
+                                                <td>{isEditing ? <input type="date" value={editingDate} onChange={(e) => setEditingDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                                <td><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
+                                                <td className="c"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
+                                                <td className="r text-gray-400 line-through">{formatSmartMoney(row.oldPrice)}</td>
+                                                <td className="c text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
+                                                <td><span className="font-bold text-gray-900">{formatSmartMoney(row.newPrice)}</span></td>
+                                                <td><div className="flex items-center justify-center gap-2 text-xs"><span className="text-gray-500 font-medium">{row.preVel.toFixed(1)}/d</span><ArrowRight className="w-3 h-3 text-gray-300" /><span className={`font-bold ${row.postVel > row.preVel ? 'text-emerald-600' : row.postVel < row.preVel ? 'text-red-500' : 'text-gray-600'}`}>{row.postVel.toFixed(1)}/d</span></div></td>
+                                                <td className="r">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdatePriceChangeRecord && editingDate) { onUpdatePriceChangeRecord({ ...row, date: editingDate }); setRecentlySavedId(row.id); setTimeout(() => setRecentlySavedId(null), 2500); } setEditingHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingHistoryId(row.id); setEditingDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
                                             </tr>
                                         )
                                     })}
@@ -838,7 +843,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                         </div>
                         {/* Pagination Footer */}
                         {historyTableData.length > 0 && (
-                            <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                            <div className="sello-table-footer">
                                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-4">
                                         <p className="text-sm text-gray-700">Showing <span className="font-medium">{(historyCurrentPage - 1) * historyItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(historyCurrentPage * historyItemsPerPage, historyTableData.length)}</span> of <span className="font-medium">{historyTableData.length}</span> results</p>
@@ -874,17 +879,17 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                 </div>
                             </div>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="tbl w-full text-left text-sm whitespace-nowrap">
+                        <div className="sello-table-scroll">
+                            <table className="sello-table">
                                 <thead>
                                     <tr>
-                                        <th className="p-4">Date</th>
-                                        <th className="p-4">SKU</th>
-                                        <th className="p-4 text-center">Change</th>
-                                        <th className="p-4 text-right">Old Cost</th>
-                                        <th className="p-4 text-center"></th>
-                                        <th className="p-4 text-left">New Cost</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th>Date</th>
+                                        <th>SKU</th>
+                                        <th className="c">Change</th>
+                                        <th className="r">Old Cost</th>
+                                        <th className="c"></th>
+                                        <th>New Cost</th>
+                                        <th className="r">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -892,13 +897,13 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                         const isEditing = editingCostHistoryId === row.id;
                                         return (
                                             <tr key={row.id} className={`${isEditing ? 'bg-indigo-50/50' : ''}`}>
-                                                <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingCostDate} onChange={(e) => setEditingCostDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                                                <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
-                                                <td className="p-4 text-center"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
-                                                <td className="p-4 text-right text-gray-400 line-through">{formatSmartMoney(row.oldCost)}</td>
-                                                <td className="p-4 text-center text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
-                                                <td className="p-4 font-bold text-gray-900">{formatSmartMoney(row.newCost)}</td>
-                                                <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdateCostChangeRecord && editingCostDate) { onUpdateCostChangeRecord({ ...row, date: editingCostDate }); setRecentlySavedCostId(row.id); setTimeout(() => setRecentlySavedCostId(null), 2500); } setEditingCostHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingCostHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedCostId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingCostHistoryId(row.id); setEditingCostDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
+                                                <td>{isEditing ? <input type="date" value={editingCostDate} onChange={(e) => setEditingCostDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                                <td><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
+                                                <td className="c"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${row.changeType === 'INCREASE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.changeType === 'INCREASE' ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}{Math.abs(row.percentChange).toFixed(1)}%</span></td>
+                                                <td className="r text-gray-400 line-through">{formatSmartMoney(row.oldCost)}</td>
+                                                <td className="c text-gray-300"><ArrowRight className="w-4 h-4 mx-auto" /></td>
+                                                <td><span className="font-bold text-gray-900">{formatSmartMoney(row.newCost)}</span></td>
+                                                <td className="r">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdateCostChangeRecord && editingCostDate) { onUpdateCostChangeRecord({ ...row, date: editingCostDate }); setRecentlySavedCostId(row.id); setTimeout(() => setRecentlySavedCostId(null), 2500); } setEditingCostHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingCostHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedCostId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingCostHistoryId(row.id); setEditingCostDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
                                             </tr>
                                         );
                                     })}
@@ -908,7 +913,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                         </div>
                         {/* Pagination */}
                         {costHistoryTableData.length > 0 && (
-                            <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                            <div className="sello-table-footer">
                                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-4">
                                         <p className="text-sm text-gray-700">Showing <span className="font-medium">{(costHistoryCurrentPage - 1) * costHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(costHistoryCurrentPage * costHistoryItemsPerPage, costHistoryTableData.length)}</span> of <span className="font-medium">{costHistoryTableData.length}</span> results</p>
@@ -943,18 +948,18 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                 </div>
                             </div>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="tbl w-full text-left text-sm whitespace-nowrap">
+                        <div className="sello-table-scroll">
+                            <table className="sello-table">
                                 <thead>
                                     <tr>
-                                        <th className="p-4">Date</th>
-                                        <th className="p-4">SKU</th>
-                                        <th className="p-4 text-center">Stock Before</th>
-                                        <th className="p-4 text-center">Stock After</th>
-                                        <th className="p-4 text-center">+Delta</th>
-                                        <th className="p-4 text-center">Strategic?</th>
-                                        <th className="p-4">Source / Reason</th>
-                                        <th className="p-4 text-right">Actions</th>
+                                        <th>Date</th>
+                                        <th>SKU</th>
+                                        <th className="c">Stock Before</th>
+                                        <th className="c">Stock After</th>
+                                        <th className="c">+Delta</th>
+                                        <th className="c">Strategic?</th>
+                                        <th>Source / Reason</th>
+                                        <th className="r">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -962,23 +967,23 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                                         const isEditing = editingInventoryHistoryId === row.id;
                                         return (
                                             <tr key={row.id} className={`${isEditing ? 'bg-indigo-50/50' : ''}`}>
-                                                <td className="p-4 text-gray-500 text-xs">{isEditing ? <input type="date" value={editingInventoryDate} onChange={(e) => setEditingInventoryDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                                                <td className="p-4"><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
-                                                <td className="p-4 text-center text-gray-400">{row.prevStock}</td>
-                                                <td className="p-4 text-center font-bold text-gray-900">{row.newStock}</td>
-                                                <td className="p-4 text-center"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">+{row.deltaStock}</span></td>
-                                                <td className="p-4 text-center">
+                                                <td>{isEditing ? <input type="date" value={editingInventoryDate} onChange={(e) => setEditingInventoryDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md text-sm w-full bg-white" autoFocus /> : new Date(row.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                                                <td><div className="font-bold text-gray-900">{row.sku}</div><div className="text-xs text-gray-500 truncate max-w-[250px]">{row.productName}</div></td>
+                                                <td className="c text-gray-400">{row.prevStock}</td>
+                                                <td className="c font-bold text-gray-900">{row.newStock}</td>
+                                                <td className="c"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">+{row.deltaStock}</span></td>
+                                                <td className="c">
                                                     {row.isStrategic ? (
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">YES</span>
                                                     ) : (
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">NO</span>
                                                     )}
                                                 </td>
-                                                <td className="p-4 text-xs text-gray-500">
+                                                <td>
                                                     <div className="font-medium text-gray-700">{row.source}</div>
                                                     {row.reason && <div className="text-gray-400 mt-0.5 italic">{row.reason}</div>}
                                                 </td>
-                                                <td className="p-4 text-right">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdateInventoryChangeRecord && editingInventoryDate) { onUpdateInventoryChangeRecord({ ...row, date: editingInventoryDate }); setRecentlySavedInventoryId(row.id); setTimeout(() => setRecentlySavedInventoryId(null), 2500); } setEditingInventoryHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingInventoryHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedInventoryId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingInventoryHistoryId(row.id); setEditingInventoryDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
+                                                <td className="r">{isEditing ? (<div className="flex items-center justify-end gap-2 h-7"><button onClick={() => { if (onUpdateInventoryChangeRecord && editingInventoryDate) { onUpdateInventoryChangeRecord({ ...row, date: editingInventoryDate }); setRecentlySavedInventoryId(row.id); setTimeout(() => setRecentlySavedInventoryId(null), 2500); } setEditingInventoryHistoryId(null); }} className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg" title="Save"><Save className="w-4 h-4" /></button><button onClick={() => setEditingInventoryHistoryId(null)} className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg" title="Cancel"><X className="w-4 h-4" /></button></div>) : (<div className="flex items-center justify-end gap-2 h-7">{recentlySavedInventoryId === row.id && (<span className="text-xs text-green-600 font-medium animate-in fade-in duration-300 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Saved</span>)}<button onClick={() => { setEditingInventoryHistoryId(row.id); setEditingInventoryDate(new Date(row.date).toISOString().split('T')[0]); }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit Date"><Edit2 className="w-4 h-4" /></button></div>)}</td>
                                             </tr>
                                         );
                                     })}
@@ -988,7 +993,7 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
                         </div>
                         {/* Pagination */}
                         {inventoryHistoryTableData.length > 0 && (
-                            <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                            <div className="sello-table-footer">
                                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-4">
                                         <p className="text-sm text-gray-700">Showing <span className="font-medium">{(inventoryHistoryCurrentPage - 1) * inventoryHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(inventoryHistoryCurrentPage * inventoryHistoryItemsPerPage, inventoryHistoryTableData.length)}</span> of <span className="font-medium">{inventoryHistoryTableData.length}</span> results</p>
@@ -1012,3 +1017,5 @@ export const StrategyPageContainer: React.FC<StrategyPageContainerProps> = ({
         </div>
     );
 };
+
+export const StrategyPageContainer = React.memo(StrategyPageContainerInner);

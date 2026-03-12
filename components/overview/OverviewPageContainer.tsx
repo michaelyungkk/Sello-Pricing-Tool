@@ -16,8 +16,8 @@ import { CategoryPerformanceSlide } from '../CategoryPerformanceSlide';
 import { aggregateCategoryData } from '../../services/categoryAgg';
 import AuditPanel from '../AuditPanel';
 import { FilterBar } from '../common/FilterBar';
-import { Calendar, Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingUp, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
-import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../utils/format';
+import { Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
+import { formatSmartMoney, formatNumber, formatPct } from '../../utils/format';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, Bar, Line, BarChart, Cell } from 'recharts';
 import { resolveEffectiveVelocity } from '../../services/metrics';
 import { MetricValue } from '../common/MetricValue';
@@ -59,7 +59,7 @@ const getMedianVal = (vals: number[]) => {
     return s.length % 2 !== 0 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
-export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
+const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     products,
     priceHistoryMap,
     refundHistory,
@@ -990,3 +990,7 @@ export const OverviewPageContainer: React.FC<OverviewPageContainerProps> = ({
         </div>
     );
 };
+
+export const OverviewPageContainer = React.memo(OverviewPageContainerInner);
+
+export default OverviewPageContainer;

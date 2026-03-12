@@ -169,20 +169,20 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
 
             {/* SECTION 2: Confirmed Family Groups */}
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="tbl w-full text-left border-collapse">
+                <div className="sello-table-scroll">
+                    <table className="sello-table">
                         <thead>
-                            <tr className="bg-gray-50 border-bottom border-gray-200">
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Family Name</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Member SKUs</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date Created</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                            <tr>
+                                <th>Family Name</th>
+                                <th>Member SKUs</th>
+                                <th>Date Created</th>
+                                <th className="r">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {skuFamilies.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan={4} className="c p-12 text-gray-500">
                                         <Layers className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                         <p>No family groups created yet.</p>
                                         <button 
@@ -196,11 +196,11 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                 </tr>
                             ) : (
                                 skuFamilies.map(family => (
-                                    <tr key={family.id} className="">
-                                        <td className="px-6 py-4">
+                                    <tr key={family.id}>
+                                        <td>
                                             <span className="font-semibold text-gray-900">{family.name}</span>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td>
                                             <div className="flex flex-wrap gap-1.5 max-w-md">
                                                 {family.memberSkus.map(sku => (
                                                     <span key={sku} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs rounded-md border border-indigo-100 font-medium">
@@ -209,10 +209,10 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                                 ))}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-500">
+                                        <td className="text-gray-500">
                                             {new Date(family.createdAt).toLocaleDateString()}
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="r">
                                             <div className="flex justify-end gap-2">
                                                 <button
                                                     onClick={() => handleOpenEditModal(family)}

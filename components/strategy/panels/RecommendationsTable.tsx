@@ -120,28 +120,28 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                 }
             />
 
-            <div className="overflow-x-auto">
-                <table className="tbl w-full text-left text-sm whitespace-nowrap">
+            <div className="sello-table-scroll">
+                <table className="sello-table">
                     <thead>
                         <tr>
-                            <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                            <SortableHeader label="Runway / Velocity" sortKey="runway" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Recent Avg Price" sortKey="avgPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="bg-blue-50/50" />
-                            <SortableHeader label="Recent Sales $" sortKey="sales" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="bg-blue-50/50" />
-                            <SortableHeader label="Recent Qty" sortKey="qty" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="bg-blue-50/50" />
-                            <SortableHeader label="Net PM%" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="bg-green-50/50" />
-                            <SortableHeader label="Recent Changes (30D)" sortKey="recentChanges" sort={sort} onChange={setSort} themeColor={themeColor} align="center" />
-                            <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="text-purple-600" />
-                            <SortableHeader label="New Price" sortKey="newPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                            <SortableHeader label="Action" sortKey="action" sort={sort} onChange={setSort} themeColor={themeColor} align="center" />
-                            <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Reason</th>
+                            <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} />
+                            <SortableHeader label="Runway / Velocity" sortKey="runway" sort={sort} onChange={setSort} align="right" />
+                            <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
+                            <SortableHeader label="Recent Avg Price" sortKey="avgPrice" sort={sort} onChange={setSort} align="right" tint="blue" />
+                            <SortableHeader label="Recent Sales $" sortKey="sales" sort={sort} onChange={setSort} align="right" tint="blue" />
+                            <SortableHeader label="Recent Qty" sortKey="qty" sort={sort} onChange={setSort} align="right" tint="blue" />
+                            <SortableHeader label="Net PM%" sortKey="margin" sort={sort} onChange={setSort} align="right" tint="green" />
+                            <SortableHeader label="Recent Changes (30D)" sortKey="recentChanges" sort={sort} onChange={setSort} align="center" />
+                            <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} align="right" tint="ca" />
+                            <SortableHeader label="New Price" sortKey="newPrice" sort={sort} onChange={setSort} align="right" />
+                            <SortableHeader label="Action" sortKey="action" sort={sort} onChange={setSort} align="center" />
+                            <th>Reason</th>
                         </tr>
                     </thead>
                     <tbody>
                         {paginatedData.map((row: any) => (
-                            <tr key={row.id} className={`${row.safetyViolation ? 'bg-amber-50/30' : ''}`}>
-                                <td className="p-4">
+                            <tr key={row.id} className={row.safetyViolation ? 'row-warn' : ''}>
+                                <td>
                                     <div className="flex items-center">
                                         <div className="font-bold text-gray-900">{row.sku}</div>
                                         <GradeBadge gradeLevel={row.gradeLevel} />
@@ -187,7 +187,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                     <div className="text-xs text-gray-500 truncate max-w-[200px]">{row.name}</div>
                                     <div className="flex flex-wrap items-center gap-1 mt-1.5">{row.subcategory && <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-full border border-gray-200">{row.subcategory}</span>}{row.seasonTags?.slice(0, 2).map((tag: string) => (<span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>))}{(row.seasonTags?.length || 0) > 2 && (<span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{(row.seasonTags?.length || 0) - 2}</span>)}{row.festivalTags?.slice(0, 2).map((tag: string) => (<span key={tag} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">{tag}</span>))}{(row.festivalTags?.length || 0) > 2 && (<span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">+{(row.festivalTags?.length || 0) - 2}</span>)}</div>
                                 </td>
-                                <td className="p-4 text-right">
+                                <td className="r">
                                     <div className="flex flex-col items-end gap-1.5">
                                         {(() => {
                                             const runwayBin = getRunwayBin(row.runwayDays, row.stockLevel, row.leadTimeDays);
@@ -196,16 +196,16 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                         <span className="text-[11px] font-semibold text-gray-700">{formatNumber(row.dailyVelocity, 1)} / day</span>
                                     </div>
                                 </td>
-                                <td className="p-4 text-right font-mono font-bold text-gray-700">{row.stockLevel}</td>
-                                <td className="p-4 text-right bg-blue-50/30">{formatSmartMoney(row.averagePrice)}</td>
-                                <td className="p-4 text-right bg-blue-50/30">£{formatNumber(row.recentTotalSales, 2)}</td>
-                                <td className="p-4 text-right bg-blue-50/30 font-bold">{formatNumber(row.recentTotalQty, 0)}</td>
-                                <td className="p-4 text-right bg-green-50/30 font-bold text-emerald-600">
+                                <td className="r v-num">{row.stockLevel}</td>
+                                <td className="r col-blue">{formatSmartMoney(row.averagePrice)}</td>
+                                <td className="r col-blue">£{formatNumber(row.recentTotalSales, 2)}</td>
+                                <td className="r col-blue v-num v-bold">{formatNumber(row.recentTotalQty, 0)}</td>
+                                <td className="r col-green">
                                     <span title={`Profit: £${formatMoney(row.totalProfit, 4, '')} / Sales: £${formatNumber(row.recentTotalSales, 2)}`} className="cursor-help border-b border-dotted border-green-700/50">
                                         {formatPct(row.netPmPercent, 1)}
                                     </span>
                                 </td>
-                                <td className="p-4 text-center">
+                                <td className="c">
                                     {row.recentChanges && Array.isArray(row.recentChanges) && row.recentChanges.length > 0 ? (
                                         <div className="flex items-center justify-center gap-1.5" title="History (30D): Oldest → Newest (4 Weeks)">
                                             {row.recentChanges.map((type: string | null, idx: number) => {
@@ -222,19 +222,19 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                         <span className="text-gray-300">-</span>
                                     )}
                                 </td>
-                                <td className="p-4 text-right font-bold text-purple-600 font-mono">{row.caPrice ? formatSmartMoney(row.caPrice) : '-'}</td>
-                                <td className="p-4 text-right font-mono font-bold">
+                                <td className="r v-ca">{row.caPrice ? formatSmartMoney(row.caPrice) : '-'}</td>
+                                <td className="r v-num">
                                     {row.action !== 'MAINTAIN' ? (
                                         <span style={{ color: themeColor }}>{formatSmartMoney(row.adjustedPrice)}</span>
                                     ) : '-'}
                                     {row.safetyViolation && <AlertCircle className="w-4 h-4 text-red-500 inline ml-1" />}
                                 </td>
-                                <td className="p-4 text-center">
-                                    {row.action === 'INCREASE' && <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-bold">INCREASE</span>}
-                                    {row.action === 'DECREASE' && <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-bold">DECREASE</span>}
-                                    {row.action === 'MAINTAIN' && <span className="text-gray-400 text-xs shadow-sm border px-2 py-1 rounded">MAINTAIN</span>}
+                                <td className="c">
+                                    {row.action === 'INCREASE' && <span className="sello-badge badge-increase">INCREASE</span>}
+                                    {row.action === 'DECREASE' && <span className="sello-badge badge-decrease">DECREASE</span>}
+                                    {row.action === 'MAINTAIN' && <span className="sello-badge badge-maintain">MAINTAIN</span>}
                                 </td>
-                                <td className="p-4 text-xs text-gray-500 max-w-[200px] truncate" title={row.reasoning}>
+                                <td className="max-w-[200px] truncate" title={row.reasoning}>
                                     {row.inPromotion && <span className="text-indigo-600 font-bold mr-1">[PROMO]</span>}
                                     {row.reasoning}
                                 </td>
@@ -245,7 +245,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
             </div>
 
             {totalCount > 0 && (
-                <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-between sm:px-6">
+                <div className="sello-table-footer">
                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                         <div className="flex items-center gap-4">
                             <p className="text-sm text-gray-700">

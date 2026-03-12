@@ -91,18 +91,18 @@ export const PriceChangeHistoryPanel: React.FC<PriceChangeHistoryPanelProps> = (
                      No price changes recorded.
                  </div>
              ) : (
-                 <div className="overflow-x-auto">
-                     <table className="tbl w-full text-left text-xs whitespace-nowrap">
+                 <div className="sello-table-scroll">
+                     <table className="sello-table">
                          <thead>
                              <tr>
-                                 <th className="p-3 pl-4">Date/Time</th>
-                                 <th className="p-3">Platform</th>
-                                 <th className="p-3">Change Type</th>
-                                 <th className="p-3 text-right">Old Price</th>
-                                 <th className="p-3 text-center"></th>
-                                 <th className="p-3 text-right">New Price</th>
-                                 <th className="p-3 text-right">Δ Impact</th>
-                                 <th className="p-3 pr-4 text-right">Source</th>
+                                 <th>Date/Time</th>
+                                 <th>Platform</th>
+                                 <th>Change Type</th>
+                                 <th className="r">Old Price</th>
+                                 <th className="c"></th>
+                                 <th className="r">New Price</th>
+                                 <th className="r">Δ Impact</th>
+                                 <th className="r">Source</th>
                              </tr>
                          </thead>
                          <tbody>
@@ -111,34 +111,34 @@ export const PriceChangeHistoryPanel: React.FC<PriceChangeHistoryPanelProps> = (
                                  const isIncrease = delta > 0;
                                  return (
                                      <tr key={record.id} className="">
-                                         <td className="p-3 pl-4 font-mono text-gray-600">
+                                         <td className="font-mono text-gray-600">
                                              {new Date(record.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                          </td>
-                                         <td className="p-3">
-                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
+                                         <td>
+                                             <span className="sello-badge badge-purple">
                                                  Master / CA
                                              </span>
                                          </td>
-                                         <td className="p-3">
-                                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${isIncrease ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                         <td>
+                                             <span className={`sello-badge ${isIncrease ? 'badge-green' : 'badge-red'}`}>
                                                  {isIncrease ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                                                  {isIncrease ? 'INCREASE' : 'DECREASE'}
                                              </span>
                                          </td>
-                                         <td className="p-3 text-right text-gray-500 line-through">
+                                         <td className="r text-gray-500 line-through">
                                              {formatSmartMoney(record.oldPrice)}
                                          </td>
-                                         <td className="p-3 text-center text-gray-400">
+                                         <td className="c text-gray-400">
                                              <ArrowRight className="w-3 h-3 mx-auto" />
                                          </td>
-                                         <td className="p-3 text-right font-bold text-gray-900">
+                                         <td className="r font-bold text-gray-900">
                                              {formatSmartMoney(record.newPrice)}
                                          </td>
-                                         <td className={`p-3 text-right font-bold ${isIncrease ? 'text-green-600' : 'text-red-600'}`}>
+                                         <td className={`r font-bold ${isIncrease ? 'text-green-600' : 'text-red-600'}`}>
                                              {isIncrease ? '+' : ''}{formatSmartMoney(delta)} ({isIncrease ? '+' : ''}{record.percentChange.toFixed(1)}%)
                                          </td>
-                                         <td className="p-3 pr-4 text-right">
-                                             <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">
+                                         <td className="r">
+                                             <span className="sello-badge badge-gray">
                                                  {getSource(record.id)}
                                              </span>
                                          </td>

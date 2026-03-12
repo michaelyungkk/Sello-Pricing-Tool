@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Trophy, BellRing, X, Settings, Plus, Layers, TrendingUp, RotateCcw, BarChart as BarChartIcon, ArrowUpRight, ArrowDownRight, Activity, Check, ChevronDown, Minus, Medal, Info, ArrowUp, ArrowDown, LayoutGrid, Maximize2, Sparkles, Search } from 'lucide-react';
+import { Trophy, BellRing, X, Settings, Plus, Layers, TrendingUp, RotateCcw, BarChart as BarChartIcon, ArrowUpRight, ArrowDownRight, Activity, Minus, Medal, Info, ArrowUp, ArrowDown, LayoutGrid, Maximize2, Sparkles, Search } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, ReferenceArea, BarChart, Bar, Cell, ReferenceLine, AreaChart, Area } from 'recharts';
-import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
+import { formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { Tab3AlertRules } from '../../../services/platformAlertRules';
 import { PlatformTrendData } from '../../../services/platformTrendAgg';
 import { Flag } from '../platformManagement.types';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
+import { SelectFilter } from '../../common/SelectFilter';
 import AuditPanel from '../../AuditPanel';
 import { FilterBar } from '../../common/FilterBar';
 
@@ -94,94 +95,6 @@ const TrendDeltaPill = ({ value, isPp = false, invert = false }: { value: number
     );
 };
 
-const FocusPlatformDropdown = ({
-    platforms = [],
-    selected = [],
-    onChange
-}: {
-    platforms?: string[],
-    selected?: string[],
-    onChange: (p: string[]) => void
-}) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const togglePlatform = (p: string) => {
-        if (selected.includes(p)) {
-            onChange(selected.filter(s => s !== p));
-        } else {
-            onChange([...selected, p]);
-        }
-    };
-
-    const handleReset = () => {
-        onChange(platforms);
-    };
-
-    const handleClear = () => {
-        onChange([]);
-    };
-
-    let label = "Select Platforms";
-    if (selected.length === platforms.length && platforms.length > 0) label = "All Platforms Visible";
-    else if (selected.length === 0) label = "Hidden (None)";
-    else if (selected.length === 1) label = selected[0];
-    else label = `${selected.length} Platforms Visible`;
-
-    return (
-        <div className="relative" ref={dropdownRef}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-medium text-gray-700 shadow-sm hover:border-indigo-300 transition-all"
-            >
-                <div className="flex items-center gap-2 truncate">
-                    <Layers className="w-4 h-4 text-indigo-500" />
-                    <span className="truncate">{label}</span>
-                </div>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {isOpen && (
-                <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-left">
-                    <div className="p-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Visibility</span>
-                        <div className="flex gap-3">
-                            <button onClick={handleClear} className="text-[10px] font-medium text-gray-500 hover:text-red-600">Clear</button>
-                            <button onClick={handleReset} className="text-[10px] font-medium text-indigo-600 hover:text-indigo-700 hover:underline">All</button>
-                        </div>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto p-1">
-                        {platforms.map(p => {
-                            const isSelected = selected.includes(p);
-                            return (
-                                <button
-                                    key={p}
-                                    onClick={() => togglePlatform(p)}
-                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors text-left group"
-                                >
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all flex-shrink-0 ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
-                                        {isSelected && <Check className="w-3 h-3 text-white" />}
-                                    </div>
-                                    <span className={`text-xs truncate ${isSelected ? 'font-medium text-gray-900' : 'font-medium text-gray-600'}`}>{p}</span>
-                                </button>
-                            )
-                        })}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
 
 export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
     trendData,
@@ -426,29 +339,29 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                         {isAlertRulesOpen && (<div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"><div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h4 className="font-bold text-gray-900 text-sm">Alert Thresholds</h4><button onClick={() => setIsAlertRulesOpen(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="space-y-4"><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Revenue Drop Threshold (%)</label><input type="number" value={alertRules.revenueDropPctThreshold} onChange={e => setAlertRules({ ...alertRules, revenueDropPctThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Low Margin Threshold (%)</label><input type="number" value={alertRules.marginLowThreshold} onChange={e => setAlertRules({ ...alertRules, marginLowThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">High TACoS Threshold (%)</label><input type="number" value={alertRules.tacosHighThreshold} onChange={e => setAlertRules({ ...alertRules, tacosHighThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div></div><div className="mt-6 flex gap-2"><button onClick={() => setIsAlertRulesOpen(false)} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-medium text-xs">Save</button></div></div>)}
                     </div>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="tbl w-full text-left text-sm whitespace-nowrap">
+                <div className="sello-table-scroll">
+                    <table className="sello-table">
                         <thead className="sticky top-0">
                             <tr>
-                                <SortableHeader label="Rank" sortKey="rank" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="center" className="w-10" />
-                                <SortableHeader label="Platform Performance" sortKey="name" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" />
-                                <SortableHeader label="Revenue" sortKey="revenue" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
-                                <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
-                                <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
-                                <SortableHeader label="Quality (Refunds)" sortKey="refunds" sort={tableSort} onChange={setTableSort} themeColor="#6366f1" align="right" />
-                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Risk Analysis</th>
+                                <SortableHeader label="Rank" sortKey="rank" sort={tableSort} onChange={setTableSort} align="center" style={{ width: 40 }} />
+                                <SortableHeader label="Platform Performance" sortKey="name" sort={tableSort} onChange={setTableSort} />
+                                <SortableHeader label="Revenue" sortKey="revenue" sort={tableSort} onChange={setTableSort} align="right" />
+                                <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={tableSort} onChange={setTableSort} align="right" />
+                                <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={tableSort} onChange={setTableSort} align="right" />
+                                <SortableHeader label="Quality (Refunds)" sortKey="refunds" sort={tableSort} onChange={setTableSort} align="right" />
+                                <th className="c">Risk Analysis</th>
                             </tr>
                         </thead>
                         <tbody>
                             {portfolioAverages && (
                                 <tr className="bg-indigo-50/50 border-b border-indigo-100 shadow-inner">
-                                    <td className="px-4 py-3 text-center"><Activity className="w-4 h-4 text-indigo-400 mx-auto" /></td>
-                                    <td className="px-4 py-3"><div className="font-black text-indigo-900 text-xs italic">PORTFOLIO AVERAGE</div></td>
-                                    <td className="px-4 py-3 text-right"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatSmartMoney(portfolioAverages.revenue)}</span><TrendDeltaPill value={portfolioAverages.revenueDelta} /></div></td>
-                                    <td className="px-4 py-3 text-right"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatPct(portfolioAverages.margin)}</span><TrendDeltaPill value={portfolioAverages.marginDelta} isPp /></div></td>
-                                    <td className="px-4 py-3 text-right"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatPct(portfolioAverages.tacos)}</span><TrendDeltaPill value={portfolioAverages.tacosDelta} isPp invert /></div></td>
-                                    <td className="px-4 py-3 text-right"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatPct(portfolioAverages.refundRate)}</span><TrendDeltaPill value={portfolioAverages.refundRateDelta} isPp invert /></div></td>
-                                    <td className="px-4 py-3 text-center"><span className="text-[10px] font-bold text-indigo-400 uppercase italic">System Baseline</span></td>
+                                    <td className="c"><Activity className="w-4 h-4 text-indigo-400 mx-auto" /></td>
+                                    <td><div className="font-black text-indigo-900 text-xs italic">PORTFOLIO AVERAGE</div></td>
+                                    <td className="r"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatSmartMoney(portfolioAverages.revenue)}</span><TrendDeltaPill value={portfolioAverages.revenueDelta} /></div></td>
+                                    <td className="r"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatPct(portfolioAverages.margin)}</span><TrendDeltaPill value={portfolioAverages.marginDelta} isPp /></div></td>
+                                    <td className="r"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatPct(portfolioAverages.tacos)}</span><TrendDeltaPill value={portfolioAverages.tacosDelta} isPp invert /></div></td>
+                                    <td className="r"><div className="flex flex-col items-end"><span className="font-bold text-indigo-900">{formatPct(portfolioAverages.refundRate)}</span><TrendDeltaPill value={portfolioAverages.refundRateDelta} isPp invert /></div></td>
+                                    <td className="c"><span className="text-[10px] font-bold text-indigo-400 uppercase italic">System Baseline</span></td>
                                 </tr>
                             )}
                             {rankedPlatforms.map((row) => {
@@ -464,26 +377,26 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                                 const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
 
                                 const flags: Flag[] = [];
-                                if (isRevWarning) flags.push({ label: "Growth Drop", style: "bg-red-100 text-red-800 border-red-200", tooltip: `Revenue down ${revDelta?.toFixed(1)}%` });
-                                if (isMarginCritical) flags.push({ label: "Low Margin", style: "bg-amber-100 text-amber-800 border-amber-200", tooltip: "Below efficiency target" });
-                                if (isTacosHigh) flags.push({ label: "High Ad Costs", style: "bg-purple-100 text-purple-800 border-purple-200", tooltip: "Ad spend above threshold" });
-                                if (isRefundHigh) flags.push({ label: "High Returns", style: "bg-orange-100 text-orange-800 border-orange-200", tooltip: "Quality/Fulfillment issues detected" });
-                                if (row.current.netProfit < 0) flags.push({ label: "Bleeding", style: "bg-red-900 text-white border-red-950 shadow-sm", tooltip: "Operating at a net loss" });
+                                if (isRevWarning) flags.push({ label: "Growth Drop", style: "badge-red", tooltip: `Revenue down ${revDelta?.toFixed(1)}%` });
+                                if (isMarginCritical) flags.push({ label: "Low Margin", style: "badge-amber", tooltip: "Below efficiency target" });
+                                if (isTacosHigh) flags.push({ label: "High Ad Costs", style: "badge-purple", tooltip: "Ad spend above threshold" });
+                                if (isRefundHigh) flags.push({ label: "High Returns", style: "badge-orange", tooltip: "Quality/Fulfillment issues detected" });
+                                if (row.current.netProfit < 0) flags.push({ label: "Bleeding", style: "badge-red", tooltip: "Operating at a net loss" });
                                 return (
                                     <tr key={row.platform} className={`cursor-pointer ${hoveredPlatform === row.platform ? 'bg-indigo-50/40 ring-1 ring-inset ring-indigo-200' : ''}`} onMouseEnter={() => setHoveredPlatform(row.platform)} onMouseLeave={() => setHoveredPlatform(null)}>
-                                        <td className="p-4 text-center"><div className="flex flex-col items-center gap-0.5"><div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-black border border-gray-200">{row.currentPos}</div>{row.shift !== 0 ? (<div className={`text-[8px] font-black flex items-center ${row.shift > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{row.shift > 0 ? <ArrowUp className="w-2 h-2" /> : <ArrowDown className="w-2 h-2" />}{Math.abs(row.shift)}</div>) : <Minus className="w-2 h-2 text-gray-300" />}</div></td>
-                                        <td className="p-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white shadow-sm" style={{ backgroundColor: rule?.color || '#6366f1' }}>{row.platform[0]}</div><div className="flex flex-col"><div className="font-bold text-gray-900 text-sm leading-none">{row.platform}</div><div className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-wider">{rule?.manager || 'Unassigned'}</div></div></div></td>
-                                        <td className={`p-4 text-right transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}>
+                                        <td className="c"><div className="flex flex-col items-center gap-0.5"><div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-black border border-gray-200">{row.currentPos}</div>{row.shift !== 0 ? (<div className={`text-[8px] font-black flex items-center ${row.shift > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{row.shift > 0 ? <ArrowUp className="w-2 h-2" /> : <ArrowDown className="w-2 h-2" />}{Math.abs(row.shift)}</div>) : <Minus className="w-2 h-2 text-gray-300" />}</div></td>
+                                        <td><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white shadow-sm" style={{ backgroundColor: rule?.color || '#6366f1' }}>{row.platform[0]}</div><div className="flex flex-col"><div className="font-bold text-gray-900 text-sm leading-none">{row.platform}</div><div className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-wider">{rule?.manager || 'Unassigned'}</div></div></div></td>
+                                        <td className={`r transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}>
                                             <div className="flex flex-col items-end">
                                                 <span className="font-bold text-gray-900">{formatSmartMoney(row.current.revenue)}</span>
                                                 {isCostBased && <span className="text-[8px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded border border-slate-200 cursor-help" title="Cost-based Revenue">Cost Basis</span>}
                                                 <TrendDeltaPill value={revDelta} />
                                             </div>
                                         </td>
-                                        <td className={`p-4 text-right transition-colors ${isMarginCritical ? 'bg-amber-50/30' : ''}`}><div className="flex flex-col items-end"><span className={`font-black ${row.current.marginPct < 15 ? 'text-amber-500' : 'text-emerald-600'}`}>{formatPct(row.current.marginPct)}</span><TrendDeltaPill value={marginDelta} isPp /></div></td>
-                                        <td className={`p-4 text-right transition-colors ${isTacosHigh ? 'bg-purple-50/30' : ''}`}><div className="flex flex-col items-end"><span className="font-medium text-gray-700">{formatPct(row.current.tacosPct)}</span><TrendDeltaPill value={tacosDelta} isPp invert /></div></td>
-                                        <td className={`p-4 text-right transition-colors ${isRefundHigh ? 'bg-orange-50/30' : ''}`}><div className="flex flex-col items-end"><span className="font-medium text-gray-700">{formatPct(row.current.refundRatePct)}</span><TrendDeltaPill value={refundDelta} isPp invert /></div></td>
-                                        <td className="p-4 text-center"><div className="flex justify-center gap-1.5 flex-wrap min-w-[120px]">{flags.length > 0 ? flags.map((flag, idx) => (<span key={idx} className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border cursor-help shadow-xs ${flag.style}`} title={flag.tooltip}>{flag.label}</span>)) : (<span className="px-2 py-0.5 rounded text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 uppercase">Healthy</span>)}</div></td>
+                                        <td className={`r transition-colors ${isMarginCritical ? 'bg-amber-50/30' : ''}`}><div className="flex flex-col items-end"><span className={`font-black ${row.current.marginPct < 15 ? 'text-amber-500' : 'text-emerald-600'}`}>{formatPct(row.current.marginPct)}</span><TrendDeltaPill value={marginDelta} isPp /></div></td>
+                                        <td className={`r transition-colors ${isTacosHigh ? 'bg-purple-50/30' : ''}`}><div className="flex flex-col items-end"><span className="font-medium text-gray-700">{formatPct(row.current.tacosPct)}</span><TrendDeltaPill value={tacosDelta} isPp invert /></div></td>
+                                        <td className={`r transition-colors ${isRefundHigh ? 'bg-orange-50/30' : ''}`}><div className="flex flex-col items-end"><span className="font-medium text-gray-700">{formatPct(row.current.refundRatePct)}</span><TrendDeltaPill value={refundDelta} isPp invert /></div></td>
+                                        <td className="c"><div className="flex justify-center gap-1.5 flex-wrap min-w-[120px]">{flags.length > 0 ? flags.map((flag, idx) => (<span key={idx} className={`sello-badge ${flag.style} cursor-help`} title={flag.tooltip}>{flag.label}</span>)) : (<span className="sello-badge badge-green">Healthy</span>)}</div></td>
                                     </tr>
                                 );
                             })}
@@ -499,7 +412,13 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                         <div>
                             <span className="text-[10px] font-medium text-gray-400 uppercase block mb-3 tracking-widest">Focus Platforms</span>
-                            <FocusPlatformDropdown platforms={uniquePlatforms} selected={selectedChartPlatforms} onChange={setSelectedChartPlatforms} />
+                            <SelectFilter
+                                label="Platforms"
+                                icon={Layers}
+                                options={uniquePlatforms}
+                                selected={selectedChartPlatforms}
+                                onChange={setSelectedChartPlatforms}
+                            />
                         </div>
                         <div>
                             <span className="text-[10px] font-medium text-gray-400 uppercase block mb-3 tracking-widest">Processing</span>

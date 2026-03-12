@@ -434,7 +434,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                 <h2 className="text-2xl font-bold text-gray-900">{promo.name}</h2>
                                 <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                                     <span className="flex items-center gap-1 font-medium"><Target className="w-4 h-4" /> {promo.platform}</span>
-                                    <span className="text-xs font-black uppercase bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100">{promo.promotionScope || 'SKU'} SCOPE</span>
+                                    <span className="sello-badge badge-indigo">{promo.promotionScope || 'SKU'} SCOPE</span>
                                 </div>
                             </div>
                             <div className="flex flex-col items-end gap-2">
@@ -479,35 +479,35 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                             </div>
                         )}
 
-                        <table className="tbl w-full text-left text-sm whitespace-nowrap bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                        <table className="sello-table">
                             <thead>
                                 <tr>
-                                    <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                    <th className="p-4 text-right">Baseline Price</th>
-                                    <th className="p-4">{isSkuScope ? 'Discount Type' : 'Rule Status'}</th>
-                                    <th className="p-4 text-right">{isSkuScope ? 'Value' : ''}</th>
-                                    <th className="p-4 text-right">Effective Promo Price</th>
-                                    <th className="p-4 text-right">Proj. Margin</th>
-                                    <th className="p-4 text-right w-10"></th>
+                                    <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} />
+                                    <th className="r">Baseline Price</th>
+                                    <th>{isSkuScope ? 'Discount Type' : 'Rule Status'}</th>
+                                    <th className="r">{isSkuScope ? 'Value' : ''}</th>
+                                    <th className="r">Effective Promo Price</th>
+                                    <th className="r">Proj. Margin</th>
+                                    <th className="r" style={{ width: 40 }}></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {sortedItems.map((item: any) => (
                                     <tr key={item.sku} className="group">
-                                        <td className="p-4">
+                                        <td>
                                             <div className="flex items-center gap-1">
                                                 <div className="font-bold text-gray-900">{item.sku}</div>
                                                 <GradeBadge gradeLevel={item.product?.gradeLevel} />
                                                 {item.isIncomplete && (
-                                                    <span className="ml-2 text-[8px] bg-red-100 text-red-700 px-1 py-0.5 rounded-full font-black uppercase flex items-center gap-1 border border-red-200">
+                                                    <span className="sello-badge badge-red ml-2">
                                                         <AlertCircle className="w-2.5 h-2.5" /> Incomplete
                                                     </span>
                                                 )}
                                             </div>
                                             <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[150px]">{item.product?.name}</div>
                                         </td>
-                                        <td className="p-4 text-right text-gray-500 font-medium">{formatSmartMoney(item.baselinePrice)}</td>
-                                        <td className="p-4">
+                                        <td className="r text-gray-500 font-medium">{formatSmartMoney(item.baselinePrice)}</td>
+                                        <td>
                                             {isSkuScope ? (
                                                 <select 
                                                     value={item.discountType || 'FIXED_PRICE'}
@@ -524,7 +524,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="p-4 text-right">
+                                        <td className="r">
                                             {isSkuScope && (
                                                 <input 
                                                     type="number"
@@ -535,18 +535,18 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                                 />
                                             )}
                                         </td>
-                                        <td className="p-4 text-right">
+                                        <td className="r">
                                             <div className="flex flex-col items-end">
                                                 <span className="text-sm font-black text-gray-900">{formatSmartMoney(item.promoPrice)}</span>
                                                 <span className="text-[9px] font-bold text-red-500">-{item.discountPercent.toFixed(1)}% OFF</span>
                                             </div>
                                         </td>
-                                        <td className="p-4 text-right">
-                                            <span className={`px-2 py-1 rounded text-xs font-bold border ${item.projectedMargin > 20 ? 'bg-green-100 text-green-700 border-green-200' : item.projectedMargin > 0 ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                                        <td className="r">
+                                            <span className={`sello-badge ${item.projectedMargin > 20 ? 'badge-green' : item.projectedMargin > 0 ? 'badge-green' : 'badge-red'}`}>
                                                 {item.projectedMargin !== null && item.projectedMargin !== undefined ? item.projectedMargin.toFixed(1) : '0.0'}%
                                             </span>
                                         </td>
-                                        <td className="p-4 text-right">
+                                        <td className="r">
                                             <button
                                                 onClick={() => onDeleteItem(item.sku)}
                                                 className="text-gray-300 hover:text-red-600 transition-colors p-1"
@@ -557,7 +557,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                     </tr>
                                 ))}
                                 {(!promo?.items || promo.items.length === 0) && (
-                                    <tr><td colSpan={7} className="p-12 text-center text-gray-400 italic">No SKUs nominated for this campaign.</td></tr>
+                                    <tr><td colSpan={7} className="c p-12 text-gray-400 italic">No SKUs nominated for this campaign.</td></tr>
                                 )}
                             </tbody>
                         </table>

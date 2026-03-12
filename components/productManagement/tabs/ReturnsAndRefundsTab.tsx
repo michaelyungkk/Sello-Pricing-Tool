@@ -505,17 +505,17 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         </h4>
                     </div>
                     <div className="overflow-auto flex-1">
-                        <table className="tbl w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                        <table className="sello-table">
                             <thead className="sticky top-0">
-                                <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                    <SortableHeader label="SKU / Product" sortKey="sku" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} />
-                                    <SortableHeader label="Return QTY" sortKey="refundQty" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Return QTY%" sortKey="refundRate" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Return AMT" sortKey="refundValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <SortableHeader label="Return AMT%" sortKey="refundRateValue" sort={triageSortConfig} onChange={setTriageSortConfig} themeColor={themeColor} align="right" />
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Top Reason</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Flags</th>
+                                <tr>
+                                    <th className="c">Detail</th>
+                                    <SortableHeader label="SKU / Product" sortKey="sku" sort={triageSortConfig} onChange={setTriageSortConfig} />
+                                    <SortableHeader label="Return QTY" sortKey="refundQty" sort={triageSortConfig} onChange={setTriageSortConfig} align="right" />
+                                    <SortableHeader label="Return QTY%" sortKey="refundRate" sort={triageSortConfig} onChange={setTriageSortConfig} align="right" tint="red" />
+                                    <SortableHeader label="Return AMT" sortKey="refundValue" sort={triageSortConfig} onChange={setTriageSortConfig} align="right" />
+                                    <SortableHeader label="Return AMT%" sortKey="refundRateValue" sort={triageSortConfig} onChange={setTriageSortConfig} align="right" tint="red" />
+                                    <th>Top Reason</th>
+                                    <th>Flags</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -524,7 +524,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                         const isInvalidSku = !row.sku || row.sku === 'Unknown' || row.sku === 'Freight';
                                         return (
                                             <tr key={row.sku} className="group">
-                                                <td className="px-4 py-4 text-center">
+                                                <td className="c">
                                                     <button
                                                         onClick={() => !isInvalidSku && handleDeepDiveClick(row.sku)}
                                                         className={`p-1.5 rounded-lg transition-colors ${isInvalidSku ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
@@ -534,29 +534,29 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                         <Search className="w-4 h-4" />
                                                     </button>
                                                 </td>
-                                                <td className="px-4 py-4">
+                                                <td>
                                                     <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{row.sku}</div>
                                                     <div className="text-[10px] text-gray-500 truncate max-w-[200px]">{row.title}</div>
                                                 </td>
-                                                <td className="px-4 py-4 text-right font-bold text-gray-800">{row.refundQty}</td>
-                                                <td className="px-4 py-4 text-right font-mono">
+                                                <td className="r font-bold text-gray-800">{row.refundQty}</td>
+                                                <td className="r col-red font-mono">
                                                     {row.refundRate !== null
                                                         ? <span className="text-gray-600">{row.refundRate.toFixed(1)}%</span>
                                                         : <span className="text-gray-300">-</span>
                                                     }
                                                 </td>
-                                                <td className="px-4 py-4 text-right font-bold text-gray-800">{formatSmartMoney(row.refundValue)}</td>
-                                                <td className="px-4 py-4 text-right font-mono">
+                                                <td className="r font-bold text-gray-800">{formatSmartMoney(row.refundValue)}</td>
+                                                <td className="r col-red font-mono">
                                                     {row.refundRateValue !== null
                                                         ? <span className="text-gray-600">{(row.refundRateValue || 0).toFixed(1)}%</span>
                                                         : <span className="text-gray-300">-</span>
                                                     }
                                                 </td>
-                                                <td className="px-4 py-4 text-gray-600 truncate max-w-[180px]" title={parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}>
+                                                <td className="text-gray-600 truncate max-w-[180px]" title={parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}>
                                                     {parseReturnsReason(row.topReasons[0]?.reason).description || 'Unknown'}
                                                     {row.topReasons[0] && <span className="text-gray-400 ml-1 text-xs">({row.topReasons[0].count})</span>}
                                                 </td>
-                                                <td className="px-4 py-4">
+                                                <td>
                                                     <div className="flex gap-1 flex-wrap">
                                                         {row.flags.map((flag: string) => (
                                                             <span key={flag} className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] rounded border border-red-200 font-bold uppercase whitespace-nowrap">
@@ -595,32 +595,32 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
 
                 <div className="p-6">
                     <div className="overflow-auto border border-gray-100 rounded-lg max-h-[400px]">
-                        <table className="tbl w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                        <table className="sello-table">
                             <thead className="sticky top-0">
                                 {viewMode === 'reason' ? (
-                                    <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                        <SortableHeader label="Reason" sortKey="reason" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">SKUs Affected</th>
+                                    <tr>
+                                        <SortableHeader label="Reason" sortKey="reason" sort={sortConfig} onChange={setSortConfig} />
+                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} align="right" />
+                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} align="right" tint="red" />
+                                        <th className="r">SKUs Affected</th>
                                     </tr>
                                 ) : viewMode === 'product' ? (
-                                    <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                        <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Top Reason</th>
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right w-12">Action</th>
+                                    <tr>
+                                        <SortableHeader label="SKU" sortKey="sku" sort={sortConfig} onChange={setSortConfig} />
+                                        <SortableHeader label="Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} align="right" />
+                                        <SortableHeader label="Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} align="right" tint="red" />
+                                        <th>Top Reason</th>
+                                        <th className="r" style={{ width: '3rem' }}>Action</th>
                                     </tr>
                                 ) : (
-                                    <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                        <th className="w-8"></th>
-                                        <SortableHeader label="Logistic Partner" sortKey="partner" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} />
-                                        <SortableHeader label="Complaint Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Share %" sortKey="countShare" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <SortableHeader label="Loss Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" />
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Primary Issue</th>
-                                        <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Action</th>
+                                    <tr>
+                                        <th style={{ width: '2rem' }}></th>
+                                        <SortableHeader label="Logistic Partner" sortKey="partner" sort={sortConfig} onChange={setSortConfig} />
+                                        <SortableHeader label="Complaint Count" sortKey="count" sort={sortConfig} onChange={setSortConfig} align="right" />
+                                        <SortableHeader label="Share %" sortKey="countShare" sort={sortConfig} onChange={setSortConfig} align="right" />
+                                        <SortableHeader label="Loss Value" sortKey="totalValue" sort={sortConfig} onChange={setSortConfig} align="right" tint="red" />
+                                        <th>Primary Issue</th>
+                                        <th className="r">Action</th>
                                     </tr>
                                 )}
                             </thead>
@@ -634,23 +634,23 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                             <tr className={`cursor-pointer ${isPartnerExpanded ? 'bg-indigo-50/20 border-l-2 border-indigo-500' : ''}`} onClick={() => viewMode === 'partner' && togglePartnerExpand(item.partner)}>
                                                 {viewMode === 'reason' ? (
                                                     <>
-                                                        <td className="px-4 py-4 font-medium text-gray-700 truncate max-w-xs" title={item.reason}>{item.reason}</td>
-                                                        <td className="px-4 py-4 text-right font-mono">{item.count}</td>
-                                                        <td className="px-4 py-4 text-right font-mono font-bold text-red-600">{formatSmartMoney(item.totalValue)}</td>
-                                                        <td className="px-4 py-4 text-right font-mono">{item.skus.size}</td>
+                                                        <td className="font-medium text-gray-700 truncate max-w-xs" title={item.reason}>{item.reason}</td>
+                                                        <td className="r font-mono">{item.count}</td>
+                                                        <td className="r font-mono font-bold text-red-600">{formatSmartMoney(item.totalValue)}</td>
+                                                        <td className="r font-mono">{item.skus.size}</td>
                                                     </>
                                                 ) : viewMode === 'product' ? (
                                                     <>
-                                                        <td className="px-4 py-4">
+                                                        <td>
                                                             <div className="font-mono font-bold text-gray-800">{item.sku}</div>
                                                             <div className="text-gray-500 truncate max-w-[150px]">{productLookup.get(item.sku)?.name || ''}</div>
                                                         </td>
-                                                        <td className="px-4 py-4 text-right font-mono">{item.count}</td>
-                                                        <td className="px-4 py-4 text-right font-mono font-bold text-red-600">{formatSmartMoney(item.totalValue)}</td>
-                                                        <td className="px-4 py-4 truncate max-w-[150px] text-gray-600">
+                                                        <td className="r font-mono">{item.count}</td>
+                                                        <td className="r font-mono font-bold text-red-600">{formatSmartMoney(item.totalValue)}</td>
+                                                        <td className="truncate max-w-[150px] text-gray-600">
                                                             {parseReturnsReason(item.topReason).description || item.topReason}
                                                         </td>
-                                                        <td className="px-4 py-4 text-right">
+                                                        <td className="r">
                                                             <button
                                                                 onClick={() => !isInvalidSku && handleDeepDiveClick(item.sku)}
                                                                 className={`p-1.5 bg-white border rounded transition-all ${isInvalidSku ? 'opacity-20 grayscale cursor-not-allowed' : 'border-gray-200 hover:border-indigo-300 text-gray-400 hover:text-indigo-600'}`}
@@ -661,12 +661,12 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <td className="px-4 py-4 text-center cursor-pointer">
+                                                        <td className="c cursor-pointer">
                                                             {isPartnerExpanded ? <ChevronDown className="w-4 h-4 text-indigo-500" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                                                         </td>
-                                                        <td className="px-4 py-4 font-bold text-gray-800 cursor-pointer">{item.partner}</td>
-                                                        <td className="px-4 py-4 text-right font-mono">{item.count}</td>
-                                                        <td className="px-4 py-4 text-right font-mono text-gray-600">
+                                                        <td className="font-bold text-gray-800 cursor-pointer">{item.partner}</td>
+                                                        <td className="r font-mono">{item.count}</td>
+                                                        <td className="r font-mono text-gray-600">
                                                             <div className="flex items-center justify-end gap-2">
                                                                 <span>{item.countShare.toFixed(1)}%</span>
                                                                 <div className="w-12 h-1 bg-gray-100 rounded-full overflow-hidden">
@@ -674,11 +674,11 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="px-4 py-4 text-right font-mono font-bold text-red-600">{formatSmartMoney(item.totalValue)}</td>
-                                                        <td className="px-4 py-4 text-gray-600 truncate max-w-[200px]">
+                                                        <td className="r font-mono font-bold text-red-600">{formatSmartMoney(item.totalValue)}</td>
+                                                        <td className="text-gray-600 truncate max-w-[200px]">
                                                             {item.topReason}
                                                         </td>
-                                                        <td className="px-4 py-4 text-right">
+                                                        <td className="r">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); onAnalyzeCarrier(item.partner); }}
                                                                 className="p-1.5 bg-white border border-gray-200 rounded hover:border-indigo-300 text-gray-400 hover:text-indigo-600 transition-colors"
@@ -699,27 +699,27 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                                     <span>Service Breakdown for {item.partner}</span>
                                                                     <span>Breakdown based on imported transaction log</span>
                                                                 </div>
-                                                                 <table className="tbl w-full text-xs text-left border-separate border-spacing-0">
+                                                                 <table className="sello-table">
                                                                     <thead className="sticky top-0">
                                                                          <tr>
-                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Service Name</th>
-                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Refunds</th>
-                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Share %</th>
-                                                                            <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Value</th>
+                                                                            <th>Service Name</th>
+                                                                            <th className="r">Refunds</th>
+                                                                            <th className="r">Share %</th>
+                                                                            <th className="r">Value</th>
                                                                         </tr>
                                                                     </thead>
                                                                      <tbody>
                                                                         {item.servicesBreakdown.length > 0 ? (
                                                                             item.servicesBreakdown.map((srv: any, idx: number) => (
-                                                                                <tr key={idx} className="">
-                                                                                    <td className="px-3 py-1.5 font-mono text-gray-700">{srv.name || 'Unknown / Not Mapped'}</td>
-                                                                                    <td className="px-3 py-1.5 text-right font-bold">{srv.count}</td>
-                                                                                    <td className="px-3 py-1.5 text-right text-gray-500">{srv.share.toFixed(1)}%</td>
-                                                                                    <td className="px-3 py-1.5 text-right text-red-600">{formatSmartMoney(srv.value)}</td>
+                                                                                <tr key={idx}>
+                                                                                    <td className="font-mono text-gray-700">{srv.name || 'Unknown / Not Mapped'}</td>
+                                                                                    <td className="r font-bold">{srv.count}</td>
+                                                                                    <td className="r text-gray-500">{srv.share.toFixed(1)}%</td>
+                                                                                    <td className="r text-red-600">{formatSmartMoney(srv.value)}</td>
                                                                                 </tr>
                                                                             ))
                                                                         ) : (
-                                                                            <tr><td colSpan={4} className="px-4 py-4 text-center text-gray-400 italic">No service detail available. Re-import Sales Report to capture logistics names.</td></tr>
+                                                                            <tr><td colSpan={4} className="c p-4 text-gray-400 italic">No service detail available. Re-import Sales Report to capture logistics names.</td></tr>
                                                                         )}
                                                                     </tbody>
                                                                 </table>
@@ -750,28 +750,28 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                                                 </div>
                                                                             </div>
                                                                         )}
-                                                                         <table className="tbl w-full text-xs text-left border-separate border-spacing-0">
+                                                                         <table className="sello-table">
                                                                             <thead className="sticky top-0">
                                                                                  <tr>
-                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Date</th>
-                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Order ID</th>
-                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">SKU</th>
-                                                                                    <th className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Refund Amt</th>
+                                                                                    <th>Date</th>
+                                                                                    <th>Order ID</th>
+                                                                                    <th>SKU</th>
+                                                                                    <th className="r">Refund Amt</th>
                                                                                 </tr>
                                                                             </thead>
                                                                             <tbody>
                                                                                 {item.records.slice(0, 100).map((rec: RefundLog, rIdx: number) => (
-                                                                                    <tr key={rec.id || rIdx} className="">
-                                                                                        <td className="px-3 py-1.5 font-mono text-gray-600">{new Date(rec.date).toLocaleDateString()}</td>
-                                                                                        <td className="px-3 py-1.5 font-mono text-indigo-600 font-medium select-all cursor-text flex items-center gap-1">
+                                                                                    <tr key={rec.id || rIdx}>
+                                                                                        <td className="font-mono text-gray-600">{new Date(rec.date).toLocaleDateString()}</td>
+                                                                                        <td className="font-mono text-indigo-600 font-medium select-all cursor-text flex items-center gap-1">
                                                                                             {rec.orderId || '—'}
                                                                                         </td>
-                                                                                        <td className="px-3 py-1.5 font-mono text-gray-600">{rec.sku}</td>
-                                                                                        <td className="px-3 py-1.5 text-right text-gray-800">{formatSmartMoney(((rec.amount || 0) + (rec.freightAmount || 0)))}</td>
+                                                                                        <td className="font-mono text-gray-600">{rec.sku}</td>
+                                                                                        <td className="r text-gray-800">{formatSmartMoney(((rec.amount || 0) + (rec.freightAmount || 0)))}</td>
                                                                                     </tr>
                                                                                 ))}
                                                                                 {item.records.length > 100 && (
-                                                                                    <tr><td colSpan={4} className="px-3 py-1.5 text-center text-gray-400 italic">...and {item.records.length - 100} more</td></tr>
+                                                                                    <tr><td colSpan={4} className="c text-gray-400 italic">...and {item.records.length - 100} more</td></tr>
                                                                                 )}
                                                                             </tbody>
                                                                         </table>
@@ -790,7 +790,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                     </div>
                 </div>
                 {totalPages > 1 && (
-                    <div className="bg-gray-50/50 px-4 py-3 border-t border-custom-glass flex items-center justify-end">
+                    <div className="sello-table-footer" style={{ justifyContent: 'flex-end' }}>
                         <div className="flex gap-1">
                             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 border rounded-lg bg-white text-xs font-bold disabled:opacity-50">Prev</button>
                             <span className="px-3 py-1.5 text-xs text-gray-500 flex items-center">Page {currentPage} of {totalPages}</span>

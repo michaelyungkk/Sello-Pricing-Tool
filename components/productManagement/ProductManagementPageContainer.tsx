@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog } from '../../types';
 
-import { List, Ship, RotateCcw, DollarSign, Activity, Calendar, Columns, Layers } from 'lucide-react';
+import { List, Ship, RotateCcw, DollarSign, Activity, Columns, Layers } from 'lucide-react';
 
 import { MasterCatalogueTab } from './tabs/MasterCatalogueTab';
 import { ShipmentsTab } from './tabs/ShipmentsTab';
@@ -42,7 +42,7 @@ interface ProductManagementPageContainerProps {
 
 type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison' | 'family-groups';
 
-export const ProductManagementPageContainer: React.FC<ProductManagementPageContainerProps> = ({
+const ProductManagementPageContainerInner: React.FC<ProductManagementPageContainerProps> = ({
     products,
     pricingRules,
     priceHistoryMap = new Map(),
@@ -324,3 +324,5 @@ export const ProductManagementPageContainer: React.FC<ProductManagementPageConta
         </div>
     );
 };
+
+export const ProductManagementPageContainer = React.memo(ProductManagementPageContainerInner);

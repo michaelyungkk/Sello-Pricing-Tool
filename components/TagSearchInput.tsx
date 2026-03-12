@@ -10,6 +10,10 @@ interface TagSearchInputProps {
     themeColor: string;
 }
 
+/**
+ * @deprecated Use FilterBar with searchTags/onSearchTagsChange props instead.
+ * This component will be removed in a future cleanup pass.
+ */
 export const TagSearchInput: React.FC<TagSearchInputProps> = ({ tags, onTagsChange, onInputChange, placeholder, themeColor }) => {
     const [input, setInput] = useState('');
 

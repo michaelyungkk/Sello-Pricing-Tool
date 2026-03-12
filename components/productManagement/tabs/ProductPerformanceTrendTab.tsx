@@ -1,13 +1,12 @@
 
 import React, { useMemo, useState } from 'react';
-import { TrendingUp, TrendingDown, Package, Activity, Search, ArrowUpRight, ArrowDownRight, Minus, Trophy, AlertTriangle, ShieldAlert, Zap, LayoutGrid, List, Info, X } from 'lucide-react';
+import { Activity, Search, ArrowUpRight, ArrowDownRight, Minus, Trophy, LayoutGrid, List, Info, X } from 'lucide-react';
 import { Product, PriceLog, RefundLog } from '../../../types';
 import { aggregateProductTrends, ProductTrendData } from '../../../services/productTrendAgg';
-import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
+import { formatSmartMoney, formatPct } from '../../../utils/format';
 import { GradeBadge } from '../../GradeBadge';
 import { SortableHeader } from '../../common/SortableHeader';
 import AuditPanel from '../../AuditPanel';
-import { FilterBar } from '../../common/FilterBar';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { BcgMatrix } from '../parts/BcgMatrix';
 
@@ -221,18 +220,18 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
               </div>
             </div>
           </div>
-          <div className="overflow-x-auto pb-20">
-            <table className="tbl w-full text-left text-sm whitespace-nowrap">
+          <div className="sello-table-scroll" style={{ paddingBottom: '5rem' }}>
+            <table className="sello-table">
               <thead className="sticky top-0">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                  <SortableHeader label="Product SKU" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                  <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <SortableHeader label="Quality (Refunds)" sortKey="refund" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Flags</th>
+                  <th className="c">Detail</th>
+                  <SortableHeader label="Product SKU" sortKey="sku" sort={sort} onChange={setSort} />
+                  <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
+                  <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} align="right" />
+                  <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={sort} onChange={setSort} align="right" />
+                  <SortableHeader label="Ads (TACoS)" sortKey="tacos" sort={sort} onChange={setSort} align="right" />
+                  <SortableHeader label="Quality (Refunds)" sortKey="refund" sort={sort} onChange={setSort} align="right" />
+                  <th className="c">Flags</th>
                 </tr>
               </thead>
               <tbody>
@@ -243,7 +242,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
 
                   return (
                     <tr key={row.sku} className="group">
-                      <td className="p-4 text-center">
+                      <td className="c">
                         <button
                           onClick={() => onDeepDive(row.sku)}
                           className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-gray-200 shadow-none hover:shadow-sm transition-colors"
@@ -252,20 +251,20 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                           <Search className="w-4 h-4" />
                         </button>
                       </td>
-                      <td className="p-4">
+                      <td>
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-gray-900 font-mono text-sm leading-none">{row.sku}</span>
                           <GradeBadge gradeLevel={row.gradeLevel} />
                         </div>
                         <div className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-wider truncate max-w-[200px]">{row.name}</div>
                       </td>
-                      <td className={`p-4 text-right transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}>
+                      <td className={`r transition-colors ${isRevWarning ? 'bg-red-50/30' : ''}`}>
                         <div className="flex flex-col items-end">
                           <span className="font-bold text-gray-900">{formatSmartMoney(row.current.revenue)}</span>
                           <TrendDeltaPill value={row.deltas.revenueDeltaPct} />
                         </div>
                       </td>
-                      <td className="p-4 text-right font-medium">
+                      <td className="r font-medium">
                         <div className="flex flex-col items-end">
                           <span className={`font-bold ${row.current.netProfit >= 0 ? 'text-gray-700' : 'text-red-500'}`}>
                             {formatSmartMoney(row.current.netProfit)}
@@ -273,7 +272,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                           <TrendDeltaPill value={row.deltas.netProfitDeltaPct} />
                         </div>
                       </td>
-                      <td className={`p-4 text-right transition-colors ${isMarginCritical ? 'bg-amber-50/30' : ''}`}>
+                      <td className={`r transition-colors ${isMarginCritical ? 'bg-amber-50/30' : ''}`}>
                         <div className="flex flex-col items-end">
                           <span className={`font-black ${row.current.marginPct < 15 ? 'text-amber-500' : 'text-emerald-600'}`}>
                             {formatPct(row.current.marginPct)}
@@ -281,7 +280,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                           <TrendDeltaPill value={row.deltas.marginDeltaPp} isPp />
                         </div>
                       </td>
-                      <td className={`p-4 text-right transition-colors ${isTacosHigh ? 'bg-purple-50/30' : ''}`}>
+                      <td className={`r transition-colors ${isTacosHigh ? 'bg-purple-50/30' : ''}`}>
                         <div className="flex flex-col items-end">
                           <span className="font-medium text-gray-700">
                             {row.current.tacosPct !== null ? formatPct(row.current.tacosPct) : '—'}
@@ -289,13 +288,13 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                           <TrendDeltaPill value={row.deltas.tacosDeltaPp} isPp invert />
                         </div>
                       </td>
-                      <td className="p-4 text-right transition-colors">
+                      <td className="r transition-colors">
                         <div className="flex flex-col items-end">
                           <span className="font-medium text-gray-700">{formatPct(row.current.refundRatePct)}</span>
                           <TrendDeltaPill value={row.deltas.refundRateDeltaPp} isPp invert />
                         </div>
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="c">
                         <div className="flex justify-center gap-1.5 flex-wrap min-w-[100px]">
                           {isRevWarning && <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-red-100 text-red-800 border border-red-200 shadow-xs">Drop</span>}
                           {isMarginCritical && <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200 shadow-xs">Margin</span>}

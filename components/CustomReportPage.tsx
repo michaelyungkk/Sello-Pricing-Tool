@@ -1169,11 +1169,11 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             </div>
                         </div>
                     ) : (
-                        <table className="tbl w-full text-left border-collapse min-w-full table-auto">
+                        <table className="sello-table">
                             <thead className="sticky top-0 z-20">
                                 <tr>
                                     {reportResult.rowHeaders.map((rh, idx) => (
-                                        <th key={rh} rowSpan={2} className="sticky left-0 z-30 bg-[var(--glass-header-bg)] backdrop-blur-[12px] border-b border-r border-[rgba(229,231,235,0.55)] px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest w-[160px] min-w-[160px] max-w-[160px] truncate shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]" style={{ left: idx * 160 }}>
+                                        <th key={rh} rowSpan={2} className="pin truncate" style={{ left: idx * 160, width: 160, minWidth: 160, maxWidth: 160 }}>
                                             <div className="flex items-center justify-between cursor-pointer w-full">
                                                 <div className="flex items-center gap-2" onClick={() => handleSort(rh)}>
                                                     <span className="truncate">{getDimLabel(rh)}</span>
@@ -1205,7 +1205,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                 onDragOver={e => handleColDragOver(e, ch.id)}
                                                 onDragLeave={() => setDragOverCol(null)}
                                                 onDrop={handleColDrop}
-                                                style={{ borderLeft: dragOverCol === ch.id ? '2px solid var(--theme)' : '1px solid var(--glass-divider)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', cursor: 'grab', userSelect: 'none', opacity: dragColRef.current === ch.id ? 0.4 : 1, transition: 'border-color 0.1s' }}
+                                                style={{ borderLeft: dragOverCol === ch.id ? '2px solid var(--theme)' : '2px solid rgba(209,213,219,0.7)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', cursor: 'grab', userSelect: 'none', opacity: dragColRef.current === ch.id ? 0.4 : 1, transition: 'border-color 0.1s' }}
                                             >
                                                 <span style={platformBadgeStyle(hex)}>{ch.label}</span>
                                             </th>
@@ -1227,8 +1227,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                 <th
                                                     key={`${ch.id}_${m.id}`}
                                                     onClick={(e) => handleSort(`${ch.id}_${m.id}`, e)}
-                                                    className={`r ${colClass} ${isSorted ? 'sorted' : ''}`}
-                                                    style={{ borderLeft: mIdx === 0 ? '1px solid var(--glass-divider)' : undefined, minWidth: 80 }}
+                                                    className={`r metric-sub ${colClass} ${isSorted ? 'sorted' : ''}`}
+                                                    style={{ borderLeft: mIdx === 0 ? '2px solid rgba(209,213,219,0.7)' : undefined, minWidth: 80 }}
                                                 >
                                                     <div className="sw r" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -1255,7 +1255,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             <th
                                                 key={`total_${m.id}`}
                                                 onClick={(e) => handleSort(`total_${m.id}`, e)}
-                                                className={`r ${colClass} ${isSorted ? 'sorted' : ''}`}
+                                                className={`r metric-sub ${colClass} ${isSorted ? 'sorted' : ''}`}
                                                 style={{ borderLeft: mIdx === 0 ? '2px solid rgba(79,70,229,0.15)' : undefined, minWidth: 80 }}
                                             >
                                                 <div className="sw r" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
@@ -1283,7 +1283,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
                                             if (dim === 'sku' && meta) {
                                                 return (
-                                                    <td key={pIdx} className="sticky left-0 z-10 bg-[var(--glass-bg)] group-hover:bg-[var(--glass-row-hover)] border-r border-[rgba(229,231,235,0.55)] px-4 py-[10px] shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px]" style={{ left: pIdx * 160 }}>
+                                                    <td key={pIdx} className="pin whitespace-nowrap" style={{ left: pIdx * 160, width: 160, minWidth: 160, maxWidth: 160 }}>
                                                         <div className="flex items-center gap-2 truncate">
                                                             <span className="font-bold text-gray-900 font-mono text-xs truncate">{meta.sku}</span>
                                                             <GradeBadge gradeLevel={meta.gradeLevel} />
@@ -1294,7 +1294,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             }
 
                                             return (
-                                                <td key={pIdx} className="sticky left-0 z-10 bg-[var(--glass-bg)] group-hover:bg-[var(--glass-row-hover)] border-r border-[rgba(229,231,235,0.55)] px-4 py-[10px] text-xs font-bold text-gray-900 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap w-[160px] min-w-[160px] max-w-[160px] truncate" style={{ left: pIdx * 160 }}>
+                                                <td key={pIdx} className="pin text-xs font-bold text-gray-900 whitespace-nowrap truncate" style={{ left: pIdx * 160, width: 160, minWidth: 160, maxWidth: 160 }}>
                                                     {part}
                                                 </td>
                                             );
@@ -1315,7 +1315,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                     : formatNumber(val);
 
                                                 return (
-                                                    <td key={`${ch.id}_${m.id}`} className={`r ${colClass}`} style={{ borderLeft: mIdx === 0 ? '1px solid var(--glass-divider)' : undefined }}>
+                                                    <td key={`${ch.id}_${m.id}`} className={`r ${colClass}`} style={{ borderLeft: mIdx === 0 ? '2px solid rgba(209,213,219,0.7)' : undefined }}>
                                                         {isEmpty
                                                             ? <span className="v-dim">—</span>
                                                             : <span className={isNeg ? 'v-neg' : 'v-num'}>{formatted}</span>

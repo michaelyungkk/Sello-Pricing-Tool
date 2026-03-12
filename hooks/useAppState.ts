@@ -54,24 +54,35 @@ import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../ser
 // Helper for recalculation
 const recalculateProductMetrics = (
     products: Product[],
-    history: PriceLog[],
+    historyOrMap: PriceLog[] | Map<string, PriceLog[]>,
     lookback: VelocityLookback,
     thresholds: ThresholdConfig,
     pricingRules?: PricingRules,
     brandMap?: AttributeMap,
     categoryMap?: AttributeMap
 ): Product[] => {
-    const historyMap = new Map<string, PriceLog[]>();
-    (history || []).forEach(h => {
-        if (!h || !h.sku) return;
-        if (!historyMap.has(h.sku)) historyMap.set(h.sku, []);
-        historyMap.get(h.sku)!.push(h);
-    });
+    let historyMap: Map<string, PriceLog[]>;
+    let historyArray: PriceLog[];
+
+    if (historyOrMap instanceof Map) {
+        historyMap = historyOrMap;
+        // Flatten map to array for the date range calculation below
+        historyArray = [];
+        historyOrMap.forEach(logs => historyArray.push(...logs));
+    } else {
+        historyArray = historyOrMap || [];
+        historyMap = new Map<string, PriceLog[]>();
+        historyArray.forEach(h => {
+            if (!h || !h.sku) return;
+            if (!historyMap.has(h.sku)) historyMap.set(h.sku, []);
+            historyMap.get(h.sku)!.push(h);
+        });
+    }
 
     let days = 30;
     if (lookback === 'ALL') {
-        if (history && history.length > 0) {
-            const daysArr = history.map(l => new Date(l.date).getTime()).filter(t => !isNaN(t));
+        if (historyArray.length > 0) {
+            const daysArr = historyArray.map(l => new Date(l.date).getTime()).filter(t => !isNaN(t));
             if (daysArr.length > 0) {
                 const minDate = Math.min(...daysArr);
                 const diff = Date.now() - minDate;
@@ -291,9 +302,14 @@ export const useAppState = () => {
         };
         loadDatabase();
 
+        let lastShowBackToTop = false;
         const handleScroll = () => {
             if (mainContentRef.current) {
-                setShowBackToTop(mainContentRef.current.scrollTop > 400);
+                const shouldShow = mainContentRef.current.scrollTop > 400;
+                if (shouldShow !== lastShowBackToTop) {
+                    lastShowBackToTop = shouldShow;
+                    setShowBackToTop(shouldShow);
+                }
             }
         };
 
@@ -370,7 +386,7 @@ export const useAppState = () => {
     }, [userProfile.backgroundImage, userProfile.backgroundColor, userProfile.themeColor, userProfile.glassMode]);
 
     const handleRefreshProductStatuses = useCallback((config: ThresholdConfig) => {
-        const recalculated = recalculateProductMetrics(products, salesHistory, velocityLookback, config, pricingRules, brandMap, categoryMap);
+        const recalculated = recalculateProductMetrics(products, priceHistoryMap, velocityLookback, config, pricingRules, brandMap, categoryMap);
         setProducts(recalculated);
     }, [products, salesHistory, velocityLookback, pricingRules, brandMap, categoryMap]);
 
@@ -756,7 +772,7 @@ export const useAppState = () => {
                     newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: toNumber(item.dailyAverageSales), leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, category: item.category || 'Uncategorized', brand: item.brand, dailyAverageSales: toNumber(item.dailyAverageSales) });
                 }
             });
-            return recalculateProductMetrics(newProducts, salesHistory, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
+            return recalculateProductMetrics(newProducts, priceHistoryMap, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
         });
 
         // Family Group Suggestion Step

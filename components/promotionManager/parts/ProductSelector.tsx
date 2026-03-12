@@ -113,10 +113,10 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
             </div>
 
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden max-h-[60vh] overflow-y-auto">
-                <table className="tbl w-full text-left text-sm">
+                <table className="sello-table">
                     <thead className="sticky top-0">
                         <tr>
-                            <th className="p-4 w-10">
+                            <th style={{ width: 40 }}>
                                 <div 
                                     className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all ${allSelected || isIndeterminate ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 bg-white'}`}
                                     onClick={toggleSelectAll}
@@ -125,10 +125,10 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
                                     {isIndeterminate && <Minus className="w-3.5 h-3.5 text-white" />}
                                 </div>
                             </th>
-                            <th className="p-4">SKU / Title</th>
-                            <th className="p-4 text-right">CA Price</th>
-                            <th className="p-4 text-right">Current Stock</th>
-                            <th className="p-4 text-right">Daily Vel.</th>
+                            <th>SKU / Title</th>
+                            <th className="r">CA Price</th>
+                            <th className="r">Current Stock</th>
+                            <th className="r">Daily Vel.</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -138,18 +138,18 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
                                 className={`group cursor-pointer ${selectedSkus.has(p.sku) ? 'bg-indigo-50/30' : ''}`}
                                 onClick={() => handleRowClick(p.sku)}
                             >
-                                <td className="p-4">
+                                <td>
                                     <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedSkus.has(p.sku) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 bg-white'}`}>
                                         {selectedSkus.has(p.sku) && <Check className="w-3.5 h-3.5 text-white" />}
                                     </div>
                                 </td>
-                                <td className="p-4">
+                                <td>
                                     <div className="font-bold text-gray-900">{p.sku}</div>
                                     <div className="text-xs text-gray-500 truncate max-w-[300px]">{p.name}</div>
                                 </td>
-                                <td className="p-4 text-right font-mono text-indigo-600 font-bold">{p.caPrice ? formatSmartMoney(p.caPrice) : '—'}</td>
-                                <td className="p-4 text-right text-gray-500 font-mono">{p.stockLevel}</td>
-                                <td className="p-4 text-right text-gray-500 font-mono">{(p.averageDailySales || 0).toFixed(1)}</td>
+                                <td className="r font-mono text-indigo-600 font-bold">{p.caPrice ? formatSmartMoney(p.caPrice) : '—'}</td>
+                                <td className="r text-gray-500 font-mono">{p.stockLevel}</td>
+                                <td className="r text-gray-500 font-mono">{(p.averageDailySales || 0).toFixed(1)}</td>
                             </tr>
                         ))}
                     </tbody>

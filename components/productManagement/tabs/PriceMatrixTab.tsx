@@ -208,27 +208,27 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                     </div>
 
                 </div>
-                <button onClick={handleExport} className="px-3 h-8 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2 text-xs font-bold whitespace-nowrap">
+                <button onClick={handleExport} className="sello-btn cta">
                     <Download className="w-4 h-4" /> Export CSV
                 </button>
             </div>
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-auto flex-1">
-                <table className="tbl tbl-compact w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                <table className="sello-table">
                     <thead className="sticky top-0">
-                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                            <th className="px-4 py-3 sticky left-0 z-30 bg-gray-50/80 backdrop-blur-sm min-w-[150px] border-r border-gray-200/50">Product Reference</th>
-                            <th className="px-4 py-3 sticky left-[150px] z-30 bg-gray-50/80 backdrop-blur-sm w-[80px] text-right border-r border-gray-200/50">CA Price</th>
-                            {platforms.map(p => <th key={p} className="px-4 py-3 text-center min-w-[120px] font-semibold text-gray-600 uppercase tracking-wider">{p}</th>)}
+                        <tr>
+                            <th className="pin" style={{ minWidth: 150 }}>Product Reference</th>
+                            <th className="pin r col-ca" style={{ left: 150, minWidth: 80 }}>CA Price</th>
+                            {platforms.map(p => <th key={p} className="c" style={{ minWidth: 120 }}>{p}</th>)}
                         </tr>
                     </thead>
                     <tbody>
                         {paginatedProducts.map(p => (
                             <tr key={p.id} className="group">
-                                <td className="px-4 py-4 sticky left-0 bg-white border-r border-gray-100/50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors group-hover:bg-gray-50/50">
+                                <td className="pin">
                                     <div className="font-mono font-bold text-gray-900 truncate max-w-[134px]">{p.sku}</div>
                                     <div className="text-[10px] text-gray-500 truncate max-w-[134px]">{p.name}</div>
                                 </td>
-                                <td className="px-4 py-4 sticky left-[150px] bg-white text-right font-medium text-purple-600 border-r border-gray-100/50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors group-hover:bg-gray-50/50">
+                                <td className="pin r v-ca" style={{ left: 150 }}>
                                     {p.caPrice ? formatSmartMoney(p.caPrice) : '-'}
                                 </td>
                                 {platforms.map(platform => {
@@ -257,7 +257,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                                     }
 
                                     return (
-                                        <td key={platform} className="px-4 py-4 text-center align-top border-r border-gray-50/50">
+                                        <td key={platform} className="c" style={{ verticalAlign: 'top' }}>
                                             {(channel || promo) ? (
                                                 <div className="flex flex-col items-center gap-1">
                                                     {isPromoActive ? (
@@ -289,7 +289,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                     </tbody>
                 </table>
                 {filtered.length > itemsPerPage && (
-                    <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6 sticky bottom-0">
+                    <div className="sello-table-footer" style={{ position: 'sticky', bottom: 0 }}>
                         <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                             <div className="flex items-center gap-4">
                                 <p className="text-sm text-gray-700">

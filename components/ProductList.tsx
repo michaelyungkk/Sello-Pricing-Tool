@@ -131,9 +131,9 @@ const ProductRow = React.memo(({
     const runwayWeeks = (product.daysRemaining || 0) / 7;
     const runwayBin = {
         label: runwayWeeks > 104 ? '> 2 Years' : `${runwayWeeks.toFixed(1)} Weeks`,
-        color: product.status === 'Critical' ? 'bg-red-50 text-red-600 border-red-200' :
-            product.status === 'Overstock' ? 'bg-orange-50 text-orange-600 border-orange-200' :
-                product.status === 'Warning' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-green-50 text-green-600 border-green-200'
+        color: product.status === 'Critical' ? 'badge-red' :
+            product.status === 'Overstock' ? 'badge-orange' :
+                product.status === 'Warning' ? 'badge-amber' : 'badge-green'
     };
 
     const isHighReturns = product.returnRate !== undefined && product.returnRate > 5;
@@ -266,7 +266,7 @@ const ProductRow = React.memo(({
                 onMouseLeave={handleMouseLeave}
             >
                 <div className="flex flex-col items-end gap-1.5">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded border text-xs font-bold whitespace-nowrap ${runwayBin.color}`}>
+                    <span className={`sello-badge ${runwayBin.color}`}>
                         {runwayBin.label}
                     </span>
                     <div className="flex items-center gap-1">
@@ -906,7 +906,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                 <div className="w-full xl:w-auto flex justify-end relative">
                     <button
                         onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-                        className="px-3 h-8 bg-white/50 border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
+                        className="sello-btn"
                     >
                         <Download className="w-3.5 h-3.5" />
                         Export List

@@ -1,10 +1,9 @@
 
 import React from 'react';
-import { Layers, Activity, Calendar, Search, Info, Rows, Settings2 } from 'lucide-react';
+import { Activity, Calendar, Search, Info, Rows } from 'lucide-react';
 import { SelectFilter } from '../../common/SelectFilter';
 import AuditPanel from '../../AuditPanel';
-import { GradeBadge } from '../../GradeBadge';
-import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
+import { formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { asDateKey } from '../../../services/dateUtils';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { Product } from '../../../types';
@@ -68,7 +67,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     calcProfit,
     calcAdSpend,
     marginPct,
-    product,
+    _product,
     adRedistributionSummary
 }) => {
     return (
@@ -229,19 +228,19 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             </div>
 
             <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden">
-                <div className="overflow-x-auto border rounded-lg">
-                    <table className="tbl tbl-compact w-full text-xs text-left whitespace-nowrap">
+                <div className="sello-table-scroll">
+                    <table className="sello-table">
                         <thead className="sticky top-0">
                             <tr>
-                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-left">Date</th>
-                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-left">Platform</th>
-                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Price</th>
-                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Qty</th>
-                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Revenue</th>
-                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Ex. Freight</th>
-                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Postage</th>
-                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Ads</th>
-                                <th className="px-3 py-1.5 text-[10px] font-semibold text-gray-600 uppercase tracking-wider text-right">Margin</th>
+                                <th>Date</th>
+                                <th>Platform</th>
+                                <th className="r">Price</th>
+                                <th className="r">Qty</th>
+                                <th className="r">Revenue</th>
+                                <th className="r">Ex. Freight</th>
+                                <th className="r">Postage</th>
+                                <th className="r">Ads</th>
+                                <th className="r">Margin</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -261,10 +260,10 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                         isRefund ? 'bg-red-50/40 text-red-900' :
                                         isZeroRev ? 'opacity-60 bg-gray-50/30' : ''
                                     }`}>
-                                        <td className="px-3 py-1.5 font-mono text-xs opacity-80">{new Date(tx.date).toLocaleDateString('en-GB')}</td>
-                                        <td className="px-3 py-1.5">
+                                        <td className="font-mono text-xs opacity-80">{new Date(tx.date).toLocaleDateString('en-GB')}</td>
+                                        <td>
                                             <div className="flex flex-col">
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border w-fit ${isAdRow ? 'bg-orange-100 border-orange-200 text-orange-800' : isRefund ? 'bg-red-100 border-red-200 text-red-800' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                <span className={`sello-badge ${isAdRow ? 'badge-orange' : isRefund ? 'badge-red' : tx.platform === 'Amazon' ? 'badge-amazon' : tx.platform === 'eBay' ? 'badge-ebay' : tx.platform === 'Etsy' ? 'badge-etsy' : 'badge-gray'}`}>
                                                     {tx.platform}
                                                 </span>
                                                 {isRefund && tx.reason && (
@@ -272,30 +271,30 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-3 py-1.5 text-right font-medium">
+                                        <td className="r font-medium">
                                             {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : formatSmartMoney(tx.price * VAT_MULTIPLIER)}
                                         </td>
-                                        <td className="px-3 py-1.5 text-right font-bold opacity-90">{formatNumber(tx.velocity)}</td>
-                                        <td className={`px-4 py-2 text-right ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
+                                        <td className="r font-bold opacity-90">{formatNumber(tx.velocity)}</td>
+                                        <td className={`r ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
                                             {formatSmartMoney(tx.price * tx.velocity * VAT_MULTIPLIER)}
                                         </td>
-                                        <td className="px-3 py-1.5 text-right text-green-600 font-medium">
+                                        <td className="r text-green-600 font-medium">
                                             {totalExtraFreight > 0 ? formatSmartMoney(totalExtraFreight) : '-'}
                                         </td>
-                                        <td className="px-3 py-1.5 text-right text-orange-600 font-medium">
+                                        <td className="r text-orange-600 font-medium">
                                             {totalPostage > 0 ? formatSmartMoney(totalPostage) : '-'}
                                         </td>
-                                        <td className="px-3 py-1.5 text-right text-orange-600 font-medium">
+                                        <td className="r text-orange-600 font-medium">
                                             {(tx.adsSpend || 0) > 0 ? formatSmartMoney(tx.adsSpend * VAT_MULTIPLIER) : '-'}
                                         </td>
-                                        <td className={`px-4 py-2 text-right font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-500' : 'text-emerald-600'}`}>
+                                        <td className={`r font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-500' : 'text-emerald-600'}`}>
                                             {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '—' : '-'}
                                         </td>
                                     </tr>
                                 );
                             })}
                             {paginatedTransactions.length === 0 && (
-                                <tr><td colSpan={9} className="p-8 text-center text-gray-400">No transactions match filters</td></tr>
+                                <tr><td colSpan={9} className="c p-8 text-gray-400">No transactions match filters</td></tr>
                             )}
                         </tbody>
                     </table>
