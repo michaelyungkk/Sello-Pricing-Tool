@@ -228,6 +228,11 @@
 .sello-table td.col-green { background: var(--col-green); }
 .sello-table td.col-red   { background: var(--col-red); }
 
+/* Shorthand aliases */
+.sello-table th.cb, .sello-table td.cb { background: var(--col-blue-h); }
+.sello-table th.cg, .sello-table td.cg { background: var(--col-green-h); }
+.sello-table th.cr, .sello-table td.cr { background: var(--col-red-h); }
+
 /* Sticky product column */
 .sello-table td.pin {
   position: sticky;

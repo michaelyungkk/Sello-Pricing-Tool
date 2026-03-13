@@ -1136,7 +1136,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             </div>
 
             {/* Table Container */}
-            <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col relative p-4">
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex-1 flex flex-col backdrop-blur-custom relative">
                 {needsGeneration && !isGenerating && !reportResult && (
                     <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
                         <button
