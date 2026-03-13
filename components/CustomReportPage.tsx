@@ -115,14 +115,264 @@ interface FilterRule {
     value: string | string[];
 }
 
+interface MetricInstance {
+    id: string;
+    metricId: string;
+    timeRange: string;
+    startDate?: string;
+    endDate?: string;
+    isHidden?: boolean;
+}
+
 interface CustomMetric {
     id: string;
     label: string;
+    formulaType: 'arithmetic' | 'share_of_total';
+    // arithmetic operands — instance ids (Mode A) or metricIds (Mode B)
     metricA: string;
-    metricB: string;
+    metricB?: string;
+    metricATime?: string; // Mode B standalone time
+    metricBTime?: string;
     operator: '+' | '-' | '*' | '/';
+    // share_of_total operand
+    shareMetric?: string;
+    shareMetricTime?: string;
     type: 'currency' | 'percent' | 'number';
 }
+
+// --- CUSTOM METRIC MODAL ---
+interface CustomMetricModalProps {
+    pendingMetrics: MetricInstance[];
+    onClose: () => void;
+    onCreate: (cm: CustomMetric) => void;
+}
+
+const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, onClose, onCreate }) => {
+    const [label, setLabel] = useState('');
+    const [formulaType, setFormulaType] = useState<'arithmetic' | 'share_of_total'>('arithmetic');
+    const [mode, setMode] = useState<'table' | 'standalone'>('table');
+    const [metricA, setMetricA] = useState(pendingMetrics[0]?.id || METRICS[0].id);
+    const [metricB, setMetricB] = useState(pendingMetrics[1]?.id || METRICS[1].id);
+    const [metricAStandalone, setMetricAStandalone] = useState(METRICS[0].id);
+    const [metricATime, setMetricATime] = useState('30d');
+    const [metricBStandalone, setMetricBStandalone] = useState(METRICS[1].id);
+    const [metricBTime, setMetricBTime] = useState('30d');
+    const [shareMetric, setShareMetric] = useState(pendingMetrics[0]?.id || METRICS[0].id);
+    const [shareMetricStandalone, setShareMetricStandalone] = useState(METRICS[0].id);
+    const [shareMetricTime, setShareMetricTime] = useState('30d');
+    const [operator, setOperator] = useState<'+' | '-' | '*' | '/'>('/');
+    const [displayType, setDisplayType] = useState<'currency' | 'percent' | 'number'>('number');
+
+    const labelCls = "text-[10px] font-bold text-gray-400 uppercase mb-1 block";
+    const selectCls = "w-full p-2 border border-gray-200 rounded-lg text-xs";
+
+    const handleCreate = () => {
+        if (!label.trim()) return;
+        const id = Math.random().toString(36).substr(2, 9);
+        if (formulaType === 'share_of_total') {
+            onCreate({
+                id, label, formulaType,
+                metricA: mode === 'table' ? shareMetric : shareMetricStandalone,
+                operator: '/',
+                shareMetric: mode === 'table' ? shareMetric : shareMetricStandalone,
+                shareMetricTime: mode === 'standalone' ? shareMetricTime : undefined,
+                type: displayType,
+            });
+        } else {
+            onCreate({
+                id, label, formulaType,
+                metricA: mode === 'table' ? metricA : metricAStandalone,
+                metricATime: mode === 'standalone' ? metricATime : undefined,
+                metricB: mode === 'table' ? metricB : metricBStandalone,
+                metricBTime: mode === 'standalone' ? metricBTime : undefined,
+                operator,
+                type: displayType,
+            });
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-100 rounded-lg">
+                        <Calculator className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900">Custom Metric</h3>
+                </div>
+                <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+                {/* Label */}
+                <div>
+                    <label className={labelCls}>Label</label>
+                    <input
+                        type="text"
+                        value={label}
+                        onChange={e => setLabel(e.target.value)}
+                        placeholder="e.g. Contribution Margin"
+                        className="w-full p-2 border border-gray-200 rounded-lg text-sm"
+                    />
+                </div>
+
+                {/* Formula Type */}
+                <div>
+                    <label className={labelCls}>Formula Type</label>
+                    <div className="flex gap-2">
+                        {(['arithmetic', 'share_of_total'] as const).map(ft => (
+                            <button
+                                key={ft}
+                                onClick={() => setFormulaType(ft)}
+                                className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${formulaType === ft ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-300'}`}
+                            >
+                                {ft === 'arithmetic' ? 'Arithmetic' : 'Share of Total'}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Mode */}
+                <div>
+                    <label className={labelCls}>Mode</label>
+                    <div className="flex gap-2">
+                        {(['table', 'standalone'] as const).map(m => (
+                            <button
+                                key={m}
+                                onClick={() => setMode(m)}
+                                className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${mode === m ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}
+                            >
+                                {m === 'table' ? 'From Table' : 'Standalone'}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Arithmetic fields */}
+                {formulaType === 'arithmetic' && (
+                    <div className="space-y-3">
+                        {mode === 'table' ? (
+                            <div className="grid grid-cols-3 gap-2 items-end">
+                                <div>
+                                    <label className={labelCls}>Metric A</label>
+                                    <select value={metricA} onChange={e => setMetricA(e.target.value)} className={selectCls}>
+                                        {pendingMetrics.map(m => (
+                                            <option key={m.id} value={m.id}>{METRICS.find(x => x.id === m.metricId)?.label || m.metricId} ({m.timeRange})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className={labelCls}>Op</label>
+                                    <select value={operator} onChange={e => setOperator(e.target.value as any)} className={selectCls}>
+                                        <option value="+">+</option><option value="-">-</option>
+                                        <option value="*">×</option><option value="/">/</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className={labelCls}>Metric B</label>
+                                    <select value={metricB} onChange={e => setMetricB(e.target.value)} className={selectCls}>
+                                        {pendingMetrics.map(m => (
+                                            <option key={m.id} value={m.id}>{METRICS.find(x => x.id === m.metricId)?.label || m.metricId} ({m.timeRange})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className={labelCls}>Metric A</label>
+                                        <select value={metricAStandalone} onChange={e => setMetricAStandalone(e.target.value)} className={selectCls}>
+                                            {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelCls}>Time Range</label>
+                                        <select value={metricATime} onChange={e => setMetricATime(e.target.value)} className={selectCls}>
+                                            {TIME_RANGES.filter(t => t.id !== 'custom').map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex justify-center">
+                                    <select value={operator} onChange={e => setOperator(e.target.value as any)} className="p-2 border border-gray-200 rounded-lg text-xs w-20 text-center">
+                                        <option value="+">+</option><option value="-">-</option>
+                                        <option value="*">×</option><option value="/">/</option>
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className={labelCls}>Metric B</label>
+                                        <select value={metricBStandalone} onChange={e => setMetricBStandalone(e.target.value)} className={selectCls}>
+                                            {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelCls}>Time Range</label>
+                                        <select value={metricBTime} onChange={e => setMetricBTime(e.target.value)} className={selectCls}>
+                                            {TIME_RANGES.filter(t => t.id !== 'custom').map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Share of Total fields */}
+                {formulaType === 'share_of_total' && (
+                    <div>
+                        {mode === 'table' ? (
+                            <div>
+                                <label className={labelCls}>Metric</label>
+                                <select value={shareMetric} onChange={e => setShareMetric(e.target.value)} className={selectCls}>
+                                    {pendingMetrics.map(m => (
+                                        <option key={m.id} value={m.id}>{METRICS.find(x => x.id === m.metricId)?.label || m.metricId} ({m.timeRange})</option>
+                                    ))}
+                                </select>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className={labelCls}>Metric</label>
+                                    <select value={shareMetricStandalone} onChange={e => setShareMetricStandalone(e.target.value)} className={selectCls}>
+                                        {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className={labelCls}>Time Range</label>
+                                    <select value={shareMetricTime} onChange={e => setShareMetricTime(e.target.value)} className={selectCls}>
+                                        {TIME_RANGES.filter(t => t.id !== 'custom').map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Display As */}
+                <div>
+                    <label className={labelCls}>Display As</label>
+                    <select value={displayType} onChange={e => setDisplayType(e.target.value as any)} className={selectCls}>
+                        <option value="currency">Currency</option>
+                        <option value="percent">Percent</option>
+                        <option value="number">Number</option>
+                    </select>
+                </div>
+            </div>
+            <div className="p-6 bg-gray-50 flex gap-3">
+                <button onClick={onClose} className="flex-1 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button
+                    onClick={handleCreate}
+                    disabled={!label.trim()}
+                    className="flex-1 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
+                >
+                    Create Metric
+                </button>
+            </div>
+        </div>
+    );
+};
 
 export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     products,
@@ -131,22 +381,46 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     pricingRules,
 }) => {
     // --- STATE ---
-    const [rowDims, setRowDims] = useState<string[]>(['sku']);
-    const [colDims, setColDims] = useState<string[]>(['platform']);
-    const [metrics, setMetrics] = useState<Array<{ id: string; metricId: string; timeRange: string; startDate?: string; endDate?: string }>>([
-        { id: Math.random().toString(36).substr(2, 9), metricId: 'units', timeRange: '30d' },
-        { id: Math.random().toString(36).substr(2, 9), metricId: 'revenue', timeRange: '30d' },
-        { id: Math.random().toString(36).substr(2, 9), metricId: 'profit', timeRange: '30d' }
-    ]);
 
+    // pendingMetrics = staging; metrics = last committed (used by generateReport)
+    const mkInst = (metricId: string): MetricInstance => ({ id: Math.random().toString(36).substr(2, 9), metricId, timeRange: '30d' });
+
+    // Lazy initialisers — read from localStorage once on mount, fall back to defaults
+    const [rowDims, setRowDims] = useState<string[]>(() => {
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.rowDims?.length) return d.rowDims; } catch {}
+        return ['sku'];
+    });
+    const [colDims, setColDims] = useState<string[]>(() => {
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.colDims?.length) return d.colDims; } catch {}
+        return ['platform'];
+    });
+    const [pendingMetrics, setPendingMetrics] = useState<MetricInstance[]>(() => {
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.pendingMetrics?.length) return d.pendingMetrics; } catch {}
+        return [mkInst('units'), mkInst('revenue'), mkInst('profit')];
+    });
+    const [pendingFilters, setPendingFilters] = useState<FilterRule[]>(() => {
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.pendingFilters?.length) return d.pendingFilters; } catch {}
+        return [];
+    });
+    const [reportName, setReportName] = useState<string>(() => {
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.reportName) return d.reportName; } catch {}
+        return 'New Custom Report';
+    });
+    const [sortRules, setSortRules] = useState<SortRule[]>(() => {
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.sortRules?.length) return d.sortRules; } catch {}
+        return [{ key: 'total_units', dir: 'desc' }];
+    });
+
+    const [metrics, setMetrics] = useState<MetricInstance[]>([]);
+
+    // filters = applied; pendingFilters = staging
     const [filters, setFilters] = useState<FilterRule[]>([]);
-    const [pendingFilters, setPendingFilters] = useState<FilterRule[]>([]);
     const [customMetrics, setCustomMetrics] = useState<CustomMetric[]>([]);
     const [isCustomMetricModalOpen, setIsCustomMetricModalOpen] = useState(false);
+    const [cmMode, setCmMode] = useState<'table' | 'standalone'>('table');
+    const [cmFormula, setCmFormula] = useState<'arithmetic' | 'share_of_total'>('arithmetic');
 
-    const [reportName, setReportName] = useState('New Custom Report');
     const [savedLayouts, setSavedLayouts] = useState<ReportLayout[]>(getReportLayouts());
-    const [sortRules, setSortRules] = useState<SortRule[]>([{ key: 'total_units', dir: 'desc' }]);
     const [activePopover, setActivePopover] = useState<string | null>(null);
 
     const [isGenerating, setIsGenerating] = useState(false);
@@ -162,8 +436,23 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     const [skuSearchInput, setSkuSearchInput] = useState('');
     const [colOrder, setColOrder] = useState<string[]>([]);
     const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+    const [isReorderOpen, setIsReorderOpen] = useState(false);
+    const [draftOrder, setDraftOrder] = useState<string[]>([]);
+    const [dragPanelOver, setDragPanelOver] = useState<number | null>(null);
+    const dragPanelIdx = useRef<number | null>(null);
     const dragColRef = useRef<string | null>(null);
     const dragOverColRef = useRef<string | null>(null);
+    const filtersRef = useRef<FilterRule[]>([]);
+
+    // Auto-save draft to localStorage whenever config changes
+    React.useEffect(() => {
+        try {
+            const draft = { rowDims, colDims, pendingMetrics, pendingFilters, reportName, sortRules };
+            localStorage.setItem('sello_custom_report_draft', JSON.stringify(draft));
+        } catch {}
+    }, [rowDims, colDims, pendingMetrics, pendingFilters, reportName, sortRules]);
+
+
 
     // Auto-generate report when changes occur and report already exists
     // REMOVED: Auto-refresh disabled per user request
@@ -203,33 +492,35 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     };
 
     const handleAddMetric = (metricId: string) => {
-        setMetrics([...metrics, {
+        setPendingMetrics(prev => [...prev, {
             id: Math.random().toString(36).substr(2, 9),
             metricId,
             timeRange: '30d'
         }]);
-        setNeedsGeneration(true);
     };
 
     const handleAddFilter = (field: string, type: 'dim' | 'metric') => {
         const newFilter: FilterRule = {
             id: Math.random().toString(36).substr(2, 9),
             type,
-            field,
+            field, // dim: field name; metric: metric instance id
             operator: type === 'dim' ? 'contains' : 'gt',
             value: ''
         };
-        setPendingFilters([...pendingFilters, newFilter]);
+        setPendingFilters(prev => [...prev, newFilter]);
     };
 
     const applyFilters = () => {
         const newFilters = [...pendingFilters];
+        const prevFilters = filtersRef.current;
+        filtersRef.current = newFilters;
         setFilters(newFilters);
-        setNeedsGeneration(true);
-        // Trigger immediate generation with new filters
-        setTimeout(() => {
-            generateReport(undefined, undefined, newFilters);
-        }, 0);
+        // Re-generate if dim filters changed in any way (added, removed, or value changed)
+        const prevHasDim = prevFilters.some(f => f.type === 'dim');
+        const newHasDim = newFilters.some(f => f.type === 'dim');
+        if (prevHasDim || newHasDim) {
+            setTimeout(() => generateReport(undefined, undefined, newFilters), 0);
+        }
     };
 
     const handleRemoveRowDim = (id: string) => {
@@ -243,8 +534,9 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     };
 
     const handleRemoveMetric = (id: string) => {
-        setMetrics(metrics.filter(m => m.id !== id));
-        setNeedsGeneration(true);
+        setPendingMetrics(prev => prev.filter(m => m.id !== id));
+        // Also remove any pending filters referencing this metric instance
+        setPendingFilters(prev => prev.filter(f => f.field !== id));
     };
 
     const handleRemoveFilter = (id: string) => {
@@ -257,7 +549,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             name: reportName,
             rowDims,
             colDims,
-            metrics,
+            metrics: pendingMetrics,
             updatedAt: new Date().toISOString()
         };
         saveReportLayout(layout);
@@ -267,6 +559,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     const handleLoadLayout = (layout: any) => {
         setRowDims(layout.rowDims || ['sku']);
         setColDims(layout.colDims || []);
+        setPendingMetrics(layout.metrics || []);
         setMetrics(layout.metrics || []);
         setFilters(layout.filters || []);
         setPendingFilters(layout.filters || []);
@@ -342,24 +635,28 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
         if (type === 'metric') {
             if (sourceZone === 'metrics') {
-                const next = [...metrics];
-                const oldIdx = next.findIndex(m => m.id === id);
-                const item = next[oldIdx];
-                next.splice(oldIdx, 1);
-                const insertIdx = targetIdx !== undefined ? targetIdx : next.length;
-                next.splice(insertIdx, 0, item);
-                setMetrics(next);
-            } else {
-                const next = [...metrics];
-                const insertIdx = targetIdx !== undefined ? targetIdx : next.length;
-                next.splice(insertIdx, 0, {
-                    id: Math.random().toString(36).substr(2, 9),
-                    metricId: id,
-                    timeRange: '30d'
+                setPendingMetrics(prev => {
+                    const next = [...prev];
+                    const oldIdx = next.findIndex(m => m.id === id);
+                    if (oldIdx < 0) return prev;
+                    const item = next[oldIdx];
+                    next.splice(oldIdx, 1);
+                    const insertIdx = targetIdx !== undefined ? targetIdx : next.length;
+                    next.splice(insertIdx, 0, item);
+                    return next;
                 });
-                setMetrics(next);
+            } else {
+                setPendingMetrics(prev => {
+                    const next = [...prev];
+                    const insertIdx = targetIdx !== undefined ? targetIdx : next.length;
+                    next.splice(insertIdx, 0, {
+                        id: Math.random().toString(36).substr(2, 9),
+                        metricId: id,
+                        timeRange: '30d'
+                    });
+                    return next;
+                });
             }
-            setNeedsGeneration(true);
         }
     };
 
@@ -376,9 +673,17 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     const generateReport = async (overrideRowDims?: string[], overrideColDims?: string[], overrideFilters?: FilterRule[]) => {
         const effectiveRowDims = overrideRowDims || rowDims;
         const effectiveColDims = overrideColDims || colDims;
-        const effectiveFilters = overrideFilters || filters;
 
-        if (effectiveRowDims.length === 0 || metrics.length === 0) return;
+        // Commit pendingMetrics → metrics on every generate
+        const committedMetrics = pendingMetrics.length > 0 ? pendingMetrics : metrics;
+        setMetrics(committedMetrics);
+
+        // Reset pending filters back to last applied (discard unapplied changes)
+        setPendingFilters([...filtersRef.current]);
+
+        const effectiveFilters = overrideFilters || filtersRef.current;
+
+        if (effectiveRowDims.length === 0 || committedMetrics.filter(m => !m.isHidden).length === 0) return;
         setIsGenerating(true);
 
         setTimeout(() => {
@@ -516,7 +821,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             const finalRows = Array.from(rowMap.values()).map(row => {
                 const data: any = { ...row };
 
-                const calculateMetricValue = (items: any[], mConfig: typeof metrics[0], rowSkus: Set<string>) => {
+                const calculateMetricValue = (items: any[], mConfig: MetricInstance, rowSkus: Set<string>) => {
                     const { start, end } = getDates(mConfig.timeRange, mConfig.startDate, mConfig.endDate);
                     const filtered = items.filter(l => {
                         const d = new Date(l.date);
@@ -570,13 +875,38 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 // Check custom metrics
                                 const custom = customMetrics.find(cm => cm.id === mId);
                                 if (custom) {
-                                    const valA: number = getBaseValue(custom.metricA);
-                                    const valB: number = getBaseValue(custom.metricB);
-                                    switch (custom.operator) {
-                                        case '+': return valA + valB;
-                                        case '-': return valA - valB;
-                                        case '*': return valA * valB;
-                                        case '/': return valB !== 0 ? valA / valB : 0;
+                                    if (custom.formulaType === 'share_of_total') {
+                                        const shareInst = committedMetrics.find(mi => mi.id === custom.shareMetric);
+                                        if (shareInst) {
+                                            const cellVal = calculateMetricValue(items, shareInst, rowSkus);
+                                            const totalVal = calculateMetricValue(row.totals, shareInst, rowSkus);
+                                            return totalVal !== 0 ? (cellVal / totalVal) * 100 : 0;
+                                        }
+                                        if (custom.shareMetricTime) {
+                                            const tempInst: MetricInstance = { id: '__temp__', metricId: custom.shareMetric!, timeRange: custom.shareMetricTime };
+                                            const cellVal = calculateMetricValue(items, tempInst, rowSkus);
+                                            const totalVal = calculateMetricValue(row.totals, tempInst, rowSkus);
+                                            return totalVal !== 0 ? (cellVal / totalVal) * 100 : 0;
+                                        }
+                                        return 0;
+                                    } else {
+                                        // arithmetic
+                                        const resolveOperand = (instId: string, standaloneTime?: string): number => {
+                                            if (standaloneTime) {
+                                                const tempInst: MetricInstance = { id: '__temp__', metricId: instId, timeRange: standaloneTime };
+                                                return calculateMetricValue(items, tempInst, rowSkus);
+                                            }
+                                            const inst = committedMetrics.find(mi => mi.id === instId);
+                                            return inst ? calculateMetricValue(items, inst, rowSkus) : 0;
+                                        };
+                                        const valA = resolveOperand(custom.metricA, custom.metricATime);
+                                        const valB = custom.metricB ? resolveOperand(custom.metricB, custom.metricBTime) : 0;
+                                        switch (custom.operator) {
+                                            case '+': return valA + valB;
+                                            case '-': return valA - valB;
+                                            case '*': return valA * valB;
+                                            case '/': return valB !== 0 ? valA / valB : 0;
+                                        }
                                     }
                                 }
                                 return 0;
@@ -589,13 +919,13 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
                 colHeaders.forEach(ch => {
                     const cellLogs = row.cells.get(ch.id) || [];
-                    metrics.forEach(m => {
+                    committedMetrics.forEach(m => {
                         data[`${ch.id}_${m.id}`] = calculateMetricValue(cellLogs, m, row.skus);
                     });
                 });
 
                 // Grand Totals
-                metrics.forEach(m => {
+                committedMetrics.forEach(m => {
                     data[`total_${m.id}`] = calculateMetricValue(row.totals, m, row.skus);
                 });
 
@@ -640,10 +970,9 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             rows = rows.filter(row => {
                 return filters.every(f => {
                     if (f.type === 'dim') return true; // Handled in generation
-
-                    const val = row[`total_${f.field}`] || 0;
+                    // f.field is the metric instance id — maps directly to total_${id}
+                    const val = row[`total_${f.field}`] ?? 0;
                     const targetVal = f.value;
-
                     switch (f.operator) {
                         case 'gt': return Number(val) > Number(targetVal);
                         case 'lt': return Number(val) < Number(targetVal);
@@ -762,381 +1091,384 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
     return (
         <div className="flex flex-col h-[calc(100vh-140px)] space-y-4 animate-in fade-in duration-500">
-            {/* Header */}
-            <div className="flex items-center justify-end shrink-0">
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setShowBuilder(!showBuilder)}
-                        className={`flex items-center gap-2 px-3 h-8 border rounded-lg text-xs font-bold transition-all shadow-sm ${showBuilder ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <Settings2 className="w-4 h-4" />
-                        {showBuilder ? 'Hide Builder' : 'Show Builder'}
-                    </button>
-                    <button
-                        onClick={() => generateReport()}
-                        disabled={!needsGeneration}
-                        className={`flex items-center gap-2 px-4 h-8 rounded-lg text-xs font-bold transition-all shadow-sm ${needsGeneration
-                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md'
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            {/* Builder Panel */}
+            <div className="relative z-50 bg-custom-glass rounded-xl border border-custom-glass shadow-md shrink-0 p-4" style={{backdropFilter:'var(--glass-blur)',WebkitBackdropFilter:'var(--glass-blur)'}}>
+
+                {/* Top row: Report Builder label + name + actions */}
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Report Builder</span>
+                        <span className="text-[11px] font-semibold text-gray-900 px-2.5 py-1 rounded-lg border" style={{background:'rgba(79,70,229,0.07)',borderColor:'rgba(79,70,229,0.18)',color:'#4f46e5'}}>
+                            {reportName || 'Untitled Report'}
+                        </span>
+                        <button
+                            onClick={() => setShowBuilder(!showBuilder)}
+                            className="text-[10px] font-bold text-gray-400 hover:text-indigo-600 transition-colors"
+                        >{showBuilder ? '▲ collapse' : '▼ expand'}</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleExport}
+                            disabled={!reportResult}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm disabled:opacity-40 transition-all"
+                            style={{borderColor:'rgba(209,213,219,0.8)'}}
+                        >
+                            <Download className="w-3.5 h-3.5" /> Export XLSX
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all"
+                            style={{borderColor:'rgba(209,213,219,0.8)'}}
+                        >
+                            <Save className="w-3.5 h-3.5" /> Save Layout
+                        </button>
+                        {savedLayouts.length > 0 && (
+                            <div className="relative group">
+                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all" style={{borderColor:'rgba(209,213,219,0.8)'}}>
+                                    <FolderOpen className="w-3.5 h-3.5" /> Load
+                                </button>
+                                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all">
+                                    {savedLayouts.map(layout => (
+                                        <button key={layout.id} onClick={() => handleLoadLayout(layout)} className="w-full text-left px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded truncate">{layout.name}</button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <button
+                            onClick={() => generateReport()}
+                            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[11px] font-bold shadow-sm transition-all ${
+                                (() => {
+                                    const needsNewGenerate = pendingMetrics.length !== metrics.length ||
+                                        pendingMetrics.some((m, i) => metrics[i]?.id !== m.id || metrics[i]?.timeRange !== m.timeRange);
+                                    return needsNewGenerate
+                                        ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse'
+                                        : needsGeneration
+                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed';
+                                })()
                             }`}
-                    >
-                        <Play className="w-4 h-4 fill-current" />
-                        Generate Report
-                    </button>
-                    {savedLayouts.length > 0 && (
-                        <div className="relative group">
-                            <button className="flex items-center gap-2 px-4 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm">
-                                <FolderOpen className="w-4 h-4" />
-                                Load
-                            </button>
-                            <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all animate-in slide-in-from-top-1">
-                                {savedLayouts.map(layout => (
-                                    <button
-                                        key={layout.id}
-                                        onClick={() => handleLoadLayout(layout)}
-                                        className="w-full text-left px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded truncate"
-                                    >
-                                        {layout.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    <button
-                        onClick={handleExport}
-                        disabled={!reportResult}
-                        className="flex items-center gap-2 px-4 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
-                    >
-                        <Download className="w-4 h-4" />
-                        Export
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        className="flex items-center gap-2 px-4 h-8 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm"
-                    >
-                        <Save className="w-4 h-4" />
-                        Save Layout
-                    </button>
+                        >
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            {reportResult ? 'Up to date' : 'Generate Report'}
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            {/* Builder Section (Top) */}
-            {showBuilder && (
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 shrink-0 transition-all">
-                    <div className="grid grid-cols-12 gap-6">
-                        {/* Source Palette */}
-                        <div className="col-span-4 border-r border-gray-100 pr-6 space-y-4">
-                            <div>
-                                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Dimensions</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {DIMENSIONS.map(dim => (
-                                        <div
-                                            key={dim.id}
-                                            draggable
-                                            onDragStart={(e) => onDragStart(e, dim.id, 'dim')}
-                                            className="flex items-center gap-2 px-2 py-1.5 rounded border border-gray-100 bg-gray-50 hover:border-indigo-200 hover:bg-indigo-50 transition-all cursor-grab active:cursor-grabbing"
-                                        >
-                                            <dim.icon className="w-3 h-3 text-gray-400" />
-                                            <span className="text-xs font-medium text-gray-700">{dim.label}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Metrics</h3>
-                                    <button onClick={() => setIsCustomMetricModalOpen(true)} className="text-emerald-600 hover:bg-emerald-50 p-0.5 rounded"><Plus className="w-3 h-3" /></button>
-                                </div>
-                                <div className="flex flex-wrap gap-2 max-h-[80px] overflow-y-auto">
-                                    {METRICS.map(metric => (
-                                        <div
-                                            key={metric.id}
-                                            draggable
-                                            onDragStart={(e) => onDragStart(e, metric.id, 'metric')}
-                                            onClick={() => handleAddMetric(metric.id)}
-                                            className="flex items-center gap-2 px-2 py-1.5 rounded border border-gray-100 bg-gray-50 hover:border-emerald-200 hover:bg-emerald-50 transition-all cursor-grab active:cursor-grabbing"
-                                        >
-                                            <metric.icon className="w-3 h-3 text-gray-400" />
-                                            <span className="text-xs font-medium text-gray-700">{metric.label}</span>
-                                        </div>
-                                    ))}
-                                    {customMetrics.map(metric => (
-                                        <div
-                                            key={metric.id}
-                                            draggable
-                                            onDragStart={(e) => onDragStart(e, metric.id, 'metric')}
-                                            onClick={() => handleAddMetric(metric.id)}
-                                            className="flex items-center gap-2 px-2 py-1.5 rounded border border-emerald-100 bg-emerald-50/30 hover:bg-emerald-50 transition-all cursor-grab active:cursor-grabbing"
-                                        >
-                                            <Calculator className="w-3 h-3 text-emerald-600" />
-                                            <span className="text-xs font-medium text-emerald-700">{metric.label}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                {/* Builder grid */}
+                {showBuilder && (
+                <div className="grid gap-4" style={{gridTemplateColumns:'200px 1fr 200px'}}>
+
+                    {/* LEFT: palette */}
+                    <div className="pr-4" style={{borderRight:'1px solid var(--glass-divider)'}}>
+                        {/* Dimensions */}
+                        <div className="text-[9.5px] font-bold uppercase tracking-widest mb-2" style={{color:'var(--c-dim,#9ca3af)'}}>Dimensions</div>
+                        <div className="flex flex-wrap gap-1.5 mb-4">
+                            {DIMENSIONS.map(dim => {
+                                const inUse = rowDims.includes(dim.id) || colDims.includes(dim.id);
+                                return (
+                                    <div
+                                        key={dim.id}
+                                        draggable
+                                        onDragStart={(e) => onDragStart(e, dim.id, 'dim')}
+                                        onClick={() => { if (!rowDims.includes(dim.id)) setRowDims(prev => [...prev, dim.id]); }}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold cursor-grab active:cursor-grabbing transition-all"
+                                        style={inUse
+                                            ? {background:'rgba(79,70,229,0.08)',borderColor:'rgba(79,70,229,0.2)',color:'#4f46e5'}
+                                            : {background:'rgba(255,255,255,0.6)',borderColor:'rgba(209,213,219,0.7)',color:'#374151'}}
+                                    >
+                                        <dim.icon className="w-2.5 h-2.5" style={{opacity:0.6}} />
+                                        {dim.label}
+                                    </div>
+                                );
+                            })}
                         </div>
 
-                        {/* Drop Zones */}
-                        <div className="col-span-8 space-y-3">
-                            {/* Rows */}
+                        {/* Metrics */}
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="text-[9.5px] font-bold uppercase tracking-widest" style={{color:'var(--c-dim,#9ca3af)'}}>Metrics</div>
+                            <button onClick={() => setIsCustomMetricModalOpen(true)} className="text-emerald-600 hover:bg-emerald-50 p-0.5 rounded"><Plus className="w-3 h-3" /></button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto">
+                            {METRICS.map(metric => {
+                                const inUse = pendingMetrics.some(m => m.metricId === metric.id);
+                                const isRed = ['refund_rate','refund_value'].includes(metric.id);
+                                const isGreen = ['revenue','profit','margin','roi'].includes(metric.id);
+                                return (
+                                    <div
+                                        key={metric.id}
+                                        draggable
+                                        onDragStart={(e) => onDragStart(e, metric.id, 'metric')}
+                                        onClick={() => handleAddMetric(metric.id)}
+                                        className="px-2 py-1 rounded-lg border text-[10px] font-bold cursor-grab active:cursor-grabbing transition-all"
+                                        style={inUse
+                                            ? (isRed ? {background:'rgba(254,242,242,0.9)',borderColor:'rgba(220,38,38,0.25)',color:'#b91c1c'} : {background:'rgba(236,253,245,0.9)',borderColor:'rgba(5,150,105,0.25)',color:'#047857'})
+                                            : (isRed ? {background:'rgba(254,242,242,0.6)',borderColor:'rgba(220,38,38,0.15)',color:'#dc2626'} : isGreen ? {background:'rgba(236,253,245,0.6)',borderColor:'rgba(5,150,105,0.18)',color:'#059669'} : {background:'rgba(255,255,255,0.6)',borderColor:'rgba(209,213,219,0.7)',color:'#6b7280'})}
+                                    >
+                                        {metric.label}
+                                    </div>
+                                );
+                            })}
+                            {customMetrics.map(metric => (
+                                <div
+                                    key={metric.id}
+                                    draggable
+                                    onDragStart={(e) => onDragStart(e, metric.id, 'metric')}
+                                    onClick={() => handleAddMetric(metric.id)}
+                                    className="px-2 py-1 rounded-lg text-[10px] font-bold cursor-grab transition-all"
+                                    style={{background:'rgba(236,253,245,0.6)',borderColor:'rgba(5,150,105,0.18)',border:'1px solid',color:'#047857'}}
+                                >
+                                    <Calculator className="w-2.5 h-2.5 inline mr-1 opacity-60" />{metric.label}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* MIDDLE: axes */}
+                    <div className="flex flex-col gap-2">
+
+                        {/* Rows */}
+                        <div>
+                            <div className="text-[9.5px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--c-dim,#9ca3af)'}}>Rows</div>
                             <div
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => onDropRow(e)}
-                                className="flex items-center gap-3 bg-gray-50/50 border border-dashed border-gray-200 rounded-lg p-2 min-h-[44px]"
+                                className="flex items-center flex-wrap gap-2 px-2.5 py-2 rounded-xl min-h-[38px]"
+                                style={{border:'1.5px dashed rgba(79,70,229,0.25)',background:'rgba(79,70,229,0.03)'}}
                             >
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-16 shrink-0">Rows</span>
-                                <div className="flex flex-wrap gap-2 flex-1">
-                                    {rowDims.map((id, idx) => (
-                                        <div
-                                            key={id}
-                                            draggable
-                                            onDragStart={(e) => onDragStart(e, id, 'dim', 'rows')}
-                                            onDragOver={(e) => e.preventDefault()}
-                                            onDrop={(e) => { e.stopPropagation(); onDropRow(e, idx); }}
-                                            className="px-2 py-1 bg-white border border-indigo-100 rounded text-[10px] font-bold text-indigo-700 flex items-center gap-1.5 shadow-sm cursor-move"
-                                        >
-                                            <GripVertical className="w-3 h-3 text-gray-300" />
-                                            {getDimLabel(id)}
-                                            <button onClick={() => handleRemoveRowDim(id)}><X className="w-3 h-3" /></button>
-                                        </div>
-                                    ))}
-                                    {rowDims.length === 0 && <span className="text-[10px] text-gray-400 italic">Drop dimensions here...</span>}
-                                </div>
+                                {rowDims.map((id, idx) => (
+                                    <div
+                                        key={id}
+                                        draggable
+                                        onDragStart={(e) => onDragStart(e, id, 'dim', 'rows')}
+                                        onDragOver={(e) => e.preventDefault()}
+                                        onDrop={(e) => { e.stopPropagation(); onDropRow(e, idx); }}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold cursor-move"
+                                        style={{background:'rgba(79,70,229,0.08)',border:'1px solid rgba(79,70,229,0.2)',color:'#4f46e5'}}
+                                    >
+                                        {(() => { const d = DIMENSIONS.find(x => x.id === id); return d ? <d.icon className="w-2.5 h-2.5 opacity-60" /> : null; })()}
+                                        {getDimLabel(id)}
+                                        <button onClick={() => handleRemoveRowDim(id)} className="opacity-40 hover:opacity-100 ml-0.5"><X className="w-2.5 h-2.5" /></button>
+                                    </div>
+                                ))}
+                                {rowDims.length === 0 && <span className="text-[10px] italic" style={{color:'rgba(156,163,175,0.8)'}}>Drop dimensions here…</span>}
                             </div>
+                        </div>
 
-                            {/* Columns */}
+                        {/* Columns */}
+                        <div>
+                            <div className="text-[9.5px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--c-dim,#9ca3af)'}}>Columns</div>
                             <div
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => onDropCol(e)}
-                                className="flex items-center gap-3 bg-gray-50/50 border border-dashed border-gray-200 rounded-lg p-2 min-h-[44px]"
+                                className="flex items-center flex-wrap gap-2 px-2.5 py-2 rounded-xl min-h-[38px]"
+                                style={{border:'1.5px dashed rgba(79,70,229,0.25)',background:'rgba(79,70,229,0.03)'}}
                             >
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-16 shrink-0">Columns</span>
-                                <div className="flex flex-wrap gap-2 flex-1">
-                                    {colDims.map((id, idx) => (
-                                        <div
-                                            key={id}
-                                            draggable
-                                            onDragStart={(e) => onDragStart(e, id, 'dim', 'cols')}
-                                            onDragOver={(e) => e.preventDefault()}
-                                            onDrop={(e) => { e.stopPropagation(); onDropCol(e, idx); }}
-                                            className="px-2 py-1 bg-white border border-indigo-100 rounded text-[10px] font-bold text-indigo-700 flex items-center gap-1.5 shadow-sm cursor-move"
-                                        >
-                                            <GripVertical className="w-3 h-3 text-gray-300" />
-                                            {getDimLabel(id)}
-                                            <button onClick={() => handleRemoveColDim(id)}><X className="w-3 h-3" /></button>
-                                        </div>
-                                    ))}
-                                    {colDims.length === 0 && <span className="text-[10px] text-gray-400 italic">Drop dimensions here...</span>}
-                                </div>
+                                {colDims.map((id, idx) => (
+                                    <div
+                                        key={id}
+                                        draggable
+                                        onDragStart={(e) => onDragStart(e, id, 'dim', 'cols')}
+                                        onDragOver={(e) => e.preventDefault()}
+                                        onDrop={(e) => { e.stopPropagation(); onDropCol(e, idx); }}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold cursor-move"
+                                        style={{background:'rgba(79,70,229,0.08)',border:'1px solid rgba(79,70,229,0.2)',color:'#4f46e5'}}
+                                    >
+                                        {(() => { const d = DIMENSIONS.find(x => x.id === id); return d ? <d.icon className="w-2.5 h-2.5 opacity-60" /> : null; })()}
+                                        {getDimLabel(id)}
+                                        <button onClick={() => handleRemoveColDim(id)} className="opacity-40 hover:opacity-100 ml-0.5"><X className="w-2.5 h-2.5" /></button>
+                                    </div>
+                                ))}
+                                {colDims.length === 0 && <span className="text-[10px] italic" style={{color:'rgba(156,163,175,0.8)'}}>Drop dimensions here…</span>}
+                                {colDims.length > 0 && (
+                                    <button
+                                        onClick={handleSwapDims}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all"
+                                        style={{background:'white',border:'1px solid rgba(209,213,219,0.6)',color:'#6b7280'}}
+                                    >
+                                        <ArrowLeftRight className="w-2.5 h-2.5" /> Swap
+                                    </button>
+                                )}
                             </div>
+                        </div>
 
-                            {/* Metrics */}
+                        {/* Values */}
+                        <div>
+                            <div className="text-[9.5px] font-bold uppercase tracking-widest mb-1.5" style={{color:'var(--c-dim,#9ca3af)'}}>
+                                Values
+                                {pendingMetrics.length > 0 && <span className="ml-1 text-[9px] font-normal normal-case" style={{color:'var(--c-dim,#9ca3af)'}}>({pendingMetrics[0]?.timeRange === pendingMetrics[pendingMetrics.length-1]?.timeRange ? `Last ${pendingMetrics[0]?.timeRange}` : 'mixed range'})</span>}
+                            </div>
                             <div
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => onDropMetric(e)}
-                                className="flex items-center gap-3 bg-gray-50/50 border border-dashed border-gray-200 rounded-lg p-2 min-h-[44px]"
+                                className="flex items-center flex-wrap gap-2 px-2.5 py-2 rounded-xl min-h-[38px]"
+                                style={{border:'1.5px dashed rgba(5,150,105,0.2)',background:'rgba(5,150,105,0.02)'}}
                             >
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-16 shrink-0">Values</span>
-                                <div className="flex flex-wrap gap-2 flex-1">
-                                    {metrics.map((m, idx) => (
+                                {pendingMetrics.map((m, idx) => {
+                                    const isRed = ['refund_rate','refund_value'].includes(m.metricId);
+                                    const chipStyle = isRed
+                                        ? {background:'rgba(254,242,242,0.9)',border:'1px solid rgba(220,38,38,0.2)',color:'#b91c1c'}
+                                        : {background:'rgba(236,253,245,0.9)',border:'1px solid rgba(5,150,105,0.25)',color:'#047857'};
+                                    return (
                                         <div
                                             key={m.id}
                                             draggable
                                             onDragStart={(e) => onDragStart(e, m.id, 'metric', 'metrics')}
                                             onDragOver={(e) => e.preventDefault()}
                                             onDrop={(e) => { e.stopPropagation(); onDropMetric(e, idx); }}
-                                            className="relative"
+                                            className="relative flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold cursor-move"
+                                            style={chipStyle}
                                         >
-                                            <div className="px-2 py-1 bg-white border border-emerald-100 rounded text-[10px] font-bold text-emerald-700 flex items-center gap-1.5 shadow-sm cursor-move">
-                                                <GripVertical className="w-3 h-3 text-gray-300" />
-                                                <div className="flex flex-col">
-                                                    <span>{getMetricLabel(m.metricId)}</span>
-                                                    <button
-                                                        onClick={() => setActivePopover(activePopover === m.id ? null : m.id)}
-                                                        className="text-[8px] text-gray-400 flex items-center gap-0.5 hover:text-indigo-600"
-                                                    >
-                                                        <Clock className="w-2 h-2" />
-                                                        {m.timeRange}
-                                                    </button>
-                                                </div>
-                                                <button onClick={() => handleRemoveMetric(m.id)}><X className="w-3 h-3" /></button>
-                                            </div>
+                                            {getMetricLabel(m.metricId)}
+                                            <button
+                                                onClick={() => setActivePopover(activePopover === m.id ? null : m.id)}
+                                                className="text-[9px] font-bold opacity-50 hover:opacity-100 transition-opacity"
+                                            >{m.timeRange}</button>
+                                            <button onClick={() => handleRemoveMetric(m.id)} className="opacity-40 hover:opacity-100 ml-0.5"><X className="w-2.5 h-2.5" /></button>
 
                                             {activePopover === m.id && (
-                                                <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 animate-in slide-in-from-top-1">
+                                                <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2">
                                                     <div className="space-y-1">
                                                         {TIME_RANGES.map(tr => (
                                                             <button
                                                                 key={tr.id}
                                                                 onClick={() => {
-                                                                    const next = [...metrics];
-                                                                    next[idx].timeRange = tr.id;
-                                                                    setMetrics(next);
-                                                                    if (tr.id !== 'custom') {
-                                                                        setActivePopover(null);
-                                                                        setNeedsGeneration(true);
-                                                                    }
+                                                                    setPendingMetrics(prev => { const next=[...prev]; next[idx]={...next[idx],timeRange:tr.id}; return next; });
+                                                                    if (tr.id !== 'custom') setActivePopover(null);
                                                                 }}
                                                                 className={`w-full text-left px-2 py-1.5 rounded text-[10px] transition-colors ${m.timeRange === tr.id ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}
-                                                            >
-                                                                {tr.label}
-                                                            </button>
+                                                            >{tr.label}</button>
                                                         ))}
                                                     </div>
                                                     {m.timeRange === 'custom' && (
                                                         <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
-                                                            <input
-                                                                type="date"
-                                                                value={m.startDate || ''}
-                                                                onChange={(e) => {
-                                                                    const next = [...metrics];
-                                                                    next[idx].startDate = e.target.value;
-                                                                    setMetrics(next);
-                                                                }}
-                                                                className="w-full text-[9px] p-1 border border-gray-200 rounded"
-                                                            />
-                                                            <input
-                                                                type="date"
-                                                                value={m.endDate || ''}
-                                                                onChange={(e) => {
-                                                                    const next = [...metrics];
-                                                                    next[idx].endDate = e.target.value;
-                                                                    setMetrics(next);
-                                                                }}
-                                                                className="w-full text-[9px] p-1 border border-gray-200 rounded"
-                                                            />
-                                                            <button
-                                                                onClick={() => { setActivePopover(null); setNeedsGeneration(true); }}
-                                                                className="w-full py-1 bg-indigo-600 text-white text-[9px] font-bold rounded"
-                                                            >
-                                                                Apply
-                                                            </button>
+                                                            <input type="date" value={m.startDate||''} onChange={(e) => setPendingMetrics(prev => { const next=[...prev]; next[idx]={...next[idx],startDate:e.target.value}; return next; })} className="w-full text-[9px] p-1 border border-gray-200 rounded" />
+                                                            <input type="date" value={m.endDate||''} onChange={(e) => setPendingMetrics(prev => { const next=[...prev]; next[idx]={...next[idx],endDate:e.target.value}; return next; })} className="w-full text-[9px] p-1 border border-gray-200 rounded" />
                                                         </div>
                                                     )}
                                                 </div>
                                             )}
                                         </div>
-                                    ))}
-                                    {metrics.length === 0 && <span className="text-[10px] text-gray-400 italic">Drop metrics here...</span>}
-                                </div>
+                                    );
+                                })}
+                                <button
+                                    onClick={() => setIsCustomMetricModalOpen(true)}
+                                    className="px-2 py-1 rounded-lg text-[10px] font-bold transition-all"
+                                    style={{border:'1px dashed rgba(5,150,105,0.3)',background:'transparent',color:'#059669'}}
+                                >+ Add metric</button>
+                                {pendingMetrics.length === 0 && <span className="text-[10px] italic" style={{color:'rgba(156,163,175,0.8)'}}>Drop metrics here…</span>}
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
 
-            {/* Filter Bar */}
-            <div
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={onDropFilter}
-                className="bg-white border border-gray-200 rounded-lg p-2 flex items-center gap-3 shrink-0 shadow-sm"
-            >
-                <div className="flex items-center gap-2 px-2 border-r border-gray-100">
-                    <Filter className="w-4 h-4 text-gray-400" />
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Filters</span>
-                </div>
-                <div className="flex flex-wrap gap-2 flex-1">
-                    {pendingFilters.map((f, idx) => (
-                        <div key={f.id} className="flex items-center gap-2 bg-gray-50 p-1.5 border border-gray-200 rounded shadow-sm">
-                            {f.type === 'dim' ? (
-                                <MultiSelectDropdown
-                                    label={getDimLabel(f.field)}
-                                    icon={DIMENSIONS.find(d => d.id === f.field)?.icon}
-                                    selected={Array.isArray(f.value) ? f.value : []}
-                                    onChange={(newVal: string[]) => {
-                                        const next = [...pendingFilters];
-                                        next[idx].value = newVal;
-                                        setPendingFilters(next);
-                                    }}
-                                    options={getUniqueValues(f.field)}
-                                />
-                            ) : (
-                                <>
-                                    <span className="text-[10px] font-bold text-gray-600">
-                                        {getMetricLabel(f.field)}
-                                    </span>
-                                    <select
-                                        value={f.operator}
-                                        onChange={(e) => {
-                                            const next = [...pendingFilters];
-                                            next[idx].operator = e.target.value as any;
-                                            setPendingFilters(next);
-                                        }}
-                                        className="text-[10px] border-none bg-white rounded p-0.5 focus:ring-0 shadow-sm"
-                                    >
-                                        <option value="gt">&gt;</option>
-                                        <option value="lt">&lt;</option>
-                                        <option value="equals">=</option>
-                                    </select>
-                                    <input
-                                        type="text"
-                                        value={f.value as string}
-                                        onChange={(e) => {
-                                            const next = [...pendingFilters];
-                                            next[idx].value = e.target.value;
-                                            setPendingFilters(next);
-                                        }}
-                                        placeholder="Value..."
-                                        className="text-[10px] border-none bg-white rounded p-0.5 w-20 focus:ring-0 shadow-sm"
-                                    />
-                                </>
-                            )}
-                            <button onClick={() => handleRemoveFilter(f.id)}><X className="w-3 h-3 text-gray-400 hover:text-red-500" /></button>
-                        </div>
-                    ))}
+                    {/* RIGHT: filters */}
+                    <div className="pl-4" style={{borderLeft:'1px solid var(--glass-divider)'}}>
+                        <div className="text-[9.5px] font-bold uppercase tracking-widest mb-2" style={{color:'var(--c-dim,#9ca3af)'}}>Filters</div>
+                        <div className="flex flex-col gap-2">
 
-                    {/* Add Filter Dropdown */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setIsFilterMenuOpen(v => !v)}
-                            className="flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold hover:bg-indigo-100 transition-colors"
-                        >
-                            <Plus className="w-3 h-3" />
-                            Add Filter
-                        </button>
-                        {isFilterMenuOpen && (
-                            <>
-                                <div className="fixed inset-0 z-40" onClick={() => setIsFilterMenuOpen(false)} />
-                                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 animate-in slide-in-from-top-1">
-                                    <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Dimensions</div>
-                                    {DIMENSIONS.map(d => (
-                                        <button
-                                            key={d.id}
-                                            onClick={() => { handleAddFilter(d.id, 'dim'); setIsFilterMenuOpen(false); }}
-                                            className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded"
-                                        >
-                                            {d.label}
-                                        </button>
-                                    ))}
-                                    <div className="border-t border-gray-100 my-1"></div>
-                                    <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Metrics</div>
-                                    {METRICS.map(m => (
-                                        <button
-                                            key={m.id}
-                                            onClick={() => { handleAddFilter(m.id, 'metric'); setIsFilterMenuOpen(false); }}
-                                            className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded"
-                                        >
-                                            {m.label}
-                                        </button>
-                                    ))}
+                            {/* Applied filter cards */}
+                            {pendingFilters.map((f, idx) => (
+                                <div key={f.id} className="px-3 py-2 rounded-lg text-[10px]" style={{border:'1px solid rgba(209,213,219,0.6)',background:'rgba(249,250,251,0.8)'}}>
+                                    <div className="text-[9px] font-bold uppercase tracking-wide mb-1.5" style={{color:'var(--c-dim,#9ca3af)'}}>
+                                        {f.type === 'dim' ? getDimLabel(f.field) : (() => { const inst = metrics.find(m => m.id === f.field); return inst ? `${getMetricLabel(inst.metricId)} (${inst.timeRange})` : f.field; })()}
+                                    </div>
+                                    {f.type === 'dim' ? (
+                                        <MultiSelectDropdown
+                                            label={getDimLabel(f.field)}
+                                            icon={DIMENSIONS.find(d => d.id === f.field)?.icon}
+                                            selected={Array.isArray(f.value) ? f.value : []}
+                                            onChange={(newVal: string[]) => setPendingFilters(prev => prev.map((pf, i) => i === idx ? { ...pf, value: newVal } : pf))}
+                                            options={getUniqueValues(f.field)}
+                                        />
+                                    ) : (
+                                        <div className="flex items-center gap-1.5">
+                                            <select
+                                                value={f.operator}
+                                                onChange={(e) => setPendingFilters(prev => prev.map((pf, i) => i === idx ? { ...pf, operator: e.target.value as any } : pf))}
+                                                className="text-[10px] border rounded px-1 py-0.5 bg-white focus:ring-0"
+                                                style={{borderColor:'rgba(209,213,219,0.7)'}}
+                                            >
+                                                <option value="gt">&gt;</option>
+                                                <option value="lt">&lt;</option>
+                                                <option value="equals">=</option>
+                                            </select>
+                                            <input
+                                                type="text"
+                                                value={f.value as string}
+                                                onChange={(e) => setPendingFilters(prev => prev.map((pf, i) => i === idx ? { ...pf, value: e.target.value } : pf))}
+                                                placeholder="Value…"
+                                                className="text-[10px] border rounded px-1.5 py-0.5 w-16 bg-white focus:ring-0"
+                                                style={{borderColor:'rgba(209,213,219,0.7)'}}
+                                            />
+                                            <span className="font-bold" style={{color: Number(f.value) > 0 ? '#047857' : '#374151'}}>
+                                                {f.value ? `${f.value}` : ''}
+                                            </span>
+                                            <button onClick={() => handleRemoveFilter(f.id)} className="ml-auto opacity-40 hover:opacity-100"><X className="w-3 h-3" /></button>
+                                        </div>
+                                    )}
+                                    {f.type === 'dim' && (
+                                        <button onClick={() => handleRemoveFilter(f.id)} className="mt-1 opacity-30 hover:opacity-80 float-right"><X className="w-3 h-3" /></button>
+                                    )}
                                 </div>
-                            </>
-                        )}
+                            ))}
+
+                            {/* Add filter button */}
+                            <div className="relative z-50">
+                                <button
+                                    onClick={() => setIsFilterMenuOpen(v => !v)}
+                                    className="w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-all"
+                                    style={{border:'1px dashed rgba(209,213,219,0.8)',background:'transparent',color:'#6b7280'}}
+                                >+ Add filter</button>
+                                {isFilterMenuOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setIsFilterMenuOpen(false)} />
+                                        <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2">
+                                            <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Dimensions</div>
+                                            {DIMENSIONS.map(d => (
+                                                <button key={d.id} onClick={() => { handleAddFilter(d.id, 'dim'); setIsFilterMenuOpen(false); }} className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded">{d.label}</button>
+                                            ))}
+                                            {reportResult && metrics.length > 0 && (
+                                                <>
+                                                    <div className="border-t border-gray-100 my-1"></div>
+                                                    <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Metrics</div>
+                                                    {metrics.filter(m => !m.isHidden).map(m => (
+                                                        <button key={m.id} onClick={() => { handleAddFilter(m.id, 'metric'); setIsFilterMenuOpen(false); }} className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded">
+                                                            {getMetricLabel(m.metricId)} ({m.timeRange})
+                                                        </button>
+                                                    ))}
+                                                </>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Apply filters */}
+                            {pendingFilters.length > 0 && (
+                                <button
+                                    onClick={applyFilters}
+                                    className="w-full py-1.5 rounded-lg text-[10px] font-bold text-white transition-all"
+                                    style={{background:'#4f46e5'}}
+                                >Apply Filters</button>
+                            )}
+
+                            {/* Time window */}
+                           {/* <div className="mt-1">
+                                <select className="w-full text-[10px] rounded-lg px-2 py-1.5 bg-white font-medium" style={{border:'1px solid rgba(209,213,219,0.7)',color:'#374151',fontFamily:'inherit'}}>
+                                    <option>Last 30 Days</option>
+                                    <option>Last 7 Days</option>
+                                    <option>Last 90 Days</option>
+                                    <option>YTD</option>
+                                </select>
+                            </div>*/}
+                        </div>
                     </div>
 
-                    {pendingFilters.length > 0 && (
-                        <button
-                            onClick={applyFilters}
-                            className="ml-auto px-3 py-1 bg-indigo-600 text-white rounded text-[10px] font-bold hover:bg-indigo-700 shadow-sm"
-                        >
-                            Apply Filters
-                        </button>
-                    )}
                 </div>
+                )}
             </div>
 
             {/* Table Container */}
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden flex-1 flex flex-col backdrop-blur-custom relative">
+            <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col relative">
                 {needsGeneration && !isGenerating && !reportResult && (
                     <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
                         <button
@@ -1154,6 +1486,88 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                         <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
                         <p className="text-lg font-bold text-gray-900">Crunching Data...</p>
                         <p className="text-xs text-gray-400">Aggregating dimensions and calculating metrics</p>
+                    </div>
+                )}
+
+                {/* Reorder Columns Panel */}
+                {isReorderOpen && orderedColHeaders.length > 0 && (
+                    <div className="absolute inset-y-0 right-0 z-40 w-64 bg-white border-l border-gray-200 shadow-2xl flex flex-col">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                            <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Reorder Columns</span>
+                            <button onClick={() => setIsReorderOpen(false)} className="p-1 hover:bg-gray-100 rounded">
+                                <X className="w-4 h-4 text-gray-400" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+                            {draftOrder.map((colId, idx) => {
+                                const ch = orderedColHeaders.find((c: any) => c.id === colId);
+                                if (!ch) return null;
+                                const hex = getPlatformHex(ch.label, pricingRules);
+                                const isDragOver = dragPanelOver === idx;
+                                return (
+                                    <div
+                                        key={colId}
+                                        draggable
+                                        onDragStart={() => { dragPanelIdx.current = idx; }}
+                                        onDragOver={(e) => { e.preventDefault(); setDragPanelOver(idx); }}
+                                        onDragLeave={() => setDragPanelOver(null)}
+                                        onDrop={() => {
+                                            const from = dragPanelIdx.current;
+                                            if (from === null || from === idx) { setDragPanelOver(null); return; }
+                                            setDraftOrder(prev => {
+                                                const next = [...prev];
+                                                const [moved] = next.splice(from, 1);
+                                                next.splice(idx, 0, moved);
+                                                return next;
+                                            });
+                                            dragPanelIdx.current = null;
+                                            setDragPanelOver(null);
+                                        }}
+                                        onDragEnd={() => { dragPanelIdx.current = null; setDragPanelOver(null); }}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-grab active:cursor-grabbing ${isDragOver ? 'bg-indigo-50 border-indigo-300 scale-[1.02]' : 'bg-gray-50 border-gray-100'}`}
+                                    >
+                                        <GripVertical className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+                                        <span style={platformBadgeStyle(hex)} className="flex-1 text-[11px] truncate">{ch.label}</span>
+                                        <button
+                                            disabled={idx === 0}
+                                            onClick={() => setDraftOrder(prev => {
+                                                const next = [...prev];
+                                                [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                                return next;
+                                            })}
+                                            className="p-1 rounded hover:bg-indigo-50 disabled:opacity-20 disabled:cursor-not-allowed"
+                                        >
+                                            <ArrowUp className="w-3.5 h-3.5 text-indigo-500" />
+                                        </button>
+                                        <button
+                                            disabled={idx === draftOrder.length - 1}
+                                            onClick={() => setDraftOrder(prev => {
+                                                const next = [...prev];
+                                                [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                                                return next;
+                                            })}
+                                            className="p-1 rounded hover:bg-indigo-50 disabled:opacity-20 disabled:cursor-not-allowed"
+                                        >
+                                            <ArrowDown className="w-3.5 h-3.5 text-indigo-500" />
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="px-4 py-3 border-t border-gray-100 flex flex-col gap-2">
+                            <button
+                                onClick={() => { setColOrder([...draftOrder]); setIsReorderOpen(false); }}
+                                className="w-full py-1.5 bg-indigo-600 text-white text-[11px] font-bold rounded-lg hover:bg-indigo-700 transition-colors"
+                            >
+                                Apply Order
+                            </button>
+                            <button
+                                onClick={() => { setDraftOrder(orderedColHeaders.map((c: any) => c.id)); setColOrder([]); }}
+                                className="w-full text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                            >
+                                Reset to default
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -1205,14 +1619,30 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                 onDragOver={e => handleColDragOver(e, ch.id)}
                                                 onDragLeave={() => setDragOverCol(null)}
                                                 onDrop={handleColDrop}
-                                                style={{ borderLeft: dragOverCol === ch.id ? '2px solid var(--theme)' : '2px solid rgba(209,213,219,0.7)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', cursor: 'grab', userSelect: 'none', opacity: dragColRef.current === ch.id ? 0.4 : 1, transition: 'border-color 0.1s' }}
+                                                style={{ borderLeft: dragOverCol === ch.id ? '2px solid var(--theme)' : '2px solid rgba(209,213,219,0.7)', borderBottom: '1px solid var(--glass-divider)', padding: '12px 14px', cursor: 'grab', userSelect: 'none', opacity: dragColRef.current === ch.id ? 0.4 : 1, transition: 'border-color 0.1s' }}
                                             >
                                                 <span style={platformBadgeStyle(hex)}>{ch.label}</span>
                                             </th>
                                         );
                                     })}
                                     <th colSpan={metrics.length} className="c" style={{ borderLeft: '2px solid rgba(79,70,229,0.15)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', color: '#4f46e5', fontWeight: 800 }}>
-                                        Grand Total
+                                        <div className="flex items-center gap-2">
+                                            <span>Grand Total</span>
+                                            {orderedColHeaders.length > 1 && (
+                                                <button
+                                                    onClick={() => {
+                                        if (!isReorderOpen) {
+                                            setDraftOrder(colOrder.length > 0 ? [...colOrder] : orderedColHeaders.map((c: any) => c.id));
+                                        }
+                                        setIsReorderOpen(v => !v);
+                                    }}
+                                                    title="Reorder columns"
+                                                    className={`p-1 rounded transition-colors ${isReorderOpen ? 'bg-indigo-100 text-indigo-600' : 'text-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                                                >
+                                                    <GripVertical className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </th>
                                 </tr>
                                 <tr>
@@ -1356,87 +1786,14 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             </div>
             {isCustomMetricModalOpen && (
                 <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-emerald-100 rounded-lg">
-                                    <Calculator className="w-5 h-5 text-emerald-600" />
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-900">Custom Metric</h3>
-                            </div>
-                            <button onClick={() => setIsCustomMetricModalOpen(false)}><X className="w-5 h-5 text-gray-400" /></button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Label</label>
-                                <input
-                                    type="text"
-                                    id="cm-label"
-                                    placeholder="e.g. Contribution Margin"
-                                    className="w-full p-2 border border-gray-200 rounded-lg text-sm"
-                                />
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 items-end">
-                                <div className="col-span-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Metric A</label>
-                                    <select id="cm-a" className="w-full p-2 border border-gray-200 rounded-lg text-xs">
-                                        {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-                                    </select>
-                                </div>
-                                <div className="col-span-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Op</label>
-                                    <select id="cm-op" className="w-full p-2 border border-gray-200 rounded-lg text-xs">
-                                        <option value="+">+</option>
-                                        <option value="-">-</option>
-                                        <option value="*">*</option>
-                                        <option value="/">/</option>
-                                    </select>
-                                </div>
-                                <div className="col-span-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Metric B</label>
-                                    <select id="cm-b" className="w-full p-2 border border-gray-200 rounded-lg text-xs">
-                                        {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Display As</label>
-                                <select id="cm-type" className="w-full p-2 border border-gray-200 rounded-lg text-xs">
-                                    <option value="currency">Currency</option>
-                                    <option value="percent">Percent</option>
-                                    <option value="number">Number</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="p-6 bg-gray-50 flex gap-3">
-                            <button
-                                onClick={() => setIsCustomMetricModalOpen(false)}
-                                className="flex-1 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const label = (document.getElementById('cm-label') as HTMLInputElement).value;
-                                    const metricA = (document.getElementById('cm-a') as HTMLSelectElement).value;
-                                    const metricB = (document.getElementById('cm-b') as HTMLSelectElement).value;
-                                    const operator = (document.getElementById('cm-op') as HTMLSelectElement).value as any;
-                                    const type = (document.getElementById('cm-type') as HTMLSelectElement).value as any;
-
-                                    if (label) {
-                                        setCustomMetrics([...customMetrics, {
-                                            id: Math.random().toString(36).substr(2, 9),
-                                            label, metricA, metricB, operator, type
-                                        }]);
-                                        setIsCustomMetricModalOpen(false);
-                                    }
-                                }}
-                                className="flex-1 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
-                            >
-                                Create Metric
-                            </button>
-                        </div>
-                    </div>
+                    <CustomMetricModal
+                        pendingMetrics={pendingMetrics}
+                        onClose={() => setIsCustomMetricModalOpen(false)}
+                        onCreate={(cm) => {
+                            setCustomMetrics([...customMetrics, cm]);
+                            setIsCustomMetricModalOpen(false);
+                        }}
+                    />
                 </div>
             )}
         </div>

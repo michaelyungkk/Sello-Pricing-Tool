@@ -179,7 +179,7 @@ const App: React.FC = () => {
     } = useAppState();
 
     // Progressive page mounting — pages stagger-mount during browser idle time after initial render
-    const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','tools','definitions','settings'];
+    const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','tools','definitions','settings','custom-report'];
     const [mountedPages, setMountedPages] = useState<Set<string>>(() => new Set<string>());
 
     useEffect(() => {
@@ -862,14 +862,15 @@ const App: React.FC = () => {
                         <div style={{ display: currentView === 'definitions' ? 'block' : 'none' }}>
                             <DefinitionsPage />
                         </div>)}
-                        {currentView === 'custom-report' && (
+                        {mountedPages.has('custom-report') && (
+                        <div style={{ display: currentView === 'custom-report' ? 'block' : 'none' }}>
                             <CustomReportPage
                                 products={products}
                                 priceHistory={salesHistory}
                                 refundHistory={refundHistory}
                                 pricingRules={pricingRules}
                             />
-                        )}
+                        </div>)}
                         {mountedPages.has('settings') && (
                         <div style={{ display: currentView === 'settings' ? 'block' : 'none' }}>
                             <SettingsPage
