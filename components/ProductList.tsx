@@ -2,8 +2,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { formatSmartMoney } from '../utils/format';
 import { createPortal } from 'react-dom';
-import { Product, PricingRules, SkuFamily, PriceLog } from '../types';
+import { Product, PricingRules, SkuFamily, PriceLog, OptimalPriceResult } from '../types';
 import { VAT_MULTIPLIER } from '../constants';
+import { getCanonicalSku } from '../services/skuNormalization';
 import { TagSearchInput } from './TagSearchInput';
 import { GradeBadge } from './GradeBadge';
 import { Search, Filter, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, SlidersHorizontal, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart, Zap } from 'lucide-react';
@@ -16,11 +17,12 @@ interface ProductListProps {
     onEditAliases?: (product: Product) => void;
     onEditTags?: (product: Product) => void;
     onViewShipments?: (sku: string) => void;
-    onViewElasticity?: (product: Product) => void;
+    onViewElasticity?: (product: Product, result?: OptimalPriceResult) => void;
     onDeepDive?: (sku: string) => void;
     pricingRules?: PricingRules;
     themeColor: string;
     priceHistoryMap: Map<string, PriceLog[]>;
+    optimalPriceResults?: Map<string, OptimalPriceResult>;
 }
 
 const RecommendationTooltip = ({ product, rect }: { product: Product, rect: DOMRect }) => {
@@ -87,12 +89,13 @@ interface ProductRowProps {
     onEditAliases?: (p: Product) => void;
     onEditTags?: (p: Product) => void;
     onViewShipments?: (sku: string) => void;
-    onViewElasticity?: (p: Product) => void;
+    onViewElasticity?: (p: Product, result?: OptimalPriceResult) => void;
     onDeepDive?: (sku: string) => void;
     hoveredProduct: { id: string; rect: DOMRect } | null;
     handleMouseEnter: (id: string, e: React.MouseEvent) => void;
     handleMouseLeave: () => void;
     priceHistoryMap: Map<string, PriceLog[]>;
+    optimalPriceResults?: Map<string, OptimalPriceResult>;
 }
 
 const ProductRow = React.memo(({
@@ -105,7 +108,8 @@ const ProductRow = React.memo(({
     onDeepDive,
     handleMouseEnter,
     handleMouseLeave,
-    priceHistoryMap
+    priceHistoryMap,
+    optimalPriceResults,
 }: ProductRowProps) => {
 
     const { totalAdSpend, acos } = useMemo(() => {
@@ -153,9 +157,9 @@ const ProductRow = React.memo(({
                     )}
                     {onViewElasticity && (
                         <button
-                            onClick={() => onViewElasticity(product)}
+                            onClick={() => onViewElasticity(product, optimalPriceResults?.get(getCanonicalSku(product.sku)))}
                             className="text-gray-400 hover:text-indigo-600 transition-colors p-1.5 rounded hover:bg-indigo-50 border border-transparent hover:border-indigo-100"
-                            title="View Price Elasticity Chart"
+                            title="View Price Curve"
                         >
                             <LineChart className="w-3.5 h-3.5" />
                         </button>
@@ -209,19 +213,55 @@ const ProductRow = React.memo(({
                 </div>
             </td>
             <td className="px-4 py-4 text-right">
-                {optimalPriceWithVat ? (
-                    <div className="flex items-center justify-end gap-1 font-bold" style={{ color: themeColor }} title="Based on historical margin & velocity performance (VAT Inc)">
-                        <Star className="w-3 h-3" style={{ fill: `${themeColor}20` }} />
-                        {formatSmartMoney(optimalPriceWithVat)}
-                    </div>
-                ) : volumePriceWithVat ? (
-                    <div className="flex items-center justify-end gap-1 font-bold text-amber-600" title="Fallback: Price with highest sales volume (VAT Inc)">
-                        <Zap className="w-3 h-3 text-amber-500 fill-amber-100" />
-                        {formatSmartMoney(volumePriceWithVat)}
-                    </div>
-                ) : (
-                    <span className="text-gray-300">-</span>
-                )}
+                {(() => {
+                    const result = optimalPriceResults?.get(getCanonicalSku(product.sku));
+                    if (!result) {
+                        // Fallback to old optimalPrice if no new result yet
+                        return optimalPriceWithVat ? (
+                            <div className="flex items-center justify-end gap-1 font-bold text-gray-400" title="Legacy optimal reference (recalculate benchmarks to update)">
+                                <Star className="w-3 h-3" style={{ fill: 'rgba(156,163,175,0.2)' }} />
+                                {formatSmartMoney(optimalPriceWithVat)}
+                            </div>
+                        ) : (
+                            <span className="text-gray-300">-</span>
+                        );
+                    }
+                    const isStale = Date.now() - new Date(result.calculatedAt).getTime() > 30 * 24 * 60 * 60 * 1000;
+                    const delta = result.recommendedPrice - result.currentPrice;
+                    const confidenceBadge = (() => {
+                        if (result.source === 'COHORT' || result.confidence < 0.3)
+                            return <span className="px-1 py-0.5 text-[8px] font-bold rounded border border-gray-200 text-gray-400">Bench</span>;
+                        if (result.confidence >= 0.9)
+                            return <span className="px-1 py-0.5 text-[8px] font-bold rounded bg-emerald-100 text-emerald-700">High</span>;
+                        if (result.confidence >= 0.5)
+                            return <span className="px-1 py-0.5 text-[8px] font-bold rounded bg-amber-100 text-amber-700">Med</span>;
+                        return <span className="px-1 py-0.5 text-[8px] font-bold rounded bg-gray-100 text-gray-500">Low</span>;
+                    })();
+                    return (
+                        <div className="group relative flex flex-col items-end gap-0.5">
+                            <div className="flex items-center gap-1">
+                                <span className="font-bold text-gray-900" style={{ fontSize: 13 }}>
+                                    {formatSmartMoney(result.recommendedPrice)}
+                                </span>
+                                {isStale && <span title={`Last calculated ${new Date(result.calculatedAt).toLocaleDateString()}`} className="text-gray-400 text-[10px]">🕐</span>}
+                            </div>
+                            {Math.abs(delta) >= 0.01 && (
+                                <span className={`text-[10px] font-bold ${delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                    {delta > 0 ? '+' : ''}{formatSmartMoney(delta)}
+                                </span>
+                            )}
+                            {confidenceBadge}
+                            {/* Inline reasoning tooltip */}
+                            <div className="absolute bottom-full right-0 mb-2 w-72 p-3 bg-gray-900 text-white text-[11px] rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all pointer-events-none z-[60]">
+                                <p className="leading-relaxed">{result.reasoning.split('. ').slice(0, 2).join('. ')}.</p>
+                                <div className="mt-1.5 text-gray-400 text-[10px]">
+                                    Last calculated: {new Date(result.calculatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </div>
+                                <div className="absolute top-full right-4 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                            </div>
+                        </div>
+                    );
+                })()}
             </td>
             <td className="px-4 py-4 text-right">
                 <div className="text-gray-400 font-medium">
@@ -426,7 +466,8 @@ const FamilyGridView = ({
     hoveredProduct,
     handleMouseEnter,
     handleMouseLeave,
-    priceHistoryMap
+    priceHistoryMap,
+    optimalPriceResults,
 }: any) => {
     const familiesWithProducts = useMemo(() => {
         const familyMap = new Map<string, { family: SkuFamily, items: Product[] }>();
@@ -530,6 +571,7 @@ const FamilyGridView = ({
                                 handleMouseEnter={handleMouseEnter}
                                 handleMouseLeave={handleMouseLeave}
                                 priceHistoryMap={priceHistoryMap}
+                                optimalPriceResults={optimalPriceResults}
                             />
                         ))}
                     </React.Fragment>
@@ -562,6 +604,7 @@ const FamilyGridView = ({
                             handleMouseEnter={handleMouseEnter}
                             handleMouseLeave={handleMouseLeave}
                             priceHistoryMap={priceHistoryMap}
+                            optimalPriceResults={optimalPriceResults}
                         />
                     ))}
                 </React.Fragment>
@@ -570,7 +613,7 @@ const FamilyGridView = ({
     );
 };
 
-const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = [], onEditAliases, onEditTags, onViewShipments, onViewElasticity, onDeepDive, pricingRules, themeColor, priceHistoryMap }) => {
+const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = [], onEditAliases, onEditTags, onViewShipments, onViewElasticity, onDeepDive, pricingRules, themeColor, priceHistoryMap, optimalPriceResults }) => {
     const [viewMode, setViewMode] = useState<'LIST' | 'FAMILY'>('LIST');
     const [collapsedFamilies, setCollapsedFamilies] = useState<Set<string>>(new Set(['ungrouped']));
     const [searchQuery, setSearchQuery] = useState('');
@@ -1127,7 +1170,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                             <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-semibold backdrop-blur-sm shadow-sm">
                                 <th className="px-4 py-3 font-semibold text-center w-[80px] text-xs uppercase text-gray-600 tracking-wider">Actions</th>
                                 <SortableHeader label="Product" sortKey="sku" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} className="min-w-[250px]" />
-                                <SortableHeader label="Optimal Ref." sortKey="optimalPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
+                                <SortableHeader label="Optimal Price" sortKey="optimalPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[120px]" />
                                 <SortableHeader label="Last Week" sortKey="oldPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
                                 <SortableHeader label={isContextFiltered ? "Current (Filt.)" : "Current"} sortKey="currentPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[110px]" />
                                 <SortableHeader label="CA Price" sortKey="caPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
@@ -1155,6 +1198,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                         handleMouseEnter={handleMouseEnter}
                                         handleMouseLeave={handleMouseLeave}
                                         priceHistoryMap={priceHistoryMap}
+                                        optimalPriceResults={optimalPriceResults}
                                     />
                                 )}
                                 {(!filteredProducts || filteredProducts.length === 0) && (
@@ -1192,6 +1236,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                 handleMouseEnter={handleMouseEnter}
                                 handleMouseLeave={handleMouseLeave}
                                 priceHistoryMap={priceHistoryMap}
+                                optimalPriceResults={optimalPriceResults}
                             />
                         )}
                     </table>

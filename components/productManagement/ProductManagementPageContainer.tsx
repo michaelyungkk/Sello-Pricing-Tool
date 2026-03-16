@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog } from '../../types';
+import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice } from '../../types';
+import type { CohortShiftWarning } from '../../services/cohortAnalysis';
 
 import { List, Ship, RotateCcw, DollarSign, Activity, Columns, Layers } from 'lucide-react';
 
@@ -28,7 +29,7 @@ interface ProductManagementPageContainerProps {
 
     dateLabels: { current: string, last: string };
     onUpdateProduct?: (product: Product) => void;
-    onViewElasticity?: (product: Product) => void;
+    onViewElasticity?: (product: Product, result?: OptimalPriceResult) => void;
     onDeepDive: (sku: string) => void;
     themeColor: string;
     deductRefunds: boolean;
@@ -38,6 +39,11 @@ interface ProductManagementPageContainerProps {
     setSkuFamilies: (families: SkuFamily[]) => void;
     pendingFamilySuggestions: SkuFamily[];
     setPendingFamilySuggestions: (suggestions: SkuFamily[]) => void;
+    // Optimal pricing — threaded down from App.tsx in Session 6
+    cohortSnapshot?: CohortSnapshot | null;
+    optimalPriceResults?: Map<string, OptimalPriceResult>;
+    benchmarkUpdateNotices?: BenchmarkUpdateNotice[];
+    onRecalculateBenchmarks?: () => CohortShiftWarning[];
 }
 
 type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison' | 'family-groups';
@@ -60,7 +66,11 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     setSkuFamilies,
     pendingFamilySuggestions,
     setPendingFamilySuggestions,
-    promotions = []
+    promotions = [],
+    cohortSnapshot,
+    optimalPriceResults,
+    benchmarkUpdateNotices,
+    onRecalculateBenchmarks,
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
@@ -230,6 +240,10 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                         pricingRules={pricingRules}
                         themeColor={themeColor}
                         priceHistoryMap={priceHistoryMap}
+                        cohortSnapshot={cohortSnapshot}
+                        optimalPriceResults={optimalPriceResults}
+                        benchmarkUpdateNotices={benchmarkUpdateNotices}
+                        onRecalculateBenchmarks={onRecalculateBenchmarks}
                     />
                 )}
 

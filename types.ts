@@ -430,3 +430,120 @@ export interface HistoryPayload {
     realPostage?: number;
     realExtraFreight?: number;
 }
+// =============================================================================
+// OPTIMAL PRICE ALGORITHM — Types (added Session 1)
+// =============================================================================
+
+export interface PriceBucket {
+    category: string;
+    bucketIndex: number;
+    priceMin: number;
+    priceMax: number;
+    label: string;   // e.g. "£80–120"
+    skuCount: number;
+}
+
+export interface CohortStats {
+    bucketKey: string;
+    category: string;
+    bucket: PriceBucket;
+    skuCount: number;
+    totalEligibleTx: number;
+    medianVelocity: number;
+    medianMarginPct: number;
+    priceElasticity: number;
+    optimalPriceRatio: number;
+    optimalDailyProfit: number;
+}
+
+export interface CohortSnapshot {
+    computedAt: string;
+    categoryBuckets: Map<string, PriceBucket[]>;
+    cohortStats: Map<string, CohortStats>;  // bucketKey → stats
+    skuAssignments: Map<string, string>;    // canonicalSku → bucketKey
+    version: number;
+}
+
+export interface BenchmarkUpdateNotice {
+    category: string;
+    reason: 'new_sku' | 'price_bucket_shift';
+    skuCount: number;       // how many SKUs triggered this in the category
+    detectedAt: string;     // ISO timestamp
+}
+
+export interface PriceEra {
+    eraId: string;
+    sku: string;        // canonical SKU
+    caPrice: number;
+    startDate: string;
+    endDate: string;
+}
+
+export type TransactionSource = 'organic' | 'promo';
+
+export interface TaggedTransaction extends PriceLog {
+    canonicalSku: string;       // resolved canonical SKU
+    rawSku: string;             // original SKU from data (for transparency)
+    source: TransactionSource;
+    effectivePrice: number;
+    promoDiscountPct?: number;
+    eraId: string;
+}
+
+export interface PricePoint {
+    price: number;
+    source: 'organic' | 'promo';
+    eraId: string;
+    totalUnits: number;
+    weekCount: number;
+    velocity: number;
+    margin: number;
+    dailyProfit: number;
+    promoDiscountPct?: number;
+}
+
+export interface OptimalPriceResult {
+    sku: string;                    // canonical SKU
+    currentPrice: number;
+    recommendedPrice: number;
+
+    // Confidence & source
+    confidence: number;             // 0.0–1.0
+    source: 'SKU_DATA' | 'BLENDED' | 'COHORT' | 'GUARDRAIL';
+
+    // Expected impact
+    currentDailyProfit: number;
+    expectedDailyProfit: number;
+    profitUplift: number;           // % change
+    expectedVelocityChange: number;
+    expectedMarginChange: number;   // pp change
+
+    // Cohort context
+    cohort: {
+        category: string;
+        bucket: string;
+        skusInBucket: number;
+        medianMarginPct: number;
+        medianVelocity: number;
+        elasticity: number;
+    };
+
+    // SKU-level data
+    skuPricePoints: PricePoint[];
+    organicPointCount: number;
+    promoPointCount: number;
+
+    // Alias transparency
+    aliasesUsed: string[];          // raw alias SKUs merged into this result
+
+    // Transparency
+    reasoning: string;              // full human-readable explanation
+    wasConstrained: boolean;
+    constraintReason?: string;
+
+    // Metadata
+    calculatedAt: string;           // ISO timestamp
+
+    // Data quality
+    warnings: string[];
+}

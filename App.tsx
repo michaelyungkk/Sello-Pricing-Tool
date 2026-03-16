@@ -37,7 +37,8 @@ import PriceElasticityModal from './components/PriceElasticityModal';
 import AnalysisModal from './components/AnalysisModal';
 
 import { TAX_NOTE_SHORT } from './services/taxPolicy';
-import { StrategyConfig } from './types';
+import { StrategyConfig, OptimalPriceResult } from './types';
+import type { CohortShiftWarning } from './services/cohortAnalysis';
 
 
 const PageSpinner = () => (
@@ -175,12 +176,24 @@ const App: React.FC = () => {
         handleAdminToggle,
         handleAdminExit,
         handleAdminPush,
-        handleSync
+        handleSync,
+        // Optimal pricing
+        cohortSnapshot,
+        optimalPriceResults,
+        benchmarkUpdateNotices,
+        handleRecalculateBenchmarks,
     } = useAppState();
 
     // Progressive page mounting — pages stagger-mount during browser idle time after initial render
     const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','tools','definitions','settings','custom-report'];
     const [mountedPages, setMountedPages] = useState<Set<string>>(() => new Set<string>());
+
+    // Optimal price curve modal state (extends useAppState's selectedElasticityProduct)
+    const [elasticityResult, setElasticityResult] = useState<OptimalPriceResult | null>(null);
+    const handleViewElasticityWithResult = (product: Parameters<typeof handleViewElasticity>[0], result?: OptimalPriceResult) => {
+        setElasticityResult(result ?? null);
+        handleViewElasticity(product);
+    };
 
     useEffect(() => {
         let i = 0;
@@ -610,6 +623,7 @@ const App: React.FC = () => {
                                     skuFamilies={skuFamilies}
                                     adGroups={adGroups}
                                     priceHistoryMap={priceHistoryMap}
+                                    optimalPriceResults={optimalPriceResults}
                                 />
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full text-gray-400">
@@ -764,7 +778,7 @@ const App: React.FC = () => {
                                 onOpenMappingModal={() => setIsMappingModalOpen(true)}
                                 dateLabels={dynamicDateLabels}
                                 onUpdateProduct={(p) => setProducts(prev => (prev || []).map(old => old.id === p.id ? p : old))}
-                                onViewElasticity={handleViewElasticity}
+                                onViewElasticity={handleViewElasticityWithResult}
                                 themeColor={userProfile.themeColor}
                                 onAnalyze={handleAnalyze}
                                 onDeepDive={handleDeepDiveRequest}
@@ -778,6 +792,10 @@ const App: React.FC = () => {
                                 pendingFamilySuggestions={pendingFamilySuggestions}
                                 setPendingFamilySuggestions={setPendingFamilySuggestions}
                                 headerStyle={headerStyle}
+                                cohortSnapshot={cohortSnapshot}
+                                optimalPriceResults={optimalPriceResults}
+                                benchmarkUpdateNotices={benchmarkUpdateNotices}
+                                onRecalculateBenchmarks={handleRecalculateBenchmarks}
                             />
                         </div>)}
                         {mountedPages.has('platforms') && (
@@ -825,6 +843,7 @@ const App: React.FC = () => {
                                 velocityLookback={velocityLookback}
                                 thresholds={thresholds}
                                 skuFamilies={skuFamilies}
+                                optimalPriceResults={optimalPriceResults}
                             />
                         </div>)}
                         {mountedPages.has('costs') && (
@@ -973,9 +992,11 @@ const App: React.FC = () => {
                     selectedElasticityProduct && (
                         <PriceElasticityModal
                             product={selectedElasticityProduct}
-                            priceHistory={salesHistory}
-                            priceChangeHistory={priceChangeHistory || []}
-                            onClose={() => setSelectedElasticityProduct(null)}
+                            result={elasticityResult ?? undefined}
+                            onClose={() => {
+                                setSelectedElasticityProduct(null);
+                                setElasticityResult(null);
+                            }}
                         />
                     )
                 }

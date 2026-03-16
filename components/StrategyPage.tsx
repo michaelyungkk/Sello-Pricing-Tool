@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { StrategyPageContainer } from './strategy/StrategyPageContainer';
-import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog, SkuFamily } from '../types';
+import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog, SkuFamily, OptimalPriceResult } from '../types';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 
 interface StrategyPageProps {
@@ -26,6 +26,7 @@ interface StrategyPageProps {
     onUpdateInventoryChangeRecord?: (record: InventoryChangeRecord) => void;
     onManualPriceChange?: (data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
     onManualCostChange?: (data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
+    optimalPriceResults?: Map<string, OptimalPriceResult>;
 }
 
 const StrategyPage: React.FC<StrategyPageProps> = (props) => {

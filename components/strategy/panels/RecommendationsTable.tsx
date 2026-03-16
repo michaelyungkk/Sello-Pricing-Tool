@@ -6,8 +6,22 @@ import { SortableHeader } from '../../common/SortableHeader';
 import { SortState } from '../../../utils/tableSort';
 import { Eye, EyeOff, AlertCircle, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Layers } from 'lucide-react';
 import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
-import { SkuFamily, Product } from '../../../types';
+import { SkuFamily, Product, OptimalPriceResult } from '../../../types';
 import { VAT_MULTIPLIER } from '../../../constants';
+
+// ── Confidence Badge (inline — same pattern as Sessions 4 & 5)
+const ConfidenceBadge: React.FC<{ confidence: number; source: string }> = ({ confidence, source }) => {
+    if (source === 'COHORT' || confidence < 0.3) {
+        return <span className="px-1.5 py-0.5 text-[9px] font-bold rounded border border-gray-300 text-gray-500">Benchmark</span>;
+    }
+    if (confidence >= 0.9) {
+        return <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-700">High</span>;
+    }
+    if (confidence >= 0.5) {
+        return <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-700">Medium</span>;
+    }
+    return <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-gray-100 text-gray-500">Low</span>;
+};
 
 interface RecommendationsTableProps {
     paginatedData: any[];
@@ -32,6 +46,7 @@ interface RecommendationsTableProps {
     onAuditToggle?: () => void;
     skuFamilies: SkuFamily[];
     products: Product[];
+    optimalPriceResults?: Map<string, OptimalPriceResult>;
 }
 
 export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
@@ -56,7 +71,8 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
     auditActive,
     onAuditToggle,
     skuFamilies = [],
-    products = []
+    products = [],
+    optimalPriceResults,
 }) => {
 
     const getRunwayBin = (days: number, stockLevel: number, leadTime: number) => {
@@ -151,6 +167,18 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                             const family = skuFamilies.find(f => f.memberSkus.includes(row.sku));
                                             if (!family) return null;
                                             const siblings = family.memberSkus.filter(s => s !== row.sku);
+                                            const currentResult = optimalPriceResults?.get(row.sku);
+                                            const rowCurrentPrice = row.caPrice || (row.currentPrice * VAT_MULTIPLIER) || 0;
+                                            const rowOptimalPrice = currentResult?.recommendedPrice;
+
+                                            // Anomaly: sibling is currently cheaper but algorithm says it should be pricier
+                                            const anomaly = siblings.some(s => {
+                                                const sibProd = products.find(p => p.sku === s);
+                                                const sibResult = optimalPriceResults?.get(s);
+                                                if (!sibProd || !sibResult) return false;
+                                                const sibCurrent = sibProd.caPrice || 0;
+                                                return sibCurrent < rowCurrentPrice && sibResult.recommendedPrice > (rowOptimalPrice || 0);
+                                            });
 
                                             return (
                                                 <div className="group relative ml-2">
@@ -159,25 +187,56 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                                     </div>
 
                                                     {/* Tooltip */}
-                                                    <div className="absolute bottom-full left-0 mb-2 w-72 p-3 bg-gray-900 text-white text-[11px] rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-[100] transform translate-y-1 group-hover:translate-y-0 border border-white/10 backdrop-blur-md">
+                                                    <div className="absolute bottom-full left-0 mb-2 w-80 p-3 bg-gray-900 text-white text-[11px] rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-[100] transform translate-y-1 group-hover:translate-y-0 border border-white/10 backdrop-blur-md">
                                                         <div className="font-bold mb-2 border-b border-gray-700 pb-1.5 flex items-center gap-2">
                                                             <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                                                            Family Group: {family.name}
+                                                            Family: {family.name}
                                                         </div>
-                                                        <div className="space-y-1.5">
+
+                                                        {/* Column headers */}
+                                                        <div className="grid grid-cols-3 text-[9px] text-gray-500 uppercase tracking-wide mb-1 px-1.5">
+                                                            <span>SKU</span>
+                                                            <span className="text-right">Current</span>
+                                                            <span className="text-right">Optimal</span>
+                                                        </div>
+
+                                                        {/* Current row — highlighted */}
+                                                        <div className="grid grid-cols-3 items-center bg-indigo-500/20 p-1 px-1.5 rounded border border-indigo-400/20 mb-1">
+                                                            <span className="font-bold text-indigo-200">{row.sku} ★</span>
+                                                            <span className="text-right font-bold text-gray-200">{formatSmartMoney(rowCurrentPrice)}</span>
+                                                            <span className="text-right font-bold text-emerald-300">
+                                                                {rowOptimalPrice ? formatSmartMoney(rowOptimalPrice) : '—'}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Sibling rows */}
+                                                        <div className="space-y-1">
                                                             {siblings.length > 0 ? siblings.map(s => {
                                                                 const siblingProd = products.find(p => p.sku === s);
-                                                                const price = siblingProd ? (siblingProd.caPrice || (siblingProd.currentPrice * VAT_MULTIPLIER)) : 0;
+                                                                const sibResult = optimalPriceResults?.get(s);
+                                                                const sibCurrentPrice = siblingProd ? (siblingProd.caPrice || (siblingProd.currentPrice * VAT_MULTIPLIER)) : 0;
                                                                 return (
-                                                                    <div key={s} className="flex justify-between items-center bg-white/5 p-1 px-1.5 rounded">
+                                                                    <div key={s} className="grid grid-cols-3 items-center bg-white/5 p-1 px-1.5 rounded">
                                                                         <span className="font-medium text-gray-300">{s}</span>
-                                                                        <span className="font-bold text-indigo-300">{formatSmartMoney(price)}</span>
+                                                                        <span className="text-right text-gray-300">{formatSmartMoney(sibCurrentPrice)}</span>
+                                                                        <span className="text-right font-bold text-emerald-300">
+                                                                            {sibResult ? formatSmartMoney(sibResult.recommendedPrice) : '—'}
+                                                                        </span>
                                                                     </div>
                                                                 );
                                                             }) : (
-                                                                <div className="text-gray-500 italic">No sibling SKUs</div>
+                                                                <div className="text-gray-500 italic px-1.5">No sibling SKUs</div>
                                                             )}
                                                         </div>
+
+                                                        {/* Anomaly hint */}
+                                                        {anomaly && (
+                                                            <div className="mt-2 pt-2 border-t border-gray-700 text-[10px] text-amber-300 flex items-start gap-1.5">
+                                                                <span>⚠</span>
+                                                                <span>Optimal prices may not reflect expected family hierarchy. Review siblings before applying.</span>
+                                                            </div>
+                                                        )}
+
                                                         <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                                                     </div>
                                                 </div>
@@ -224,10 +283,32 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                 </td>
                                 <td className="r v-ca">{row.caPrice ? formatSmartMoney(row.caPrice) : '-'}</td>
                                 <td className="r v-num">
-                                    {row.action !== 'MAINTAIN' ? (
-                                        <span style={{ color: themeColor }}>{formatSmartMoney(row.adjustedPrice)}</span>
-                                    ) : '-'}
-                                    {row.safetyViolation && <AlertCircle className="w-4 h-4 text-red-500 inline ml-1" />}
+                                    {(() => {
+                                        const optResult = optimalPriceResults?.get(row.sku);
+                                        return (
+                                            <div className="flex flex-col items-end gap-1">
+                                                {row.action !== 'MAINTAIN' ? (
+                                                    <div className="group relative">
+                                                        <span style={{ color: themeColor }}>{formatSmartMoney(row.adjustedPrice)}</span>
+                                                        {row.safetyViolation && <AlertCircle className="w-4 h-4 text-red-500 inline ml-1" />}
+                                                        {/* Reasoning tooltip */}
+                                                        {optResult && (
+                                                            <div className="absolute bottom-full right-0 mb-2 w-72 p-3 bg-gray-900 text-white text-[11px] rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50 border border-white/10">
+                                                                <p className="text-gray-300 leading-relaxed">
+                                                                    {optResult.reasoning.split('. ').slice(0, 2).join('. ')}.
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400">-</span>
+                                                )}
+                                                {optResult && (
+                                                    <ConfidenceBadge confidence={optResult.confidence} source={optResult.source} />
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </td>
                                 <td className="c">
                                     {row.action === 'INCREASE' && <span className="sello-badge badge-increase">INCREASE</span>}

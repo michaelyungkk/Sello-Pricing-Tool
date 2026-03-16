@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextBar } from '../common/ContextBar';
-import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog, SkuFamily } from '../../types';
+import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog, SkuFamily, OptimalPriceResult } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../../constants';
 import { Activity, History, Coins, Database, Ship, Settings, Download, X, ArrowRight, RotateCcw, TrendingUp, TrendingDown, Save, Edit2, CheckCircle, Info, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -43,6 +43,8 @@ interface StrategyPageContainerProps {
     onUpdateInventoryChangeRecord?: (record: InventoryChangeRecord) => void;
     onManualPriceChange?: (data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
     onManualCostChange?: (data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
+    // NOTE: wired down from App.tsx via StrategyPage in Session 6
+    optimalPriceResults?: Map<string, OptimalPriceResult>;
 }
 
 const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
@@ -55,7 +57,8 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
     onUpdateCostChangeRecord,
     onUpdateInventoryChangeRecord,
     onManualPriceChange,
-    onManualCostChange
+    onManualCostChange,
+    optimalPriceResults,
 }) => {
     // --- STATE ---
     const [config, setConfig] = useState<StrategyConfig>(() => {
@@ -780,6 +783,7 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
                         themeColor={themeColor}
                         skuFamilies={skuFamilies}
                         products={products}
+                        optimalPriceResults={optimalPriceResults}
                     />
                 </div>
             )}

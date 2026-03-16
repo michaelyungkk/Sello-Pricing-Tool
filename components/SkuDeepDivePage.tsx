@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Info, AlertTriangle, Package, RotateCcw, Megaphone, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
-import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules } from '../types';
+import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules, OptimalPriceResult } from '../types';
 import { ThresholdConfig } from '../services/thresholdsConfig';
 import { calcProfit, calcRevenue, calcAdSpend, marginPct, calcTACoSPct, calcUnits } from '../services/metrics';
 import { buildWindow } from '../services/dateWindow';
@@ -12,6 +12,7 @@ import { parseReturnsReason } from '../services/returnsReasonCodes';
 import { sortRows, SortState } from '../utils/tableSort';
 import { aggregateRefundKeywords } from '../services/refundTextAgg';
 import { calculateQuantiles } from './skuDeepDive/charts/BoxPlot';
+import { getCanonicalSku } from '../services/skuNormalization';
 
 // Section Components
 import { SkuOverviewSection } from './skuDeepDive/sections/SkuOverviewSection';
@@ -40,6 +41,7 @@ interface SkuDeepDivePageProps {
     products: Product[];
     adGroups: any[];
     priceHistoryMap: Map<string, any[]>;
+    optimalPriceResults?: Map<string, OptimalPriceResult>;
 }
 
 // Helper to read URL params
@@ -51,7 +53,7 @@ const getActiveSectionFromUrl = () => {
 
 const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     data, themeColor, onBack, priceChangeHistory = [], initialTimeWindow, focus, thresholds, pricingRules,
-    skuFamilies, products, adGroups, priceHistoryMap
+    skuFamilies, products, adGroups, priceHistoryMap, optimalPriceResults
 }) => {
     const { product, allTimeSales, allTimeQty, transactions = [], refunds = [] } = data;
 
@@ -745,9 +747,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                         startKey={startKey}
                         endKey={endKey}
                         themeColor={themeColor}
-                        // Use optimal price (Profit) as priority, fallback to maxVelocity (Velocity) if not set.
-                        // Ensure VAT scaling is applied as it is raw in source.
                         optimalPrice={(product.optimalPrice || product.maxVelocityPrice || 0) * VAT_MULTIPLIER}
+                        optimalPriceResult={optimalPriceResults?.get(getCanonicalSku(product.sku))}
                         currentPrice={product.currentPrice * VAT_MULTIPLIER}
                         siblings={siblings}
                         isInFamily={isInFamily}

@@ -1,10 +1,10 @@
 
 import React, { useMemo, useState } from 'react';
 import { DollarSign, Tag, TrendingUp, TrendingDown, ArrowRight, Info, Users, Clock, LayoutGrid } from 'lucide-react';
-import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, ReferenceArea, ReferenceLine, Tooltip as RechartsTooltip, Legend, BarChart, Bar } from 'recharts';
+import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, ReferenceArea, ReferenceLine, Tooltip as RechartsTooltip, Legend, BarChart, Bar, ComposedChart, Line } from 'recharts';
 import { PriceChangeHistoryPanel } from '../../strategy/PriceChangeHistoryPanel';
 import { OptimalPriceCard } from '../parts/OptimalPriceCard';
-import { Product, PriceLog } from '../../../types';
+import { Product, PriceLog, OptimalPriceResult, PricePoint } from '../../../types';
 import { formatMoney, formatSmartMoney } from '../../../utils/format';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { asDateKey, addDaysToDateKey } from '../../../services/dateUtils';
@@ -26,6 +26,7 @@ interface PricingHistorySectionProps {
     themeColor: string;
     formatYAxis?: (val: any) => string;
     optimalPrice: number;
+    optimalPriceResult?: OptimalPriceResult;   // new: full result
     currentPrice: number;
     siblings: Product[];
     isInFamily: boolean;
@@ -48,6 +49,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
     endKey,
     themeColor,
     optimalPrice,
+    optimalPriceResult,
     currentPrice,
     siblings,
     isInFamily,
@@ -147,6 +149,145 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
 
     const familySkus = [productSku, ...siblings.map(s => s.sku)];
 
+    // ── Inline Profit Curve Chart (same spec as modal in Session 4)
+    const ProfitCurveChart: React.FC<{ result?: OptimalPriceResult; currentPrice: number }> = ({ result: r, currentPrice: cp }) => {
+        if (!r) {
+            return (
+                <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                    No optimal price data available for this SKU yet.
+                </div>
+            );
+        }
+        const pricePoints: PricePoint[] = r.skuPricePoints;
+        const recommendedPrice = r.recommendedPrice;
+        const cohortElasticity = r.cohort.elasticity;
+        const cohortVelocity = r.cohort.medianVelocity;
+        const costs = 0; // costs not available in this context — guardrail zone omitted
+
+        const allPrices = pricePoints.map(p => p.price);
+        const lo = allPrices.length > 0 ? Math.min(...allPrices) * 0.9 : cp * 0.7;
+        const hi = Math.max(cp, recommendedPrice) * 1.15;
+        const xMin = Math.min(lo, cp * 0.85);
+        const xMax = hi;
+
+        const organicData = pricePoints.filter(p => p.source === 'organic').map(p => ({
+            x: p.price, y: p.dailyProfit, price: p.price, source: 'organic',
+            velocity: p.velocity, margin: p.margin, dailyProfit: p.dailyProfit, eraId: p.eraId,
+        }));
+        const promoData = pricePoints.filter(p => p.source === 'promo').map(p => ({
+            x: p.price, y: p.dailyProfit, price: p.price, source: 'promo',
+            velocity: p.velocity, margin: p.margin, dailyProfit: p.dailyProfit, eraId: p.eraId,
+        }));
+        const sorted = [...pricePoints].sort((a, b) => a.price - b.price);
+        const curveData = sorted.length >= 3
+            ? sorted.map(p => ({ x: p.price, y: p.dailyProfit, price: p.price, dailyProfit: p.dailyProfit }))
+            : [];
+        const STEPS = 40;
+        const bucketMid = (xMin + xMax) / 2;
+        const cohortCurveData = Array.from({ length: STEPS + 1 }, (_, i) => {
+            const price = xMin + (i / STEPS) * (xMax - xMin);
+            const margin = price - costs;
+            if (margin <= 0) return null;
+            const vf = 1 + cohortElasticity * ((price - bucketMid) / (bucketMid || 1));
+            const estV = cohortVelocity * Math.max(0, vf);
+            return { x: price, y: margin * estV, price, dailyProfit: margin * estV };
+        }).filter((d): d is NonNullable<typeof d> => d !== null);
+
+        const hasNoData = pricePoints.length === 0;
+
+        return (
+            <div className="relative w-full h-full">
+                {hasNoData && (
+                    <div className="absolute top-2 left-0 right-0 flex justify-center z-10 pointer-events-none">
+                        <span className="bg-gray-800/80 text-white text-[10px] px-3 py-1 rounded-full">
+                            No sales history — curve based on benchmark
+                        </span>
+                    </div>
+                )}
+                <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart margin={{ top: 24, right: 20, left: 10, bottom: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis type="number" dataKey="x" domain={[xMin, xMax]} tickFormatter={(v) => `£${Number(v).toFixed(0)}`} tick={{ fontSize: 10 }} label={{ value: 'Price (£)', position: 'insideBottom', offset: -8, fontSize: 10, fill: '#9ca3af' }} />
+                        <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `£${Number(v).toFixed(2)}`} label={{ value: 'Daily Profit', angle: -90, position: 'insideLeft', offset: 10, fontSize: 10, fill: '#9ca3af' }} />
+                        <RechartsTooltip
+                            content={({ active, payload }: any) => {
+                                if (!active || !payload?.length) return null;
+                                const d = payload[0]?.payload;
+                                if (!d) return null;
+                                const isOpt = Math.abs(d.price - recommendedPrice) < 0.5;
+                                return (
+                                    <div className="bg-gray-900 text-white p-3 rounded-xl text-[11px] min-w-[160px] border border-gray-700">
+                                        <div className="font-bold text-indigo-300 mb-1">{formatSmartMoney(d.price)}{isOpt ? ' ★' : ''}</div>
+                                        {d.velocity != null && <div className="text-gray-400">Velocity: {d.velocity.toFixed(2)}/day</div>}
+                                        <div className={isOpt ? 'font-bold text-emerald-300' : ''}>Profit: {formatSmartMoney(d.dailyProfit ?? d.y)}</div>
+                                    </div>
+                                );
+                            }}
+                        />
+                        {cohortCurveData.length > 0 && (
+                            <Line data={cohortCurveData} type="monotone" dataKey="y" stroke="#9ca3af" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
+                        )}
+                        {curveData.length >= 3 && (
+                            <Line data={curveData} type="monotone" dataKey="y" stroke="#4f46e5" strokeWidth={2} dot={false} isAnimationActive={false} />
+                        )}
+                        {organicData.length > 0 && <Scatter data={organicData} fill="#4f46e5" name="Organic" />}
+                        {promoData.length > 0 && <Scatter data={promoData} fill="none" stroke="#f59e0b" strokeWidth={2} name="Promo" />}
+                        <ReferenceLine x={cp} stroke="#6b7280" strokeWidth={1.5} strokeDasharray="4 3" label={{ value: `Current ${formatSmartMoney(cp)}`, position: 'top', fontSize: 9, fill: '#6b7280' }} />
+                        <ReferenceLine x={recommendedPrice} stroke="#10b981" strokeWidth={2} label={{ value: `Optimal ${formatSmartMoney(recommendedPrice)} ★`, position: 'top', fontSize: 9, fill: '#10b981' }} />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            </div>
+        );
+    };
+
+    // ── Profit Curve Price Points Table
+    const ProfitCurveTable: React.FC<{ result: OptimalPriceResult }> = ({ result: r }) => (
+        <div className="mt-4">
+            {r.aliasesUsed.length > 0 && (
+                <p className="text-xs text-gray-500 mb-2">
+                    Includes data from: <span className="font-medium text-gray-700">{r.aliasesUsed.join(', ')}</span>
+                </p>
+            )}
+            {r.skuPricePoints.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No price points — no eligible sales history.</p>
+            ) : (
+                <table className="sello-table text-xs">
+                    <thead><tr>
+                        <th className="text-left">Era</th>
+                        <th className="r">Price</th>
+                        <th className="r">Source</th>
+                        <th className="r">Weeks</th>
+                        <th className="r">Velocity</th>
+                        <th className="r">Margin</th>
+                        <th className="r">Daily Profit</th>
+                    </tr></thead>
+                    <tbody>
+                        {r.skuPricePoints.map((p, i) => {
+                            const isOpt = Math.abs(p.price - r.recommendedPrice) < 0.5;
+                            const isPromo = p.source === 'promo';
+                            return (
+                                <tr key={i} className={isOpt ? 'bg-emerald-50' : isPromo ? 'bg-amber-50/40' : ''}>
+                                    <td className="font-mono text-[10px] text-gray-500">{p.eraId}</td>
+                                    <td className="r font-bold">{formatSmartMoney(p.price)}{isOpt ? ' ★' : ''}</td>
+                                    <td className="r">
+                                        {isPromo
+                                            ? <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">↓{Math.round((p.promoDiscountPct ?? 0) * 100)}%</span>
+                                            : <span className="text-indigo-600 font-medium">Organic</span>
+                                        }
+                                    </td>
+                                    <td className="r">{p.weekCount ?? '—'}</td>
+                                    <td className="r">{p.velocity.toFixed(2)}/day</td>
+                                    <td className="r">{formatSmartMoney(p.margin)}</td>
+                                    <td className={`r font-bold ${isOpt ? 'text-emerald-700' : ''}`}>{formatSmartMoney(p.dailyProfit)}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            )}
+        </div>
+    );
+
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -198,11 +339,19 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                     {p}
                                 </button>
                             ))}
+                            <button
+                                onClick={() => setChartPeriod('profit-curve')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${chartPeriod === 'profit-curve' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Profit Curve
+                            </button>
                         </div>
                     </div>
 
                     <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[420px] select-none relative">
-                        {viewMode === 'deviation' ? (
+                        {chartPeriod === 'profit-curve' ? (
+                            <ProfitCurveChart result={optimalPriceResult} currentPrice={currentPrice} />
+                        ) : viewMode === 'deviation' ? (
                             <>
                                 <div className="flex justify-between items-start mb-4 shrink-0">
                                     <h4 className="text-xs font-bold text-gray-500 uppercase font-mono">
@@ -338,6 +487,11 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                         windowEnd={endKey}
                         themeColor={themeColor}
                     />
+
+                    {/* Profit Curve price points table */}
+                    {chartPeriod === 'profit-curve' && optimalPriceResult && (
+                        <ProfitCurveTable result={optimalPriceResult} />
+                    )}
                 </div>
 
                 <div className="space-y-4">
@@ -361,7 +515,9 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                 {priceVolumeAnalysis.pointsTable.map((pt: any, i: number) => {
                                     const isLowest = minPricePoint !== null && pt.price === minPricePoint;
                                     const isHighest = maxPricePoint !== null && pt.price === maxPricePoint;
-                                    const isOptimal = optimalPrice && Math.abs(pt.price - optimalPrice) < 0.01;
+                                    // Prefer new algorithm result; fall back to legacy optimalPrice
+                                    const optimalRef = optimalPriceResult?.recommendedPrice ?? optimalPrice;
+                                    const isOptimal = optimalRef && Math.abs(pt.price - optimalRef) < 0.5;
                                     const sharePct = totalVolume > 0 ? (pt.qty / totalVolume) * 100 : 0;
 
                                     return (
@@ -407,8 +563,9 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                         </table>
                     </div>
 
-                    {optimalPrice && optimalPrice > 0 && (
+                    {(optimalPriceResult || (optimalPrice && optimalPrice > 0)) && (
                         <OptimalPriceCard
+                            result={optimalPriceResult}
                             optimalPrice={optimalPrice}
                             currentPrice={currentPrice || 0}
                         />

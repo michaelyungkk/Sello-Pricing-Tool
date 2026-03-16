@@ -38,7 +38,21 @@ import { getThresholdConfig, ThresholdConfig, saveThresholdConfig } from '../ser
 import { migrateRestoredDatabase, auditRestoredDatabase } from '../services/migrationService';
 import { normalizeRestoredState } from '../services/restoreSanitizer';
 import { hexToRgb, extractFirstHex } from '../utils/color';
-import { getCanonicalSku } from '../services/skuNormalization';
+import { getCanonicalSku, buildCanonicalResolver, CANONICAL_MAP } from '../services/skuNormalization';
+import {
+    calculateOptimalPrice,
+    buildPriceEras,
+    buildPricePoints,
+    isEligibleTransaction,
+    tagTransactionSource,
+    assignTransactionToEra,
+} from '../services/optimalPriceEngine';
+import {
+    computeAllCohortStats,
+    detectBenchmarkShifts,
+    detectBenchmarkUpdateNeeded,
+} from '../services/cohortAnalysis';
+import type { CohortSnapshot, OptimalPriceResult, BenchmarkUpdateNotice, PricePoint } from '../types';
 import { resolveEffectiveVelocity, toNumber } from '../services/metrics';
 import { asDateKey } from '../services/dateUtils';
 import { resolveAttribute } from '../services/mappingService';
@@ -233,6 +247,11 @@ export const useAppState = () => {
     const [adGroups, setAdGroups] = useState<AdGroup[]>([]);
     const [lastRecalculationSummary, setLastRecalculationSummary] = useState<{ affectedTransactions: number; totalSpreadAmount: number; daysProcessed: number } | null>(null);
     const [pendingFamilySuggestions, setPendingFamilySuggestions] = useState<SkuFamily[]>([]);
+
+    // --- OPTIMAL PRICING STATE ---
+    const [cohortSnapshot, setCohortSnapshot] = useState<CohortSnapshot | null>(null);
+    const [optimalPriceResults, setOptimalPriceResults] = useState<Map<string, OptimalPriceResult>>(new Map());
+    const [benchmarkUpdateNotices, setBenchmarkUpdateNotices] = useState<BenchmarkUpdateNotice[]>([]);
 
     // --- DB SYNC STATE ---
     const [isAdminMode, setIsAdminMode] = useState<boolean>(
@@ -560,12 +579,21 @@ export const useAppState = () => {
         skuFamilies,
         adGroups,
         inventoryTemplates,
-        freightRates
+        freightRates,
+        cohortSnapshot: cohortSnapshot ? {
+            ...cohortSnapshot,
+            categoryBuckets: Object.fromEntries(cohortSnapshot.categoryBuckets),
+            cohortStats: Object.fromEntries(cohortSnapshot.cohortStats),
+            skuAssignments: Object.fromEntries(cohortSnapshot.skuAssignments),
+        } : null,
+        optimalPriceResults: Object.fromEntries(optimalPriceResults),
+        benchmarkUpdateNotices,
     }), [products, priceChangeHistory, costChangeHistory,
         inventoryChangeHistory, promotions, learnedAliases,
         pricingRules, logisticsRules, strategyRules, searchConfig,
         thresholds, brandMap, categoryMap, skuFamilies, adGroups,
-        inventoryTemplates, freightRates]);
+        inventoryTemplates, freightRates,
+        cohortSnapshot, optimalPriceResults, benchmarkUpdateNotices]);
 
     const handleBackup = useCallback(() => {
         const data = {
@@ -733,7 +761,55 @@ export const useAppState = () => {
         if (discoveredPlatforms && discoveredPlatforms.length > 0) { setPricingRules(prev => { const newRules = { ...(prev || {}) }; let changed = false; discoveredPlatforms.forEach(p => { if (!newRules[p]) { newRules[p] = { markup: 0, commission: 15, manager: 'Unassigned', color: '#6b7280', pricingControl: 'MERCHANT', feeModel: 'COMMISSION_PCT', adsEnabled: false }; changed = true; } }); return changed ? newRules : prev; }); }
         updateTimestamp('Sales'); setIsSalesImportModalOpen(false);
         if (isAdminMode) setIsDirty(true);
-    }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, isAdminMode]);
+
+        // Auto-recalculate optimal prices for SKUs that received new transactions
+        if (historyPayload && historyPayload.length > 0 && cohortSnapshot) {
+            const todayKey = new Date().toISOString().split('T')[0];
+            const resolver = buildCanonicalResolver(learnedAliases);
+            const affectedSkus = new Set(historyPayload.map(tx => resolver(tx.sku)));
+
+            setOptimalPriceResults(prev => {
+                const next = new Map(prev);
+                affectedSkus.forEach(canonicalSku => {
+                    const product = products.find(p => resolver(p.sku) === canonicalSku);
+                    if (!product) return;
+                    const bucketKey = cohortSnapshot.skuAssignments.get(canonicalSku);
+                    const cohort = bucketKey ? cohortSnapshot.cohortStats.get(bucketKey) : undefined;
+                    if (!cohort) return;
+                    const result = calculateOptimalPrice({
+                        sku: product,
+                        priceHistory: salesHistory,
+                        priceChangeLog: priceChangeHistory,
+                        promotions,
+                        pricingRules,
+                        cohortSnapshot,
+                        learnedAliases,
+                        today: todayKey,
+                    });
+                    next.set(canonicalSku, result);
+                });
+                return next;
+            });
+
+            // Detect if any categories need benchmark update
+            const notices = detectBenchmarkUpdateNeeded(products, cohortSnapshot, Array.from(affectedSkus));
+            if (notices.length > 0) {
+                setBenchmarkUpdateNotices(prev => {
+                    const merged = [...prev];
+                    notices.forEach(n => {
+                        const existing = merged.findIndex(m => m.category === n.category);
+                        if (existing >= 0) {
+                            merged[existing] = { ...merged[existing], skuCount: merged[existing].skuCount + n.skuCount };
+                        } else {
+                            merged.push(n);
+                        }
+                    });
+                    return merged;
+                });
+            }
+        }
+    }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, isAdminMode,
+        cohortSnapshot, learnedAliases, priceChangeHistory, promotions]);
 
     const handleInventoryImport = useCallback((data: any[]) => {
         const costChanges: CostChangeRecord[] = [];
@@ -1174,6 +1250,23 @@ export const useAppState = () => {
         );
         setProducts(finalProducts);
         setAdGroups(adGroupsToUse);
+
+        // Restore optimal pricing state if present in snapshot
+        if (m.cohortSnapshot) {
+            const s = m.cohortSnapshot;
+            setCohortSnapshot({
+                ...s,
+                categoryBuckets: new Map(Object.entries(s.categoryBuckets || {})),
+                cohortStats: new Map(Object.entries(s.cohortStats || {})),
+                skuAssignments: new Map(Object.entries(s.skuAssignments || {})),
+            });
+        }
+        if (m.optimalPriceResults) {
+            setOptimalPriceResults(new Map(Object.entries(m.optimalPriceResults)));
+        }
+        if (m.benchmarkUpdateNotices) {
+            setBenchmarkUpdateNotices(m.benchmarkUpdateNotices);
+        }
     }, [velocityLookback, thresholds]);
 
     const handleSync = useCallback(async () => {
@@ -1329,6 +1422,93 @@ export const useAppState = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // --- OPTIMAL PRICING: RECALCULATE BENCHMARKS ---
+    const handleRecalculateBenchmarks = useCallback((categoriesToRebuild?: string[]) => {
+        const todayKey = new Date().toISOString().split('T')[0];
+        const resolver = buildCanonicalResolver(learnedAliases);
+
+        // Build price points for all SKUs (needed for cohort stats)
+        const allPricePoints = new Map<string, PricePoint[]>();
+        products.forEach(product => {
+            const canonicalSku = resolver(product.sku);
+            const eras = buildPriceEras(
+                canonicalSku, priceChangeHistory,
+                product.caPrice ?? product.currentPrice, todayKey, resolver
+            );
+            const txs = priceHistoryMap.get(product.sku) ?? [];
+            const tagged = txs
+                .filter(tx => isEligibleTransaction(tx, pricingRules))
+                .map(tx => ({
+                    ...tx,
+                    canonicalSku,
+                    rawSku: tx.sku,
+                    source: tagTransactionSource(tx, promotions, canonicalSku, resolver),
+                    effectivePrice: tx.price,
+                    eraId: assignTransactionToEra(tx, eras)?.eraId ?? '',
+                }));
+            const costs =
+                (product.costPrice ?? product.costDetail?.cogs ?? 0) +
+                (product.postage ?? product.costDetail?.postage ?? 0) +
+                (product.sellingFee ?? product.costDetail?.sellingFee ?? 0) +
+                (product.adsFee ?? product.costDetail?.adsFee ?? 0);
+            allPricePoints.set(
+                canonicalSku,
+                buildPricePoints(canonicalSku, tagged, eras, promotions, costs, resolver)
+            );
+        });
+
+        // Build new snapshot
+        const newSnapshot = computeAllCohortStats(products, allPricePoints);
+
+        // Detect bucket shifts vs existing snapshot
+        const shifts = cohortSnapshot ? detectBenchmarkShifts(cohortSnapshot, newSnapshot) : [];
+
+        // Merge with existing snapshot — replace rebuilt categories, keep others
+        const merged: CohortSnapshot = cohortSnapshot ? {
+            ...cohortSnapshot,
+            computedAt: newSnapshot.computedAt,
+            version: (cohortSnapshot.version ?? 0) + 1,
+            categoryBuckets: new Map([...cohortSnapshot.categoryBuckets, ...newSnapshot.categoryBuckets]),
+            cohortStats: new Map([...cohortSnapshot.cohortStats, ...newSnapshot.cohortStats]),
+            skuAssignments: new Map([...cohortSnapshot.skuAssignments, ...newSnapshot.skuAssignments]),
+        } : newSnapshot;
+
+        setCohortSnapshot(merged);
+
+        // Recalculate optimal prices for all SKUs in rebuilt categories
+        const affectedSkus = new Set<string>();
+        newSnapshot.skuAssignments.forEach((_, sku) => affectedSkus.add(sku));
+
+        const nextResults = new Map(optimalPriceResults);
+        affectedSkus.forEach(canonicalSku => {
+            const product = products.find(p => resolver(p.sku) === canonicalSku);
+            if (!product) return;
+            const bucketKey = merged.skuAssignments.get(canonicalSku);
+            const cohort = bucketKey ? merged.cohortStats.get(bucketKey) : undefined;
+            if (!cohort) return;
+            const result = calculateOptimalPrice({
+                sku: product,
+                priceHistory: salesHistory,
+                priceChangeLog: priceChangeHistory,
+                promotions,
+                pricingRules,
+                cohortSnapshot: merged,
+                learnedAliases,
+                today: todayKey,
+            });
+            nextResults.set(canonicalSku, result);
+        });
+        setOptimalPriceResults(nextResults);
+
+        // Clear notices for rebuilt categories
+        setBenchmarkUpdateNotices(prev =>
+            prev.filter(n => !newSnapshot.categoryBuckets.has(n.category))
+        );
+
+        return shifts;
+    }, [products, priceHistoryMap, priceChangeHistory, pricingRules, promotions,
+        learnedAliases, cohortSnapshot, optimalPriceResults, salesHistory]);
+
     return {
         t,
         products,
@@ -1472,6 +1652,12 @@ export const useAppState = () => {
         handleAdminPush,
         handleSync,
         resolveConflicts,
-        getSharedSnapshot
+        getSharedSnapshot,
+        // Optimal Pricing
+        cohortSnapshot,
+        setCohortSnapshot,
+        optimalPriceResults,
+        benchmarkUpdateNotices,
+        handleRecalculateBenchmarks,
     };
 };

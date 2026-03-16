@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Product, PricingRules, SearchConfig, PriceChangeRecord } from '../../../types';
+import { Product, PricingRules, SearchConfig, PriceChangeRecord, OptimalPriceResult } from '../../../types';
 import { SearchIntent } from '../../../services/geminiService';
 import { isAdsEnabled } from '../../../services/platformCapabilities';
 import SkuDeepDivePage from '../../SkuDeepDivePage';
@@ -23,13 +23,14 @@ interface SearchResultsPageContainerProps {
     skuFamilies: any[];
     adGroups: any[];
     priceHistoryMap: Map<string, any[]>;
+    optimalPriceResults?: Map<string, OptimalPriceResult>;
 }
 
 type GroupBy = 'platform' | 'sku';
 
 export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProps> = ({
     data, products, pricingRules, themeColor, headerStyle, timeLabel, onRefine, searchConfig, priceChangeHistory, thresholds,
-    skuFamilies, adGroups, priceHistoryMap
+    skuFamilies, adGroups, priceHistoryMap, optimalPriceResults
 }) => {
     const [groupBy, setGroupBy] = useState<GroupBy>('platform');
     const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
@@ -483,6 +484,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
             products={products}
             adGroups={adGroups}
             priceHistoryMap={priceHistoryMap}
+            optimalPriceResults={optimalPriceResults}
         />;
     }
 
