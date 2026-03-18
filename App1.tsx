@@ -875,11 +875,9 @@ const App: React.FC = () => {
                                 onSaveTemplates={setInventoryTemplates}
                                 learnedAliases={learnedAliases}
                                 onSaveLearnedAliases={(aliases) => setLearnedAliases(prev => ({ ...prev, ...aliases }))}
-                                products={products || []}
+                                products={products}
                                 themeColor={userProfile.themeColor}
                                 headerStyle={headerStyle}
-                                salesHistory={salesHistory || []}
-                                refundHistory={refundHistory || []}
                             />
                         </div>)}
                         {mountedPages.has('definitions') && (

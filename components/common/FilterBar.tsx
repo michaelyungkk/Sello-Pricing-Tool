@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, KeyboardEvent, ClipboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, ChevronDown, X, Activity, SlidersHorizontal, Check } from 'lucide-react';
 
 export interface FilterBarProps {
@@ -58,9 +59,12 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 }) => {
   const [openDropdownKey, setOpenDropdownKey] = useState<string | null>(null);
   const [dropdownSearch, setDropdownSearch] = useState<Record<string, string>>({});
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 240 });
+  const triggerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [tagInput, setTagInput] = useState('');
   const tagInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const portalRef = useRef<HTMLDivElement | null>(null);
 
   const isTagMode = searchTags !== undefined && onSearchTagsChange !== undefined;
 
@@ -99,7 +103,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)
+          && (!portalRef.current || !portalRef.current.contains(event.target as Node))) {
         setOpenDropdownKey(null);
       }
     };
@@ -221,8 +226,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
           return (
             <div key={m.key} className="relative">
+              <div ref={el => { triggerRefs.current[m.key] = el; }}>
               <button
-                onClick={() => setOpenDropdownKey(isOpen ? null : m.key)}
+                onClick={() => {
+                  if (isOpen) { setOpenDropdownKey(null); return; }
+                  const el = triggerRefs.current[m.key];
+                  if (el) {
+                    const rect = el.getBoundingClientRect();
+                    setDropdownPos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX, width: Math.max(240, rect.width) });
+                  }
+                  setOpenDropdownKey(m.key);
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -275,17 +289,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 </div>
               </button>
 
-              {isOpen && (
-                <div style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 6px)',
-                  left: 0,
-                  width: 240,
+              {isOpen && createPortal(
+                <div ref={portalRef} style={{
+                  position: 'fixed',
+                  top: dropdownPos.top,
+                  left: dropdownPos.left,
+                  width: dropdownPos.width,
                   background: 'white',
                   border: '1px solid rgba(229,231,235,0.8)',
                   borderRadius: 10,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                  zIndex: 50,
+                  zIndex: 9999,
                   overflow: 'hidden',
                 }}>
                   <div style={{ padding: 8, borderBottom: '1px solid rgba(229,231,235,0.6)', background: 'rgba(249,250,251,0.8)' }}>
@@ -360,8 +374,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                       <div style={{ padding: '12px 10px', textAlign: 'center', fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>No options found</div>
                     )}
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
+              </div>
             </div>
           );
         })}

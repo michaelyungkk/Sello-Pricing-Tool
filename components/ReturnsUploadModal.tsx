@@ -154,7 +154,8 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
 
         // Update date columns to include order date and payment date candidates
         const dateIdx = findColPriority(dHeaders, ['ordertime', 'time', 'orderdate', 'date', 'refundtime', 'refund_time']);
-        const platformIdx = findColPriority(dHeaders, ['platformname', 'platform']);
+        const platformIdx  = findColPriority(dHeaders, ['platformnamelevel1', 'platformname', 'platform']);
+        const platform2Idx = findColPriority(dHeaders, ['platformnamelevel2']);
 
         const missingCols: string[] = [];
         if (skuIdx === -1) missingCols.push("SKU (sku_code)");
@@ -227,8 +228,22 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                     if (dKey) dateStr = new Date(dKey).toISOString();
                 }
 
-                // Platform Match
-                let finalPlatform = platformIdx !== -1 ? String(row[platformIdx]) : undefined;
+                // Platform Match — use level2 if available (e.g. "Amazon(UK) FBA" not "Amazon(UK)")
+                // Same logic as salesImportWorker: prefer level2, fall back to level1
+                let finalPlatform: string | undefined = undefined;
+                if (platformIdx !== -1 || platform2Idx !== -1) {
+                    const p1 = platformIdx  !== -1 ? String(row[platformIdx]  || '').trim() : '';
+                    const p2 = platform2Idx !== -1 ? String(row[platform2Idx] || '').trim() : '';
+                    if (p2 && p2 !== '-' && p2.toLowerCase() !== 'unknown') {
+                        if (p1 && !p2.toLowerCase().includes(p1.toLowerCase()) && p2.length < 5) {
+                            finalPlatform = `${p1} ${p2}`;
+                        } else {
+                            finalPlatform = p2;
+                        }
+                    } else if (p1) {
+                        finalPlatform = p1;
+                    }
+                }
                 if (existingOrders && existingOrders.size > 0) {
                     if (existingOrders.has(oid)) {
                         matchedOrders++;

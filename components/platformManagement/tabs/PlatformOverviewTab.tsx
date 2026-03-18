@@ -43,9 +43,9 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
     isAuditVisible,
 }) => {
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6">
             {isAuditVisible && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="">
                     <AuditPanel
                         title="Platform Overview Audit"
                         startKey={startKey}
@@ -56,6 +56,9 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                         getQty={(row) => row.units}
                         getProfit={(row) => row.profit}
                         getAdSpend={(row) => row.adSpend}
+                        distinctDaysCount={startKey && endKey
+                            ? Math.round((new Date(endKey).getTime() - new Date(startKey).getTime()) / 86400000) + 1
+                            : 0}
                     />
                 </div>
             )}
@@ -125,7 +128,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                     </div>
                 </div>
                 {selectedPlatformKey && selectedSummary && (
-                    <div className="lg:w-1/3 space-y-6 animate-in slide-in-from-right duration-300">
+                    <div className="lg:w-1/3 space-y-6">
                         <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg overflow-hidden">
                             <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex items-center justify-between">
                                 <div className="flex items-center gap-2">

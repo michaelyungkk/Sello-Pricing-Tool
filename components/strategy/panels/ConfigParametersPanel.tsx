@@ -46,7 +46,7 @@ export const ConfigParametersPanel: React.FC<ConfigParametersPanelProps> = ({ co
     };
 
     return (
-        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden animate-in fade-in slide-in-from-top-4">
+        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
             <div className="border-b border-custom-glass bg-gray-50/50 p-4 flex justify-between items-center">
                 <h3 className="font-bold text-gray-800 flex items-center gap-2">
                     <Settings className="w-4 h-4 text-gray-500" />

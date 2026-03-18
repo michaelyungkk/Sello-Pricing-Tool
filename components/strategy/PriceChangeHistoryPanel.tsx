@@ -53,7 +53,7 @@ export const PriceChangeHistoryPanel: React.FC<PriceChangeHistoryPanelProps> = (
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6 animate-in fade-in slide-in-from-bottom-2">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
       <div 
         className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}

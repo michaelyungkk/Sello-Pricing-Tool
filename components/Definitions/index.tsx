@@ -42,7 +42,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
 
             <div className="flex-1 overflow-y-auto pr-2 space-y-6">
                 {activeTab === 'operational' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="space-y-6">
                         {/* Inventory Health Section */}
                         <DefinitionSection>
                             <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
@@ -199,7 +199,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                 )}
 
                 {activeTab === 'financial' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="space-y-6">
                         <DefinitionSection>
                             <div className="flex items-center gap-3 mb-4">
                                 <div className="p-2 bg-teal-50 rounded-lg text-teal-600">
@@ -344,7 +344,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                 )}
 
                 {activeTab === 'manual' && (
-                    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
+                    <div className="space-y-12 pb-20">
                         {manualSections.map(section => (
                             <section key={section.id}>
                                 <div className="flex items-center gap-3 mb-6">

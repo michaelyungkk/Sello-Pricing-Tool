@@ -12,8 +12,7 @@ import * as XLSX from 'xlsx';
 import { SortState, sortRows } from '../utils/tableSort';
 import { SortableHeader } from './common/SortableHeader';
 import { VAT_MULTIPLIER } from '../constants';
-import { MetricCard } from './common/MetricCard';
-import { MetricValue } from './common/MetricValue';
+import { MetricCard } from './productManagement/parts/MetricCard';
 
 // Helper to determine text color based on background luminance
 const getTextColorForBackground = (hexColor: string): string => {

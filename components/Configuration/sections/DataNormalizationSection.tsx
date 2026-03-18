@@ -66,7 +66,7 @@ export const DataNormalizationSection: React.FC<DataNormalizationSectionProps> =
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold" style={headerStyle}>
                     Data Normalization

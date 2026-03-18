@@ -69,6 +69,7 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
 
     if (timeWindow === 'ALL') mode = 'all';
     else if (timeWindow === 'CUSTOM') mode = 'custom';
+    else if (timeWindow === 'YESTERDAY') { mode = 'days'; days = 1; }
     else days = parseInt(timeWindow.replace('D', ''));
 
     return buildWindow({
@@ -76,7 +77,7 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
       days,
       startKey: customStart,
       endKey: customEnd,
-      excludeToday: true
+      excludeToday: timeWindow !== 'CUSTOM' && timeWindow !== 'ALL'
     });
   }, [timeWindow, customStart, customEnd]);
 
@@ -606,13 +607,13 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
           ]}
           activeTab={activeTab}
           onChange={(key) => { setActiveTab(key as Tab); setIsAuditVisible(false); }}
-          size="sm"
         />
 
       </div>
 
       <ContextBar
         timeOptions={[
+          { key: 'YESTERDAY', label: 'Yesterday' },
           { key: '7D', label: '7D' },
           { key: '14D', label: '14D' },
           { key: '30D', label: '30D' },
@@ -629,17 +630,17 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
         onCustomEndChange={setCustomEnd}
       >
         {activeTab !== 'ad-groups' && (<>
-          <div className="flex bg-gray-100 p-1 rounded-lg">
+          <div className="flex bg-gray-100 p-0.5 rounded-lg h-8 items-center">
             <button
               onClick={() => setReturnDateBasis('refundDate')}
-              className={`px-3 h-8 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <Clock className="w-3 h-3" />
               Refund Date
             </button>
             <button
               onClick={() => setReturnDateBasis('orderDate')}
-              className={`px-3 h-8 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <Calendar className="w-3 h-3" />
               Order Date

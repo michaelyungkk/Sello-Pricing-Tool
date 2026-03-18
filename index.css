@@ -15,9 +15,9 @@
   --glass-divider:   rgba(229, 231, 235, 0.55);
 
   /* ── Theme ── */
-  --theme:    #4f46e5;
-  --theme-10: rgba(79, 70, 229, 0.10);
-  --theme-20: rgba(79, 70, 229, 0.20);
+  --theme:    #134E4A;
+  --theme-10: rgba(19, 78, 74, 0.10);
+  --theme-20: rgba(19, 78, 74, 0.20);
 
   /* ── Column group tints (header darker / cell lighter) ── */
   --col-blue:    rgba(219, 234, 254, 0.16);   /* td data cells  */

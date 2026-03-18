@@ -955,16 +955,24 @@ export const useAppState = () => {
     }, [pricingRules, isAdminMode]);
 
     const handleReturnsImport = useCallback((newRefunds: RefundLog[]) => {
-        const existingIds = new Set((refundHistory || []).map(r => r.id));
+        // Deduplicate incoming records by id (deterministic hash of sku|orderId|date|amount)
         const uniqueInNew = new Map<string, RefundLog>();
-        newRefunds.forEach(r => {
-            if (!uniqueInNew.has(r.id)) {
-                uniqueInNew.set(r.id, r);
-            }
+        newRefunds.forEach(r => { if (!uniqueInNew.has(r.id)) uniqueInNew.set(r.id, r); });
+        const deduped = Array.from(uniqueInNew.values());
+
+        // Build sets of keys from new records to replace any matching existing records
+        // Keys: generated id (exact match) OR orderId+sku (catches platform-remap cases)
+        const newIds = new Set(deduped.map(r => r.id));
+        const newOrderSkuKeys = new Set(deduped.map(r => `${r.orderId || ''}|${r.sku}`));
+
+        // Keep existing records that are NOT superseded by the new upload
+        const keptExisting = (refundHistory || []).filter(r => {
+            if (newIds.has(r.id)) return false; // exact match — replace
+            if (r.orderId && newOrderSkuKeys.has(`${r.orderId}|${r.sku}`)) return false; // same order+sku — replace
+            return true;
         });
 
-        const uniqueNew = Array.from(uniqueInNew.values()).filter(r => !existingIds.has(r.id));
-        const mergedRefunds = [...(refundHistory || []), ...uniqueNew];
+        const mergedRefunds = [...deduped, ...keptExisting];
 
         setRefundHistory(mergedRefunds);
         setProducts(prev => (prev || []).map(p => {
@@ -1433,9 +1441,11 @@ export const useAppState = () => {
             const canonicalSku = resolver(product.sku);
             const eras = buildPriceEras(
                 canonicalSku, priceChangeHistory,
+                salesHistory,
                 product.caPrice ?? product.currentPrice, todayKey, resolver
             );
-            const txs = priceHistoryMap.get(product.sku) ?? [];
+            // Collect transactions for this canonical SKU from all alias variants
+            const txs = salesHistory.filter(tx => resolver(tx.sku) === canonicalSku);
             const tagged = txs
                 .filter(tx => isEligibleTransaction(tx, pricingRules))
                 .map(tx => ({
@@ -1458,7 +1468,7 @@ export const useAppState = () => {
         });
 
         // Build new snapshot
-        const newSnapshot = computeAllCohortStats(products, allPricePoints);
+        const newSnapshot = computeAllCohortStats(products, allPricePoints, 4, resolver);
 
         // Detect bucket shifts vs existing snapshot
         const shifts = cohortSnapshot ? detectBenchmarkShifts(cohortSnapshot, newSnapshot) : [];

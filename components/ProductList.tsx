@@ -375,12 +375,15 @@ const FilterDropdown = ({ label, icon: Icon, value, onChange, options, themeColo
 
 const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, themeColor }: any) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLDivElement>(null);
     const currentSelected = selected || [];
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)
+                && triggerRef.current && !triggerRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
             }
         };
@@ -398,11 +401,19 @@ const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, t
 
     const displayText = currentSelected.length === 0 ? 'All' : currentSelected.length === 1 ? currentSelected[0] : `${currentSelected.length} Selected`;
 
+    const handleOpen = () => {
+        if (!isOpen && triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            setDropdownPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+        }
+        setIsOpen(!isOpen);
+    };
+
     return (
-        <div className="relative" ref={dropdownRef}>
-            <div
+        <div className="relative">
+            <div ref={triggerRef}
                 className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden cursor-pointer"
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={handleOpen}
                 style={{ borderColor: isOpen ? themeColor : '#d1d5db' }}
             >
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
@@ -415,8 +426,9 @@ const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, t
                 </div>
             </div>
 
-            {isOpen && (
-                <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-100">
+            {isOpen && createPortal(
+                <div ref={dropdownRef} style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }}
+                    className="w-64 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
                     <div className="p-2 border-b border-gray-100 flex justify-between">
                         <button
                             className="text-[10px] text-gray-500 hover:text-gray-800"
@@ -446,7 +458,8 @@ const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, t
                             );
                         })}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

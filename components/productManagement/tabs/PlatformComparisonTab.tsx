@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { SelectFilter } from '../../common/SelectFilter';
 import { Product, PricingRules, PriceLog, RefundLog } from '../../../types';
 import { FilterBar } from '../../common/FilterBar';
 import { Columns, ChevronDown, CheckSquare, Square, Download, GripVertical, Settings2, ArrowUp, ArrowDown, Plus, Trash2, ListFilter, Trophy } from 'lucide-react';
@@ -21,6 +22,7 @@ interface PlatformComparisonTabProps {
     themeColor: string;
     deductRefunds: boolean;
     refundHistory: RefundLog[];
+    isAuditVisible: boolean;
 }
 
 interface SortRule {
@@ -28,89 +30,19 @@ interface SortRule {
     dir: 'asc' | 'desc';
 }
 
-const MultiSelectDropdown = ({ label, options, selected, onChange, icon: Icon = Columns }: any) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const toggleOption = (option: string) => {
-        if (selected.includes(option)) {
-            onChange(selected.filter((item: string) => item !== option));
-        } else {
-            onChange([...selected, option]);
-        }
-    };
-
-    // Special rendering for column metric keys to show nice labels
-    const getLabel = (opt: string) => {
-        const map: Record<string, string> = {
-            qty: 'Quantity',
-            share: 'Share %',
-            pm: 'PM %',
-            avgPrice: 'Avg Price',
-            revenue: 'Revenue',
-            profit: 'Net Profit'
-        };
-        return map[opt] || opt;
-    };
-
-    const displayText = label === 'Columns'
-        ? `${selected.length} Columns`
-        : (selected.length === options.length ? 'All Platforms' : `${selected.length} Platforms`);
-
-    return (
-        <div className="relative" ref={dropdownRef}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-indigo-300 transition-colors shadow-sm min-w-[160px]"
-            >
-                <div className="flex items-center gap-2 truncate">
-                    <Icon className="w-4 h-4 text-gray-400" />
-                    <span className="truncate">{displayText}</span>
-                </div>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-            </button>
-
-            {isOpen && (
-                <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-100">
-                    <div className="p-2 border-b border-gray-100 flex justify-between bg-gray-50">
-                        <button className="text-xs font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1" onClick={() => onChange(options)}>Select All</button>
-                        <button className="text-xs font-bold text-gray-500 hover:text-gray-700 px-2 py-1" onClick={() => onChange([])}>Clear</button>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto p-1">
-                        {options.map((opt: string) => {
-                            const isSelected = selected.includes(opt);
-                            return (
-                                <div key={opt} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer rounded-lg transition-colors" onClick={() => toggleOption(opt)}>
-                                    {isSelected ? <CheckSquare className="w-4 h-4 text-indigo-600" /> : <Square className="w-4 h-4 text-gray-300" />}
-                                    <span className={`text-xs ${isSelected ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{getLabel(opt)}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
 const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platforms }: any) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLDivElement>(null);
+    const portalRef = useRef<HTMLDivElement>(null);
     const [addKey, setAddKey] = useState('');
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)
+                && triggerRef.current && !triggerRef.current.contains(event.target as Node)
+                && portalRef.current && !portalRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
             }
         };
@@ -146,19 +78,25 @@ const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platfor
 
     return (
         <div className="relative" ref={dropdownRef}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-indigo-300 transition-colors shadow-sm min-w-[160px]"
-            >
-                <div className="flex items-center gap-2 truncate">
-                    <ListFilter className="w-4 h-4 text-gray-400" />
-                    <span className="truncate">Sort Priority</span>
-                </div>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-            </button>
+            <div ref={triggerRef}>
+                <button
+                    onClick={() => {
+                        if (!isOpen && triggerRef.current) {
+                            const r = triggerRef.current.getBoundingClientRect();
+                            setDropPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX });
+                        }
+                        setIsOpen(!isOpen);
+                    }}
+                    className="px-3 h-8 text-xs font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm flex items-center gap-2 transition-colors"
+                >
+                    <ListFilter className="w-3.5 h-3.5" />
+                    Sort Priority
+                    <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+            </div>
 
-            {isOpen && (
-                <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in duration-100 p-3">
+            {isOpen && createPortal(
+                <div ref={portalRef} style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999 }} className="w-72 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden p-3">
                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Active Sort Hierarchy</h4>
                     <div className="space-y-2 mb-3">
                         {sortRules.map((rule: SortRule, i: number) => (
@@ -195,7 +133,8 @@ const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platfor
                             <Plus className="w-4 h-4" />
                         </button>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
@@ -208,9 +147,9 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
     refundHistory,
     pricingRules,
     priceHistoryMap,
-    dateWindow
+    dateWindow,
+    isAuditVisible,
 }) => {
-    const [isAuditVisible, setIsAuditVisible] = useState(false);
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
@@ -508,9 +447,6 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         <div className="space-y-6 h-full flex flex-col">
             {/* Controls */}
             <FilterBar
-                showAudit
-                auditActive={isAuditVisible}
-                onAuditToggle={() => setIsAuditVisible(v => !v)}
                 searchTags={searchTags}
                 onSearchTagsChange={(tags) => { setSearchTags(tags); }}
                 onSearchChange={(val) => { setSearchQuery(val); }}
@@ -533,12 +469,11 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                             platforms={selectedPlatforms}
                             themeColor={themeColor}
                         />
-                        <MultiSelectDropdown
+                        <SelectFilter
                             label="Columns"
                             options={availableColumns}
                             selected={visibleColumns}
                             onChange={setVisibleColumns}
-                            themeColor={themeColor}
                             icon={Settings2}
                         />
                         <button
@@ -559,6 +494,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                         endKey={dateWindow.endKey}
                         rows={processedData}
                         getDateKey={() => null}
+                        distinctDaysCount={dateWindow.startKey && dateWindow.endKey ? Math.round((new Date(dateWindow.endKey).getTime() - new Date(dateWindow.startKey).getTime()) / 86400000) + 1 : 0}
                         getRevenue={(row: any) => row.totalRevenue}
                         getQty={(row: any) => row.totalQty}
                         getProfit={(row: any) => row.totalProfit}

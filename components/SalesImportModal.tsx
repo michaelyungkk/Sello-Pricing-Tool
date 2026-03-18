@@ -46,6 +46,7 @@ interface ColumnMapping {
     profitExclRn?: string; // New: Absolute Profit currency
     profitExclRnPercent?: string; // New: Net PM%
     outerOrderId?: string; // New: Unique Order ID
+    orderType?: string;    // New: order_type (normal vs ad_only)
     receivePostcode?: string; // New: Receive Postcode
     logisticPartner?: string; // New: Logistic Partner (label_provider)
 }
@@ -166,6 +167,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     profitExclRn: findMapped(['profit_excl_rn', 'netprofit', 'profitamount'], false),
                     profitExclRnPercent: findMapped(['profit_excl_rn%', 'netpm', 'profit%', 'margin%'], true),
                     outerOrderId: findMapped(['outer_order_id', 'order_id', 'orderid', 'order_no', 'ordernumber', 'transaction_id'], false),
+                    orderType: findMapped(['ordertype', 'order_type', 'type'], false),
                     receivePostcode: findMapped(['receive_postcode', 'postcode', 'zip', 'postalcode', 'ship_to_zip'], false),
                     logisticPartner: findMapped(['label_provider', 'shipping_partner', 'logistic_partner', 'carrier_partner'], false)
                 };

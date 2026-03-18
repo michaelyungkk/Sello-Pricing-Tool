@@ -368,7 +368,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
     }, [aggregatedEffectiveness]);
 
     return (
-        <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-right duration-300">
+        <div className="space-y-6 pb-20 ">
             <div className="flex items-center justify-between">
                 <button onClick={onBack} className="text-gray-500 hover:text-gray-700 flex items-center gap-1 text-sm font-medium">
                     <ArrowLeft className="w-4 h-4" /> Back to Dashboard
@@ -393,7 +393,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             </div>
 
             {/* Lifecycle Banner */}
-            <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm animate-in zoom-in duration-300 ${
+            <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm  ${
                 windows.phase === 'PRE' ? 'bg-blue-50 border-blue-100 text-blue-800' :
                 windows.phase === 'LIVE' ? 'bg-green-50 border-green-100 text-green-800' :
                 'bg-indigo-50 border-indigo-100 text-indigo-800'
@@ -446,7 +446,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                         </div>
 
                         {!isSkuScope && (
-                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6 animate-in slide-in-from-top-2">
+                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <h4 className="font-bold text-indigo-900 text-sm">Shop-Wide Discount Rule</h4>
@@ -564,7 +564,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                     </div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in slide-in-from-left duration-300">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 ">
                     {/* Panel A: Forecast */}
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
                         <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
@@ -576,7 +576,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                 {suggestedLiftData.val > 0 && Math.abs(suggestedLiftData.val - (promo.expectedLiftPct || 0)) > 1 && (
                                     <button
                                         onClick={() => onUpdateMeta({ expectedLiftPct: suggestedLiftData.val })}
-                                        className="flex items-center gap-1 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200 transition-all animate-in fade-in"
+                                        className="flex items-center gap-1 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200 transition-all"
                                         title={`${suggestedLiftData.source}. Calculated Sensitivity: ${suggestedLiftData.elasticity.toFixed(1)}`}
                                     >
                                         <Sparkles className="w-2.5 h-2.5" />
@@ -652,7 +652,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                 </div>
                                 <div className="text-right">
                                     {aggregatedEffectiveness.totals.upliftUnits > 0 ? (
-                                        <div className="flex items-center gap-1 text-green-600 font-bold animate-in slide-in-from-bottom-1">
+                                        <div className="flex items-center gap-1 text-green-600 font-bold">
                                             <TrendingUp className="w-4 h-4" />
                                             {formatNumber(aggregatedEffectiveness.totals.upliftUnits)} units uplift
                                         </div>
@@ -713,7 +713,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                 {stratRec && (
                                     <div>
                                         <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">Strategic Recommendation</div>
-                                        <div className={`p-3 rounded-xl border ${stratRec.style} animate-in fade-in slide-in-from-top-1`}>
+                                        <div className={`p-3 rounded-xl border ${stratRec.style} `}>
                                             <div className="font-black text-xs uppercase flex items-center gap-2 mb-1">
                                                 <Target className="w-3.5 h-3.5" />
                                                 {stratRec.label}

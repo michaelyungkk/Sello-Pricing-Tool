@@ -957,7 +957,6 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                     endKey={asDateKey(dateRange.end) || ''}
                                     rows={categoryData}
                                     getDateKey={() => null}
-                        distinctDaysCount={startKey && endKey ? Math.round((new Date(endKey).getTime() - new Date(startKey).getTime()) / 86400000) + 1 : 0}
                                     getRevenue={(row) => row.total.revenue}
                                     getQty={() => 0}
                                     getProfit={() => 0}

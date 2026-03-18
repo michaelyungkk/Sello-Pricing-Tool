@@ -293,7 +293,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
     const xLabel = xAxisMetric === 'REVENUE' ? 'Rev' : 'Margin';
 
     return (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-4">
             {/* Explanation / Legend */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="p-2.5 bg-white rounded-lg border border-gray-200 shadow-sm flex items-center gap-3">
@@ -427,7 +427,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                     </div>
 
                     {limitPct === 100 && totalCount > 2000 && (
-                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none bg-red-50 text-red-600 px-4 py-2 rounded-lg border border-red-100 shadow-lg text-xs font-bold animate-in fade-in zoom-in">
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none bg-red-50 text-red-600 px-4 py-2 rounded-lg border border-red-100 shadow-lg text-xs font-bold ">
                             Warning: Rendering {totalCount} items may cause lag.
                         </div>
                     )}

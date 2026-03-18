@@ -320,7 +320,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
             </div>
 
             {results && (
-                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden animate-in fade-in slide-in-from-bottom-4 backdrop-blur-custom">
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                     <div className="p-6 border-b border-custom-glass bg-gray-50/50 flex flex-col md:flex-row justify-between items-start gap-4">
                         <div>
                             <h3 className="text-lg font-bold text-gray-900">Analysis Complete</h3>

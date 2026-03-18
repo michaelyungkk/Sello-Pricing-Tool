@@ -435,7 +435,6 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         endKey={endDate}
                         rows={triageOverview.skuRows}
                         getDateKey={() => null}
-                        distinctDaysCount={startDate && endDate ? Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1 : 0}
                         getRevenue={(row: any) => row.refundValue}
                         getQty={(row: any) => row.refundQty}
                         getProfit={() => 0}
@@ -461,40 +460,28 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         color="red"
                         desc="Inc VAT & Freight"
                     />
-                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase">Return Rate (Qty)</span>
-                            <Package className="w-4 h-4 text-indigo-500" />
-                        </div>
-                        <div className="text-2xl font-bold text-gray-900">
-                            {triageOverview.kpis.refundRateQty !== null ? formatPct(triageOverview.kpis.refundRateQty) : '—'}
-                        </div>
-                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Units vs Sold</div>
-                    </div>
+                     <MetricCard
+                        title="Return Rate (Qty)"
+                        value={triageOverview.kpis.refundRateQty !== null ? formatPct(triageOverview.kpis.refundRateQty) : '—'}
+                        icon={Package}
+                        color="indigo"
+                        desc="Units vs Sold"
+                    />
+                    <MetricCard
+                        title="Return Rate (Val)"
+                        value={triageOverview.kpis.refundRateValue !== null ? formatPct(triageOverview.kpis.refundRateValue) : '—'}
+                        icon={DollarSign}
+                        color="red"
+                        desc="Value vs Revenue"
+                    />
+                    <MetricCard
+                        title="Worst Carrier"
+                        value={topGripingPartner?.partner || 'N/A'}
+                        icon={TruckIcon}
+                        color="indigo"
+                        desc={topGripingPartner ? `${topGripingPartner.count} complaints` : 'Complaints Source'}
+                    />
 
-                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase">Return Rate (Val)</span>
-                            <DollarSign className="w-4 h-4 text-rose-500" />
-                        </div>
-                        <div className="text-2xl font-bold text-gray-900">
-                            {triageOverview.kpis.refundRateValue !== null ? formatPct(triageOverview.kpis.refundRateValue) : '—'}
-                        </div>
-                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Value vs Revenue</div>
-                    </div>
-
-                    <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between group">
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase">Worst Carrier</span>
-                            <TruckIcon className="w-4 h-4 text-indigo-500" />
-                        </div>
-                        <div className="text-xl font-bold text-gray-900 truncate" title={topGripingPartner?.partner}>
-                            {topGripingPartner?.partner || 'N/A'}
-                        </div>
-                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">
-                            {topGripingPartner ? `${topGripingPartner.count} complaints` : 'Complaints Source'}
-                        </div>
-                    </div>
                 </div>
 
                 {/* SKU Alerts Table */}

@@ -23,7 +23,8 @@ export function formatDateKeyMelbourne(date: Date): string {
  */
 function excelSerialToDate(serial: number): Date {
   const excelEpoch = new Date(Date.UTC(1899, 11, 30)); // Dec 30, 1899 UTC
-  const days = serial > 59 ? serial - 1 : serial;     // correct for Excel leap year bug
+  const intDays = Math.floor(serial);                  // strip time-of-day decimal
+  const days = intDays > 59 ? intDays - 1 : intDays;  // correct for Excel leap year bug
   const ms = days * 24 * 60 * 60 * 1000;
   return new Date(excelEpoch.getTime() + ms);
 }
@@ -34,7 +35,10 @@ function excelSerialToDate(serial: number): Date {
  * Numbers like 45123 = a real date; numbers like 45 (milliseconds) would be 1970.
  */
 function looksLikeExcelSerial(n: number): boolean {
-  return Number.isInteger(n) && n > 1 && n < 60000;
+  // Accept both integer serials (e.g. 45123) and decimal serials with time component
+  // (e.g. 45123.52 where .52 = ~12:29pm). Math.floor strips the time portion.
+  const intPart = Math.floor(n);
+  return intPart > 1 && intPart < 60000;
 }
 
 /**

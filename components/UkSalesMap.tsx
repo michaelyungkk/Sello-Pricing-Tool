@@ -286,7 +286,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-auto animate-in fade-in slide-in-from-right-4 pb-10">
+    <div className="flex flex-col h-auto pb-10">
         {/* Controls Header */}
         <div className="flex flex-row justify-between items-center mb-4 gap-4 p-4 bg-white/50 rounded-xl border border-gray-200">
             <div className="flex items-center gap-4">
@@ -502,7 +502,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
 
                 {/* Floating Tooltip */}
                 {areaToShow && (
-                    <div className="absolute top-4 right-4 bg-white/95 backdrop-blur shadow-lg rounded-lg p-3 border border-gray-100 w-60 animate-in fade-in zoom-in duration-200 pointer-events-none z-10">
+                    <div className="absolute top-4 right-4 bg-white/95 backdrop-blur shadow-lg rounded-lg p-3 border border-gray-100 w-60 pointer-events-none z-10">
                         <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-100">
                             <span className="font-bold text-gray-900 text-lg">{getAreaDisplayName(areaToShow.code)}</span>
                             <span className="text-xs font-medium text-gray-500">#{areaToShow.rank}</span>
@@ -649,7 +649,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             {/* Right Panel: Leaderboard or Snapshot */}
             <div className="w-full lg:w-96 flex flex-col gap-4">
                 {pinnedArea ? (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex-1 animate-in fade-in">
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex-1">
                         <div className="flex justify-between items-center mb-4">
                             <h4 className="font-bold text-gray-800 text-lg">{getAreaDisplayName(pinnedArea.code)} Snapshot</h4>
                             <button onClick={() => setPinnedArea(null)} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full">

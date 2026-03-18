@@ -32,7 +32,6 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
                 ]}
                 activeTab={activeTab}
                 onChange={(key) => setActiveTab(key as any)}
-                size="sm"
             />
 
             <div className="pr-2">

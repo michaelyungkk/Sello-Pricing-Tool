@@ -2,15 +2,6 @@
 import React from 'react';
 import { PromotionEvent, PricingRules, InventoryTemplate, Product } from '../../types';
 
-export interface ERPCrossCheckToolProps {
-    salesHistory: import('../../types').PriceLog[];
-    refundHistory: import('../../types').RefundLog[];
-    pricingRules: import('../../types').PricingRules;
-    products: Product[];
-    learnedAliases: Record<string, string>;
-    themeColor: string;
-}
-
 export interface ToolboxPageProps {
     promotions: PromotionEvent[];
     pricingRules: PricingRules;
@@ -21,8 +12,6 @@ export interface ToolboxPageProps {
     products?: Product[]; // Added to access alias map
     themeColor: string;
     headerStyle: React.CSSProperties;
-    salesHistory: import('../../types').PriceLog[];
-    refundHistory: import('../../types').RefundLog[];
 }
 
 export interface UploadedItem {

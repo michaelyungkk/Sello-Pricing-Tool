@@ -489,7 +489,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
     }
 
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-4 space-y-4">
+        <div className="space-y-4">
             <div className="flex justify-end pr-2">
                 <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
                     <input

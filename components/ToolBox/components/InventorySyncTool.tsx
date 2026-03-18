@@ -45,9 +45,11 @@ const MatchInput = ({
 export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({ 
     templates, 
     onSaveTemplates, 
+    learnedAliases = {},
+    onSaveLearnedAliases,
     themeColor,
     pricingRules,
-    products = []
+    products = [],
 }) => {
     const [masterFile, setMasterFile] = useState<File | null>(null);
     const [platformFile, setPlatformFile] = useState<File | null>(null);
@@ -122,7 +124,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
         return Array.from(masterInventory.keys()).sort();
     }, [masterInventory]);
 
-    // New: Global Alias Map from Product Management
+    // Global Alias Map: product channel aliases + manually learned aliases
     const globalAliasMap = useMemo(() => {
         const map = new Map<string, string>();
         products.forEach(p => {
@@ -137,8 +139,12 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                 }
             });
         });
+        // Merge manually saved aliases so confirmed matches persist across sessions
+        Object.entries(learnedAliases).forEach(([alias, master]) => {
+            map.set(alias.toUpperCase(), master.toUpperCase());
+        });
         return map;
-    }, [products]);
+    }, [products, learnedAliases]);
 
     // --- UTILS ---
     const normalizeBufferRules = (br?: BufferRules): SingleBufferRule[] => {
@@ -468,6 +474,8 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
 
     const handleApplyManualMatch = (platformSku: string, masterSku: string) => {
         setManualMatches(prev => new Map(prev).set(platformSku, masterSku));
+        // Persist immediately so the alias survives page reload / next session
+        onSaveLearnedAliases({ [platformSku.toUpperCase()]: masterSku.toUpperCase() });
     };
     
     const handleClearManualMatch = (platformSku: string) => {
@@ -800,7 +808,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in">
+        <div className="space-y-6">
             {/* 0. Platform Templates Grid */}
             <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm backdrop-blur-custom">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -851,7 +859,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
 
             {/* Template Mapping Modal (Inline) */}
             {isMappingTemplate && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 animate-in fade-in slide-in-from-top-2">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
                     <div className="flex justify-between items-start mb-4">
                         <h4 className="font-bold text-amber-800 flex items-center gap-2">
                             <Settings className="w-4 h-4"/> 
@@ -1092,7 +1100,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
 
             {/* Action Bar */}
             {masterInventory && platformRows && selectedTemplateId && !isMappingTemplate && (
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 flex flex-col animate-in slide-in-from-bottom-4">
+                <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 flex flex-col">
                     
                     {/* Top Row: Info & Stats */}
                     <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
@@ -1174,7 +1182,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                             <h4 className="text-xs font-bold text-gray-600 uppercase">Active Buffer Rules</h4>
                         </div>
                         
-                        <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100 animate-in fade-in slide-in-from-top-1">
+                        <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100">
                             {bufferRulesList.map((rule, idx) => (
                                 renderBufferRule(rule, idx, updateBufferRule, removeBufferRule)
                             ))}
@@ -1202,7 +1210,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                         </div>
                         <div className="p-4 bg-blue-50 border-b border-blue-100 text-xs text-blue-800 flex items-start gap-2">
                             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                            <p>Map unknown platform items to your Master Inventory. These mappings apply to this session only.</p>
+                            <p>Map unknown platform items to your Master Inventory. Confirmed matches are saved permanently to your SKU aliases.</p>
                         </div>
                         <div className="p-4 border-b">
                             <input 
@@ -1262,7 +1270,17 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                         </div>
                         <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
                             <button 
-                                onClick={() => setIsFixingModalOpen(false)} 
+                                onClick={() => {
+                                    // Flush all confirmed matches to learnedAliases on close
+                                    if (manualMatches.size > 0) {
+                                        const toSave: Record<string, string> = {};
+                                        manualMatches.forEach((masterSku, platformSku) => {
+                                            toSave[platformSku.toUpperCase()] = masterSku.toUpperCase();
+                                        });
+                                        onSaveLearnedAliases(toSave);
+                                    }
+                                    setIsFixingModalOpen(false);
+                                }}
                                 className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-sm"
                             >
                                 Done

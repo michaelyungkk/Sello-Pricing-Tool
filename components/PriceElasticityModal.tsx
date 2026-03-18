@@ -150,10 +150,13 @@ const ProfitCurveChart: React.FC<{
                 r: Math.min(12, Math.max(4, (p.weekCount ?? 1) * 2)),
             }));
 
-        // Interpolated SKU curve (3+ points sorted by price)
-        const sorted = [...pricePoints].sort((a, b) => a.price - b.price);
-        const curveData = sorted.length >= 3
-            ? sorted.map(p => ({ x: p.price, y: p.dailyProfit, price: p.price, dailyProfit: p.dailyProfit, source: p.source }))
+        // Interpolated SKU curve — organic points only, requires 2+ distinct prices
+        const organicSorted = [...pricePoints]
+            .filter(p => p.source === 'organic')
+            .sort((a, b) => a.price - b.price);
+        const distinctOrganicPrices = new Set(organicSorted.map(p => p.price)).size;
+        const curveData = distinctOrganicPrices >= 2
+            ? organicSorted.map(p => ({ x: p.price, y: p.dailyProfit, price: p.price, dailyProfit: p.dailyProfit, source: p.source }))
             : [];
 
         // Cohort dotted curve across full x range
@@ -244,13 +247,23 @@ const ProfitCurveChart: React.FC<{
                     )}
 
                     {/* Current price line */}
-                    <ReferenceLine
-                        x={currentPrice}
-                        stroke="#6b7280"
-                        strokeWidth={1.5}
-                        strokeDasharray="4 3"
-                        label={{ value: `Current ${formatSmartMoney(currentPrice)}`, position: 'top', fontSize: 9, fill: '#6b7280' }}
-                    />
+                    {/* When prices are close, offset current label downward to avoid overlap */}
+                    {(() => {
+                        const priceDiff = Math.abs(recommendedPrice - currentPrice);
+                        const xRange = xMax - xMin;
+                        const tooClose = xRange > 0 && (priceDiff / xRange) < 0.08;
+                        const currentLabelPos = tooClose ? 'insideTopLeft' : 'top';
+                        const currentOffset = tooClose ? { dy: 28 } : {};
+                        return (
+                            <ReferenceLine
+                                x={currentPrice}
+                                stroke="#6b7280"
+                                strokeWidth={1.5}
+                                strokeDasharray="4 3"
+                                label={{ value: `Current ${formatSmartMoney(currentPrice)}`, position: currentLabelPos, fontSize: 9, fill: '#6b7280', ...currentOffset }}
+                            />
+                        );
+                    })()}
 
                     {/* Recommended price line */}
                     <ReferenceLine

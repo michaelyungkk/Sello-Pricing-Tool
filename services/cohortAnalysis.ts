@@ -141,19 +141,36 @@ function mergeThinBuckets(buckets: PriceBucket[], minSkus: number): PriceBucket[
  * price buckets using quantile boundaries. Thin buckets (< MIN_SKUS_PER_BUCKET)
  * are merged into neighbours.
  *
+ * When resolveCanonical is provided, alias variants are collapsed to their
+ * canonical SKU before bucketing so duplicates don't inflate bucket counts.
+ * The returned map is keyed by category; bucket skuCount reflects distinct
+ * canonical SKUs only.
+ *
  * @param products           Full product catalogue
  * @param bucketsPerCategory Target number of buckets per category (default 4)
+ * @param resolveCanonical   Optional alias resolver — collapses variants
  * @returns Map<category, PriceBucket[]>
  */
 export function buildPriceBuckets(
     products: Product[],
-    bucketsPerCategory = 4
+    bucketsPerCategory = 4,
+    resolveCanonical?: (sku: string) => string
 ): Map<string, PriceBucket[]> {
     const result = new Map<string, PriceBucket[]>();
 
-    // Group products by category, filtering those with a valid price
-    const byCategory = new Map<string, Product[]>();
+    // De-duplicate by canonical SKU — keep the first product seen per canonical
+    const seen = new Set<string>();
+    const deduped: Product[] = [];
     for (const p of products) {
+        const key = resolveCanonical ? resolveCanonical(p.sku) : p.sku;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(p);
+    }
+
+    // Group de-duped products by category, filtering those with a valid price
+    const byCategory = new Map<string, Product[]>();
+    for (const p of deduped) {
         const cat = p.category ?? 'Uncategorised';
         const price = getProductPrice(p);
         if (price <= 0) continue;
@@ -291,13 +308,24 @@ function estimateElasticity(
 
 /**
  * Returns the cohort-benchmark optimal price for a given SKU.
- * Looks up the SKU's bucket assignment from the snapshot, then delegates
- * to the inner search function.
+ *
+ * Resolves the SKU to its canonical form before looking up the bucket
+ * assignment so alias variants (e.g. BF1071-K-DG-UK_1) correctly map to
+ * the same cohort as their canonical SKU (BF1071-K-DG-UK).
  *
  * Used by optimalPriceEngine.ts as the Layer 2 input to blending.
+ *
+ * @param sku               Product whose optimal price is being calculated
+ * @param cohortSnapshot    Current snapshot containing bucket assignments
+ * @param resolveCanonical  Alias resolver from buildCanonicalResolver()
  */
-export function getCohortOptimalPrice(sku: Product, cohortSnapshot: CohortSnapshot): number {
-    const bucketKey = cohortSnapshot.skuAssignments.get(sku.sku);
+export function getCohortOptimalPrice(
+    sku: Product,
+    cohortSnapshot: CohortSnapshot,
+    resolveCanonical?: (sku: string) => string
+): number {
+    const canonicalSku = resolveCanonical ? resolveCanonical(sku.sku) : sku.sku;
+    const bucketKey = cohortSnapshot.skuAssignments.get(canonicalSku);
     const cohortStats = bucketKey ? cohortSnapshot.cohortStats.get(bucketKey) : undefined;
 
     if (!cohortStats) return sku.caPrice ?? sku.currentPrice ?? 0;
@@ -354,9 +382,12 @@ function getCohortOptimalPriceFromStats(cohort: CohortStats, sku: Product): numb
 /**
  * Computes full CohortStats for a single PriceBucket.
  *
- * @param bucket        The bucket definition (category, price range, skuCount)
- * @param skusInBucket  Products assigned to this bucket
- * @param allPricePoints Map canonicalSku → PricePoint[] (from Layer 1)
+ * allPricePoints is keyed by canonical SKU. Products in skusInBucket are
+ * looked up by their canonical form so alias variants share price points.
+ *
+ * @param bucket            The bucket definition (category, price range, skuCount)
+ * @param skusInBucket      Products assigned to this bucket (canonical reps only)
+ * @param allPricePoints    Map canonicalSku → PricePoint[] (from Layer 1)
  */
 export function computeCohortStats(
     bucket: PriceBucket,
@@ -441,23 +472,37 @@ export function computeCohortStats(
  * Builds price buckets for all categories, computes CohortStats per bucket,
  * assigns each SKU to its bucket, and returns a complete CohortSnapshot.
  *
+ * When resolveCanonical is provided:
+ *   - Alias variants are collapsed before bucketing (buildPriceBuckets)
+ *   - skuAssignments maps canonical SKUs → bucketKey, so alias variants
+ *     correctly resolve to the same bucket during blending
+ *
  * @param products           Full product catalogue
  * @param allPricePoints     Map canonicalSku → PricePoint[] from current data
  * @param bucketsPerCategory Target number of buckets per category (default 4)
+ * @param resolveCanonical   Optional alias resolver from buildCanonicalResolver()
  */
 export function computeAllCohortStats(
     products: Product[],
     allPricePoints: Map<string, PricePoint[]>,
-    bucketsPerCategory = 4
+    bucketsPerCategory = 4,
+    resolveCanonical?: (sku: string) => string
 ): CohortSnapshot {
-    const categoryBuckets = buildPriceBuckets(products, bucketsPerCategory);
+    const categoryBuckets = buildPriceBuckets(products, bucketsPerCategory, resolveCanonical);
     const cohortStats = new Map<string, CohortStats>();
     const skuAssignments = new Map<string, string>();
 
     for (const [category, buckets] of categoryBuckets) {
-        const catProducts = products.filter(
-            p => (p.category ?? 'Uncategorised') === category
-        );
+        // Work with canonical-de-duped products for this category
+        const seen = new Set<string>();
+        const catProducts = products.filter(p => {
+            const cat = p.category ?? 'Uncategorised';
+            if (cat !== category) return false;
+            const canonical = resolveCanonical ? resolveCanonical(p.sku) : p.sku;
+            if (seen.has(canonical)) return false;
+            seen.add(canonical);
+            return true;
+        });
 
         for (let bi = 0; bi < buckets.length; bi++) {
             const bucket = buckets[bi];
@@ -472,12 +517,20 @@ export function computeAllCohortStats(
 
             if (skusInBucket.length === 0) continue;
 
+            // Re-key skusInBucket by canonical SKU for price-point lookup
+            const canonicalSkusInBucket = skusInBucket.map(p => ({
+                ...p,
+                sku: resolveCanonical ? resolveCanonical(p.sku) : p.sku,
+            }));
+
             const bucketKey = `${category}::${bucket.label}`;
-            const stats = computeCohortStats(bucket, skusInBucket, allPricePoints);
+            const stats = computeCohortStats(bucket, canonicalSkusInBucket, allPricePoints);
             cohortStats.set(bucketKey, stats);
 
+            // Assign CANONICAL SKU → bucketKey so alias variants are covered
             for (const p of skusInBucket) {
-                skuAssignments.set(p.sku, bucketKey);
+                const canonical = resolveCanonical ? resolveCanonical(p.sku) : p.sku;
+                skuAssignments.set(canonical, bucketKey);
             }
         }
     }

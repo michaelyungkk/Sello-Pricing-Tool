@@ -147,6 +147,10 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
             startKey = '1970-01-01';
             endKey = yesterdayKey;
             days = 30;
+        } else if (setting === 'Yesterday') {
+            startKey = yesterdayKey;
+            endKey = yesterdayKey;
+            days = 1;
         } else {
             days = parseInt(setting) || 30;
             endKey = yesterdayKey;
@@ -705,15 +709,15 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
                     ]}
                     activeTab={activeTab}
                     onChange={(key) => { setActiveTab(key as 'ENGINE' | 'HISTORY' | 'COST_HISTORY' | 'INVENTORY_HISTORY'); setIsAuditPanelVisible(false); }}
-                    size="md"
                 />
 
             </div>
 
             {activeTab === 'ENGINE' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                <div className="space-y-6">
                     <ContextBar
                         timeOptions={[
+                            { key: 'Yesterday', label: 'Yesterday' },
                             { key: '7', label: '7D' },
                             { key: '14', label: '14D' },
                             { key: '30', label: '30D' },
@@ -790,7 +794,7 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
 
             {/* History Tabs (Table logic kept here as per plan) */}
             {activeTab === 'HISTORY' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                <div className="space-y-6">
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start gap-4">
                         <div className="p-2 bg-blue-50 text-blue-700 rounded-lg"><Info className="w-5 h-5" /></div>
                         <div>
@@ -862,7 +866,7 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
             )}
 
             {activeTab === 'COST_HISTORY' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                <div className="space-y-6">
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start gap-4">
                         <div className="p-2 bg-green-50 text-green-700 rounded-lg"><Info className="w-5 h-5" /></div>
                         <div>
@@ -932,7 +936,7 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
             )}
 
             {activeTab === 'INVENTORY_HISTORY' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                <div className="space-y-6">
                     <div className="bg-custom-glass p-4 rounded-xl border border-custom-glass shadow-sm flex items-start gap-4">
                         <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg"><Database className="w-5 h-5" /></div>
                         <div>

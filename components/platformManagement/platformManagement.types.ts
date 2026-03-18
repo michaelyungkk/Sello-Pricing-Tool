@@ -24,7 +24,7 @@ export interface PlatformManagementPageProps {
 }
 
 export type PlatformKey = string;
-export type TimeWindow = '7D' | '14D' | '30D' | '60D' | 'ALL' | 'CUSTOM';
+export type TimeWindow = 'YESTERDAY' | '7D' | '14D' | '30D' | '60D' | 'ALL' | 'CUSTOM';
 
 export interface PlatformSummary {
   platform: PlatformKey;

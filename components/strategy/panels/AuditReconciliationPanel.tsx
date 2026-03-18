@@ -15,7 +15,7 @@ export const AuditReconciliationPanel: React.FC<AuditReconciliationPanelProps> =
     if (!isVisible || !auditStats) return null;
 
     return (
-        <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-200/80 space-y-4 animate-in fade-in slide-in-from-top-2">
+        <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-200/80 space-y-4">
             <AuditPanel
                 title={`Audit & Reconciliation Panel (${auditStats.productCount} Products)`}
                 startKey={startKey}

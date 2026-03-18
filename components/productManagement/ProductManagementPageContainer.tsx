@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice } from '../../types';
+import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice, SkuFamily } from '../../types';
 import type { CohortShiftWarning } from '../../services/cohortAnalysis';
 
 import { List, Ship, RotateCcw, DollarSign, Activity, Columns, Layers } from 'lucide-react';
@@ -18,7 +18,6 @@ import { TagsDrawer } from './parts/TagsDrawer';
 import { buildWindow } from '../../services/dateWindow';
 import { getTodayKeyMelbourne } from '../../services/dateUtils';
 import { ContextBar } from '../common/ContextBar';
-import { SkuFamily } from '../../types';
 
 interface ProductManagementPageContainerProps {
     products: Product[];
@@ -79,7 +78,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     const [isAuditVisible, setIsAuditVisible] = useState(false);
 
     // Time Window State (Mirroring Platform Management)
-    const [timeWindow, setTimeWindow] = useState<'7D' | '14D' | '30D' | '60D' | 'ALL' | 'CUSTOM'>('30D');
+    const [timeWindow, setTimeWindow] = useState<'YESTERDAY' | '7D' | '14D' | '30D' | '60D' | 'ALL' | 'CUSTOM'>('30D');
     const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
     const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
 
@@ -132,6 +131,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
         let days = 30;
         if (timeWindow === 'ALL') mode = 'all';
         else if (timeWindow === 'CUSTOM') mode = 'custom';
+        else if (timeWindow === 'YESTERDAY') { mode = 'days'; days = 1; }
         else days = parseInt(timeWindow.replace('D', ''));
 
         return buildWindow({
@@ -139,6 +139,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
             days,
             startKey: customStart,
             endKey: customEnd,
+            excludeToday: timeWindow === 'YESTERDAY',
             excludeToday: true
         });
     }, [timeWindow, customStart, customEnd]);
@@ -167,7 +168,6 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                     ]}
                     activeTab={activeTab}
                     onChange={(key) => { setActiveTab(key as Tab); setIsAuditVisible(false); }}
-                    size="sm"
                 />
 
             </div>
@@ -175,6 +175,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
             {/* Global Context Control — only relevant for data-driven tabs */}
             {(activeTab === 'performance' || activeTab === 'comparison' || activeTab === 'returns') && <ContextBar
                 timeOptions={[
+                    { key: 'YESTERDAY', label: 'Yesterday' },
                     { key: '7D', label: '7D' },
                     { key: '14D', label: '14D' },
                     { key: '30D', label: '30D' },
@@ -199,7 +200,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                         </div>
                     </label>
                 )}
-                {activeTab === 'performance' && (
+                {(activeTab === 'performance' || activeTab === 'comparison') && (
                     <button
                         onClick={() => setIsAuditVisible(v => !v)}
                         className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
@@ -288,6 +289,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                         themeColor={themeColor}
                         deductRefunds={deductRefunds}
                         refundHistory={refundHistory}
+                        isAuditVisible={isAuditVisible}
                     />
                 )}
 

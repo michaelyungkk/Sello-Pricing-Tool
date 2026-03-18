@@ -22,9 +22,8 @@ import {
 } from 'lucide-react';
 import { AdGroup, SkuFamily, Product, PricingRules } from '../../../types';
 import { formatMoney, formatSmartMoney } from '../../../utils/format';
-import { MetricCard } from '../../common/MetricCard';
+import { MetricCard } from '../../productManagement/parts/MetricCard';
 import { FilterBar } from '../../common/FilterBar';
-import { MetricValue } from '../../common/MetricValue';
 
 interface AdGroupsTabProps {
     adGroups: AdGroup[];

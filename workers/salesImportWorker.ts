@@ -60,7 +60,8 @@ self.onmessage = (e: MessageEvent) => {
         const wmsIdx = getIdx(mapping.wmsFee);
         const profitIdx = getIdx(mapping.profitExclRn);
         const netPmIdx = getIdx(mapping.profitExclRnPercent);
-        const orderIdIdx = getIdx(mapping.outerOrderId);
+        const orderIdIdx   = getIdx(mapping.outerOrderId);
+        const orderTypeIdx = getIdx(mapping.orderType);
         const postcodeIdx = getIdx(mapping.receivePostcode);
         const partnerIdx = getIdx(mapping.logisticPartner);
 
@@ -197,7 +198,14 @@ self.onmessage = (e: MessageEvent) => {
                 platformName = p1;
             }
 
-            const orderId = (orderIdIdx !== -1 && row[orderIdIdx]) ? String(row[orderIdIdx]).trim() : '';
+            const orderId   = (orderIdIdx   !== -1 && row[orderIdIdx])   ? String(row[orderIdIdx]).trim()   : '';
+            const orderType = (orderTypeIdx !== -1 && row[orderTypeIdx]) ? String(row[orderTypeIdx]).trim().toLowerCase() : '';
+
+            // Skip ad_only rows entirely — their ads cost is already captured
+            // in the normal order rows' ads_fee column. Processing them separately
+            // creates negative-profit ghost entries that distort profit totals.
+            if (orderType === 'ad_only') return;
+
             const postcode = (postcodeIdx !== -1 && row[postcodeIdx]) ? String(row[postcodeIdx]).trim() : undefined;
             const partner = (partnerIdx !== -1 && row[partnerIdx]) ? String(row[partnerIdx]).trim() : undefined;
             const serviceName = (logNameIdx !== -1 && row[logNameIdx]) ? String(row[logNameIdx]).trim() : undefined;
@@ -214,14 +222,27 @@ self.onmessage = (e: MessageEvent) => {
                 platformStats: {}
             };
 
+            // Exclude platforms from price/velocity aggregation when either:
+            //   1. pricingControl === 'PLATFORM_COST_BASED' — wholesale price, not consumer price
+            //   2. isExcluded === true — manually excluded in Configuration by the user
+            // Fees are still accumulated below for margin calculations.
+            const platformConfig = pricingRules[platformName];
+            const isCostBased =
+                platformConfig?.pricingControl === 'PLATFORM_COST_BASED' ||
+                platformConfig?.isExcluded === true;
+
             const item = aggregated[masterSku];
-            item.qty += qty;
-            item.revenue += rev;
+            if (!isCostBased) {
+                item.qty += qty;
+                item.revenue += rev;
+            }
             item.count++;
 
             const weight = Math.abs(qty) || 1;
-            item.netPmSum += (netPm * weight);
-            item.profitSum += profit;
+            if (!isCostBased) {
+                item.netPmSum += (netPm * weight);
+                item.profitSum += profit;
+            }
 
             const postageCost = parseVal(postIdx);
             const extraFreightInc = parseVal(extraIdx);

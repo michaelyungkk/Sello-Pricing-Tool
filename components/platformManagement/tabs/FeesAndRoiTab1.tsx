@@ -39,7 +39,6 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                         endKey={endKey}
                         rows={roiData}
                         getDateKey={() => null}
-                        distinctDaysCount={startKey && endKey ? Math.round((new Date(endKey).getTime() - new Date(startKey).getTime()) / 86400000) + 1 : 0}
                         getRevenue={(row) => row.revenue}
                         getQty={(row) => row.units}
                         getProfit={(row) => row.profit}

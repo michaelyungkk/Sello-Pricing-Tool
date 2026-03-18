@@ -145,12 +145,31 @@ export function tagTransactionSource(
 
 /**
  * Builds price eras from the CA price change log for a canonical SKU.
- * Each era represents a period during which the CA price was stable.
- * If no change events exist, a single era covering all history is returned.
+ *
+ * Era 0 covers the period from the SKU's first observed transaction date up to
+ * the day before the first price change, using the first change's oldPrice.
+ * Subsequent eras cover each period between consecutive price changes, using
+ * that change's newPrice. The final era runs to today.
+ *
+ * If no change events exist, a single era spanning firstSeenDate → today is
+ * returned using currentCaPrice.
+ *
+ * Era 0 is omitted entirely if firstSeenDate >= the first change date (i.e.
+ * no sales data exists for the pre-change period).
+ *
+ * @param canonicalSku      Canonical SKU identifier
+ * @param priceChangeLog    All CA price change records
+ * @param priceHistory      Raw (unfiltered) transaction log — used to derive
+ *                          firstSeenDate; alias variants are resolved via
+ *                          resolveCanonical so their dates are included
+ * @param currentCaPrice    Current CA price (used when no change log exists)
+ * @param today             ISO date string for today
+ * @param resolveCanonical  Alias resolver function
  */
 export function buildPriceEras(
     canonicalSku: string,
     priceChangeLog: PriceChangeRecord[],
+    priceHistory: PriceLog[],
     currentCaPrice: number,
     today: string,
     resolveCanonical: (sku: string) => string
@@ -159,23 +178,52 @@ export function buildPriceEras(
         .filter(e => resolveCanonical(e.sku) === canonicalSku)
         .sort((a, b) => a.date.localeCompare(b.date));
 
+    // Derive first-seen date from raw transaction data (pre-eligibility-filter)
+    // so alias variants and cost-based platform records still anchor the date.
+    const skuDates = priceHistory
+        .filter(tx => resolveCanonical(tx.sku) === canonicalSku)
+        .map(tx => tx.date.split('T')[0]);
+    const firstSeenDate = skuDates.length > 0
+        ? skuDates.reduce((a, b) => a < b ? a : b)
+        : today;
+
     if (events.length === 0) {
         return [{
             eraId: `${canonicalSku}-era-0`,
             sku: canonicalSku,
             caPrice: currentCaPrice,
-            startDate: '2000-01-01',
+            startDate: firstSeenDate,
             endDate: today,
         }];
     }
 
-    return events.map((event, i) => ({
-        eraId: `${canonicalSku}-era-${i}`,
-        sku: canonicalSku,
-        caPrice: event.newPrice,
-        startDate: event.date,
-        endDate: i + 1 < events.length ? dateBefore(events[i + 1].date) : today,
-    }));
+    const eras: PriceEra[] = [];
+
+    // Era 0: the period BEFORE the first price change, using oldPrice.
+    // Only added when there is actual sales history in this window.
+    const firstChangeDate = events[0].date;
+    if (firstSeenDate < firstChangeDate) {
+        eras.push({
+            eraId: `${canonicalSku}-era-0`,
+            sku: canonicalSku,
+            caPrice: events[0].oldPrice,
+            startDate: firstSeenDate,
+            endDate: dateBefore(firstChangeDate),
+        });
+    }
+
+    // One era per price change event, using that event's newPrice.
+    for (let i = 0; i < events.length; i++) {
+        eras.push({
+            eraId: `${canonicalSku}-era-${eras.length}`,
+            sku: canonicalSku,
+            caPrice: events[i].newPrice,
+            startDate: events[i].date,
+            endDate: i + 1 < events.length ? dateBefore(events[i + 1].date) : today,
+        });
+    }
+
+    return eras;
 }
 
 /**
@@ -626,7 +674,16 @@ export function calculateOptimalPrice(options: CalculateOptimalPriceOptions): Op
     const totalEligibleTx = eligibleTx.length;
 
     // --- Build price eras ---
-    const eras = buildPriceEras(canonicalSku, priceChangeLog, currentPrice, today, resolveCanonical);
+    // Pass the raw priceHistory (pre-filter) so firstSeenDate uses the broadest
+    // possible date anchor, including records excluded for platform reasons.
+    const eras = buildPriceEras(
+        canonicalSku,
+        priceChangeLog,
+        priceHistory,
+        currentPrice,
+        today,
+        resolveCanonical
+    );
 
     // --- Tag and assign transactions ---
     const tagged: TaggedTransaction[] = [];
@@ -667,7 +724,7 @@ export function calculateOptimalPrice(options: CalculateOptimalPriceOptions): Op
     const confidence = skuConfidence(pricePoints, totalEligibleTx);
 
     // --- Layer 2: Cohort optimal ---
-    const cohortOptimalPrice = getCohortOptimalPrice(sku, cohortSnapshot);
+    const cohortOptimalPrice = getCohortOptimalPrice(sku, cohortSnapshot, resolveCanonical);
 
     // --- Blending ---
     let blendedPrice: number;

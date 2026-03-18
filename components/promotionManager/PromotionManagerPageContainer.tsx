@@ -46,7 +46,6 @@ export const PromotionManagerPageContainer: React.FC<PromotionManagerPageContain
                 ]}
                 activeTab={activeTab}
                 onChange={(key) => setActiveTab(key as Tab)}
-                size="sm"
             />
 
             <div className="min-h-[500px]">

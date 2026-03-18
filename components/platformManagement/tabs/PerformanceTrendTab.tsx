@@ -259,7 +259,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
     const CustomTrendTooltip = ({ active, payload, label }: any) => {
         if (!active || !payload || !payload.length) return null;
         return (
-            <div className="bg-gray-900/95 backdrop-blur-md border border-gray-700 p-3 rounded-xl shadow-2xl text-white min-w-[220px] pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-gray-900/95 backdrop-blur-md border border-gray-700 p-3 rounded-xl shadow-2xl text-white min-w-[220px] pointer-events-none ">
                 <div className="flex items-center justify-between border-b border-gray-700 pb-2 mb-2"><span className="font-medium text-xs">{new Date(label).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span><span className="text-[9px] text-gray-400 font-medium uppercase tracking-widest bg-white/50 px-1.5 py-0.5 rounded">{trendMetric.replace(/_/g, ' ')}</span></div>
                 <div className="space-y-2">
                     {[...payload].sort((a: any, b: any) => b.value - a.value).map((entry: any, i: number) => {
@@ -299,15 +299,16 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
     const sanitizeId = (name: string) => name.replace(/[^a-zA-Z0-9]/g, '_');
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6">
             {isAuditVisible && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="">
                     <AuditPanel
                         title="Platform Performance Audit"
                         startKey={startKey}
                         endKey={endKey}
                         rows={trendData}
                         getDateKey={() => null}
+                        distinctDaysCount={startKey && endKey ? Math.round((new Date(endKey).getTime() - new Date(startKey).getTime()) / 86400000) + 1 : 0}
                         getRevenue={(row: any) => row.current.revenue}
                         getQty={(row: any) => row.current.unitsSold}
                         getProfit={(row: any) => row.current.netProfit}
@@ -336,7 +337,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                     </div>
                     <div className="relative">
                         <button onClick={() => setIsAlertRulesOpen(!isAlertRulesOpen)} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 flex items-center gap-1.5 shadow-sm transition-all"><BellRing className="w-3.5 h-3.5 text-indigo-500" />Alert Rules</button>
-                        {isAlertRulesOpen && (<div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-50 animate-in fade-in zoom-in-95 duration-150 origin-top-right"><div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h4 className="font-bold text-gray-900 text-sm">Alert Thresholds</h4><button onClick={() => setIsAlertRulesOpen(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="space-y-4"><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Revenue Drop Threshold (%)</label><input type="number" value={alertRules.revenueDropPctThreshold} onChange={e => setAlertRules({ ...alertRules, revenueDropPctThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Low Margin Threshold (%)</label><input type="number" value={alertRules.marginLowThreshold} onChange={e => setAlertRules({ ...alertRules, marginLowThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">High TACoS Threshold (%)</label><input type="number" value={alertRules.tacosHighThreshold} onChange={e => setAlertRules({ ...alertRules, tacosHighThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div></div><div className="mt-6 flex gap-2"><button onClick={() => setIsAlertRulesOpen(false)} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-medium text-xs">Save</button></div></div>)}
+                        {isAlertRulesOpen && (<div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 z-50 origin-top-right"><div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2"><h4 className="font-bold text-gray-900 text-sm">Alert Thresholds</h4><button onClick={() => setIsAlertRulesOpen(false)}><X className="w-4 h-4 text-gray-400" /></button></div><div className="space-y-4"><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Revenue Drop Threshold (%)</label><input type="number" value={alertRules.revenueDropPctThreshold} onChange={e => setAlertRules({ ...alertRules, revenueDropPctThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">Low Margin Threshold (%)</label><input type="number" value={alertRules.marginLowThreshold} onChange={e => setAlertRules({ ...alertRules, marginLowThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div><div className="space-y-1.5"><label className="text-[10px] font-medium uppercase text-gray-400">High TACoS Threshold (%)</label><input type="number" value={alertRules.tacosHighThreshold} onChange={e => setAlertRules({ ...alertRules, tacosHighThreshold: parseFloat(e.target.value) || 0 })} className="w-full border rounded px-3 py-1.5 text-sm font-medium bg-gray-50" /></div></div><div className="mt-6 flex gap-2"><button onClick={() => setIsAlertRulesOpen(false)} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-medium text-xs">Save</button></div></div>)}
                     </div>
                 </div>
                 <div className="sello-table-scroll">
@@ -408,7 +409,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
                 <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center"><div className="flex items-center gap-2"><Settings className="w-4 h-4 text-indigo-500" /><h4 className="font-bold text-gray-800 text-sm">Chart Configuration</h4></div><button onClick={() => setIsGroupCreatorOpen(!isGroupCreatorOpen)} className="text-xs font-medium px-3 py-1.5 rounded-lg border bg-white text-gray-600 border-gray-200 hover:border-gray-300 transition-all flex items-center gap-1"><Plus className="w-3 h-3" /> Create Group</button></div>
                 <div className="p-6">
-                    {isGroupCreatorOpen && (<div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 animate-in fade-in slide-in-from-top-2 mb-6"><div className="flex gap-4 mb-3"><div className="flex-1"><label className="text-[10px] font-medium text-indigo-400 uppercase block mb-1">Group Name</label><input type="text" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="e.g. Amazon Combined" className="w-full text-sm border border-indigo-200 rounded-md px-3 py-1.5 bg-white" /></div></div><div className="mb-4"><label className="text-[10px] font-medium text-indigo-400 uppercase block mb-1">Select Platforms</label><div className="flex flex-wrap gap-2">{uniquePlatforms.map((p: string) => <button key={p} onClick={() => toggleNewGroupPlatform(p)} className={`px-2 py-1 text-xs rounded border transition-all ${newGroupPlatforms.includes(p) ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}>{p}</button>)}</div></div><div className="flex justify-end gap-2"><button onClick={() => setIsGroupCreatorOpen(false)} className="text-xs text-gray-500 px-3 py-1.5">Cancel</button><button onClick={handleCreateGroup} disabled={!newGroupName || newGroupPlatforms.length < 2} className="text-xs bg-indigo-600 text-white font-medium px-4 py-1.5 rounded-md disabled:opacity-50">Save Group</button></div></div>)}
+                    {isGroupCreatorOpen && (<div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 mb-6"><div className="flex gap-4 mb-3"><div className="flex-1"><label className="text-[10px] font-medium text-indigo-400 uppercase block mb-1">Group Name</label><input type="text" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="e.g. Amazon Combined" className="w-full text-sm border border-indigo-200 rounded-md px-3 py-1.5 bg-white" /></div></div><div className="mb-4"><label className="text-[10px] font-medium text-indigo-400 uppercase block mb-1">Select Platforms</label><div className="flex flex-wrap gap-2">{uniquePlatforms.map((p: string) => <button key={p} onClick={() => toggleNewGroupPlatform(p)} className={`px-2 py-1 text-xs rounded border transition-all ${newGroupPlatforms.includes(p) ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}>{p}</button>)}</div></div><div className="flex justify-end gap-2"><button onClick={() => setIsGroupCreatorOpen(false)} className="text-xs text-gray-500 px-3 py-1.5">Cancel</button><button onClick={handleCreateGroup} disabled={!newGroupName || newGroupPlatforms.length < 2} className="text-xs bg-indigo-600 text-white font-medium px-4 py-1.5 rounded-md disabled:opacity-50">Save Group</button></div></div>)}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                         <div>
                             <span className="text-[10px] font-medium text-gray-400 uppercase block mb-3 tracking-widest">Focus Platforms</span>
@@ -450,7 +451,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
 
                     {chartViewMode === 'OVERLAY' ? (
                         <div className="h-[450px] w-full relative group/chart select-none">
-                            {zoomState.isZoomed && (<button onClick={handleResetZoom} className="absolute top-4 right-12 z-20 px-3 py-1.5 bg-white/90 backdrop-blur-sm border border-indigo-100 text-indigo-600 rounded-lg shadow-lg hover:bg-indigo-50 transition-all flex items-center gap-1.5 text-xs font-medium animate-in fade-in slide-in-from-top-2"><RotateCcw className="w-3.5 h-3.5" />Reset View</button>)}
+                            {zoomState.isZoomed && (<button onClick={handleResetZoom} className="absolute top-4 right-12 z-20 px-3 py-1.5 bg-white/90 backdrop-blur-sm border border-indigo-100 text-indigo-600 rounded-lg shadow-lg hover:bg-indigo-50 transition-all flex items-center gap-1.5 text-xs font-medium"><RotateCcw className="w-3.5 h-3.5" />Reset View</button>)}
                             {smoothedChartData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={smoothedChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }} onMouseDown={(e: any) => e?.activeLabel && setRefAreaLeft(e.activeLabel)} onMouseMove={(e: any) => refAreaLeft && e?.activeLabel && setRefAreaRight(e.activeLabel)} onMouseUp={zoom}>
@@ -505,7 +506,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                             ) : (<div className="h-full w-full flex flex-col items-center justify-center bg-gray-50 border border-dashed border-gray-200 rounded-xl text-gray-400 italic">No sales data available for the selected period.</div>)}
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in duration-500">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                             {selectedChartPlatforms.map((platform) => {
                                 const platformKey = `${platform}_${trendMetric}`;
                                 const color = pricingRules[platform]?.color || '#9ca3af';

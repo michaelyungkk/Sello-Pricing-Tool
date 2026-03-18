@@ -14,7 +14,7 @@ export type TabSwitcherProps = {
     size?: 'sm' | 'md';
 }
 
-export const TabSwitcher = ({ tabs, activeTab, onChange, size = 'md' }: TabSwitcherProps) => {
+export const TabSwitcher = ({ tabs, activeTab, onChange, size = 'sm' }: TabSwitcherProps) => {
     const isSm = size === 'sm';
     const paddingClasses = isSm ? 'px-3 py-1.5' : 'px-4 py-2';
     const textClasses = isSm ? 'text-xs' : 'text-sm';

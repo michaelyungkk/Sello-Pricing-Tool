@@ -108,15 +108,16 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
   }, [trendData, sort]);
 
   return (
-    <div className="space-y-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-6 pb-24">
       {isAuditVisible && (
-        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="">
           <AuditPanel
             title="Product Performance Audit"
             startKey={dateWindow.startKey}
             endKey={dateWindow.endKey}
             rows={trendData}
             getDateKey={() => null}
+                        distinctDaysCount={startKey && endKey ? Math.round((new Date(endKey).getTime() - new Date(startKey).getTime()) / 86400000) + 1 : 0}
             getRevenue={(row: any) => row.current.revenue}
             getQty={(row: any) => row.current.unitsSold}
             getProfit={(row: any) => row.current.netProfit}
@@ -147,7 +148,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                 <Info className="w-4 h-4" />
               </button>
               {showMatrixInfo && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-50 ">
                   <div className="flex justify-between items-center mb-2">
                     <h4 className="font-bold text-gray-900 text-xs uppercase">House vs. Classic BCG</h4>
                     <button onClick={() => setShowMatrixInfo(false)}><X className="w-3 h-3 text-gray-400" /></button>

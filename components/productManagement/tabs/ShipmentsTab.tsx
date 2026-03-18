@@ -85,7 +85,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+        <div className="space-y-6">
             <div className="sello-glass p-4 rounded-xl">
                 <label style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Filter Shipments</label>
                 <TagSearchInput tags={searchTags} onTagsChange={updateTags} onInputChange={setInputValue}

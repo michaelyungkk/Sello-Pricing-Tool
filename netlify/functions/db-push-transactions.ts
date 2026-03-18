@@ -65,7 +65,7 @@ export default async (req: Request) => {
                 ? `${tx.sku}|${date}|${platform}|${tx.orderId}`
                 : `${tx.sku}|${date}|${platform}`;
             return {
-                id: tx.id || dedupKey,
+                id: dedupKey,  // always deterministic — never use random log-{ts} ids
                 sku: tx.sku,
                 date: (tx.date || '').split('T')[0],
                 price: tx.price ?? null,
@@ -105,12 +105,19 @@ export default async (req: Request) => {
                 real_postage, real_extra_freight, dedup_key, updated_at
             ) VALUES ${placeholders}
             ON CONFLICT (dedup_key) DO UPDATE SET
+                id = EXCLUDED.id,
                 price = EXCLUDED.price,
                 velocity = EXCLUDED.velocity,
                 margin = EXCLUDED.margin,
                 profit = EXCLUDED.profit,
                 ads_spend = EXCLUDED.ads_spend,
                 raw_ads_spend = EXCLUDED.raw_ads_spend,
+                platform = EXCLUDED.platform,
+                order_id = EXCLUDED.order_id,
+                logistic_partner = EXCLUDED.logistic_partner,
+                logistic_service = EXCLUDED.logistic_service,
+                real_postage = EXCLUDED.real_postage,
+                real_extra_freight = EXCLUDED.real_extra_freight,
                 updated_at = NOW()
         `, flatValues);
 

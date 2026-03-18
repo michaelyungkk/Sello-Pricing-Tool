@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { LayoutDashboard, Activity, Zap, Archive, TrendingUp, Plus, Edit2, Trash2 } from 'lucide-react';
 import { SelectFilter } from '../../common/SelectFilter';
-import { MetricCard } from '../../common/MetricCard';
+import { MetricCard } from '../../productManagement/parts/MetricCard';
 import { StatusBadge } from './StatusBadge';
 import { CreateEventModal } from './CreateEventModal';
 import { EditScheduleModal } from './EditScheduleModal';
@@ -12,7 +12,6 @@ import { PromotionEvent, Product, PricingRules, PriceLog, PriceChangeRecord } fr
 import { computePromoEffectiveness } from '../../../services/promotionAnalytics';
 import { formatPct } from '../../../utils/format';
 import { getTodayKeyMelbourne } from '../../../services/dateUtils';
-import { MetricValue } from '../../common/MetricValue';
 
 interface PromotionDashboardProps {
     promotions: PromotionEvent[];

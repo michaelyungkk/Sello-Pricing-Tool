@@ -365,13 +365,13 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         // Copying existing logic for signals
         const signals = [];
         if (product.stockLevel > 0) {
-            if (product.daysRemaining < (product.leadTimeDays * thresholds.stockoutRunwayMultiplier)) {
+            if (product.daysRemaining != null && product.daysRemaining < (product.leadTimeDays * thresholds.stockoutRunwayMultiplier)) {
                 signals.push({ id: 'STOCKOUT_RISK', label: 'Stockout Risk', severity: 'High', color: 'text-red-700 bg-red-50 border-red-200', icon: AlertTriangle, desc: `Stock covers ${product.daysRemaining.toFixed(0)} days, which is less than the lead time buffer (${(product.leadTimeDays * thresholds.stockoutRunwayMultiplier).toFixed(0)} days).` });
-            } else if (product.daysRemaining > thresholds.overstockDays) {
+            } else if (product.daysRemaining != null && product.daysRemaining > thresholds.overstockDays) {
                 signals.push({ id: 'OVERSTOCK_RISK', label: 'Overstock', severity: 'Medium', color: 'text-orange-700 bg-orange-50 border-orange-200', icon: Package, desc: `Stock covers ${product.daysRemaining.toFixed(0)} days, exceeding the ${thresholds.overstockDays}-day efficiency target.` });
             }
         }
-        if (product.returnRate && product.returnRate > thresholds.returnRatePct) {
+        if (product.returnRate != null && product.returnRate > thresholds.returnRatePct) {
             signals.push({ id: 'HIGH_RETURN_RATE', label: 'Elevated Returns', severity: 'High', color: 'text-red-700 bg-red-50 border-red-200', icon: RotateCcw, desc: `Return rate is ${product.returnRate.toFixed(1)}%, which is above the ${thresholds.returnRatePct}% alert threshold.` });
         }
         const adPct = product.costDetail?.adsFeePct ?? (product.currentPrice > 0 ? ((product.adsFee || 0) / product.currentPrice * 100) : 0);
@@ -379,7 +379,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             signals.push({ id: 'HIGH_AD_DEPENDENCY', label: 'High Ad Dependency', severity: 'Medium', color: 'text-amber-700 bg-amber-50 border-amber-200', icon: Megaphone, desc: `Advertising costs consume ${adPct.toFixed(1)}% of the selling price (Target: < ${thresholds.highAdDependencyPct}%).` });
         }
         const margin = product.costDetail?.profitInclRnPct;
-        if (margin !== undefined && margin < thresholds.marginBelowTargetPct) {
+        if (margin != null && margin < thresholds.marginBelowTargetPct) {
             signals.push({ id: 'BELOW_TARGET', label: 'Margin Compression', severity: 'High', color: 'text-red-700 bg-red-50 border-red-200', icon: DollarSign, desc: `Net margin is ${margin.toFixed(1)}%, below the ${thresholds.marginBelowTargetPct}% target.` });
         }
         const trend = product._trendData?.velocityChange;
@@ -671,9 +671,16 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         return { salesRows, totalUnits, adOnlySpend, refundCount, refundValue };
     }, [filteredTransactions]);
 
+    // Each section band breaks out of the parent p-4 md:p-8 padding with -mx-4 md:-mx-8
+    // and re-applies inner padding so content lines up with the rest of the app.
+    // This gives true full-width colour bands that expand naturally with content.
+    const band = "relative -mx-4 md:-mx-8 px-4 md:px-8 py-6";
+
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300 pb-20">
-            <div className="flex items-center justify-between">
+        <div className="pb-20">
+
+            {/* ── Page header ── */}
+            <div className="flex items-center justify-between px-0 py-4">
                 <div className="flex items-center gap-2">
                     {onBack && (
                         <button onClick={onBack} className="text-gray-500 hover:text-gray-700 transition-colors p-2 rounded-full hover:bg-gray-100">
@@ -692,7 +699,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             </div>
 
-            <div ref={overviewRef}>
+            {/* ── 1. Overview — white ── */}
+            <div ref={overviewRef} className={`${band}`}>
                 <SkuOverviewSection
                     product={product}
                     allTimeSales={allTimeSales}
@@ -705,8 +713,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 />
             </div>
 
+            {/* ── 2. Diagnostic Signals — amber tint ── */}
             {diagnostics.length > 0 && (
-                <div ref={signalsRef}>
+                <div ref={signalsRef} className={`${band}`}>
                     <DiagnosticSignalsSection
                         diagnostics={diagnostics}
                         focus={focus}
@@ -715,8 +724,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
+            {/* ── 3. Distribution Analysis — light slate ── */}
             {sortedTransactions.length > 0 && (
-                <div ref={analysisRef}>
+                <div ref={analysisRef} className={`${band} bg-slate-50 border-y border-slate-100`}>
                     <DistributionAnalysisSection
                         analytics={analytics}
                         tacosStats={tacosStats}
@@ -730,8 +740,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
+            {/* ── 4. Pricing History — white ── */}
             {sortedTransactions.length > 0 && (
-                <div ref={pricingRef}>
+                <div ref={pricingRef} className={`${band} bg-lime-50 border-y border-gray-100`}>
                     <PricingHistorySection
                         priceVolumeAnalysis={priceVolumeAnalysis}
                         minPricePoint={minPricePoint}
@@ -749,7 +760,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                         themeColor={themeColor}
                         optimalPrice={(product.optimalPrice || product.maxVelocityPrice || 0) * VAT_MULTIPLIER}
                         optimalPriceResult={optimalPriceResults?.get(getCanonicalSku(product.sku))}
-                        currentPrice={product.currentPrice * VAT_MULTIPLIER}
+                        currentPrice={product.caPrice || (product.currentPrice * VAT_MULTIPLIER)}
                         siblings={siblings}
                         isInFamily={isInFamily}
                         priceHistoryMap={priceHistoryMap}
@@ -757,8 +768,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
+            {/* ── 5. Transaction Ledger — light indigo tint ── */}
             {sortedTransactions.length > 0 && (
-                <div ref={ledgerRef}>
+                <div ref={ledgerRef} className={`${band} bg-indigo-50/40 border-y border-indigo-100/60`}>
                     <TransactionLedgerSection
                         ledgerStats={ledgerStats}
                         platformSubtotals={platformSubtotals}
@@ -790,7 +802,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
-            <div ref={refundsRef}>
+            {/* ── 6. Returns Analysis — light rose tint ── */}
+            <div ref={refundsRef} className={`${band} bg-rose-50/40 border-y border-rose-100/60`}>
                 <ReturnsAnalysisSection
                     refundAnalysis={refundAnalysis}
                     refunds={refunds}

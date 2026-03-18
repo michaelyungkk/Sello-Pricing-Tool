@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Product, PriceLog, RefundLog, PricingRules } from '../types';
 import { getReportLayouts, saveReportLayout, ReportLayout } from '../services/persistenceService';
 import {
@@ -25,6 +26,8 @@ import {
     CheckSquare,
     Square,
     Search,
+    ListFilter,
+    Trash2,
 } from 'lucide-react';
 import { formatMoney, formatSmartMoney, formatPct, formatNumber } from '../utils/format';
 import { GradeBadge } from './GradeBadge';
@@ -192,7 +195,7 @@ const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, o
     };
 
     return (
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-emerald-100 rounded-lg">
@@ -374,6 +377,120 @@ const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, o
     );
 };
 
+// ─── Sort Priority Dropdown ──────────────────────────────────────────────────
+// Shows active sort rules and lets users manage them.
+// New sorts are added by clicking column headers (Shift+Click for multi-sort).
+interface SortPriorityDropdownProps {
+    sortRules: SortRule[];
+    setSortRules: (rules: SortRule[]) => void;
+    getSortKeyLabel: (key: string) => string;
+    disabled?: boolean;
+}
+
+const SortPriorityDropdown: React.FC<SortPriorityDropdownProps> = ({
+    sortRules, setSortRules, getSortKeyLabel, disabled
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
+    const triggerRef = useRef<HTMLDivElement>(null);
+    const portalRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (triggerRef.current && !triggerRef.current.contains(e.target as Node)
+                && portalRef.current && !portalRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const toggleDir = (idx: number) => {
+        const next = [...sortRules];
+        next[idx] = { ...next[idx], dir: next[idx].dir === 'asc' ? 'desc' : 'asc' };
+        setSortRules(next);
+    };
+
+    const removeRule = (idx: number) => {
+        setSortRules(sortRules.filter((_, i) => i !== idx));
+    };
+
+    const clearAll = () => {
+        setSortRules([]);
+        setIsOpen(false);
+    };
+
+    return (
+        <div ref={triggerRef} className="relative">
+            <button
+                onClick={() => {
+                    if (disabled) return;
+                    if (!isOpen && triggerRef.current) {
+                        const r = triggerRef.current.getBoundingClientRect();
+                        setDropPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX });
+                    }
+                    setIsOpen(!isOpen);
+                }}
+                disabled={disabled}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm disabled:opacity-40 transition-all"
+                style={{ borderColor: sortRules.length > 0 ? '#4f46e5' : 'rgba(209,213,219,0.8)', color: sortRules.length > 0 ? '#4f46e5' : undefined }}
+            >
+                <ListFilter className="w-3.5 h-3.5" />
+                Sort Priority
+                {sortRules.length > 0 && (
+                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black"
+                        style={{ background: '#4f46e5', color: 'white' }}>
+                        {sortRules.length}
+                    </span>
+                )}
+                <ChevronDown className="w-3 h-3" />
+            </button>
+
+            {isOpen && createPortal(
+                <div ref={portalRef} style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999 }}
+                    className="w-72 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Active Sort Rules</h4>
+                        {sortRules.length > 0 && (
+                            <button onClick={clearAll} className="text-[10px] text-red-400 hover:text-red-600 font-bold">Clear All</button>
+                        )}
+                    </div>
+
+                    {sortRules.length === 0 ? (
+                        <div className="text-[11px] text-gray-400 italic text-center py-3">No sort rules active</div>
+                    ) : (
+                        <div className="space-y-1.5 mb-3">
+                            {sortRules.map((rule, i) => (
+                                <div key={i} className="flex items-center gap-2 bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-100">
+                                    <span className="text-[10px] font-bold text-gray-400 w-4">{i + 1}.</span>
+                                    <span className="text-[11px] font-medium text-gray-800 flex-1 truncate" title={getSortKeyLabel(rule.key)}>
+                                        {getSortKeyLabel(rule.key)}
+                                    </span>
+                                    <button onClick={() => toggleDir(i)} className="p-1 hover:bg-gray-200 rounded text-gray-500" title="Toggle direction">
+                                        {rule.dir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button onClick={() => removeRule(i)} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded" title="Remove">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="border-t border-gray-100 pt-2">
+                        <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+                            Click any column header to sort.<br />
+                            <span className="font-bold">Shift+Click</span> to add to sort hierarchy.
+                        </p>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+};
+
 export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     products,
     priceHistory,
@@ -465,6 +582,29 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
     // --- HELPERS ---
     const getDimLabel = (id: string) => DIMENSIONS.find(d => d.id === id)?.label || id;
+
+    // Converts a sort key (e.g. "amazon_revenue", "total_profit", "brand") to a human label
+    const getSortKeyLabel = (key: string): string => {
+        // Row dimension key e.g. "brand", "category"
+        const dim = DIMENSIONS.find(d => d.id === key);
+        if (dim) return dim.label;
+        // total_metricId
+        if (key.startsWith('total_')) {
+            const metricId = key.replace('total_', '');
+            const inst = metrics.find(m => m.id === metricId);
+            return inst ? `Total — ${getMetricLabel(inst.metricId)}` : key;
+        }
+        // colHeaderId_metricId
+        const parts = key.split('_');
+        if (parts.length >= 2 && reportResult) {
+            const metricId = parts[parts.length - 1];
+            const colId = parts.slice(0, -1).join('_');
+            const colHeader = reportResult.colHeaders?.find((ch: any) => ch.id === colId);
+            const inst = metrics.find(m => m.id === metricId);
+            if (colHeader && inst) return `${colHeader.label} — ${getMetricLabel(inst.metricId)}`;
+        }
+        return key.replace(/_/g, ' ');
+    };
     const getMetricLabel = (id: string) => {
         const standard = METRICS.find(m => m.id === id);
         if (standard) return standard.label;
@@ -1090,7 +1230,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-140px)] space-y-4 animate-in fade-in duration-500">
+        <div className="flex flex-col h-[calc(100vh-140px)] space-y-4 ">
             {/* Builder Panel */}
             <div className="relative z-50 bg-custom-glass rounded-xl border border-custom-glass shadow-md shrink-0 p-4" style={{backdropFilter:'var(--glass-blur)',WebkitBackdropFilter:'var(--glass-blur)'}}>
 
@@ -1107,6 +1247,12 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                         >{showBuilder ? '▲ collapse' : '▼ expand'}</button>
                     </div>
                     <div className="flex items-center gap-2">
+                        <SortPriorityDropdown
+                            sortRules={sortRules}
+                            setSortRules={setSortRules}
+                            getSortKeyLabel={getSortKeyLabel}
+                            disabled={!reportResult}
+                        />
                         <button
                             onClick={handleExport}
                             disabled={!reportResult}
@@ -1127,7 +1273,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all" style={{borderColor:'rgba(209,213,219,0.8)'}}>
                                     <FolderOpen className="w-3.5 h-3.5" /> Load
                                 </button>
-                                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2 opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all">
+                                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-[9999] p-2 opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all">
                                     {savedLayouts.map(layout => (
                                         <button key={layout.id} onClick={() => handleLoadLayout(layout)} className="w-full text-left px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded truncate">{layout.name}</button>
                                     ))}
@@ -1326,7 +1472,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             <button onClick={() => handleRemoveMetric(m.id)} className="opacity-40 hover:opacity-100 ml-0.5"><X className="w-2.5 h-2.5" /></button>
 
                                             {activePopover === m.id && (
-                                                <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2">
+                                                <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-gray-100 rounded-lg shadow-xl z-[9999] p-2">
                                                     <div className="space-y-1">
                                                         {TIME_RANGES.map(tr => (
                                                             <button
@@ -1420,8 +1566,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 >+ Add filter</button>
                                 {isFilterMenuOpen && (
                                     <>
-                                        <div className="fixed inset-0 z-40" onClick={() => setIsFilterMenuOpen(false)} />
-                                        <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 p-2">
+                                        <div className="fixed inset-0 z-[9998]" onClick={() => setIsFilterMenuOpen(false)} />
+                                        <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-[9999] p-2">
                                             <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Dimensions</div>
                                             {DIMENSIONS.map(d => (
                                                 <button key={d.id} onClick={() => { handleAddFilter(d.id, 'dim'); setIsFilterMenuOpen(false); }} className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded">{d.label}</button>
@@ -1473,7 +1619,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                     <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
                         <button
                             onClick={() => generateReport()}
-                            className="flex items-center gap-3 px-10 py-5 bg-indigo-600 text-white rounded-2xl font-bold shadow-2xl hover:bg-indigo-700 hover:scale-105 transition-all animate-in zoom-in-95"
+                            className="flex items-center gap-3 px-10 py-5 bg-indigo-600 text-white rounded-2xl font-bold shadow-2xl hover:bg-indigo-700 hover:scale-105 transition-all "
                         >
                             <Play className="w-6 h-6 fill-current" />
                             Generate Pivot Report

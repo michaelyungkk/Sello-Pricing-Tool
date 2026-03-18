@@ -61,11 +61,15 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platfo
     };
 
     const handleSuggestionApply = (suggestion: Suggestion) => {
-        // Handle SKU suggestion explicitly
+        // Handle SKU suggestion explicitly — immediately trigger search, no Enter needed
         if (suggestion.kind === 'sku') {
-            // Format as SKU chip
             const val = `SKU: ${suggestion.id}`;
-            addChip({ type: 'TEXT', value: val, label: val });
+            const newChips = [...chips, { type: 'TEXT' as const, value: val, label: val }];
+            setChips(newChips);
+            setInputValue('');
+            setSearchMode('GLOBAL');
+            setIsFocused(false);
+            onSearch(newChips);
             return;
         }
 

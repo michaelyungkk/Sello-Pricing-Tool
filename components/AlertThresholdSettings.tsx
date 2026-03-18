@@ -116,7 +116,7 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
     const allValid = Object.entries(config).every(([k, v]) => isValid(k as keyof ThresholdConfig, v as number | string));
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+        <div className="space-y-6">
             <div className="flex justify-between items-start">
                 <div>
                     <h2 className="text-xl font-bold text-gray-900">Alert & Diagnostic Thresholds</h2>
@@ -141,7 +141,7 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
             </div>
 
             {savedMessage && (
-                <div className="bg-green-50 text-green-700 px-4 py-2 rounded-lg border border-green-200 text-sm font-medium flex items-center gap-2 animate-in fade-in">
+                <div className="bg-green-50 text-green-700 px-4 py-2 rounded-lg border border-green-200 text-sm font-medium flex items-center gap-2">
                     <Activity className="w-4 h-4" /> {savedMessage}
                 </div>
             )}

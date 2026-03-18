@@ -178,9 +178,14 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
             x: p.price, y: p.dailyProfit, price: p.price, source: 'promo',
             velocity: p.velocity, margin: p.margin, dailyProfit: p.dailyProfit, eraId: p.eraId,
         }));
-        const sorted = [...pricePoints].sort((a, b) => a.price - b.price);
-        const curveData = sorted.length >= 3
-            ? sorted.map(p => ({ x: p.price, y: p.dailyProfit, price: p.price, dailyProfit: p.dailyProfit }))
+        // Organic points only, 2+ distinct prices required — avoids vertical spikes
+        // when promo and organic share the same price on the x axis
+        const organicSorted = [...pricePoints]
+            .filter(p => p.source === 'organic')
+            .sort((a, b) => a.price - b.price);
+        const distinctOrganicPrices = new Set(organicSorted.map(p => p.price)).size;
+        const curveData = distinctOrganicPrices >= 2
+            ? organicSorted.map(p => ({ x: p.price, y: p.dailyProfit, price: p.price, dailyProfit: p.dailyProfit }))
             : [];
         const STEPS = 40;
         const bucketMid = (xMin + xMax) / 2;
@@ -232,7 +237,20 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                         )}
                         {organicData.length > 0 && <Scatter data={organicData} fill="#4f46e5" name="Organic" />}
                         {promoData.length > 0 && <Scatter data={promoData} fill="none" stroke="#f59e0b" strokeWidth={2} name="Promo" />}
-                        <ReferenceLine x={cp} stroke="#6b7280" strokeWidth={1.5} strokeDasharray="4 3" label={{ value: `Current ${formatSmartMoney(cp)}`, position: 'top', fontSize: 9, fill: '#6b7280' }} />
+                        {(() => {
+                            const priceDiff = Math.abs(recommendedPrice - cp);
+                            const xRange = xMax - xMin;
+                            const tooClose = xRange > 0 && (priceDiff / xRange) < 0.08;
+                            return (
+                                <ReferenceLine
+                                    x={cp}
+                                    stroke="#6b7280"
+                                    strokeWidth={1.5}
+                                    strokeDasharray="4 3"
+                                    label={{ value: `Current ${formatSmartMoney(cp)}`, position: tooClose ? 'insideTopLeft' : 'top', fontSize: 9, fill: '#6b7280', ...(tooClose ? { dy: 28 } : {}) }}
+                                />
+                            );
+                        })()}
                         <ReferenceLine x={recommendedPrice} stroke="#10b981" strokeWidth={2} label={{ value: `Optimal ${formatSmartMoney(recommendedPrice)} ★`, position: 'top', fontSize: 9, fill: '#10b981' }} />
                     </ComposedChart>
                 </ResponsiveContainer>
