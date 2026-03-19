@@ -148,17 +148,20 @@ function parseReturnsFile(buffer: ArrayBuffer, startKey: string, endKey: string)
         const amtI    = idx('returnamt') !== -1 ? idx('returnamt') : idx('amount');
         const qtyI    = idx('returnqty') !== -1 ? idx('returnqty') : idx('qty');
         const skuI    = idx('sku') !== -1 ? idx('sku') : idx('skucode');
+        const typeI   = idx('ordertype') !== -1 ? idx('ordertype') : idx('type');
+        const orderI  = idx('outerorderid') !== -1 ? idx('outerorderid') : idx('orderid');
 
         if (l2I === -1 || amtI === -1) return null;
-
-        const platforms: ParsedReturnData['platforms'] = {};
-        const dates: string[] = [];
-        let rowCount = 0;
 
         // Try to use Year/Month/Day columns if ordertime not available
         const yearI  = idx('year');
         const monthI = idx('month');
         const dayI   = idx('day');
+
+        // First pass: collect all rows in window, group resend rows by base order ID
+        // to detect multi-SKU resend orders and apply qty/amt correction
+        const rawRows: { plat: string; sku: string; oid: string; amt: number; qty: number; isResend: boolean; d: string }[] = [];
+        const resendOrderGroups = new Map<string, number>(); // baseOid -> SKU line count
 
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
@@ -173,22 +176,55 @@ function parseReturnsFile(buffer: ArrayBuffer, startKey: string, endKey: string)
                 const dd = String(row[dayI]).padStart(2, '0');
                 d = `${y}-${m}-${dd}`;
             }
-            if (!d) continue;
-            if (d < startKey || d > endKey) continue;
+            if (!d || d < startKey || d > endKey) continue;
 
             const plat = String(row[l2I] || '').trim();
             const sku  = skuI !== -1 ? String(row[skuI] || '').trim().toLowerCase() : '';
+            const oid  = orderI !== -1 ? String(row[orderI] || '').trim() : '';
             const amt  = parseFloat(String(row[amtI] || 0)) || 0;
             const qty  = parseFloat(String(row[qtyI] || 0)) || 0;
+            const otype = typeI !== -1 ? String(row[typeI] || '').toLowerCase() : '';
 
-            // Skip freight rows
             if (sku === 'freight' || sku === 'addfreight') continue;
             if (!plat || amt === 0) continue;
 
-            dates.push(d);
-            if (!platforms[plat]) platforms[plat] = { qty: 0, amt: 0 };
-            platforms[plat].amt += amt;
-            platforms[plat].qty += qty;
+            const isResend = otype.includes('resend') || oid.toLowerCase().includes('-resend');
+
+            if (isResend && oid) {
+                // Normalise to base order ID
+                let base = oid;
+                while (/-resend$/i.test(base)) base = base.replace(/-resend$/i, '');
+                resendOrderGroups.set(base, (resendOrderGroups.get(base) || 0) + 1);
+            }
+
+            rawRows.push({ plat, sku, oid, amt, qty, isResend, d });
+        }
+
+        // Second pass: aggregate with resend correction applied
+        const platforms: ParsedReturnData['platforms'] = {};
+        const dates: string[] = [];
+        let rowCount = 0;
+
+        for (const r of rawRows) {
+            let amt = r.amt;
+            let qty = r.qty;
+
+            if (r.isResend && r.oid) {
+                // Get base order ID
+                let base = r.oid;
+                while (/-resend$/i.test(base)) base = base.replace(/-resend$/i, '');
+                const nSkuLines = resendOrderGroups.get(base) || 1;
+                // Apply correction for multi-SKU resend orders
+                if (nSkuLines > 1 && qty > 1) {
+                    amt = amt / qty;   // per-unit cost
+                    qty = 1;           // actual qty per SKU line
+                }
+            }
+
+            dates.push(r.d);
+            if (!platforms[r.plat]) platforms[r.plat] = { qty: 0, amt: 0 };
+            platforms[r.plat].amt += amt;
+            platforms[r.plat].qty += qty;
             rowCount++;
         }
 
@@ -224,7 +260,7 @@ function getAppAggregates(
         const plat = log.platform || 'Unknown';
         if (!result[plat]) result[plat] = { units: 0, revenue: 0, profit: 0, ads: 0 };
         result[plat].units   += log.velocity || 0;
-        result[plat].revenue += (log.price || 0) * (log.velocity || 0) * VAT;
+        result[plat].revenue += ((log.price || 0) * (log.velocity || 0) + (log.realExtraFreight || 0)) * VAT;
         result[plat].profit  += (log.profit ?? ((log.price || 0) * (log.velocity || 0) * ((log.margin || 0) / 100))) * VAT;
         result[plat].ads     += (log.adsSpend || 0) * VAT;
     }

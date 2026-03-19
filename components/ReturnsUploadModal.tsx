@@ -195,15 +195,28 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         const unmatchedSamples: string[] = [];
 
         orderGroups.forEach((group, oid) => {
-            const totalItemVal = group.items.reduce((sum, it) => sum + it.amt, 0);
+            // Detect resend orders — qty is inflated in the returns file for multi-SKU resend orders.
+            // The ERP records each SKU line with qty = total_items_in_order instead of actual SKU qty.
+            // Fix: for resend orders, corrected_qty = 1 and corrected_amt = return_amt / file_qty (per-unit cost).
+            const isResendOrder = oid.toLowerCase().includes('-resend') ||
+                group.items.some(it => {
+                    const t = typeIdx !== -1 ? String(it.row[typeIdx] || '').toLowerCase() : '';
+                    return t.includes('resend');
+                });
+            const nSkuLines = group.items.length;
+
+            const totalItemVal = group.items.reduce((sum, it) => {
+                if (isResendOrder && nSkuLines > 1) {
+                    // Use corrected amt (per-unit cost) for freight allocation
+                    const rawQty = qtyIdx !== -1 ? parseFloat(String(it.row[qtyIdx] || '1')) || 1 : 1;
+                    return sum + (it.amt / rawQty);
+                }
+                return sum + it.amt;
+            }, 0);
 
             group.items.forEach(it => {
-                const { row, sku, amt, rawSku } = it;
-
-                // Allocate freight proportionally by value
-                const allocatedFreight = totalItemVal > 0
-                    ? (amt / totalItemVal) * group.freight
-                    : (group.freight / group.items.length);
+                const { row, sku, rawSku } = it;
+                let amt = it.amt;
 
                 let qty = 0;
                 if (qtyIdx !== -1) {
@@ -216,6 +229,17 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                 } else {
                     qty = 1;
                 }
+
+                // Apply resend qty/amt correction for multi-SKU resend orders
+                if (isResendOrder && nSkuLines > 1 && qty > 1) {
+                    amt = amt / qty;  // per-unit cost
+                    qty = 1;          // actual qty per SKU line
+                }
+
+                // Allocate freight proportionally by corrected value
+                const allocatedFreight = totalItemVal > 0
+                    ? (amt / totalItemVal) * group.freight
+                    : (group.freight / group.items.length);
 
                 const oType = typeIdx !== -1 ? String(row[typeIdx]).toLowerCase() : 'refund';
                 const reason = reasonIdx !== -1 ? String(row[reasonIdx]) : undefined;
@@ -258,8 +282,11 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                 const uniqueId = generateRefundId(rawSku, dateStr, amt, qty, reason, oid);
 
                 let resendBase = undefined;
-                if (oType.includes('resend') || oid.includes('-resend')) {
-                    resendBase = oid.replace(/-resend$/i, '');
+                if (oType.includes('resend') || oid.toLowerCase().includes('-resend')) {
+                    // Strip ALL -resend suffixes (handles double-resend like W123-1M-V-resend-resend)
+                    let base = oid;
+                    while (/-resend$/i.test(base)) base = base.replace(/-resend$/i, '');
+                    resendBase = base;
                 }
 
                 refunds.push({

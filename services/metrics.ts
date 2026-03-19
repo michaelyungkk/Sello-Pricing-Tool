@@ -45,7 +45,7 @@ export const safeDiv = (numerator: number, denominator: number, fallback: number
  * @returns The calculated revenue.
  */
 export const calcRevenue = (log: PriceLog): number => {
-    return toNumber(log.price) * toNumber(log.velocity);
+    return toNumber(log.price) * toNumber(log.velocity) + toNumber(log.realExtraFreight);
 };
 
 
