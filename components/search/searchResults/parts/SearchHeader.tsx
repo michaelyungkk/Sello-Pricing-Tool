@@ -44,8 +44,8 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
     return (
         <div className="space-y-4">
             {data.params && data.params.filters && data.params.filters.length > 0 && (
-                <div className="bg-indigo-50/50 border-b border-indigo-100 p-3 rounded-lg flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-medium text-indigo-400 uppercase tracking-wide flex items-center gap-1">
+                <div className="bg-theme-10/50 border-b border-indigo-100 p-3 rounded-lg flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-medium text-theme uppercase tracking-wide flex items-center gap-1">
                         <Filter className="w-3 h-3" /> Active Logic:
                     </span>
                     {data.params.filters.map((filter: any, idx: number) => (
@@ -71,7 +71,7 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
                     <div className="flex items-center gap-2">
                         <h2 className="text-xl font-bold text-gray-800">&quot;{data.query}&quot;</h2>
                         {data.results.length > 0 && (
-                            <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                            <span className="bg-theme-10 text-theme px-2 py-0.5 rounded-full text-xs font-medium">
                                 {data.results.length} hits
                             </span>
                         )}
@@ -128,13 +128,13 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
                             <button 
                                 onClick={() => !context.isInventory && !context.isAged && setGroupBy('platform')} 
                                 disabled={context.isInventory || context.isAged}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${groupBy === 'platform' ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' : 'text-gray-500 hover:text-gray-700'} ${(context.isInventory || context.isAged) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${groupBy === 'platform' ? 'bg-theme-10 text-theme shadow-sm border border-indigo-100' : 'text-gray-500 hover:text-gray-700'} ${(context.isInventory || context.isAged) ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 <Layers className="w-3 h-3" /> Platform
                             </button>
                             <button 
                                 onClick={() => setGroupBy('sku')} 
-                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${groupBy === 'sku' ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${groupBy === 'sku' ? 'bg-theme-10 text-theme shadow-sm border border-indigo-100' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 <Package className="w-3 h-3" /> SKU
                             </button>

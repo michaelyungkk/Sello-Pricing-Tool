@@ -95,7 +95,7 @@ const ShiftReviewModal: React.FC<ShiftReviewModalProps> = ({ shifts, rebuiltCate
                                     <span className="ml-auto flex items-center gap-1 text-gray-600">
                                         <span className="text-gray-400">{s.oldBucket}</span>
                                         <span className="text-gray-400">→</span>
-                                        <span className="font-bold text-indigo-600">{s.newBucket}</span>
+                                        <span className="font-bold text-theme">{s.newBucket}</span>
                                     </span>
                                 </div>
                             ))}
@@ -116,7 +116,7 @@ const ShiftReviewModal: React.FC<ShiftReviewModalProps> = ({ shifts, rebuiltCate
                 </button>
                 <button
                     onClick={onAccept}
-                    className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm"
+                    className="px-4 py-2 text-sm font-bold text-white bg-theme hover:bg-theme rounded-lg transition-colors shadow-sm"
                 >
                     Accept &amp; Update
                 </button>
@@ -179,17 +179,17 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
 
             {/* ── First-time setup banner */}
             {!cohortSnapshot && (
-                <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between">
+                <div className="p-4 bg-theme-10 border border-theme-20 rounded-xl flex items-center justify-between">
                     <div>
                         <div className="text-sm font-bold text-indigo-900">⚙ Price Benchmarks not yet calculated</div>
-                        <div className="text-xs text-indigo-600 mt-0.5">
+                        <div className="text-xs text-theme mt-0.5">
                             Build benchmarks to enable optimal pricing across all SKUs
                         </div>
                     </div>
                     {onRecalculateBenchmarks && (
                         <button
                             onClick={handleSetupBenchmarks}
-                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm whitespace-nowrap ml-4"
+                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg hover:bg-theme transition-colors shadow-sm whitespace-nowrap ml-4"
                         >
                             Calculate Price Benchmarks &amp; Optimal Prices
                         </button>

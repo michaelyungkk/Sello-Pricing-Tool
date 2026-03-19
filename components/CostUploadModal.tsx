@@ -132,23 +132,23 @@ const CostUploadModal: React.FC<CostUploadModalProps> = ({ onClose, onConfirm })
                 <div className="p-6">
                     {isProcessing ? (
                         <div className="flex flex-col items-center py-10">
-                            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
+                            <Loader2 className="w-8 h-8 animate-spin text-theme mb-2" />
                             <span className="text-gray-500">Processing...</span>
                         </div>
                     ) : !parsedItems ? (
                         <div
-                            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-colors ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400'
+                            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-colors ${dragActive ? 'border-theme bg-theme-10' : 'border-gray-300 hover:border-gray-400'
                                 }`}
                             onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
                         >
                             <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept=".csv, .xlsx" />
                             <Upload className="w-8 h-8 text-gray-400 mb-4" />
-                            <p className="text-sm font-medium text-gray-900">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-indigo-600 underline">Browse</button></p>
+                            <p className="text-sm font-medium text-gray-900">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-theme underline">Browse</button></p>
 
                             <div className="mt-4 text-left text-xs text-gray-500 bg-gray-50 p-3 rounded border border-gray-200 w-full">
                                 <p className="font-medium text-gray-700 mb-1">Column Requirements:</p>
                                 <ul className="list-disc pl-4 space-y-1">
-                                    <li><code className="bg-indigo-50 text-indigo-700 px-1 rounded">sku</code> (Required)</li>
+                                    <li><code className="bg-theme-10 text-theme px-1 rounded">sku</code> (Required)</li>
                                     <li><code className="bg-gray-200 px-1 rounded">cost</code> (Optional - COGS)</li>
                                     <li><code className="bg-gray-200 px-1 rounded">floor_price</code> (Optional - Min Limit)</li>
                                     <li><code className="bg-gray-200 px-1 rounded">ceiling_price</code> (Optional - Max Limit)</li>
@@ -194,7 +194,7 @@ const CostUploadModal: React.FC<CostUploadModalProps> = ({ onClose, onConfirm })
                     {validItems.length > 0 && (
                         <button
                             onClick={() => onConfirm(validItems)}
-                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors"
+                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors"
                         >
                             Update Costs
                         </button>

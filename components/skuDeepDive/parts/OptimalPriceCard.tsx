@@ -20,7 +20,7 @@ const ConfidenceBadge: React.FC<{ confidence: number; source: string }> = ({ con
 
 // ── Source label
 const sourceStyles: Record<string, string> = {
-    SKU_DATA: 'text-indigo-600',
+    SKU_DATA: 'text-theme',
     BLENDED: 'text-amber-600',
     COHORT: 'text-gray-400',
     GUARDRAIL: 'text-red-500',
@@ -56,7 +56,7 @@ export const OptimalPriceCard: React.FC<OptimalPriceCardProps> = ({ result, curr
                     <div className="text-3xl font-bold text-gray-900 tracking-tight">{formatSmartMoney(optimalPrice)}</div>
                     {isIncrease && <div className="text-right"><div className="flex items-center gap-1 text-sm font-bold text-green-600"><TrendingUp className="w-4 h-4" />+{diffPct.toFixed(1)}%</div><div className="text-[10px] text-gray-400">Target</div></div>}
                     {isDecrease && <div className="text-right"><div className="flex items-center gap-1 text-sm font-bold text-red-600"><TrendingDown className="w-4 h-4" />{diffPct.toFixed(1)}%</div><div className="text-[10px] text-gray-400">Target</div></div>}
-                    {!isIncrease && !isDecrease && <div className="flex items-center gap-1 text-sm font-bold text-indigo-600"><CheckCircle className="w-4 h-4" />Optimized</div>}
+                    {!isIncrease && !isDecrease && <div className="flex items-center gap-1 text-sm font-bold text-theme"><CheckCircle className="w-4 h-4" />Optimized</div>}
                 </div>
                 {(isIncrease || isDecrease) && (
                     <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500 flex justify-between items-center">
@@ -105,7 +105,7 @@ export const OptimalPriceCard: React.FC<OptimalPriceCardProps> = ({ result, curr
                     </div>
                 )}
                 {!isIncrease && !isDecrease && (
-                    <div className="flex items-center gap-1 text-sm font-bold text-indigo-600"><CheckCircle className="w-4 h-4" />Optimized</div>
+                    <div className="flex items-center gap-1 text-sm font-bold text-theme"><CheckCircle className="w-4 h-4" />Optimized</div>
                 )}
             </div>
 
@@ -123,7 +123,7 @@ export const OptimalPriceCard: React.FC<OptimalPriceCardProps> = ({ result, curr
                 {isLongReasoning && (
                     <button
                         onClick={() => setReasoningExpanded(v => !v)}
-                        className="text-[10px] text-indigo-500 hover:text-indigo-700 mt-1 font-medium"
+                        className="text-[10px] text-theme hover:text-theme mt-1 font-medium"
                     >
                         {reasoningExpanded ? 'Show less' : 'Show more'}
                     </button>

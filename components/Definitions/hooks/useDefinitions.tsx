@@ -198,9 +198,9 @@ export const useDefinitions = () => {
                             You don&apos;t need to build complex filters. Just type what you&apos;re thinking into the Global Search:
                         </p>
                         <div className="space-y-2">
-                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-indigo-600">&quot;Healthy SKUs with margin &gt; 40% on Amazon&quot;</div>
-                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-indigo-600">&quot;Critical stock under £10 in Home Category&quot;</div>
-                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-indigo-600">&quot;Top 20% products by units sold last week&quot;</div>
+                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-theme">&quot;Healthy SKUs with margin &gt; 40% on Amazon&quot;</div>
+                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-theme">&quot;Critical stock under £10 in Home Category&quot;</div>
+                            <div className="text-xs bg-white/50 border border-gray-100 p-2 rounded italic font-mono text-theme">&quot;Top 20% products by units sold last week&quot;</div>
                         </div>
                     </div>
                     <div className="bg-custom-glass rounded-xl p-6 border border-custom-glass">
@@ -228,7 +228,7 @@ export const useDefinitions = () => {
                             The toolbox contains specialized generators:
                         </p>
                         <ul className="mt-3 space-y-2">
-                            <li className="flex gap-2 text-[11px] text-gray-500"><Wrench className="w-3.5 h-3.5 shrink-0 text-indigo-400" /> <strong>Inventory Templates:</strong> Generate platform-specific stock update files.</li>
+                            <li className="flex gap-2 text-[11px] text-gray-500"><Wrench className="w-3.5 h-3.5 shrink-0 text-theme" /> <strong>Inventory Templates:</strong> Generate platform-specific stock update files.</li>
                             <li className="flex gap-2 text-[11px] text-gray-500"><Link className="w-3.5 h-3.5 shrink-0 text-amber-400" /> <strong>Alias Generator:</strong> Bulk map platform SKUs to Master IDs.</li>
                         </ul>
                     </div>

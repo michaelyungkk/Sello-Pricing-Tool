@@ -47,9 +47,9 @@ export const AliasDrawer: React.FC<AliasDrawerProps> = ({ product, pricingRules,
                     {platformTags.map(item => (
                         <div key={item.platform}>
                             <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">{item.platform}</label>
-                            <div className="flex flex-wrap gap-2 p-2 border rounded-lg mt-1 focus-within:ring-2 focus-within:ring-indigo-500">
+                            <div className="flex flex-wrap gap-2 p-2 border rounded-lg mt-1 focus-within:ring-2 focus-within:ring-theme">
                                 {item.tags.map((tag:string, i:number) => (
-                                    <span key={i} className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs flex items-center gap-1">
+                                    <span key={i} className="px-2 py-1 bg-theme-10 text-theme rounded text-xs flex items-center gap-1">
                                         {tag} <button onClick={() => setPlatformTags(prev => prev.map(p => p.platform === item.platform ? { ...p, tags: p.tags.filter((_, idx) => idx !== i) } : p))}><X className="w-3 h-3" /></button>
                                     </span>
                                 ))}
@@ -72,7 +72,7 @@ export const AliasDrawer: React.FC<AliasDrawerProps> = ({ product, pricingRules,
                 </div>
                 <div className="p-4 border-t flex justify-end gap-2">
                     <button onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-50">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Save</button>
+                    <button onClick={handleSave} className="px-4 py-2 bg-theme text-white rounded hover:bg-theme">Save</button>
                 </div>
             </div>
         </div>

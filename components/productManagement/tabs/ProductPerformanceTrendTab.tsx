@@ -25,8 +25,8 @@ interface ProductPerformanceTrendTabProps {
 
 const SummaryCard = ({ title, sku, delta, value, type }: any) => {
   const Icon = type === 'pos' ? ArrowUpRight : type === 'neg' ? ArrowDownRight : Activity;
-  const colorClass = type === 'pos' ? 'text-emerald-600' : type === 'neg' ? 'text-red-500' : 'text-indigo-600';
-  const bgClass = type === 'pos' ? 'bg-green-50' : type === 'neg' ? 'bg-red-50' : 'bg-indigo-50';
+  const colorClass = type === 'pos' ? 'text-emerald-600' : type === 'neg' ? 'text-red-500' : 'text-theme';
+  const bgClass = type === 'pos' ? 'bg-green-50' : type === 'neg' ? 'bg-red-50' : 'bg-theme-10';
 
   return (
     <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex items-start justify-between min-w-0">
@@ -142,7 +142,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
             <div className="relative">
               <button
                 onClick={() => setShowMatrixInfo(!showMatrixInfo)}
-                className="p-1.5 rounded-lg bg-white/80 border border-gray-200 shadow-sm backdrop-blur-sm text-gray-500 hover:text-indigo-600 transition-colors"
+                className="p-1.5 rounded-lg bg-white/80 border border-gray-200 shadow-sm backdrop-blur-sm text-gray-500 hover:text-theme transition-colors"
                 title="How to read this chart"
               >
                 <Info className="w-4 h-4" />
@@ -163,7 +163,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                     <br />
                     • <strong>Volume Growth (PoP)</strong> as a proxy for Market Growth.
                   </p>
-                  <div className="mt-2 text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-1 rounded">
+                  <div className="mt-2 text-[10px] text-theme font-bold bg-theme-10 px-2 py-1 rounded">
                     Goal: Identify internal cash cows without external competitor data.
                   </div>
                 </div>
@@ -173,14 +173,14 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
             <div className="flex bg-white/80 p-1 rounded-lg border border-gray-200 shadow-sm backdrop-blur-sm">
               <button
                 onClick={() => setViewMode('LIST')}
-                className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'LIST' ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
+                className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'LIST' ? 'bg-theme-10 text-theme' : 'text-gray-500 hover:text-gray-900'}`}
                 title="List View"
               >
                 <List className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setViewMode('MATRIX')}
-                className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'MATRIX' ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
+                className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'MATRIX' ? 'bg-theme-10 text-theme' : 'text-gray-500 hover:text-gray-900'}`}
                 title="Matrix View"
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -206,14 +206,14 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
               <div className="flex bg-white p-1 rounded-lg border border-gray-200">
                 <button
                   onClick={() => setViewMode('LIST')}
-                  className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'LIST' ? 'bg-indigo-50 text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                  className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'LIST' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                   title="List View"
                 >
                   <List className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setViewMode('MATRIX')}
-                  className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'MATRIX' ? 'bg-indigo-50 text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                  className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'MATRIX' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                   title="BCG Matrix View"
                 >
                   <LayoutGrid className="w-4 h-4" />
@@ -246,7 +246,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                       <td className="c">
                         <button
                           onClick={() => onDeepDive(row.sku)}
-                          className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-gray-200 shadow-none hover:shadow-sm transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-theme hover:bg-white rounded border border-transparent hover:border-gray-200 shadow-none hover:shadow-sm transition-colors"
                           title="Deep Dive SKU"
                         >
                           <Search className="w-4 h-4" />

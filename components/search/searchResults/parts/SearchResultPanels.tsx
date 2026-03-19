@@ -108,7 +108,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                         </h3>
                         {group.productName && <p className="text-xs text-gray-500">{group.productName}</p>}
                         {topDistricts && (
-                            <p className="text-[10px] text-indigo-600 mt-1 flex items-center gap-1 font-medium">
+                            <p className="text-[10px] text-theme mt-1 flex items-center gap-1 font-medium">
                                 <MapPin className="w-3 h-3" /> Top Districts: {topDistricts}
                             </p>
                         )}
@@ -118,7 +118,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                   <div className="flex items-center gap-8">
                     {/* UNITS COLUMN */}
                     <div className={`text-right hidden sm:block ${context.isVolume ? 'scale-110 transform origin-right' : 'opacity-70'}`}>
-                        <div className={`text-xs ${context.isVolume ? 'text-indigo-600 font-bold' : 'text-gray-500'}`}>
+                        <div className={`text-xs ${context.isVolume ? 'text-theme font-bold' : 'text-gray-500'}`}>
                             {context.isInventory || context.isAged ? 'Total Stock' : context.isTrend ? 'Vol. Change (PoP)' : 'Units Sold'}
                         </div>
                         
@@ -132,7 +132,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                             </div>
                         ) : (
                             <div className="flex flex-col items-end">
-                                <div className={`font-bold text-lg ${context.isVolume ? 'text-indigo-700' : 'text-gray-800'}`}>
+                                <div className={`font-bold text-lg ${context.isVolume ? 'text-theme' : 'text-gray-800'}`}>
                                     {formatNumber(group.totalQty)}
                                 </div>
                                 {volumeBadge}
@@ -233,7 +233,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                 ? (group.organicShare !== null && group.organicShare > 80 ? 'text-green-600' : group.organicShare !== null && group.organicShare < 40 ? 'text-red-600' : 'text-gray-800')
                                             : context.isAged
                                                 ? (group.agedStockPct > 20 ? 'text-red-600' : group.agedStockPct > 10 ? 'text-orange-600' : 'text-green-600')
-                                            : 'text-indigo-600'
+                                            : 'text-theme'
                                 }`} title={context.isAd ? "Ad Spend / Ad-Enabled Revenue. Shows '—' if no revenue on ad platforms." : undefined}>
                                     {context.isInventory 
                                         ? `${(group.globalCover || 0) > 730 ? '>2y' : (group.globalCover || 0).toFixed(0) + ' days'}`
@@ -287,7 +287,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                 onClick={(e) => handleSubGroupToggle(compositeKey, e)}
                                             >
                                                 <div className="flex items-center gap-3">
-                                                    {isSubExpanded ? <ChevronDown className="w-4 h-4 text-indigo-500" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                                                    {isSubExpanded ? <ChevronDown className="w-4 h-4 text-theme" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                                                     <div className="p-1.5 bg-gray-200 rounded text-gray-500">
                                                         {groupBy === 'platform' ? <Package className="w-3 h-3" /> : <Layers className="w-3 h-3" />}
                                                     </div>
@@ -305,7 +305,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                         <>
                                                             <div className="text-right">
                                                                 <div className="text-xs text-gray-400">Plat. Velocity</div>
-                                                                <div className="text-sm font-bold text-indigo-600">{(sub.platformVelocity || 0).toFixed(2)}/d</div>
+                                                                <div className="text-sm font-bold text-theme">{(sub.platformVelocity || 0).toFixed(2)}/d</div>
                                                             </div>
                                                             {!context.isAged && <div className="text-right w-24">
                                                                 <div className="text-xs text-gray-400">Plat. Cover</div>
@@ -382,7 +382,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                                     context.isAd ? (sub.tacos !== null && sub.tacos > thresholds.highAdDependencyPct ? 'text-red-600' : 'text-gray-700') :
                                                                     context.isOrganic ? (sub.organicShare !== null && sub.organicShare > 80 ? 'text-green-600' : sub.organicShare !== null && sub.organicShare < 40 ? 'text-red-600' : 'text-gray-700') :
                                                                     context.isMargin ? (sub.totalProfit < 0 ? 'text-red-600' : 'text-green-600') :
-                                                                    'text-indigo-600'
+                                                                    'text-theme'
                                                                 }`}>
                                                                     {context.isAd ? formatPct(sub.tacos) :
                                                                      context.isOrganic ? (sub.organicShare !== null ? `${sub.organicShare.toFixed(1)}%` : <span className="text-xs text-gray-400 font-medium">N/A</span>) :
@@ -445,7 +445,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                                                         const isAdRow = tx.type === 'AD_COST';
                                                                         
                                                                         return (
-                                                                        <tr key={idx} className="hover:bg-indigo-50/30">
+                                                                        <tr key={idx} className="hover:bg-theme-10/30">
                                                                             <td className="p-2 pl-3 font-mono text-gray-600">
                                                                                 {new Date(tx.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                                                             </td>

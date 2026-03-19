@@ -464,7 +464,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                     <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-bold text-gray-500 uppercase">Return Rate (Qty)</span>
-                            <Package className="w-4 h-4 text-indigo-500" />
+                            <Package className="w-4 h-4 text-theme" />
                         </div>
                         <div className="text-2xl font-bold text-gray-900">
                             {triageOverview.kpis.refundRateQty !== null ? formatPct(triageOverview.kpis.refundRateQty) : '—'}
@@ -486,7 +486,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                     <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between group">
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-bold text-gray-500 uppercase">Worst Carrier</span>
-                            <TruckIcon className="w-4 h-4 text-indigo-500" />
+                            <TruckIcon className="w-4 h-4 text-theme" />
                         </div>
                         <div className="text-xl font-bold text-gray-900 truncate" title={topGripingPartner?.partner}>
                             {topGripingPartner?.partner || 'N/A'}
@@ -528,7 +528,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                 <td className="c">
                                                     <button
                                                         onClick={() => !isInvalidSku && handleDeepDiveClick(row.sku)}
-                                                        className={`p-1.5 rounded-lg transition-colors ${isInvalidSku ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                                                        className={`p-1.5 rounded-lg transition-colors ${isInvalidSku ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-theme hover:bg-theme-10'}`}
                                                         disabled={isInvalidSku}
                                                         title="Deep Dive SKU"
                                                     >
@@ -536,7 +536,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                     </button>
                                                 </td>
                                                 <td>
-                                                    <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{row.sku}</div>
+                                                    <div className="font-bold text-gray-900 group-hover:text-theme transition-colors">{row.sku}</div>
                                                     <div className="text-[10px] text-gray-500 truncate max-w-[200px]">{row.title}</div>
                                                 </td>
                                                 <td className="r font-bold text-gray-800">{row.refundQty}</td>
@@ -582,13 +582,13 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                 <div className="p-4 border-b border-custom-glass flex justify-between items-center bg-gray-50/50">
                     <h3 className="font-bold text-gray-800 text-sm uppercase">Refund Details Explorer</h3>
                     <div className="flex bg-white border border-gray-200 p-0.5 rounded-lg">
-                        <button onClick={() => setViewMode('reason')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'reason' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                        <button onClick={() => setViewMode('reason')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'reason' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                             <Info className="w-3.5 h-3.5" /> By Reason
                         </button>
-                        <button onClick={() => setViewMode('product')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'product' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                        <button onClick={() => setViewMode('product')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'product' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                             <Package className="w-3.5 h-3.5" /> By Product
                         </button>
-                        <button onClick={() => setViewMode('partner')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'partner' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                        <button onClick={() => setViewMode('partner')} className={`px-3 py-1.5 text-xs font-bold uppercase rounded-lg flex items-center gap-2 transition-all ${viewMode === 'partner' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                             <TruckIcon className="w-3.5 h-3.5" /> By Carrier
                         </button>
                     </div>
@@ -632,7 +632,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
 
                                     return (
                                         <React.Fragment key={viewMode === 'reason' ? item.reason : viewMode === 'product' ? item.sku : item.partner}>
-                                            <tr className={`cursor-pointer ${isPartnerExpanded ? 'bg-indigo-50/20 border-l-2 border-indigo-500' : ''}`} onClick={() => viewMode === 'partner' && togglePartnerExpand(item.partner)}>
+                                            <tr className={`cursor-pointer ${isPartnerExpanded ? 'bg-theme-10/20 border-l-2 border-theme' : ''}`} onClick={() => viewMode === 'partner' && togglePartnerExpand(item.partner)}>
                                                 {viewMode === 'reason' ? (
                                                     <>
                                                         <td className="font-medium text-gray-700 truncate max-w-xs" title={item.reason}>{item.reason}</td>
@@ -654,7 +654,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                         <td className="r">
                                                             <button
                                                                 onClick={() => !isInvalidSku && handleDeepDiveClick(item.sku)}
-                                                                className={`p-1.5 bg-white border rounded transition-all ${isInvalidSku ? 'opacity-20 grayscale cursor-not-allowed' : 'border-gray-200 hover:border-indigo-300 text-gray-400 hover:text-indigo-600'}`}
+                                                                className={`p-1.5 bg-white border rounded transition-all ${isInvalidSku ? 'opacity-20 grayscale cursor-not-allowed' : 'border-gray-200 hover:border-theme-20 text-gray-400 hover:text-theme'}`}
                                                             >
                                                                 <Search className="w-3.5 h-3.5" />
                                                             </button>
@@ -663,7 +663,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                 ) : (
                                                     <>
                                                         <td className="c cursor-pointer">
-                                                            {isPartnerExpanded ? <ChevronDown className="w-4 h-4 text-indigo-500" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                                                            {isPartnerExpanded ? <ChevronDown className="w-4 h-4 text-theme" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                                                         </td>
                                                         <td className="font-bold text-gray-800 cursor-pointer">{item.partner}</td>
                                                         <td className="r font-mono">{item.count}</td>
@@ -671,7 +671,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                             <div className="flex items-center justify-end gap-2">
                                                                 <span>{item.countShare.toFixed(1)}%</span>
                                                                 <div className="w-12 h-1 bg-gray-100 rounded-full overflow-hidden">
-                                                                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${item.countShare}%` }}></div>
+                                                                    <div className="h-full bg-theme rounded-full" style={{ width: `${item.countShare}%` }}></div>
                                                                 </div>
                                                             </div>
                                                         </td>
@@ -682,7 +682,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                         <td className="r">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); onAnalyzeCarrier(item.partner); }}
-                                                                className="p-1.5 bg-white border border-gray-200 rounded hover:border-indigo-300 text-gray-400 hover:text-indigo-600 transition-colors"
+                                                                className="p-1.5 bg-white border border-gray-200 rounded hover:border-theme-20 text-gray-400 hover:text-theme transition-colors"
                                                                 title="Analyze Carrier Performance on Map"
                                                             >
                                                                 <MapIcon className="w-3.5 h-3.5" />
@@ -764,7 +764,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                                                                                 {item.records.slice(0, 100).map((rec: RefundLog, rIdx: number) => (
                                                                                     <tr key={rec.id || rIdx}>
                                                                                         <td className="font-mono text-gray-600">{new Date(rec.date).toLocaleDateString()}</td>
-                                                                                        <td className="font-mono text-indigo-600 font-medium select-all cursor-text flex items-center gap-1">
+                                                                                        <td className="font-mono text-theme font-medium select-all cursor-text flex items-center gap-1">
                                                                                             {rec.orderId || '—'}
                                                                                         </td>
                                                                                         <td className="font-mono text-gray-600">{rec.sku}</td>

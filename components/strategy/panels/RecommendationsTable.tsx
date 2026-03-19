@@ -182,14 +182,14 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
 
                                             return (
                                                 <div className="group relative ml-2">
-                                                    <div className="p-1 bg-indigo-50 text-indigo-500 rounded-md border border-indigo-100/50 hover:bg-indigo-100 transition-colors cursor-help">
+                                                    <div className="p-1 bg-theme-10 text-theme rounded-md border border-indigo-100/50 hover:bg-theme-10 transition-colors cursor-help">
                                                         <Layers className="w-3 h-3" />
                                                     </div>
 
                                                     {/* Tooltip */}
                                                     <div className="absolute bottom-full left-0 mb-2 w-80 p-3 bg-gray-900 text-white text-[11px] rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-[100] transform translate-y-1 group-hover:translate-y-0 border border-white/10 backdrop-blur-md">
                                                         <div className="font-bold mb-2 border-b border-gray-700 pb-1.5 flex items-center gap-2">
-                                                            <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                                                            <Layers className="w-3.5 h-3.5 text-theme" />
                                                             Family: {family.name}
                                                         </div>
 
@@ -201,7 +201,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                                         </div>
 
                                                         {/* Current row — highlighted */}
-                                                        <div className="grid grid-cols-3 items-center bg-indigo-500/20 p-1 px-1.5 rounded border border-indigo-400/20 mb-1">
+                                                        <div className="grid grid-cols-3 items-center bg-theme/20 p-1 px-1.5 rounded border border-indigo-400/20 mb-1">
                                                             <span className="font-bold text-indigo-200">{row.sku} ★</span>
                                                             <span className="text-right font-bold text-gray-200">{formatSmartMoney(rowCurrentPrice)}</span>
                                                             <span className="text-right font-bold text-emerald-300">
@@ -316,7 +316,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                     {row.action === 'MAINTAIN' && <span className="sello-badge badge-maintain">MAINTAIN</span>}
                                 </td>
                                 <td className="max-w-[200px] truncate" title={row.reasoning}>
-                                    {row.inPromotion && <span className="text-indigo-600 font-bold mr-1">[PROMO]</span>}
+                                    {row.inPromotion && <span className="text-theme font-bold mr-1">[PROMO]</span>}
                                     {row.reasoning}
                                 </td>
                             </tr>
@@ -335,7 +335,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                             <select
                                 value={itemsPerPage}
                                 onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"
+                                className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-theme focus:border-theme"
                             >
                                 <option value={10}>10</option>
                                 <option value={25}>25</option>

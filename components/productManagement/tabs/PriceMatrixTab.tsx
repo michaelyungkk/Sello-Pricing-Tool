@@ -174,7 +174,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                     </div>
 
                     <div className="group relative flex items-center justify-center z-50">
-                        <button className="p-2.5 rounded-lg hover:bg-white/50 text-gray-400 hover:text-indigo-600 transition-colors border border-transparent hover:border-gray-200">
+                        <button className="p-2.5 rounded-lg hover:bg-white/50 text-gray-400 hover:text-theme transition-colors border border-transparent hover:border-gray-200">
                             <Info className="w-5 h-5" />
                         </button>
                         <div className="absolute right-0 top-full mt-2 w-80 p-4 bg-gray-900/95 backdrop-blur-md shadow-2xl rounded-xl text-white text-xs opacity-0 group-hover:opacity-100 transition-all pointer-events-none transform translate-y-2 group-hover:translate-y-0 border border-gray-700/50 z-[100]">
@@ -274,7 +274,7 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
 
                                                     {velocity > 0 && (
                                                         <span className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5 bg-gray-50/80 px-1.5 py-0.5 rounded border border-gray-100">
-                                                            <Activity className="w-2.5 h-2.5 text-indigo-500" /> {velocity.toFixed(1)}/d
+                                                            <Activity className="w-2.5 h-2.5 text-theme" /> {velocity.toFixed(1)}/d
                                                         </span>
                                                     )}
                                                 </div>

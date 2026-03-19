@@ -33,7 +33,7 @@ export const KeywordCloud: React.FC<KeywordCloudProps> = ({ items }) => {
         const isHighlighted = highlightedWord === text;
         const hasSelection = highlightedWord !== null;
 
-        const color = normalized > 0.7 ? '#4f46e5' : normalized > 0.4 ? '#6366f1' : '#64748b';
+        const color = normalized > 0.7 ? 'var(--theme)' : normalized > 0.4 ? '#6366f1' : '#64748b';
 
         return {
             fontSize: `${fontSize}px`,
@@ -70,7 +70,7 @@ export const KeywordCloud: React.FC<KeywordCloudProps> = ({ items }) => {
             {items.length > 20 && (
                 <button 
                     onClick={() => setshowAll(!showAll)}
-                    className="mt-5 flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 self-center uppercase tracking-widest bg-indigo-50/50 hover:bg-indigo-100 px-3 py-1.5 rounded-full border border-indigo-100/50 transition-all shadow-sm"
+                    className="mt-5 flex items-center gap-1 text-[10px] font-bold text-theme hover:text-indigo-800 self-center uppercase tracking-widest bg-theme-10/50 hover:bg-theme-10 px-3 py-1.5 rounded-full border border-indigo-100/50 transition-all shadow-sm"
                 >
                     {showAll ? <><ChevronUp className="w-3 h-3"/> Show Less</> : <><ChevronDown className="w-3 h-3"/> Show All Keywords ({items.length})</>}
                 </button>

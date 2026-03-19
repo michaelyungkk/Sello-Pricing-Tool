@@ -57,11 +57,11 @@ export const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDele
             ? <><span className="font-medium">{filter.label}:</span> <span className="opacity-80 ml-1 font-mono text-[10px]">{logicString}</span></>
             : <span className="font-mono text-xs font-medium">{logicString}</span>;
 
-    const icon = filter.field === 'postcode' ? <MapPin className="w-3 h-3 text-indigo-500" /> : null;
+    const icon = filter.field === 'postcode' ? <MapPin className="w-3 h-3 text-theme" /> : null;
 
     if (isEditing) {
         return (
-            <div className="flex items-center gap-1 bg-white border border-indigo-300 rounded-lg p-1 shadow-sm animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-1 bg-white border border-theme-20 rounded-lg p-1 shadow-sm animate-in fade-in zoom-in duration-200">
                 <span className="text-[10px] font-bold text-gray-500 uppercase px-1">{displayField}</span>
                 <select 
                     value={editOperator} 
@@ -94,7 +94,7 @@ export const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDele
 
     return (
         <div 
-            className="group flex items-center gap-1 px-3 py-1.5 bg-white border border-indigo-100 rounded-full text-xs text-indigo-700 shadow-sm hover:border-indigo-300 transition-all cursor-pointer hover:shadow-md"
+            className="group flex items-center gap-1 px-3 py-1.5 bg-white border border-indigo-100 rounded-full text-xs text-theme shadow-sm hover:border-theme-20 transition-all cursor-pointer hover:shadow-md"
             onClick={() => setIsEditing(true)}
             title={filter.field === 'postcode' ? "Strict Area Match (e.g. 'B' matches 'B1' but not 'BN1')" : "Click to edit filter criteria"}
         >
@@ -102,7 +102,7 @@ export const FilterChip: React.FC<FilterChipProps> = ({ filter, onUpdate, onDele
             {finalContent}
             <button 
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-indigo-50 rounded-full text-indigo-400 hover:text-red-500 transition-all"
+                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-theme-10 rounded-full text-theme hover:text-red-500 transition-all"
             >
                 <X className="w-3 h-3" />
             </button>

@@ -30,7 +30,7 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
         <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
             <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
                 <div className="flex items-center gap-2">
-                    <div className="p-2 bg-indigo-500/10 text-indigo-600 rounded-lg">
+                    <div className="p-2 bg-theme/10 text-theme rounded-lg">
                         <Package className="w-5 h-5" />
                     </div>
                     <h3 className="text-lg font-bold text-gray-900">SKU Overview</h3>
@@ -39,16 +39,16 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                 {hasTransactions && (
                     <div className="flex items-center gap-2">
                         <span className="text-[10px] font-medium text-gray-400 uppercase mr-1 hidden sm:block select-none">Quick Access:</span>
-                        <button onClick={() => onScrollToSection('analysis')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
+                        <button onClick={() => onScrollToSection('analysis')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-theme-20 hover:text-theme hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
                             <BarChart2 className="w-3.5 h-3.5" /> Distribution
                         </button>
-                        <button onClick={() => onScrollToSection('pricing')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
+                        <button onClick={() => onScrollToSection('pricing')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-theme-20 hover:text-theme hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
                             <History className="w-3.5 h-3.5" /> Pricing
                         </button>
-                        <button onClick={() => onScrollToSection('ledger')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
+                        <button onClick={() => onScrollToSection('ledger')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-theme-20 hover:text-theme hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
                             <FileText className="w-3.5 h-3.5" /> Ledger
                         </button>
-                        <button onClick={() => onScrollToSection('refunds')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
+                        <button onClick={() => onScrollToSection('refunds')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-theme-20 hover:text-theme hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
                             <RotateCcw className="w-3.5 h-3.5" /> Refunds
                         </button>
                     </div>
@@ -64,7 +64,7 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                     )}
                     <div className="flex-1 min-0">
                         <div className="mb-2 flex items-center">
-                            <span className="font-mono text-sm font-bold text-indigo-600 bg-indigo-500/10 px-2 py-1 rounded border border-indigo-100 inline-block">
+                            <span className="font-mono text-sm font-bold text-theme bg-theme/10 px-2 py-1 rounded border border-indigo-100 inline-block">
                                 {product.sku}
                             </span>
                             <GradeBadge gradeLevel={product.gradeLevel} />

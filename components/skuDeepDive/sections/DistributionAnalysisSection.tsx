@@ -28,20 +28,20 @@ export const DistributionAnalysisSection: React.FC<DistributionAnalysisSectionPr
         <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <BarChart2 className="w-5 h-5 text-indigo-600" />
+                    <BarChart2 className="w-5 h-5 text-theme" />
                     Distribution Analysis
                     <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">Performance Distributions</span>
                 </h3>
                 <div className="flex bg-gray-100 p-1 rounded-lg">
                     <button
                         onClick={() => setChartLayout('horizontal')}
-                        className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'horizontal' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                        className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'horizontal' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}
                     >
                         <Rows className="w-3 h-3" /> Horizontal
                     </button>
                     <button
                         onClick={() => setChartLayout('vertical')}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'vertical' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${chartLayout === 'vertical' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}
                     >
                         <LayoutGrid className="w-3 h-3" /> Vertical
                     </button>

@@ -360,11 +360,11 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                     {!parsedRefunds ? (
                         <div className="space-y-6">
                             <div
-                                className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50/50'}`}
+                                className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-theme bg-theme-10' : 'border-gray-300 hover:border-gray-400 bg-gray-50/50'}`}
                                 onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
                             >
                                 <div className="space-y-4 w-full max-w-sm">
-                                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300" onClick={() => detailsInputRef.current?.click()}>
+                                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20" onClick={() => detailsInputRef.current?.click()}>
                                         <div className="flex items-center gap-3">
                                             <div className="p-2 bg-blue-50 text-blue-600 rounded"><FileText className="w-4 h-4" /></div>
                                             <div className="text-left"><span className="text-xs font-medium text-gray-700 block">Return Details.xlsx</span><span className="text-[10px] text-gray-400">{detailsFile ? detailsFile.name : 'Required'}</span></div>
@@ -373,7 +373,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                                     </div>
                                     <input ref={detailsInputRef} type="file" className="hidden" onChange={(e) => e.target.files && setDetailsFile(e.target.files[0])} accept=".xlsx,.xls" />
 
-                                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300" onClick={() => commentsInputRef.current?.click()}>
+                                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20" onClick={() => commentsInputRef.current?.click()}>
                                         <div className="flex items-center gap-3">
                                             <div className="p-2 bg-amber-50 text-amber-600 rounded"><MessageSquare className="w-4 h-4" /></div>
                                             <div className="text-left"><span className="text-xs font-medium text-gray-700 block">Return Order Comment.xlsx</span><span className="text-[10px] text-gray-400">{commentsFile ? commentsFile.name : 'Required'}</span></div>
@@ -391,7 +391,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                             <button
                                 onClick={processFiles}
                                 disabled={isProcessing || !detailsFile || !commentsFile}
-                                className="w-full py-3 bg-indigo-600 text-white font-medium rounded-xl shadow-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                className="w-full py-3 bg-theme text-white font-medium rounded-xl shadow-md hover:bg-theme disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                                 {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Process Files'}
                             </button>
@@ -477,7 +477,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                     <div className="flex gap-3">
                         <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
                         {parsedRefunds && parsedRefunds.length > 0 && (
-                            <button onClick={handleConfirm} className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                            <button onClick={handleConfirm} className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors flex items-center gap-2">
                                 <Check className="w-4 h-4" /> Import {recordsToImport} Refunds
                             </button>
                         )}

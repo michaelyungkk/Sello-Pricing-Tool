@@ -82,7 +82,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                                 value={sku}
                                 onChange={e => setSku(e.target.value)}
                                 placeholder="Start typing SKU..."
-                                className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 ${selectedProduct ? 'border-green-300 focus:ring-green-500' : 'border-gray-300 focus:ring-indigo-500'}`}
+                                className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 ${selectedProduct ? 'border-green-300 focus:ring-green-500' : 'border-gray-300 focus:ring-theme'}`}
                             />
                             <datalist id="sku-list">
                                 {products.map(p => <option key={p.id} value={p.sku} />)}
@@ -107,7 +107,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                                 type="date"
                                 value={date}
                                 onChange={e => setDate(e.target.value)}
-                                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-theme"
                             />
                         </div>
                         <div>
@@ -115,7 +115,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                             <select
                                 value={platform}
                                 onChange={e => setPlatform(e.target.value)}
-                                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-indigo-500 bg-white"
+                                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-theme bg-white"
                             >
                                 <option value="Manual">Manual</option>
                                 <option value="eBay">eBay</option>
@@ -135,7 +135,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                                     value={oldPrice}
                                     onChange={e => setOldPrice(e.target.value)}
                                     placeholder="e.g. 29.99"
-                                    className="w-full border rounded-lg pl-8 pr-3 py-2 text-sm font-mono border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full border rounded-lg pl-8 pr-3 py-2 text-sm font-mono border-gray-300 focus:ring-2 focus:ring-theme"
                                 />
                                 <DollarSign className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                             </div>
@@ -149,7 +149,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                                     value={newPrice}
                                     onChange={e => setNewPrice(e.target.value)}
                                     placeholder="e.g. 24.99"
-                                    className="w-full border rounded-lg pl-8 pr-3 py-2 text-sm font-mono border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full border rounded-lg pl-8 pr-3 py-2 text-sm font-mono border-gray-300 focus:ring-2 focus:ring-theme"
                                 />
                                 <DollarSign className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                             </div>
@@ -161,7 +161,7 @@ const ManualPriceChangeModal: React.FC<ManualPriceChangeModalProps> = ({ product
                     <button
                         onClick={handleSubmit}
                         disabled={!selectedProduct}
-                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                        className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme disabled:opacity-50 transition-colors flex items-center gap-2"
                     >
                         <Save className="w-4 h-4" />
                         Lodge Change

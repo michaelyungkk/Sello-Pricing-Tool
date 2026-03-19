@@ -140,7 +140,7 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
           </div>
           <div className="space-y-1 mt-1">
              <div className="flex items-center gap-2">
-                <span className="font-bold text-indigo-600">{data.reasonCode}</span>
+                <span className="font-bold text-theme">{data.reasonCode}</span>
                 <span className="text-gray-500">{data.reasonDesc}</span>
              </div>
              <div className="flex justify-between font-bold text-gray-900">
@@ -170,7 +170,7 @@ const ReturnsReasonTimelineChart: React.FC<ReturnsReasonTimelineChartProps> = ({
                     onClick={() => setTimeWindow(window)}
                     className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${
                         timeWindow === window 
-                        ? 'bg-white text-indigo-600 shadow-sm' 
+                        ? 'bg-white text-theme shadow-sm' 
                         : 'text-gray-500 hover:text-gray-700'
                     }`}
                 >

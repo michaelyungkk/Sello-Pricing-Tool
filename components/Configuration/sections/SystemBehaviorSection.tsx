@@ -147,7 +147,7 @@ export const SystemBehaviorSection: React.FC<SystemBehaviorSectionProps> = ({
                             />
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md transition-colors flex items-center gap-2"
+                                className="px-4 py-2 bg-theme hover:bg-theme text-white font-medium rounded-lg shadow-md transition-colors flex items-center gap-2"
                             >
                                 <Upload className="w-4 h-4" />
                                 Upload Rate Table

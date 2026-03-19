@@ -519,8 +519,8 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                     allLabel="Global View (All)"
                 />
                 {activeTab !== 'map' && (
-                    <label className="flex items-center gap-2 px-3 h-8 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-                        <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300" />
+                    <label className="flex items-center gap-2 px-3 h-8 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20 transition-colors">
+                        <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-theme rounded focus:ring-theme border-gray-300" />
                         <div className="flex items-center gap-1.5"><RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} /><span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span></div>
                     </label>
                 )}
@@ -560,9 +560,9 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                         ) : selectedAlert === 'dead' ? (
                                             <><Package className="w-4 h-4 text-gray-600" /> Clear Dead Stock Workbench</>
                                         ) : selectedAlert && typeof selectedAlert === 'string' ? (
-                                            <><Activity className="w-4 h-4 text-indigo-500" /> Decision Panel: {(selectedAlert as string).charAt(0).toUpperCase() + (selectedAlert as string).slice(1)}</>
+                                            <><Activity className="w-4 h-4 text-theme" /> Decision Panel: {(selectedAlert as string).charAt(0).toUpperCase() + (selectedAlert as string).slice(1)}</>
                                         ) : (
-                                            <><Activity className="w-4 h-4 text-indigo-500" /> Executive Workbench</>
+                                            <><Activity className="w-4 h-4 text-theme" /> Executive Workbench</>
                                         )}
                                     </h3>
                                     <span className="text-xs text-gray-500">{workbenchData.length} items requiring action</span>
@@ -598,7 +598,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                     </div>
                                                     <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover/header:opacity-100 transition-all pointer-events-none z-50 border border-gray-700 animate-in fade-in slide-in-from-top-2 duration-200">
                                                         <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight flex items-center justify-center gap-1.5">
-                                                            <Calculator className="w-3 h-3 text-indigo-400" /> Calculation Logic
+                                                            <Calculator className="w-3 h-3 text-theme" /> Calculation Logic
                                                         </div>
                                                         <div className="leading-relaxed text-center normal-case font-medium whitespace-normal">
                                                             Projected volume based on <span className="font-bold">Median Daily Sales</span> x <span className="font-bold">{expectedDays} days</span> window.
@@ -624,7 +624,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                     </div>
                                                     <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover/header:opacity-100 transition-all pointer-events-none z-50 border border-gray-700 animate-in fade-in slide-in-from-top-2 duration-200">
                                                         <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight flex items-center justify-center gap-1.5">
-                                                            <Calculator className="w-3 h-3 text-indigo-400" /> Data Source
+                                                            <Calculator className="w-3 h-3 text-theme" /> Data Source
                                                         </div>
                                                         <div className="leading-relaxed text-center normal-case font-medium whitespace-normal">
                                                             Prioritizes <span className="font-bold">ERP Daily Sales</span> if available, else calculates from imported history.
@@ -678,7 +678,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 return (
                                                     <tr key={p.id} className="group text-sm">
                                                         <td className="p-4 text-center">
-                                                            <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                                                            <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors">
                                                                 <Search className="w-4 h-4" />
                                                             </button>
                                                         </td>
@@ -687,7 +687,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                 {p.sku}
                                                                 <GradeBadge gradeLevel={p.gradeLevel} />
                                                                 {p.inPromotion && (
-                                                                    <span className="ml-2 px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                                                                    <span className="ml-2 px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-theme-10 text-theme border border-theme-20 flex items-center gap-1">
                                                                         <Zap className="w-2 h-2" /> Live Promo
                                                                     </span>
                                                                 )}
@@ -715,7 +715,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                         {/* Price Changes Column - Tooltip restricted to hover on this badge only */}
                                                         <td className="p-4 text-center">
                                                             <div className="group/tooltip relative inline-block">
-                                                                <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border font-bold text-xs transition-colors cursor-help ${p.priceChangeCount > 0 ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-gray-50 text-gray-300 border-gray-100'}`}>
+                                                                <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border font-bold text-xs transition-colors cursor-help ${p.priceChangeCount > 0 ? 'bg-theme-10 text-theme border-theme-20' : 'bg-gray-50 text-gray-300 border-gray-100'}`}>
                                                                     <History className="w-3 h-3" />
                                                                     {p.priceChangeCount}
                                                                 </div>
@@ -745,7 +745,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
                                                         <td className="p-4 text-right pr-6">
                                                             <div className="flex flex-col items-end">
-                                                                <span className="text-[11px] font-black uppercase text-indigo-700 tracking-wider bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{ctaText}</span>
+                                                                <span className="text-[11px] font-black uppercase text-theme tracking-wider bg-theme-10 px-2 py-0.5 rounded border border-indigo-100">{ctaText}</span>
                                                                 <span className="text-[11px] text-gray-600 mt-1 font-medium leading-relaxed max-w-[280px] break-words whitespace-normal text-right">{justification}</span>
                                                             </div>
                                                         </td>
@@ -758,7 +758,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 return (
                                                     <tr key={p.id} className="group text-sm">
                                                         <td className="p-4 text-center">
-                                                            <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                                                            <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors">
                                                                 <Search className="w-4 h-4" />
                                                             </button>
                                                         </td>
@@ -767,7 +767,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                 {p.sku}
                                                                 <GradeBadge gradeLevel={p.gradeLevel} />
                                                                 {p.inPromotion && (
-                                                                    <span className="ml-2 px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                                                                    <span className="ml-2 px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-theme-10 text-theme border border-theme-20 flex items-center gap-1">
                                                                         <Zap className="w-2 h-2" /> Live Promo
                                                                     </span>
                                                                 )}
@@ -809,7 +809,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 return (
                                                     <tr key={p.id} className="group text-sm">
                                                         <td className="p-4 text-center">
-                                                            <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                                                            <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors">
                                                                 <Search className="w-4 h-4" />
                                                             </button>
                                                         </td>
@@ -844,7 +844,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                     {selectedAlert === 'margin' ? (
                                                         <>
                                                             <td className="p-4 text-center">
-                                                                <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                                                                <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors">
                                                                     <Search className="w-4 h-4" />
                                                                 </button>
                                                             </td>
@@ -875,7 +875,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                     <span className={`text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded border shadow-sm ${p.primaryDrag === "Ad Spend Heavy" ? 'text-purple-700 bg-purple-50 border-purple-100' :
                                                                         p.primaryDrag === "Heavy Returns" ? 'text-red-700 bg-red-50 border-red-100' :
                                                                             p.primaryDrag === "Selling at a Loss" ? 'text-rose-700 bg-rose-50 border-rose-100' :
-                                                                                p.primaryDrag === "Price Below Master" ? 'text-indigo-700 bg-indigo-50 border-indigo-100' :
+                                                                                p.primaryDrag === "Price Below Master" ? 'text-theme bg-theme-10 border-indigo-100' :
                                                                                     p.primaryDrag === "High Returns" ? 'text-amber-700 bg-amber-50 border-amber-100' :
                                                                                         'text-gray-700 bg-gray-50 border-gray-100'
                                                                         }`}>
@@ -894,7 +894,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                             </td>
                                                             <td className="p-4 text-right pr-6">
                                                                 <div className="flex flex-col items-end">
-                                                                    <span className="text-[11px] font-black uppercase text-indigo-700 tracking-wider bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 shadow-sm">
+                                                                    <span className="text-[11px] font-black uppercase text-theme tracking-wider bg-theme-10 px-2 py-0.5 rounded border border-indigo-100 shadow-sm">
                                                                         {p.suggestedAction}
                                                                     </span>
                                                                 </div>
@@ -902,8 +902,8 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <td className="p-4 text-center"><button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Search className="w-4 h-4" /></button></td>
-                                                            <td className="p-4"><div className="font-medium text-gray-900 group-hover:text-indigo-600 transition-colors flex items-center">{p.sku}<GradeBadge gradeLevel={p.gradeLevel} /></div><div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div></td>
+                                                            <td className="p-4 text-center"><button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors"><Search className="w-4 h-4" /></button></td>
+                                                            <td className="p-4"><div className="font-medium text-gray-900 group-hover:text-theme transition-colors flex items-center">{p.sku}<GradeBadge gradeLevel={p.gradeLevel} /></div><div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div></td>
                                                             <td className="p-4"><div className="flex flex-wrap gap-1 max-w-[140px]">{p.signals.slice(0, 2).map((id: string) => { const meta = getDiagnosisMeta(id as CanonicalDiagnosisId); return <span key={id} onClick={() => onDeepDive(p.sku)} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${meta.priority === 'High' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`} title={meta.description}>{meta.shortLabel}</span> })}</div></td>
                                                             <td className="p-4 text-right text-gray-700">{formatSmartMoney((p.displayPrice * VAT_MULTIPLIER))}</td>
                                                             <td className="p-4 text-right text-gray-600">{formatSmartMoney(p.periodRevenue)}</td>

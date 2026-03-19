@@ -313,7 +313,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
         if (totals.actualUnits === 0 && windows.phase === 'POST') return { label: "Zero Impact", style: "text-gray-500", desc: "No sales recorded during this event." };
         if (totals.upliftUnits < (totals.baselineDailyUnits * 0.1) && windows.phase === 'POST') return { label: "Inefficient", style: "text-red-600", desc: "Uplift was negligible compared to baseline." };
         if (totals.upliftUnits > 0 && windows.phase === 'POST') return { label: "Successful Uplift", style: "text-green-600", desc: "Promotion generated meaningful volume growth." };
-        return { label: "Monitoring", style: "text-indigo-600", desc: "Performance tracking in progress." };
+        return { label: "Monitoring", style: "text-theme", desc: "Performance tracking in progress." };
     };
 
     const getStrategicRecommendation = () => {
@@ -396,7 +396,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm  ${
                 windows.phase === 'PRE' ? 'bg-blue-50 border-blue-100 text-blue-800' :
                 windows.phase === 'LIVE' ? 'bg-green-50 border-green-100 text-green-800' :
-                'bg-indigo-50 border-indigo-100 text-indigo-800'
+                'bg-theme-10 border-indigo-100 text-indigo-800'
             }`}>
                 <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg bg-white/60`}>
@@ -440,25 +440,25 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                             <div className="flex flex-col items-end gap-2">
                                 <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
                                     BASELINE: <span className="text-gray-900">{promo.baselineMode?.replace(/_/g, ' ')}</span>
-                                    {promo.baselineMode === 'MANUAL' && <span className="text-indigo-600"> (£{promo.baselineManualPrice})</span>}
+                                    {promo.baselineMode === 'MANUAL' && <span className="text-theme"> (£{promo.baselineManualPrice})</span>}
                                 </div>
                             </div>
                         </div>
 
                         {!isSkuScope && (
-                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
+                            <div className="bg-theme-10 border border-theme-20 rounded-xl p-5 mb-6">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <h4 className="font-bold text-indigo-900 text-sm">Shop-Wide Discount Rule</h4>
-                                        <p className="text-xs text-indigo-700 mt-0.5">All nominated SKUs will inherit this rule based on their individual baseline prices.</p>
+                                        <p className="text-xs text-theme mt-0.5">All nominated SKUs will inherit this rule based on their individual baseline prices.</p>
                                     </div>
                                     <div className="flex gap-4">
                                         <div>
-                                            <label className="text-[10px] font-bold text-indigo-400 uppercase block mb-1">Type</label>
+                                            <label className="text-[10px] font-bold text-theme uppercase block mb-1">Type</label>
                                             <select 
                                                 value={promo.shopDiscountType}
                                                 onChange={(e) => onUpdateMeta({ shopDiscountType: e.target.value })}
-                                                className="text-sm font-bold border-indigo-200 rounded-lg py-1.5 px-3 bg-white focus:ring-2 focus:ring-indigo-500"
+                                                className="text-sm font-bold border-theme-20 rounded-lg py-1.5 px-3 bg-white focus:ring-2 focus:ring-theme"
                                             >
                                                 <option value="PERCENT_OFF">% Off</option>
                                                 <option value="FIXED_OFF">£ Off</option>
@@ -466,12 +466,12 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-bold text-indigo-400 uppercase block mb-1">Value</label>
+                                            <label className="text-[10px] font-bold text-theme uppercase block mb-1">Value</label>
                                             <input 
                                                 type="number"
                                                 value={promo.shopDiscountValue}
                                                 onChange={(e) => onUpdateMeta({ shopDiscountValue: parseFloat(e.target.value) || 0 })}
-                                                className="w-24 text-sm font-bold border-indigo-200 rounded-lg py-1.5 px-3 bg-white focus:ring-2 focus:ring-indigo-500"
+                                                className="w-24 text-sm font-bold border-theme-20 rounded-lg py-1.5 px-3 bg-white focus:ring-2 focus:ring-theme"
                                             />
                                         </div>
                                     </div>
@@ -512,14 +512,14 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                                 <select 
                                                     value={item.discountType || 'FIXED_PRICE'}
                                                     onChange={(e) => onUpdateItem(item.sku, { discountType: e.target.value })}
-                                                    className="text-xs font-bold border-gray-200 rounded-lg p-1.5 bg-white group-hover:border-indigo-300 transition-colors focus:ring-2 focus:ring-indigo-500"
+                                                    className="text-xs font-bold border-gray-200 rounded-lg p-1.5 bg-white group-hover:border-theme-20 transition-colors focus:ring-2 focus:ring-theme"
                                                 >
                                                     <option value="PERCENT_OFF">% Off</option>
                                                     <option value="FIXED_OFF">£ Off</option>
                                                     <option value="FIXED_PRICE">Fixed Price</option>
                                                 </select>
                                             ) : (
-                                                <span className="text-[10px] font-bold text-indigo-500 flex items-center gap-1.5 italic">
+                                                <span className="text-[10px] font-bold text-theme flex items-center gap-1.5 italic">
                                                     <RotateCcw className="w-3 h-3" /> Inherits shop rule
                                                 </span>
                                             )}
@@ -531,7 +531,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                                     value={item.discountValue || ''}
                                                     onChange={(e) => onUpdateItem(item.sku, { discountValue: parseFloat(e.target.value) || 0 })}
                                                     placeholder="0.00"
-                                                    className="w-20 text-right text-xs font-bold border-gray-200 rounded-lg p-1.5 bg-white group-hover:border-indigo-300 transition-colors focus:ring-2 focus:ring-indigo-500"
+                                                    className="w-20 text-right text-xs font-bold border-gray-200 rounded-lg p-1.5 bg-white group-hover:border-theme-20 transition-colors focus:ring-2 focus:ring-theme"
                                                 />
                                             )}
                                         </td>
@@ -569,14 +569,14 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
                         <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
                             <h4 className="font-bold text-gray-800 flex items-center gap-2">
-                                <Zap className="w-4 h-4 text-indigo-600" />
+                                <Zap className="w-4 h-4 text-theme" />
                                 Pre-Event Forecast
                             </h4>
                             <div className="flex items-center gap-2">
                                 {suggestedLiftData.val > 0 && Math.abs(suggestedLiftData.val - (promo.expectedLiftPct || 0)) > 1 && (
                                     <button
                                         onClick={() => onUpdateMeta({ expectedLiftPct: suggestedLiftData.val })}
-                                        className="flex items-center gap-1 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200 transition-all"
+                                        className="flex items-center gap-1 text-[9px] font-bold text-theme bg-theme-10 px-2 py-1 rounded-full border border-indigo-100 hover:bg-theme-10 hover:border-theme-20 transition-all"
                                         title={`${suggestedLiftData.source}. Calculated Sensitivity: ${suggestedLiftData.elasticity.toFixed(1)}`}
                                     >
                                         <Sparkles className="w-2.5 h-2.5" />
@@ -597,10 +597,10 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                         <div className="p-6 space-y-6">
                             <p className="text-sm text-gray-600 italic">If nothing unusual happens, this promotion is expected to generate:</p>
 
-                            <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 space-y-3">
+                            <div className="p-4 bg-theme-10 rounded-xl border border-indigo-100 space-y-3">
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-indigo-800">Forecast Totals</span>
-                                    <span className="text-lg font-black text-indigo-700">{formatNumber(aggregatedEffectiveness.totals.forecastUnits, 0)} <span className="text-xs font-normal">units</span></span>
+                                    <span className="text-lg font-black text-theme">{formatNumber(aggregatedEffectiveness.totals.forecastUnits, 0)} <span className="text-xs font-normal">units</span></span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-indigo-800">Expected Revenue</span>
@@ -676,11 +676,11 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                             <div className="pt-2">
                                 <div className="flex justify-between items-center mb-1">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Goal Progress</span>
-                                    <span className="text-[10px] font-bold text-indigo-600">{Math.min(100, (aggregatedEffectiveness.totals.actualUnits / (aggregatedEffectiveness.totals.forecastUnits || 1) * 100)).toFixed(0)}%</span>
+                                    <span className="text-[10px] font-bold text-theme">{Math.min(100, (aggregatedEffectiveness.totals.actualUnits / (aggregatedEffectiveness.totals.forecastUnits || 1) * 100)).toFixed(0)}%</span>
                                 </div>
                                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                                     <div 
-                                        className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
+                                        className="h-full bg-theme rounded-full transition-all duration-1000"
                                         style={{ width: `${Math.min(100, (aggregatedEffectiveness.totals.actualUnits / (aggregatedEffectiveness.totals.forecastUnits || 1) * 100))}%` }}
                                     />
                                 </div>

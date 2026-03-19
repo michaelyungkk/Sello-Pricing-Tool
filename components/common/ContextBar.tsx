@@ -60,7 +60,7 @@ export const ContextBar: React.FC<ContextBarProps> = ({
                                 <button
                                     key={opt.key}
                                     onClick={() => handleTabClick(opt.key)}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${isActive ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${isActive ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'
                                         }`}
                                 >
                                     {opt.key === 'CUSTOM' && <Calendar className="w-3 h-3" />}
@@ -74,7 +74,7 @@ export const ContextBar: React.FC<ContextBarProps> = ({
 
                     <div className="flex flex-col">
                         <span className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-0.5">Analyzing Period</span>
-                        <span className="text-xs font-bold text-indigo-600 flex items-center gap-1.5">{periodLabel}</span>
+                        <span className="text-xs font-bold text-theme flex items-center gap-1.5">{periodLabel}</span>
                     </div>
                 </div>
 
@@ -103,7 +103,7 @@ export const ContextBar: React.FC<ContextBarProps> = ({
                                     type="date"
                                     value={customStart || ''}
                                     onChange={e => onCustomStartChange?.(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme"
                                 />
                             </div>
                             <div>
@@ -112,7 +112,7 @@ export const ContextBar: React.FC<ContextBarProps> = ({
                                     type="date"
                                     value={customEnd || ''}
                                     onChange={e => onCustomEndChange?.(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme"
                                 />
                             </div>
                         </div>
@@ -125,7 +125,7 @@ export const ContextBar: React.FC<ContextBarProps> = ({
                             </button>
                             <button
                                 onClick={applyCustom}
-                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700"
+                                className="px-4 py-2 bg-theme text-white rounded-lg text-sm font-bold shadow-md hover:bg-theme"
                             >
                                 Apply Range
                             </button>

@@ -33,7 +33,7 @@ export const AnalysisLogicSection: React.FC<AnalysisLogicSectionProps> = ({
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
                         <div className="flex items-center gap-2 mb-4">
-                            <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+                            <div className="p-2 bg-theme-10 rounded-lg text-theme">
                                 <BarChart2 className="w-5 h-5" />
                             </div>
                             <h3 className="font-bold text-gray-900">Volume Distribution Bands</h3>

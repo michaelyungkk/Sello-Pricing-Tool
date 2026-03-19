@@ -92,7 +92,7 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                                 name="mode" 
                                 checked={uploadMode === 'FIXED_PRICE'} 
                                 onChange={() => setUploadMode('FIXED_PRICE')}
-                                className="text-indigo-600 focus:ring-indigo-500"
+                                className="text-theme focus:ring-theme"
                             />
                             <span className="text-sm text-gray-700">Column 2 is <strong>Target Price (£)</strong></span>
                         </label>
@@ -102,7 +102,7 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                                 name="mode" 
                                 checked={uploadMode === 'PERCENT_OFF'} 
                                 onChange={() => setUploadMode('PERCENT_OFF')}
-                                className="text-indigo-600 focus:ring-indigo-500"
+                                className="text-theme focus:ring-theme"
                             />
                             <span className="text-sm text-gray-700">Column 2 is <strong>Percentage Off (%)</strong> <span className="text-gray-400 text-xs ml-1">(e.g. &quot;25&quot; = 25%)</span></span>
                         </label>
@@ -112,7 +112,7 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                                 name="mode" 
                                 checked={uploadMode === 'FIXED_OFF'} 
                                 onChange={() => setUploadMode('FIXED_OFF')}
-                                className="text-indigo-600 focus:ring-indigo-500"
+                                className="text-theme focus:ring-theme"
                             />
                             <span className="text-sm text-gray-700">Column 2 is <strong>Amount Off (£)</strong></span>
                         </label>
@@ -120,7 +120,7 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                 </div>
                 
                 <div 
-                    className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:bg-gray-50'}`}
+                    className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-theme bg-theme-10' : 'border-gray-300 hover:bg-gray-50'}`}
                     onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
                     onDragLeave={() => setDragActive(false)}
                     onDrop={(e) => { e.preventDefault(); setDragActive(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}
@@ -128,13 +128,13 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                     <input ref={fileInputRef} type="file" className="hidden" accept=".csv,.xlsx" onChange={(e) => e.target.files && handleFile(e.target.files[0])} />
                     {isProcessing ? (
                         <div className="flex flex-col items-center">
-                            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
-                            <p className="text-sm text-indigo-600 font-medium">Processing...</p>
+                            <Loader2 className="w-8 h-8 animate-spin text-theme mb-2" />
+                            <p className="text-sm text-theme font-medium">Processing...</p>
                         </div>
                     ) : (
                         <>
                             <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                            <p className="text-sm font-medium text-gray-900">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-indigo-600 hover:underline">Browse</button></p>
+                            <p className="text-sm font-medium text-gray-900">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-theme hover:underline">Browse</button></p>
                             <p className="text-xs text-gray-500 mt-2">
                                 Expected Format: Column 1 (SKU), Column 2 ({uploadMode === 'PERCENT_OFF' ? '% e.g. 25' : '£ value'})
                             </p>

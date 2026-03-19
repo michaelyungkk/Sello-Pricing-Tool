@@ -164,7 +164,7 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                                             type="number"
                                             value={value}
                                             onChange={(e) => handleChange(key as keyof ThresholdConfig, e.target.value)}
-                                            className={`w-20 text-right font-mono font-bold text-sm border rounded-md py-1 px-2 focus:ring-2 focus:ring-indigo-500 ${!valid ? 'border-red-500 text-red-600 bg-red-50' : 'border-gray-300'}`}
+                                            className={`w-20 text-right font-mono font-bold text-sm border rounded-md py-1 px-2 focus:ring-2 focus:ring-theme ${!valid ? 'border-red-500 text-red-600 bg-red-50' : 'border-gray-300'}`}
                                         />
                                         <span className="text-xs font-bold text-gray-400 w-8">{meta.unit}</span>
                                     </div>
@@ -173,8 +173,8 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                                 <p className="text-xs text-gray-500 mb-3 min-h-[1.5em]">{meta.description}</p>
 
                                 <div className="pt-3 border-t border-gray-100 flex items-center gap-1.5">
-                                    <Info className="w-3 h-3 text-indigo-400" />
-                                    <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wide">Used by:</span>
+                                    <Info className="w-3 h-3 text-theme" />
+                                    <span className="text-[10px] font-semibold text-theme uppercase tracking-wide">Used by:</span>
                                     <span className="text-[10px] text-gray-600 font-medium truncate" title={meta.usedBy}>
                                         {meta.usedBy}
                                     </span>
@@ -187,13 +187,13 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                     <div className="flex justify-between items-start">
                         <div>
                             <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-indigo-500" />
+                                <Calendar className="w-4 h-4 text-theme" />
                                 {t('current_season_label')}
                             </label>
                             <p className="text-xs text-gray-500 mt-2 mb-3 max-w-sm">Sets the current season for the Strategy Engine. This will affect recommendations for products with seasonal tags in future updates.</p>
                             <div className="flex items-center gap-1.5">
-                                <Info className="w-3 h-3 text-indigo-400" />
-                                <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wide">Used by:</span>
+                                <Info className="w-3 h-3 text-theme" />
+                                <span className="text-[10px] font-semibold text-theme uppercase tracking-wide">Used by:</span>
                                 <span className="text-[10px] text-gray-600 font-medium">Strategy Engine</span>
                             </div>
                         </div>
@@ -201,7 +201,7 @@ const AlertThresholdSettings: React.FC<AlertThresholdSettingsProps> = ({ themeCo
                             <select
                                 value={config.currentSeason || 'None'}
                                 onChange={(e) => handleChange('currentSeason', e.target.value)}
-                                className="w-48 border rounded-md py-1.5 px-2 focus:ring-2 focus:ring-indigo-500 border-gray-300 bg-white"
+                                className="w-48 border rounded-md py-1.5 px-2 focus:ring-2 focus:ring-theme border-gray-300 bg-white"
                             >
                                 <option value="None">None</option>
                                 <option value="Summer">Summer</option>

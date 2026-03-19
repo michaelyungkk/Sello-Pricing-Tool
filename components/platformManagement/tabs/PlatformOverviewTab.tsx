@@ -79,7 +79,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                 <div className={`bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden transition-all duration-300 ${selectedPlatformKey ? 'lg:w-2/3' : 'w-full'}`}>
                     <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                            <Globe className="w-4 h-4 text-indigo-500" />Performance Matrix
+                            <Globe className="w-4 h-4 text-theme" />Performance Matrix
                         </h3>
                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded border border-gray-100">{TAX_NOTE_SHORT}</div>
                     </div>
@@ -103,7 +103,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                     const isSelected = selectedPlatformKey === summary.platform;
                                     const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
                                     return (
-                                        <tr key={summary.platform} className={`cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`} onClick={() => setSelectedPlatformKey(isSelected ? null : summary.platform)}>
+                                        <tr key={summary.platform} className={`cursor-pointer ${isSelected ? 'bg-theme-10/50' : ''}`} onClick={() => setSelectedPlatformKey(isSelected ? null : summary.platform)}>
                                             <td className="p-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm" style={{ backgroundColor: rule?.color || '#6366f1' }}>{summary.platform[0]}</div>
@@ -112,7 +112,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                             </td>
                                             {!selectedPlatformKey && (<td className="p-4"><div className="flex items-center gap-2 text-gray-600"><User className="w-3.5 h-3.5" />{rule?.manager || 'Unassigned'}</div></td>)}
                                             <td className="p-4 text-right font-medium">{summary.skuCount}</td>
-                                            <td className="p-4 text-right font-bold text-indigo-600">
+                                            <td className="p-4 text-right font-bold text-theme">
                                                 {formatSmartMoney(summary.revenue)}
                                                 {isCostBased && <span className="block text-[8px] text-slate-400 font-normal uppercase mt-0.5">Cost Basis</span>}
                                             </td>
@@ -168,7 +168,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                         </div>
                         <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg overflow-hidden">
                             <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex items-center justify-between">
-                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2"><BarChart3 className="w-4 h-4 text-indigo-500" />Top Categories</h3>
+                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2"><BarChart3 className="w-4 h-4 text-theme" />Top Categories</h3>
                                 <span className="text-[9px] font-bold text-gray-400 uppercase">by Revenue</span>
                             </div>
                             <div className="p-5">
@@ -181,7 +181,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                                     <span className="font-bold text-gray-900">{formatSmartMoney(cat.revenue)}</span>
                                                 </div>
                                                 <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000 ease-out" style={{ width: `${(cat.revenue / categoryBreakdown[0].revenue) * 100}%` }} />
+                                                    <div className="h-full bg-theme rounded-full transition-all duration-1000 ease-out" style={{ width: `${(cat.revenue / categoryBreakdown[0].revenue) * 100}%` }} />
                                                 </div>
                                             </div>
                                         ))}

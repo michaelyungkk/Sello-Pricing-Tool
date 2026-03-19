@@ -74,14 +74,14 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                     <div className="flex bg-gray-100 p-1 rounded-lg">
                         <button 
                             onClick={() => setReturnDateBasis('refundDate')} 
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             <Clock className="w-3 h-3" />
                             Refund Date
                         </button>
                         <button 
                             onClick={() => setReturnDateBasis('orderDate')} 
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             <Calendar className="w-3 h-3" />
                             Order Date
@@ -215,13 +215,13 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                         <div className="flex bg-gray-100 p-0.5 rounded-lg">
                                             <button 
                                                 onClick={() => setKwMode('All')} 
-                                                className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'All' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
+                                                className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'All' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-theme'}`}
                                             >
                                                 All
                                             </button>
                                             <button 
                                                 onClick={() => setKwMode('Reason')} 
-                                                className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'Reason' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
+                                                className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all ${kwMode === 'Reason' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-theme'}`}
                                             >
                                                 By Reason
                                             </button>
@@ -233,7 +233,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                                 <button 
                                                     key={code} 
                                                     onClick={() => setKwReason(kwReason === code ? null : code)}
-                                                    className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-all ${kwReason === code ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}
+                                                    className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-all ${kwReason === code ? 'bg-theme text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:border-theme-20'}`}
                                                 >
                                                     {code}
                                                 </button>
@@ -286,7 +286,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                                         {displayDateKey ? new Date(displayDateKey).toLocaleDateString('en-GB') : (r.date ? new Date(r.date).toLocaleDateString('en-GB') : '-')}
                                                         {isFallbackDate && <span className="text-red-400 ml-1 text-[9px] font-bold" title="Order date unavailable, using refund date">*</span>}
                                                     </td>
-                                                    <td className="font-mono font-medium text-indigo-600 whitespace-nowrap">
+                                                    <td className="font-mono font-medium text-theme whitespace-nowrap">
                                                         {r.orderId ? (
                                                             <span className="flex items-center gap-1">
                                                                 {r.orderId}

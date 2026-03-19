@@ -69,7 +69,7 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                     <div className="flex items-center justify-between mb-2">
                         <div>
                             <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                <Target className="w-4 h-4 text-indigo-500" />
+                                <Target className="w-4 h-4 text-theme" />
                                 Efficiency Map
                             </h3>
                             <p className="text-xs text-gray-500 mt-1">
@@ -97,7 +97,7 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                                                     <div className="space-y-1">
                                                         <div className="flex justify-between gap-4">
                                                             <span className="text-gray-500">Revenue:</span>
-                                                            <span className="font-mono font-bold text-indigo-600">
+                                                            <span className="font-mono font-bold text-theme">
                                                                 {formatSmartMoney(data.revenue)}
                                                             </span>
                                                         </div>
@@ -192,7 +192,7 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                                         <td className="p-4 text-right text-amber-500">{formatSmartMoney(d.adSpend)}</td>
                                         <td className="p-4 text-right text-gray-600">{formatPct(d.tacosPct)}</td>
                                         <td className="p-4 text-right font-bold text-green-700">{formatSmartMoney(d.netAfterAds)}</td>
-                                        <td className="p-4 text-right font-bold text-indigo-700">{d.roiAfterAds?.toFixed(2)}x</td>
+                                        <td className="p-4 text-right font-bold text-theme">{d.roiAfterAds?.toFixed(2)}x</td>
                                     </tr>
                                 );
                             })}

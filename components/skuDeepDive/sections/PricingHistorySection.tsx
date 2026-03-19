@@ -233,9 +233,9 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                             <Line data={cohortCurveData} type="monotone" dataKey="y" stroke="#9ca3af" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
                         )}
                         {curveData.length >= 3 && (
-                            <Line data={curveData} type="monotone" dataKey="y" stroke="#4f46e5" strokeWidth={2} dot={false} isAnimationActive={false} />
+                            <Line data={curveData} type="monotone" dataKey="y" stroke='var(--theme)' strokeWidth={2} dot={false} isAnimationActive={false} />
                         )}
-                        {organicData.length > 0 && <Scatter data={organicData} fill="#4f46e5" name="Organic" />}
+                        {organicData.length > 0 && <Scatter data={organicData} fill='var(--theme)' name="Organic" />}
                         {promoData.length > 0 && <Scatter data={promoData} fill="none" stroke="#f59e0b" strokeWidth={2} name="Promo" />}
                         {(() => {
                             const priceDiff = Math.abs(recommendedPrice - cp);
@@ -290,7 +290,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                     <td className="r">
                                         {isPromo
                                             ? <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">↓{Math.round((p.promoDiscountPct ?? 0) * 100)}%</span>
-                                            : <span className="text-indigo-600 font-medium">Organic</span>
+                                            : <span className="text-theme font-medium">Organic</span>
                                         }
                                     </td>
                                     <td className="r">{p.weekCount ?? '—'}</td>
@@ -320,7 +320,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                     </>
                                 ) : (
                                     <>
-                                        <TrendingUp className="w-5 h-5 text-indigo-600" />
+                                        <TrendingUp className="w-5 h-5 text-theme" />
                                         Family Sales Velocity
                                     </>
                                 )}
@@ -331,13 +331,13 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                     <div className="flex bg-gray-100 p-1 rounded-full border border-gray-200 shadow-inner">
                                         <button
                                             onClick={() => setViewMode('deviation')}
-                                            className={`px-4 py-1.5 text-[10px] font-bold rounded-full transition-all flex items-center gap-2 ${viewMode === 'deviation' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                            className={`px-4 py-1.5 text-[10px] font-bold rounded-full transition-all flex items-center gap-2 ${viewMode === 'deviation' ? 'bg-white shadow-sm text-theme' : 'text-gray-500 hover:text-gray-700'}`}
                                         >
                                             <LayoutGrid className="w-3.5 h-3.5" /> Price Deviation
                                         </button>
                                         <button
                                             onClick={() => setViewMode('velocity')}
-                                            className={`px-4 py-1.5 text-[10px] font-bold rounded-full transition-all flex items-center gap-2 ${viewMode === 'velocity' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                            className={`px-4 py-1.5 text-[10px] font-bold rounded-full transition-all flex items-center gap-2 ${viewMode === 'velocity' ? 'bg-white shadow-sm text-theme' : 'text-gray-500 hover:text-gray-700'}`}
                                         >
                                             <TrendingUp className="w-3.5 h-3.5" /> Family Velocity
                                         </button>
@@ -352,7 +352,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                 <button
                                     key={p}
                                     onClick={() => setChartPeriod(p)}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${chartPeriod === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${chartPeriod === p ? 'bg-white text-theme shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                 >
                                     {p}
                                 </button>
@@ -539,13 +539,13 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                     const sharePct = totalVolume > 0 ? (pt.qty / totalVolume) * 100 : 0;
 
                                     return (
-                                        <tr key={i} className={`${isOptimal ? 'bg-indigo-50 border-l-4 border-indigo-500' : isLowest ? 'bg-amber-50/30' : isHighest ? 'bg-indigo-50/30' : ''}`}>
+                                        <tr key={i} className={`${isOptimal ? 'bg-theme-10 border-l-4 border-theme' : isLowest ? 'bg-amber-50/30' : isHighest ? 'bg-theme-10/30' : ''}`}>
                                             <td className="font-mono font-bold text-gray-700">
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center gap-2">
                                                         {formatSmartMoney(pt.price)}
                                                         {isOptimal && (
-                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold uppercase tracking-wide flex items-center gap-1">
+                                                            <span className="text-[9px] bg-theme-10 text-theme px-1.5 py-0.5 rounded border border-theme-20 font-bold uppercase tracking-wide flex items-center gap-1">
                                                                 <Tag className="w-2.5 h-2.5" /> Optimal
                                                             </span>
                                                         )}
@@ -555,7 +555,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                                             </span>
                                                         )}
                                                         {isHighest && !isOptimal && (
-                                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 font-medium uppercase tracking-wide flex items-center gap-1">
+                                                            <span className="text-[9px] bg-theme-10 text-theme px-1.5 py-0.5 rounded border border-indigo-100 font-medium uppercase tracking-wide flex items-center gap-1">
                                                                 <TrendingUp className="w-2.5 h-2.5" /> Highest
                                                             </span>
                                                         )}
@@ -596,7 +596,7 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                     <div className="p-4 bg-white/10 border-b border-custom-glass flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="bg-custom-glass backdrop-blur-custom p-2 rounded-lg shadow-sm border border-custom-glass">
-                                <Users className="w-5 h-5 text-indigo-600" />
+                                <Users className="w-5 h-5 text-theme" />
                             </div>
                             <div>
                                 <h4 className="text-sm font-bold text-gray-800">Family Price Comparison</h4>
@@ -615,18 +615,18 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr className="bg-indigo-50/30">
+                                <tr className="bg-theme-10/30">
                                     <td>
                                         <div className="flex items-center gap-2">
-                                            <span className="font-mono font-bold text-indigo-700">{productSku}</span>
-                                            <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold uppercase">Current</span>
+                                            <span className="font-mono font-bold text-theme">{productSku}</span>
+                                            <span className="text-[8px] bg-theme-10 text-theme px-1.5 py-0.5 rounded-full font-bold uppercase">Current</span>
                                         </div>
                                     </td>
                                     <td>
                                         <div className="text-xs text-gray-900 font-medium truncate max-w-[300px]" title="Current product">This Product</div>
                                     </td>
                                     <td className="r">
-                                        <span className="font-mono font-bold text-indigo-700">{formatSmartMoney(currentPrice)}</span>
+                                        <span className="font-mono font-bold text-theme">{formatSmartMoney(currentPrice)}</span>
                                     </td>
                                     <td className="r">
                                         <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">

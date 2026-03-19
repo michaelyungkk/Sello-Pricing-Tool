@@ -254,7 +254,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                     <div className="space-y-1">
                         <div className="flex justify-between gap-4">
                             <span className="text-gray-500">Revenue:</span>
-                            <span className="font-mono font-bold text-indigo-600">{formatSmartMoney(d.current.revenue)}</span>
+                            <span className="font-mono font-bold text-theme">{formatSmartMoney(d.current.revenue)}</span>
                         </div>
                         <div className="flex justify-between gap-4">
                             <span className="text-gray-500">Margin:</span>
@@ -273,7 +273,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                             </span>
                         </div>
                     </div>
-                    <div className="mt-2 pt-1 border-t border-gray-100 text-[9px] text-indigo-500 font-medium flex items-center justify-center gap-1">
+                    <div className="mt-2 pt-1 border-t border-gray-100 text-[9px] text-theme font-medium flex items-center justify-center gap-1">
                         <Search className="w-3 h-3" /> Click to Deep Dive
                     </div>
                 </div>
@@ -311,9 +311,9 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                     </div>
                 </div>
                 <div className="p-2.5 bg-white rounded-lg border border-gray-200 shadow-sm flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-md bg-indigo-100 flex items-center justify-center text-lg">❓</div>
+                    <div className="w-8 h-8 rounded-md bg-theme-10 flex items-center justify-center text-lg">❓</div>
                     <div>
-                        <div className="text-[10px] font-bold text-indigo-700 uppercase">Questions</div>
+                        <div className="text-[10px] font-bold text-theme uppercase">Questions</div>
                         <div className="text-[9px] text-gray-500">Low {xLabel} / Growing</div>
                     </div>
                 </div>
@@ -351,7 +351,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                                 onClick={() => setXAxisMetric('MARGIN')}
                                 className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 ${
                                     xAxisMetric === 'MARGIN' 
-                                    ? 'bg-white text-indigo-600 shadow-sm' 
+                                    ? 'bg-white text-theme shadow-sm' 
                                     : 'text-gray-500 hover:text-gray-700'
                                 }`}
                                 title="X-Axis: Margin %"
@@ -368,7 +368,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                                 onClick={() => setFilterMode('REVENUE')}
                                 className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 ${
                                     filterMode === 'REVENUE' 
-                                    ? 'bg-white text-indigo-600 shadow-sm' 
+                                    ? 'bg-white text-theme shadow-sm' 
                                     : 'text-gray-500 hover:text-gray-700'
                                 }`}
                                 title={xAxisMetric === 'REVENUE' ? "Always show top products by Revenue" : "Always show top products by Margin"}
@@ -380,7 +380,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                                 onClick={() => setFilterMode('BALANCED')}
                                 className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1 ${
                                     filterMode === 'BALANCED' 
-                                    ? 'bg-white text-indigo-600 shadow-sm' 
+                                    ? 'bg-white text-theme shadow-sm' 
                                     : 'text-gray-500 hover:text-gray-700'
                                 }`}
                                 title="Equal representation from Stars, Cows, Questions, Dogs"
@@ -399,7 +399,7 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                                     onClick={() => setLimitPct(opt)}
                                     className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
                                         limitPct === opt 
-                                        ? 'bg-white text-indigo-600 shadow-sm' 
+                                        ? 'bg-white text-theme shadow-sm' 
                                         : 'text-gray-500 hover:text-gray-700'
                                     }`}
                                 >
@@ -420,8 +420,8 @@ export const BcgMatrix: React.FC<BcgMatrixProps> = ({ data, onDeepDive }) => {
                 >
                     {/* Map Controls */}
                     <div className="absolute top-2 right-2 z-20 flex flex-col gap-1.5 bg-white/90 p-1.5 rounded-lg border border-gray-200 shadow-sm backdrop-blur-sm">
-                         <button onClick={() => handleZoom('in')} className="p-1 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded transition-colors" title="Zoom In"><Plus className="w-4 h-4" /></button>
-                         <button onClick={() => handleZoom('out')} className="p-1 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded transition-colors" title="Zoom Out"><Minus className="w-4 h-4" /></button>
+                         <button onClick={() => handleZoom('in')} className="p-1 text-gray-500 hover:text-theme hover:bg-gray-100 rounded transition-colors" title="Zoom In"><Plus className="w-4 h-4" /></button>
+                         <button onClick={() => handleZoom('out')} className="p-1 text-gray-500 hover:text-theme hover:bg-gray-100 rounded transition-colors" title="Zoom Out"><Minus className="w-4 h-4" /></button>
                          <div className="w-full h-px bg-gray-200 my-0.5"></div>
                          <button onClick={handleReset} className="p-1 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded transition-colors" title="Reset View"><RotateCcw className="w-4 h-4" /></button>
                     </div>

@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { LayoutDashboard, Activity, Zap, Archive, TrendingUp, Plus, Edit2, Trash2 } from 'lucide-react';
 import { SelectFilter } from '../../common/SelectFilter';
-import { MetricCard } from '../../common/MetricCard';
+import { MetricCard } from '../../productManagement/parts/MetricCard';
 import { StatusBadge } from './StatusBadge';
 import { CreateEventModal } from './CreateEventModal';
 import { EditScheduleModal } from './EditScheduleModal';
@@ -12,7 +12,6 @@ import { PromotionEvent, Product, PricingRules, PriceLog, PriceChangeRecord } fr
 import { computePromoEffectiveness } from '../../../services/promotionAnalytics';
 import { formatPct } from '../../../utils/format';
 import { getTodayKeyMelbourne } from '../../../services/dateUtils';
-import { MetricValue } from '../../common/MetricValue';
 
 interface PromotionDashboardProps {
     promotions: PromotionEvent[];
@@ -192,7 +191,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
             {/* Promotion Performance Overview */}
             <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-indigo-600" />
+                    <Activity className="w-5 h-5 text-theme" />
                     Promotion Performance Overview
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -225,7 +224,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                     />
                     <button
                         onClick={() => setIsCreateOpen(true)}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                        className="px-4 py-2 bg-theme text-white rounded-lg font-medium shadow-md hover:bg-theme transition-colors flex items-center gap-2"
                         style={{ backgroundColor: themeColor }}
                     >
                         <Plus className="w-4 h-4" />
@@ -271,14 +270,14 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                                     {formatDate(promo.startDate)} - {formatDate(promo.endDate)}
                                     <button 
                                         onClick={(e) => { e.stopPropagation(); setEditingPromo(promo); }}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-gray-200 rounded-lg text-gray-400 hover:text-indigo-600 hover:border-indigo-300 shadow-sm opacity-0 transition-all"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white border border-gray-200 rounded-lg text-gray-400 hover:text-theme hover:border-theme-20 shadow-sm opacity-0 transition-all"
                                         title="Edit Schedule"
                                     >
                                         <Edit2 className="w-3 h-3" />
                                     </button>
                                 </td>
                                 <td className="p-4">
-                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${promo.promotionScope === 'SHOP' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200'}`}>
+                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${promo.promotionScope === 'SHOP' ? 'bg-theme-10 text-theme border-theme-20' : 'bg-white text-gray-500 border-gray-200'}`}>
                                         {promo.promotionScope || 'SKU'}
                                     </span>
                                 </td>

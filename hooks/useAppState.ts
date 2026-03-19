@@ -308,7 +308,7 @@ export const useAppState = () => {
     });
 
     const [userProfile, setUserProfile] = useState<UserProfileType>({
-        name: '', themeColor: '#4f46e5', backgroundImage: '', backgroundColor: '#f3f4f6', glassMode: 'light', glassOpacity: 90, glassBlur: 10, ambientGlass: true, ambientGlassOpacity: 15
+        name: '', themeColor: '#134E4A', backgroundImage: '', backgroundColor: '#f3f4f6', glassMode: 'light', glassOpacity: 90, glassBlur: 10, ambientGlass: true, ambientGlassOpacity: 15
     });
 
     const [showBackToTop, setShowBackToTop] = useState(false);

@@ -26,7 +26,7 @@ const PriorityIcon = ({ priority }: { priority: SuggestionPriority }) => {
 const KindIcon = ({ kind }: { kind: string }) => {
     if (kind === 'metric') return <BarChart2 className="w-3.5 h-3.5 opacity-50" />;
     if (kind === 'shortcut') return <Zap className="w-3.5 h-3.5 text-yellow-500" />;
-    if (kind === 'sku') return <Tag className="w-3.5 h-3.5 text-indigo-500" />;
+    if (kind === 'sku') return <Tag className="w-3.5 h-3.5 text-theme" />;
     return null;
 }
 
@@ -40,9 +40,9 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
   if (suggestions.skuSuggestions.length > 0 || (state.searchText.toLowerCase().startsWith('sku:') || state.searchText.toLowerCase().startsWith('sku '))) {
       return (
         <div className="absolute top-full left-0 mt-2 w-full max-w-3xl bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
-            <div className="p-4 bg-indigo-50/50 border-b border-indigo-100 flex items-center gap-2">
-                <Tag className="w-4 h-4 text-indigo-600" />
-                <span className="text-xs font-bold text-indigo-700 uppercase">{t('search_assistant_sku_mode')}</span>
+            <div className="p-4 bg-theme-10/50 border-b border-indigo-100 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-theme" />
+                <span className="text-xs font-bold text-theme uppercase">{t('search_assistant_sku_mode')}</span>
             </div>
             <div className="p-2">
                 {suggestions.skuSuggestions.length > 0 ? (
@@ -51,11 +51,11 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
                             <button
                                 key={s.id}
                                 onClick={() => onApply(s)}
-                                className="w-full flex items-center gap-3 p-3 text-left bg-white hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-lg transition-all group"
+                                className="w-full flex items-center gap-3 p-3 text-left bg-white hover:bg-theme-10 border border-transparent hover:border-indigo-100 rounded-lg transition-all group"
                             >
                                 <div className="font-mono font-bold text-sm text-gray-800">{s.label}</div>
                                 <div className="text-xs text-gray-500 truncate flex-1">{s.description}</div>
-                                <ArrowRight className="w-3 h-3 text-gray-300 group-hover:text-indigo-400" />
+                                <ArrowRight className="w-3 h-3 text-gray-300 group-hover:text-theme" />
                             </button>
                         ))}
                     </div>
@@ -91,11 +91,11 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
                   <button
                     key={s.id}
                     onClick={() => onApply(s)}
-                    className="flex items-center gap-2 px-3 py-2 text-left text-xs bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 border border-transparent hover:border-indigo-200 rounded-lg transition-all group"
+                    className="flex items-center gap-2 px-3 py-2 text-left text-xs bg-gray-50 hover:bg-theme-10 hover:text-theme border border-transparent hover:border-theme-20 rounded-lg transition-all group"
                     title={s.description}
                   >
                     <KindIcon kind="metric" />
-                    <span className="font-medium text-gray-700 group-hover:text-indigo-700 truncate">{s.label}</span>
+                    <span className="font-medium text-gray-700 group-hover:text-theme truncate">{s.label}</span>
                   </button>
                 ))}
               </div>
@@ -139,15 +139,15 @@ export const SearchAssistantPopover: React.FC<SearchAssistantPopoverProps> = ({ 
                   <button
                     key={s.id}
                     onClick={() => onApply(s)}
-                    className="w-full flex items-center justify-between p-3 text-left bg-white border border-gray-200 hover:border-indigo-300 hover:shadow-md rounded-xl transition-all group"
+                    className="w-full flex items-center justify-between p-3 text-left bg-white border border-gray-200 hover:border-theme-20 hover:shadow-md rounded-xl transition-all group"
                   >
                     <div className="flex items-center gap-3">
                       <div className={`p-1.5 rounded-lg ${s.priority === 'RISK' ? 'bg-red-50 text-red-600' : s.priority === 'OPPORTUNITY' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
                         <KindIcon kind="shortcut" />
                       </div>
-                      <span className="text-xs font-semibold text-gray-700 group-hover:text-indigo-700">{s.label}</span>
+                      <span className="text-xs font-semibold text-gray-700 group-hover:text-theme">{s.label}</span>
                     </div>
-                    <ArrowRight className="w-3 h-3 text-gray-300 group-hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <ArrowRight className="w-3 h-3 text-gray-300 group-hover:text-theme opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                 ))}
               </div>

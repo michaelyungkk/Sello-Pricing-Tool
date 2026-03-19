@@ -327,10 +327,10 @@ const UploadZone = ({ label, hint, fileName, isProcessing, error, onFile, onClea
 
     if (fileName) {
         return (
-            <div className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between bg-theme-10 border border-indigo-100 rounded-xl px-4 py-3">
                 <div className="flex items-center gap-2">
-                    <FileCheck className="w-4 h-4 text-indigo-500" />
-                    <span className="text-xs font-bold text-indigo-700">{fileName}</span>
+                    <FileCheck className="w-4 h-4 text-theme" />
+                    <span className="text-xs font-bold text-theme">{fileName}</span>
                 </div>
                 <button onClick={onClear} className="text-gray-400 hover:text-red-500 transition-colors">
                     <X className="w-3.5 h-3.5" />
@@ -346,14 +346,14 @@ const UploadZone = ({ label, hint, fileName, isProcessing, error, onFile, onClea
             onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) onFile(f); }}
             onClick={() => ref.current?.click()}
             className={`border-2 border-dashed rounded-xl px-5 py-4 text-center cursor-pointer transition-all ${
-                dragging ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50/50'
+                dragging ? 'border-indigo-400 bg-theme-10' : 'border-gray-200 hover:border-theme-20 hover:bg-gray-50/50'
             }`}
         >
             <input ref={ref} type="file" accept=".xlsx,.xls,.csv" className="hidden"
                 onChange={e => e.target.files?.[0] && onFile(e.target.files[0])} />
             {isProcessing ? (
                 <div className="flex items-center justify-center gap-2">
-                    <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
+                    <RefreshCw className="w-4 h-4 text-theme animate-spin" />
                     <span className="text-xs text-gray-400">Parsing...</span>
                 </div>
             ) : (
@@ -658,13 +658,13 @@ export const ERPCrossCheckTool: React.FC<ERPCrossCheckToolProps> = ({
                             <span className="text-xs font-bold text-gray-500">DATE RANGE</span>
                             <button
                                 onClick={() => setUseCustomRange(false)}
-                                className={`text-xs px-2 py-1 rounded-md font-medium transition-colors ${!useCustomRange ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`text-xs px-2 py-1 rounded-md font-medium transition-colors ${!useCustomRange ? 'bg-theme-10 text-theme' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 Full File ({salesData.dateRange.start} → {salesData.dateRange.end})
                             </button>
                             <button
                                 onClick={() => setUseCustomRange(true)}
-                                className={`text-xs px-2 py-1 rounded-md font-medium transition-colors ${useCustomRange ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`text-xs px-2 py-1 rounded-md font-medium transition-colors ${useCustomRange ? 'bg-theme-10 text-theme' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 Custom
                             </button>
@@ -683,7 +683,7 @@ export const ERPCrossCheckTool: React.FC<ERPCrossCheckToolProps> = ({
                                 className="w-3.5 h-3.5 rounded" />
                             <span className="text-xs font-medium text-gray-600">
                                 Deduct Returns
-                                {returnsData && <span className="ml-1 text-indigo-500 font-bold">(from file)</span>}
+                                {returnsData && <span className="ml-1 text-theme font-bold">(from file)</span>}
                                 {!returnsData && <span className="ml-1 text-gray-400">(from app)</span>}
                             </span>
                         </label>

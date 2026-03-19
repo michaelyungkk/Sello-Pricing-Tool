@@ -22,7 +22,7 @@ export const DiagnosticSignalsSection: React.FC<DiagnosticSignalsSectionProps> =
         <div className="bg-custom-glass border border-custom-glass rounded-xl p-4 backdrop-blur-custom animate-in fade-in slide-in-from-top-2">
             <div className="flex justify-between items-center mb-3">
                 <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-indigo-500" />
+                    <Activity className="w-4 h-4 text-theme" />
                     Diagnostic Signals
                 </h3>
                 <span className="text-[10px] text-gray-400 italic">Thresholds based on global configuration</span>

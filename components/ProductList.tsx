@@ -149,7 +149,7 @@ const ProductRow = React.memo(({
                     {onDeepDive && (
                         <button
                             onClick={() => onDeepDive(product.sku)}
-                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1.5 rounded hover:bg-indigo-50 border border-transparent hover:border-indigo-100"
+                            className="text-gray-400 hover:text-theme transition-colors p-1.5 rounded hover:bg-theme-10 border border-transparent hover:border-indigo-100"
                             title="Deep Dive SKU Analysis"
                         >
                             <Search className="w-3.5 h-3.5" />
@@ -158,7 +158,7 @@ const ProductRow = React.memo(({
                     {onViewElasticity && (
                         <button
                             onClick={() => onViewElasticity(product, optimalPriceResults?.get(getCanonicalSku(product.sku)))}
-                            className="text-gray-400 hover:text-indigo-600 transition-colors p-1.5 rounded hover:bg-indigo-50 border border-transparent hover:border-indigo-100"
+                            className="text-gray-400 hover:text-theme transition-colors p-1.5 rounded hover:bg-theme-10 border border-transparent hover:border-indigo-100"
                             title="View Price Curve"
                         >
                             <LineChart className="w-3.5 h-3.5" />
@@ -290,7 +290,7 @@ const ProductRow = React.memo(({
                                 e.stopPropagation();
                                 if (onViewShipments) onViewShipments(product.sku);
                             }}
-                            className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center gap-1 hover:bg-indigo-100 hover:border-indigo-300 transition-colors cursor-pointer"
+                            className="text-[10px] font-semibold text-theme bg-theme-10 px-1.5 py-0.5 rounded border border-indigo-100 flex items-center gap-1 hover:bg-theme-10 hover:border-theme-20 transition-colors cursor-pointer"
                             title="Click to view incoming shipments"
                         >
                             <Ship className="w-3 h-3" />
@@ -449,7 +449,7 @@ const MultiSelectDropdown = ({ label, icon: Icon, selected, onChange, options, t
                                     onClick={() => toggleOption(opt)}
                                 >
                                     {isSelected ? (
-                                        <CheckSquare className="w-4 h-4 text-indigo-600 flex-shrink-0" style={{ color: themeColor }} />
+                                        <CheckSquare className="w-4 h-4 text-theme flex-shrink-0" style={{ color: themeColor }} />
                                     ) : (
                                         <Square className="w-4 h-4 text-gray-300 flex-shrink-0" />
                                     )}
@@ -545,9 +545,9 @@ const FamilyGridView = ({
                                 <div className="flex items-center gap-3">
                                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
                                     <div className="flex items-center gap-2">
-                                        <Layers className="w-4 h-4 text-indigo-500" />
+                                        <Layers className="w-4 h-4 text-theme" />
                                         <span className="font-bold text-gray-900">{family.name}</span>
-                                        <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">{items.length} SKUs</span>
+                                        <span className="text-xs bg-theme-10 text-theme px-2 py-0.5 rounded-full border border-theme-20">{items.length} SKUs</span>
                                     </div>
                                 </div>
                             </td>
@@ -943,14 +943,14 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                         <div className="flex bg-gray-100/50 p-1 rounded-lg border border-gray-200">
                             <button
                                 onClick={() => setViewMode('LIST')}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${viewMode === 'LIST' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${viewMode === 'LIST' ? 'bg-white shadow-sm text-theme' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 <List className="w-3.5 h-3.5" />
                                 List View
                             </button>
                             <button
                                 onClick={() => setViewMode('FAMILY')}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${viewMode === 'FAMILY' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${viewMode === 'FAMILY' ? 'bg-white shadow-sm text-theme' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 <Layers className="w-3.5 h-3.5" />
                                 Family View
@@ -1139,7 +1139,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                             <div className="flex flex-wrap gap-3">
                                 <button
                                     onClick={() => setShowOOS(!showOOS)}
-                                    className={`flex items-center justify-between gap-3 px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors hover:bg-gray-50 ${showOOS ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
+                                    className={`flex items-center justify-between gap-3 px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors hover:bg-gray-50 ${showOOS ? 'border-theme-20 bg-theme-10 text-theme' : 'border-gray-200 text-gray-600 bg-white'}`}
                                     style={showOOS ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
                                 >
                                     <span className="text-[10px] uppercase">Show Out of Stock</span>
@@ -1148,7 +1148,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
                                 <button
                                     onClick={() => setShowInactive(!showInactive)}
-                                    className={`flex items-center justify-between gap-3 px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors hover:bg-gray-50 ${showInactive ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 bg-white'}`}
+                                    className={`flex items-center justify-between gap-3 px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors hover:bg-gray-50 ${showInactive ? 'border-theme-20 bg-theme-10 text-theme' : 'border-gray-200 text-gray-600 bg-white'}`}
                                     style={showInactive ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
                                 >
                                     <span className="text-[10px] uppercase">Show Inactive</span>
@@ -1222,7 +1222,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                                 {products && products.length > 0 && !showInactive && (
                                                     <button
                                                         onClick={() => setShowInactive(true)}
-                                                        className="text-indigo-600 text-sm font-medium hover:underline flex items-center gap-1"
+                                                        className="text-theme text-sm font-medium hover:underline flex items-center gap-1"
                                                     >
                                                         <Eye className="w-4 h-4" />
                                                         Show {products.length - (filteredProducts?.length || 0)} hidden items (Inactive/Ghost)

@@ -235,14 +235,14 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                     {/* Date Selection */}
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-indigo-600" />
+                            <Calendar className="w-4 h-4 text-theme" />
                             Report Date
                         </label>
                         <input
                             type="date"
                             value={reportDate}
                             onChange={(e) => setReportDate(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme"
                         />
                         <p className="text-xs text-gray-500 mt-1">
                             Set this to the date the file was generated. This date will be recorded in the Price Change Log.
@@ -251,24 +251,24 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
 
                     {isProcessing ? (
                         <div className="flex flex-col items-center py-10">
-                            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
+                            <Loader2 className="w-8 h-8 animate-spin text-theme mb-2" />
                             <span className="text-gray-500">Processing...</span>
                         </div>
                     ) : !parsedItems ? (
                         <div
-                            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-colors ${dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400'
+                            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-colors ${dragActive ? 'border-theme bg-theme-10' : 'border-gray-300 hover:border-gray-400'
                                 }`}
                             onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
                         >
                             <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept=".csv, .xlsx" />
                             <Upload className="w-8 h-8 text-gray-400 mb-4" />
-                            <p className="text-sm font-medium text-gray-900">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-indigo-600 underline">Browse</button></p>
+                            <p className="text-sm font-medium text-gray-900">Drag & Drop or <button onClick={() => fileInputRef.current?.click()} className="text-theme underline">Browse</button></p>
 
                             <div className="mt-4 text-left text-xs text-gray-500 bg-gray-50 p-3 rounded border border-gray-200 w-full">
                                 <p className="font-semibold text-gray-700 mb-1">Column Requirements:</p>
                                 <ul className="list-disc pl-4 space-y-1">
-                                    <li><code className="bg-indigo-50 text-indigo-700 px-1 rounded">sku</code> (Required)</li>
-                                    <li><code className="bg-indigo-50 text-indigo-700 px-1 rounded">price</code> (Required - CA Price)</li>
+                                    <li><code className="bg-theme-10 text-theme px-1 rounded">sku</code> (Required)</li>
+                                    <li><code className="bg-theme-10 text-theme px-1 rounded">price</code> (Required - CA Price)</li>
                                     <li><code className="bg-gray-200 px-1 rounded">image</code> (Optional - Product Image URL)</li>
                                 </ul>
                                 <p className="mt-2 text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
@@ -329,19 +329,19 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                                             <th className="p-2 uppercase font-medium text-gray-500">SKU</th>
                                             <th className="p-2 text-right uppercase font-medium text-gray-500">Old</th>
                                             <th className="p-2 text-center"></th>
-                                            <th className="p-2 text-right uppercase font-medium text-indigo-600">New</th>
+                                            <th className="p-2 text-right uppercase font-medium text-theme">New</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {displayedChanges.length > 0 ? (
                                             displayedChanges.slice(0, 50).map((item, idx) => (
-                                                <tr key={idx} className="border-t bg-white group hover:bg-indigo-50/30">
+                                                <tr key={idx} className="border-t bg-white group hover:bg-theme-10/30">
                                                     <td className="p-2 font-mono text-gray-700 font-medium">{item.sku}</td>
                                                     <td className="p-2 text-right text-gray-400 font-mono">{formatSmartMoney(item.oldPrice)}</td>
                                                     <td className="p-2 text-center text-gray-300">
                                                         <ArrowRight className="w-3 h-3 mx-auto" />
                                                     </td>
-                                                    <td className="p-2 text-right font-bold text-indigo-700 font-mono">{formatSmartMoney(item.caPrice)}</td>
+                                                    <td className="p-2 text-right font-bold text-theme font-mono">{formatSmartMoney(item.caPrice)}</td>
                                                 </tr>
                                             ))
                                         ) : (
@@ -372,7 +372,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                     {validItems.length > 0 && (
                         <button
                             onClick={() => onConfirm(validItems, reportDate)}
-                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors"
+                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors"
                         >
                             Update Prices & Images
                         </button>

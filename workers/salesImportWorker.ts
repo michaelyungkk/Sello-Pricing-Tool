@@ -200,11 +200,7 @@ self.onmessage = (e: MessageEvent) => {
 
             const orderId   = (orderIdIdx   !== -1 && row[orderIdIdx])   ? String(row[orderIdIdx]).trim()   : '';
             const orderType = (orderTypeIdx !== -1 && row[orderTypeIdx]) ? String(row[orderTypeIdx]).trim().toLowerCase() : '';
-
-            // Skip ad_only rows entirely — their ads cost is already captured
-            // in the normal order rows' ads_fee column. Processing them separately
-            // creates negative-profit ghost entries that distort profit totals.
-            if (orderType === 'ad_only') return;
+            const isAdOnly = orderType === 'ad_only';
 
             const postcode = (postcodeIdx !== -1 && row[postcodeIdx]) ? String(row[postcodeIdx]).trim() : undefined;
             const partner = (partnerIdx !== -1 && row[partnerIdx]) ? String(row[partnerIdx]).trim() : undefined;
@@ -232,14 +228,14 @@ self.onmessage = (e: MessageEvent) => {
                 platformConfig?.isExcluded === true;
 
             const item = aggregated[masterSku];
-            if (!isCostBased) {
+            if (!isCostBased && !isAdOnly) {
                 item.qty += qty;
                 item.revenue += rev;
             }
-            item.count++;
+            if (!isAdOnly) item.count++;
 
             const weight = Math.abs(qty) || 1;
-            if (!isCostBased) {
+            if (!isCostBased && !isAdOnly) {
                 item.netPmSum += (netPm * weight);
                 item.profitSum += profit;
             }
@@ -312,22 +308,25 @@ self.onmessage = (e: MessageEvent) => {
                         totalExtraFreight: 0
                     };
                 }
-                dailyAggregated[dailyKey].totalQty += qty;
-                dailyAggregated[dailyKey].totalRevenue += rev;
-                dailyAggregated[dailyKey].totalAds += adsCost;
-                dailyAggregated[dailyKey].totalPostage += postageCost;
-                dailyAggregated[dailyKey].totalExtraFreight += extraFreightInc;
+                if (!isAdOnly) {
+                    dailyAggregated[dailyKey].totalQty += qty;
+                    dailyAggregated[dailyKey].totalRevenue += rev;
+                    dailyAggregated[dailyKey].totalPostage += postageCost;
+                    dailyAggregated[dailyKey].totalExtraFreight += extraFreightInc;
 
-                const dailyWeight = Math.abs(qty) || 0;
-                dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);
+                    const dailyWeight = Math.abs(qty) || 0;
+                    dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);
 
-                if (profit === 0 && netPm !== 0 && rev !== 0) {
-                    dailyAggregated[dailyKey].totalProfit += rev * (netPm / 100);
-                } else {
-                    dailyAggregated[dailyKey].totalProfit += profit;
+                    if (profit === 0 && netPm !== 0 && rev !== 0) {
+                        dailyAggregated[dailyKey].totalProfit += rev * (netPm / 100);
+                    } else {
+                        dailyAggregated[dailyKey].totalProfit += profit;
+                    }
                 }
+                // Always accumulate ad spend — even for ad_only rows
+                dailyAggregated[dailyKey].totalAds += adsCost;
 
-                item.dates.add(dateKey);
+                if (!isAdOnly) item.dates.add(dateKey);
             }
         });
 

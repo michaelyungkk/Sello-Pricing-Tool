@@ -62,7 +62,7 @@ const ConfidenceBadge: React.FC<{ confidence: number; source: string }> = ({ con
 
 const SourceLabel: React.FC<{ source: string }> = ({ source }) => {
     const styles: Record<string, string> = {
-        SKU_DATA: 'text-indigo-700',
+        SKU_DATA: 'text-theme',
         BLENDED: 'text-amber-600',
         COHORT: 'text-gray-500',
         GUARDRAIL: 'text-red-600',
@@ -229,7 +229,7 @@ const ProfitCurveChart: React.FC<{
                             data={curveData}
                             type="monotone"
                             dataKey="y"
-                            stroke="#4f46e5"
+                            stroke='var(--theme)'
                             strokeWidth={2}
                             dot={false}
                             isAnimationActive={false}
@@ -238,7 +238,7 @@ const ProfitCurveChart: React.FC<{
 
                     {/* Organic scatter */}
                     {organicData.length > 0 && (
-                        <Scatter data={organicData} fill="#4f46e5" name="Organic" />
+                        <Scatter data={organicData} fill='var(--theme)' name="Organic" />
                     )}
 
                     {/* Promo scatter */}
@@ -326,7 +326,7 @@ const PricePointsTable: React.FC<{
                                             ↓{Math.round((p.promoDiscountPct ?? 0) * 100)}%
                                         </span>
                                     ) : (
-                                        <span className="text-indigo-600 font-medium">Organic</span>
+                                        <span className="text-theme font-medium">Organic</span>
                                     )}
                                 </td>
                                 <td className="py-2 text-right text-gray-600">{p.weekCount ?? '—'}</td>
@@ -356,7 +356,7 @@ const OptimalPriceCurveModal: React.FC<OptimalPriceCurveModalProps> = ({ product
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center border border-gray-200">
                     <div className="text-gray-400 mb-4">No optimal price data available for <span className="font-mono font-bold text-gray-700">{product.sku}</span> yet.</div>
                     <p className="text-xs text-gray-400 mb-6">Calculate Price Benchmarks in Master Catalogue to generate optimal pricing recommendations.</p>
-                    <button onClick={onClose} className="px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-colors">Close</button>
+                    <button onClick={onClose} className="px-5 py-2 bg-theme text-white text-sm font-bold rounded-lg hover:bg-theme transition-colors">Close</button>
                 </div>
             </div>
         );
@@ -381,7 +381,7 @@ const OptimalPriceCurveModal: React.FC<OptimalPriceCurveModalProps> = ({ product
                         <div className="flex items-center gap-2">
                             <span className="font-mono text-sm font-bold text-gray-800">{product.sku}</span>
                             <GradeBadge gradeLevel={product.gradeLevel} />
-                            <span className="text-[10px] px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full font-bold uppercase tracking-wide">Price Curve</span>
+                            <span className="text-[10px] px-2 py-0.5 bg-theme-10 text-theme rounded-full font-bold uppercase tracking-wide">Price Curve</span>
                         </div>
                         <span className="text-gray-400">·</span>
                         <span className="text-gray-500 text-xs max-w-[380px] truncate">{product.name}</span>

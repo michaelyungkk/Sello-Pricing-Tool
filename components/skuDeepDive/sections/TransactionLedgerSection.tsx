@@ -75,7 +75,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 mr-auto">
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <Rows className="w-5 h-5 text-indigo-600" />
+                        <Rows className="w-5 h-5 text-theme" />
                         Transaction Ledger
                         <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">Recent Logs</span>
                     </h3>
@@ -84,7 +84,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     <select
                         value={txDays}
                         onChange={e => setTxDays(Number(e.target.value))}
-                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-theme"
                     >
                         <option value={7}>Last 7 Days</option>
                         <option value={14}>Last 14 Days</option>
@@ -105,7 +105,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     <select
                         value={txFilterType}
                         onChange={e => setTxFilterType(e.target.value)}
-                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-indigo-500"
+                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-theme"
                     >
                         <option value="All">All Types</option>
                         <option value="Sale">Sale (Price {'>'} 0)</option>
@@ -116,7 +116,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 </div>
                 <button
                     onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border flex items-center gap-2 ${isAuditPanelVisible ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border flex items-center gap-2 ${isAuditPanelVisible ? 'bg-theme-10 border-theme-20 text-theme' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                 >
                     <Activity className="w-4 h-4" />
                     {isAuditPanelVisible ? 'Hide Audit' : 'Audit Reconciliation'}
@@ -198,7 +198,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 </div>
                                 <div className="text-right w-24">
                                     <div className="text-gray-400">Revenue</div>
-                                    <div className="font-mono font-bold text-indigo-600">{formatSmartMoney(sub.revenue)}</div>
+                                    <div className="font-mono font-bold text-theme">{formatSmartMoney(sub.revenue)}</div>
                                 </div>
                                 <div className="text-right w-20">
                                     <div className="text-gray-400">Sales Share %</div>
@@ -275,7 +275,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                             {isAdRow ? <span className="text-xs text-orange-600 font-bold">Ad Cost</span> : formatSmartMoney(tx.price * VAT_MULTIPLIER)}
                                         </td>
                                         <td className="r font-bold opacity-90">{formatNumber(tx.velocity)}</td>
-                                        <td className={`r ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-indigo-600'}`}>
+                                        <td className={`r ${isZeroRev ? 'text-gray-400 italic' : isRefund ? 'text-red-600' : 'text-theme'}`}>
                                             {formatSmartMoney(tx.price * tx.velocity * VAT_MULTIPLIER)}
                                         </td>
                                         <td className="r text-green-600 font-medium">
@@ -301,7 +301,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 </div>
                 {filteredTransactionsLength >= txLimit && (
                     <div className="p-3 text-center border-t border-gray-100">
-                        <button onClick={() => setTxLimit(prev => prev + 50)} className="text-xs text-indigo-600 font-medium hover:underline">
+                        <button onClick={() => setTxLimit(prev => prev + 50)} className="text-xs text-theme font-medium hover:underline">
                             Load More ({filteredTransactionsLength - txLimit} remaining)
                         </button>
                     </div>

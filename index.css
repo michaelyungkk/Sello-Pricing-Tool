@@ -139,7 +139,7 @@
 
 .sello-table th:hover {
   color: var(--theme);
-  background: rgba(79, 70, 229, 0.04);
+  background: rgba(19, 78, 74, 0.04);
 }
 
 .sello-table th.sorted {
@@ -215,7 +215,7 @@
 /* Row state overrides */
 .sello-table tbody tr.row-warn { background: rgba(251, 191, 36, 0.06) !important; }
 .sello-table tbody tr.row-neg  { background: rgba(254, 226, 226, 0.10) !important; }
-.sello-table tbody tr.row-sel  { background: rgba(79, 70, 229, 0.05) !important; }
+.sello-table tbody tr.row-sel  { background: rgba(19, 78, 74, 0.05) !important; }
 .sello-table tbody tr.row-ad   { background: rgba(255, 237, 213, 0.10) !important; }
 
 /* ── td ── */
@@ -480,7 +480,7 @@
 }
 
 .sello-btn.cta {
-  background: #4f46e5;
+  background: #134E4A;
   color: white;
   border-color: #4338ca;
 }
@@ -728,3 +728,18 @@
 .duration-200 { --tw-animate-duration: 200ms; }
 .duration-300 { --tw-animate-duration: 300ms; }
 .duration-500 { --tw-animate-duration: 500ms; }
+
+/* ── Theme utility classes — use these instead of hardcoded indigo ── */
+.bg-theme          { background-color: var(--theme) !important; }
+.bg-theme-10       { background-color: var(--theme-10) !important; }
+.bg-theme-20       { background-color: var(--theme-20) !important; }
+.text-theme        { color: var(--theme) !important; }
+.border-theme      { border-color: var(--theme) !important; }
+.border-theme-20   { border-color: var(--theme-20) !important; }
+.ring-theme        { --tw-ring-color: var(--theme) !important; }
+.hover\:bg-theme:hover        { background-color: var(--theme) !important; }
+.hover\:bg-theme-10:hover     { background-color: var(--theme-10) !important; }
+.hover\:text-theme:hover      { color: var(--theme) !important; }
+.hover\:border-theme:hover    { border-color: var(--theme) !important; }
+.focus\:ring-theme:focus      { --tw-ring-color: var(--theme) !important; }
+.focus\:border-theme:focus    { border-color: var(--theme) !important; }

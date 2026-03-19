@@ -57,20 +57,20 @@ export const TagSearchInput: React.FC<TagSearchInputProps> = ({ tags, onTagsChan
 
     return (
         <div 
-            className="flex flex-wrap items-center gap-2 p-2 border border-gray-300 rounded-lg bg-white/50 focus-within:ring-2 focus-within:ring-indigo-500 min-h-[42px] relative transition-all" 
+            className="flex flex-wrap items-center gap-2 p-2 border border-gray-300 rounded-lg bg-white/50 focus-within:ring-2 focus-within:ring-theme min-h-[42px] relative transition-all" 
             style={{ '--tw-ring-color': themeColor } as React.CSSProperties}
             onClick={() => document.getElementById('tag-search-input')?.focus()}
         >
             <Search className="w-4 h-4 text-gray-400 ml-1 flex-shrink-0" />
             
             {tags.map(tag => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-700 animate-in fade-in zoom-in duration-200 border border-indigo-200">
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-theme-10 text-theme animate-in fade-in zoom-in duration-200 border border-theme-20">
                     {tag} 
                     <button 
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagsChange(tags.filter(t => t !== tag)); }}
                         className="hover:bg-indigo-200 rounded-full p-0.5 transition-colors"
                     >
-                        <X className="w-3 h-3 text-indigo-500 hover:text-indigo-800" />
+                        <X className="w-3 h-3 text-theme hover:text-indigo-800" />
                     </button>
                 </span>
             ))}

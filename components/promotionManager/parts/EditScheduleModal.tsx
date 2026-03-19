@@ -44,7 +44,7 @@ export const EditScheduleModal: React.FC<EditScheduleModalProps> = ({ promo, onC
                             type="date" 
                             value={startDate} 
                             onChange={(e) => setStartDate(e.target.value)} 
-                            className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                            className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-theme"
                         />
                     </div>
                     <div>
@@ -53,7 +53,7 @@ export const EditScheduleModal: React.FC<EditScheduleModalProps> = ({ promo, onC
                             type="date" 
                             value={endDate} 
                             onChange={(e) => setEndDate(e.target.value)} 
-                            className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                            className="w-full border rounded-lg px-3 py-2 text-sm border-gray-300 focus:ring-2 focus:ring-theme"
                         />
                     </div>
                     

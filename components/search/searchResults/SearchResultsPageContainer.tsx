@@ -491,12 +491,12 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
     return (
         <div className="space-y-4">
             <div className="flex justify-end pr-2">
-                <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                <label className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20 transition-colors">
                     <input
                         type="checkbox"
                         checked={deductRefunds}
                         onChange={e => setDeductRefunds(e.target.checked)}
-                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                        className="w-4 h-4 text-theme rounded focus:ring-theme border-gray-300"
                     />
                     <div className="flex items-center gap-1.5">
                         <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />

@@ -320,7 +320,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
             <div className={`bg-white rounded-2xl shadow-2xl w-full flex flex-col max-h-[90vh] transition-all ${step === 'preview' ? 'max-w-6xl' : 'max-w-2xl'}`}>
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+                        <div className="p-2 bg-theme-10 rounded-lg text-theme">
                             <LinkIcon className="w-5 h-5" />
                         </div>
                         <div>
@@ -334,7 +334,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                 <div className="p-6 flex-1 overflow-y-auto">
                     {isProcessing ? (
                         <div className="flex flex-col items-center py-12">
-                            <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mb-3" />
+                            <Loader2 className="w-10 h-10 animate-spin text-theme mb-3" />
                             <span className="text-gray-600 font-medium">Analyzing file & matching SKUs...</span>
                         </div>
                     ) : step === 'upload' ? (
@@ -346,7 +346,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                     <select
                                         value={selectedPlatform}
                                         onChange={(e) => setSelectedPlatform(e.target.value)}
-                                        className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-xl appearance-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                                        className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-xl appearance-none focus:ring-2 focus:ring-theme bg-white"
                                     >
                                         <option value="" disabled>Choose a platform...</option>
                                         {platforms.map(p => <option key={p} value={p}>{p}</option>)}
@@ -360,7 +360,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                     <input
                                         type="text"
                                         placeholder="Type platform name..."
-                                        className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                        className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-theme"
                                         onChange={(e) => setSelectedPlatform(e.target.value)}
                                     />
                                 )}
@@ -373,7 +373,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                     <button
                                         onClick={() => setImportMode('merge')}
                                         className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${importMode === 'merge'
-                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                                            ? 'border-theme bg-theme-10 text-theme'
                                             : 'border-gray-200 hover:border-gray-300 text-gray-600'
                                             }`}
                                     >
@@ -408,12 +408,12 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">3. Upload Platform Export</label>
                                 <div
-                                    className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-indigo-500 bg-indigo-50 scale-[1.02]' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                                    className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-theme bg-theme-10 scale-[1.02]' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
                                         }`}
                                     onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
                                 >
                                     <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept=".csv, .xlsx, .xls" />
-                                    <div className="w-14 h-14 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-3">
+                                    <div className="w-14 h-14 bg-theme-10 text-theme rounded-full flex items-center justify-center mb-3">
                                         <Upload className="w-7 h-7" />
                                     </div>
                                     <p className="text-gray-900 font-medium">Click to upload or drag and drop</p>
@@ -452,7 +452,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                     {/* Details */}
                                     <div className="flex gap-3 ml-4 text-xs text-gray-500 bg-white px-3 py-1 rounded border border-gray-200">
                                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Exact: {exactCount}</span>
-                                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Fuzzy: {fuzzyCount}</span>
+                                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-theme"></span> Fuzzy: {fuzzyCount}</span>
                                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Learned: {learnedCount}</span>
                                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Manual: {manualCount}</span>
                                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300"></span> Missing: {missingCount}</span>
@@ -490,7 +490,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                             const originalIndex = detectedRows.indexOf(row);
 
                                             return (
-                                                <tr key={idx} className={row.method === 'none' ? 'bg-red-50/20' : row.method === 'fuzzy' ? 'bg-indigo-50/20' : row.method === 'learned' ? 'bg-purple-50/20' : row.method === 'manual' ? 'bg-blue-50/20' : ''}>
+                                                <tr key={idx} className={row.method === 'none' ? 'bg-red-50/20' : row.method === 'fuzzy' ? 'bg-theme-10/20' : row.method === 'learned' ? 'bg-purple-50/20' : row.method === 'manual' ? 'bg-blue-50/20' : ''}>
                                                     <td className="p-3 font-mono text-xs text-gray-700 align-middle">
                                                         {row.fileSku}
                                                     </td>
@@ -505,7 +505,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                                                     value={row.masterSku || ''}
                                                                     onChange={(e) => handleManualChange(originalIndex, e.target.value)}
                                                                     placeholder="Search Master SKU..."
-                                                                    className={`w-full px-3 py-2 border rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 transition-colors ${row.masterSku && row.method !== 'none' ? 'border-gray-300 text-gray-900' : 'border-red-300 text-red-600 bg-white'}`}
+                                                                    className={`w-full px-3 py-2 border rounded-lg text-xs font-mono focus:ring-2 focus:ring-theme transition-colors ${row.masterSku && row.method !== 'none' ? 'border-gray-300 text-gray-900' : 'border-red-300 text-red-600 bg-white'}`}
                                                                 />
                                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
                                                                     {row.method === 'manual' ? <Edit2 className="w-3 h-3" /> : <Search className="w-3 h-3" />}
@@ -515,7 +515,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                                     </td>
                                                     <td className="p-3 text-right align-middle">
                                                         {row.method === 'exact' && <span className="inline-flex items-center px-2 py-1 rounded text-[10px] bg-green-100 text-green-700 font-medium">Exact</span>}
-                                                        {row.method === 'fuzzy' && <span className="inline-flex items-center px-2 py-1 rounded text-[10px] bg-indigo-100 text-indigo-700 font-medium">Auto-Link</span>}
+                                                        {row.method === 'fuzzy' && <span className="inline-flex items-center px-2 py-1 rounded text-[10px] bg-theme-10 text-theme font-medium">Auto-Link</span>}
                                                         {row.method === 'learned' && <span className="inline-flex items-center px-2 py-1 rounded text-[10px] bg-purple-100 text-purple-700 font-medium">Learned</span>}
                                                         {row.method === 'manual' && <span className="inline-flex items-center px-2 py-1 rounded text-[10px] bg-blue-100 text-blue-700 font-medium">Manual</span>}
                                                         {row.method === 'none' && <span className="inline-flex items-center px-2 py-1 rounded text-[10px] bg-gray-200 text-gray-500">Ignored</span>}
@@ -551,7 +551,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                     {step === 'preview' && matchedCount > 0 && (
                         <button
                             onClick={handleSave}
-                            className={`px-4 py-2 text-white text-sm font-bold rounded-lg shadow-md flex items-center gap-2 ${importMode === 'replace' ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                            className={`px-4 py-2 text-white text-sm font-bold rounded-lg shadow-md flex items-center gap-2 ${importMode === 'replace' ? 'bg-red-600 hover:bg-red-700' : 'bg-theme hover:bg-theme'}`}
                         >
                             {importMode === 'replace' ? <Eraser className="w-4 h-4" /> : <Check className="w-4 h-4" />}
                             Confirm {importMode === 'replace' ? 'Overwrite' : 'Merge'} {matchedCount} Mappings

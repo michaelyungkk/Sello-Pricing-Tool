@@ -124,7 +124,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
                                     {paginatedTableData.map(row => (
                                         <tr key={row.id}>
                                             <td><span className="v-num v-bold">{row.sku}</span></td>
-                                            <td><span className="v-num" style={{ color: '#4f46e5' }}>{row.containerId}</span></td>
+                                            <td><span className="v-num" style={{ color: 'var(--theme)' }}>{row.containerId}</span></td>
                                             <td>
                                                 <span style={{ ...getStatusStyle(row.status), padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', display: 'inline-block' }}>
                                                     {row.status}
@@ -158,7 +158,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({ products, themeColor
                             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--glass-divider)', background: 'rgba(249,250,251,0.5)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <div>
                                     <h3 style={{ fontWeight: 700, fontSize: 13, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <Ship style={{ width: 14, height: 14, color: '#4f46e5' }} />{c.id}
+                                        <Ship style={{ width: 14, height: 14, color: 'var(--theme)' }} />{c.id}
                                     </h3>
                                     <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>ETA: {c.eta || 'Pending'}</div>
                                 </div>

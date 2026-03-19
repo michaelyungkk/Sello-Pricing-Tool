@@ -49,7 +49,7 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
     onChange,
     singleSelect = false,
     allLabel = 'All',
-    themeColor = '#4f46e5',
+    themeColor = 'var(--theme)',
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTags, setSearchTags] = useState<string[]>([]);

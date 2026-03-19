@@ -118,7 +118,7 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
                         <tr>
                             <th style={{ width: 40 }}>
                                 <div 
-                                    className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all ${allSelected || isIndeterminate ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 bg-white'}`}
+                                    className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-all ${allSelected || isIndeterminate ? 'bg-theme border-theme' : 'border-gray-300 bg-white'}`}
                                     onClick={toggleSelectAll}
                                 >
                                     {allSelected && <Check className="w-3.5 h-3.5 text-white" />}
@@ -135,11 +135,11 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
                         {filteredProducts.map(p => (
                             <tr 
                                 key={p.sku} 
-                                className={`group cursor-pointer ${selectedSkus.has(p.sku) ? 'bg-indigo-50/30' : ''}`}
+                                className={`group cursor-pointer ${selectedSkus.has(p.sku) ? 'bg-theme-10/30' : ''}`}
                                 onClick={() => handleRowClick(p.sku)}
                             >
                                 <td>
-                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedSkus.has(p.sku) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 bg-white'}`}>
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedSkus.has(p.sku) ? 'bg-theme border-theme' : 'border-gray-300 bg-white'}`}>
                                         {selectedSkus.has(p.sku) && <Check className="w-3.5 h-3.5 text-white" />}
                                     </div>
                                 </td>
@@ -147,7 +147,7 @@ export const ProductSelector: React.FC<ProductSelectorProps> = ({
                                     <div className="font-bold text-gray-900">{p.sku}</div>
                                     <div className="text-xs text-gray-500 truncate max-w-[300px]">{p.name}</div>
                                 </td>
-                                <td className="r font-mono text-indigo-600 font-bold">{p.caPrice ? formatSmartMoney(p.caPrice) : '—'}</td>
+                                <td className="r font-mono text-theme font-bold">{p.caPrice ? formatSmartMoney(p.caPrice) : '—'}</td>
                                 <td className="r text-gray-500 font-mono">{p.stockLevel}</td>
                                 <td className="r text-gray-500 font-mono">{(p.averageDailySales || 0).toFixed(1)}</td>
                             </tr>

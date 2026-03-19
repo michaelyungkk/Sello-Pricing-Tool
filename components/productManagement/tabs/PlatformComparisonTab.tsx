@@ -120,7 +120,7 @@ const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platfor
                         <select
                             value={addKey}
                             onChange={(e) => setAddKey(e.target.value)}
-                            className="flex-1 text-xs border border-gray-300 rounded-lg p-1.5 focus:ring-2 focus:ring-indigo-500"
+                            className="flex-1 text-xs border border-gray-300 rounded-lg p-1.5 focus:ring-2 focus:ring-theme"
                         >
                             <option value="">Add Criteria...</option>
                             {allOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -128,7 +128,7 @@ const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platfor
                         <button
                             onClick={handleAdd}
                             disabled={!addKey}
-                            className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                            className="p-1.5 bg-theme text-white rounded-lg hover:bg-theme disabled:opacity-50"
                         >
                             <Plus className="w-4 h-4" />
                         </button>
@@ -436,7 +436,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         if (index === -1) return null;
         const rule = sortRules[index];
         return (
-            <span className="ml-1 inline-flex items-center text-indigo-600 text-[10px]">
+            <span className="ml-1 inline-flex items-center text-theme text-[10px]">
                 {rule.dir === 'asc' ? '▲' : '▼'}
                 {sortRules.length > 1 && <span className="ml-0.5 text-[8px] opacity-70">({index + 1})</span>}
             </span>
@@ -545,14 +545,14 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                 {selectedPlatforms.map(p => (
                                     <React.Fragment key={p}>
                                         <th
-                                            className={`c group-start cursor-move hover:bg-gray-100/80 transition-colors ${draggedPlatform === p ? 'opacity-50 border-dashed border-2 border-indigo-300' : ''}`}
+                                            className={`c group-start cursor-move hover:bg-gray-100/80 transition-colors ${draggedPlatform === p ? 'opacity-50 border-dashed border-2 border-theme-20' : ''}`}
                                             colSpan={visibleColumns.length}
                                             draggable
                                             onDragStart={(e) => handleDragStart(e, p)}
                                             onDragOver={(e) => handleDragOver(e, p)}
                                             onDrop={(e) => handleDrop(e, p)}
                                         >
-                                            <div className="flex items-center justify-center gap-2 text-indigo-700">
+                                            <div className="flex items-center justify-center gap-2 text-theme">
                                                 <GripVertical className="w-3 h-3 text-gray-400" />
                                                 {p}
                                             </div>
@@ -651,7 +651,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                                                         </td>
                                                     )}
                                                     {visibleColumns.includes('revenue') && (
-                                                        <td className={`r text-[10px] text-indigo-600 font-medium${visibleColumns[0] === 'revenue' ? ' group-start' : ''}`} style={bgStyle}>
+                                                        <td className={`r text-[10px] text-theme font-medium${visibleColumns[0] === 'revenue' ? ' group-start' : ''}`} style={bgStyle}>
                                                             {hasActivity ? formatSmartMoney(row[`${p}_revenue`]) : '-'}
                                                         </td>
                                                     )}

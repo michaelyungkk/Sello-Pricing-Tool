@@ -203,7 +203,7 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                         <td>
                                             <div className="flex flex-wrap gap-1.5 max-w-md">
                                                 {family.memberSkus.map(sku => (
-                                                    <span key={sku} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs rounded-md border border-indigo-100 font-medium">
+                                                    <span key={sku} className="px-2 py-0.5 bg-theme-10 text-theme text-xs rounded-md border border-indigo-100 font-medium">
                                                         {sku}
                                                     </span>
                                                 ))}
@@ -216,7 +216,7 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                             <div className="flex justify-end gap-2">
                                                 <button
                                                     onClick={() => handleOpenEditModal(family)}
-                                                    className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                                    className="p-2 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-all"
                                                 >
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
@@ -267,7 +267,7 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                         value={newName}
                                         onChange={(e) => setNewName(e.target.value)}
                                         placeholder="e.g. MP1018-UK Series"
-                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-theme focus:border-transparent outline-none transition-all"
                                     />
                                 </div>
 
@@ -281,7 +281,7 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                                 value={skuSearch}
                                                 onChange={(e) => setSkuSearch(e.target.value)}
                                                 placeholder="Search SKUs..."
-                                                className="w-full pl-9 pr-4 py-1.5 text-sm rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500"
+                                                className="w-full pl-9 pr-4 py-1.5 text-sm rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-theme"
                                             />
                                         </div>
                                     </div>
@@ -302,7 +302,7 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                                         }}
                                                         className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all border ${
                                                             isSelected 
-                                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium' 
+                                                                ? 'bg-theme-10 border-theme-20 text-theme font-medium' 
                                                                 : 'bg-white border-gray-100 text-gray-600 hover:bg-gray-50'
                                                         }`}
                                                     >
@@ -325,7 +325,7 @@ export const FamilyGroupsTab: React.FC<FamilyGroupsTabProps> = ({
                                         <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Selected Members</label>
                                         <div className="flex flex-wrap gap-2">
                                             {selectedSkus.map(sku => (
-                                                <span key={sku} className="inline-flex items-center gap-1 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold">
+                                                <span key={sku} className="inline-flex items-center gap-1 px-3 py-1 bg-theme-10 text-theme rounded-full text-xs font-bold">
                                                     {sku}
                                                     <button onClick={() => setSelectedSkus(selectedSkus.filter(s => s !== sku))} className="hover:text-indigo-900">
                                                         <X className="w-3 h-3" />

@@ -24,7 +24,7 @@ const MatchInput = ({
             <input 
                 type="text" 
                 list="master-sku-list" 
-                className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-indigo-500"
+                className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-theme"
                 placeholder={placeholder}
                 value={val}
                 onChange={(e) => setVal(e.target.value)}
@@ -33,7 +33,7 @@ const MatchInput = ({
             <button 
                 onClick={commit}
                 disabled={!val.trim()}
-                className="p-1.5 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 disabled:opacity-50 transition-colors border border-indigo-100"
+                className="p-1.5 bg-theme-10 text-theme rounded hover:bg-theme-10 disabled:opacity-50 transition-colors border border-indigo-100"
                 title="Confirm Match"
             >
                 <Check className="w-3 h-3" />
@@ -762,12 +762,12 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
             <div key={rule.id} className="flex items-center gap-2 group mb-2">
                 <div className="flex-1 flex items-center gap-3 bg-white p-2 rounded border border-gray-200">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <span className="font-bold text-xs text-indigo-500 w-5">{index + 1}.</span>
+                        <span className="font-bold text-xs text-theme w-5">{index + 1}.</span>
                         <span className="font-medium">If Stock</span>
                         <select
                             value={rule.operator}
                             onChange={e => updateRule(rule.id, 'operator', e.target.value)}
-                            className="bg-white border border-gray-300 rounded px-2 py-1 text-xs font-bold focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                            className="bg-white border border-gray-300 rounded px-2 py-1 text-xs font-bold focus:ring-1 focus:ring-theme cursor-pointer"
                         >
                             <option value="EQ">=</option>
                             <option value="LT">&lt;</option>
@@ -792,7 +792,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                             placeholder="0" 
                             value={rule.value}
                             onChange={e => updateRule(rule.id, 'value', e.target.value)}
-                            className="w-16 border border-gray-300 rounded px-2 py-1 text-center font-bold text-indigo-600 text-sm"
+                            className="w-16 border border-gray-300 rounded px-2 py-1 text-center font-bold text-theme text-sm"
                         />
                     </div>
                 </div>
@@ -812,12 +812,12 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
             {/* 0. Platform Templates Grid */}
             <div className="bg-custom-glass p-6 rounded-xl border border-custom-glass shadow-sm backdrop-blur-custom">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <Settings className="w-4 h-4 text-indigo-500" />
+                    <Settings className="w-4 h-4 text-theme" />
                     Platform Templates
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                     {platformTemplateStatus.map(status => (
-                        <div key={status.name} className={`relative group p-3 rounded-lg border flex flex-col justify-between h-24 transition-all ${status.isMapped ? 'bg-green-50/50 border-green-200' : 'bg-gray-50 border-gray-200 hover:border-indigo-300 hover:bg-white'}`}>
+                        <div key={status.name} className={`relative group p-3 rounded-lg border flex flex-col justify-between h-24 transition-all ${status.isMapped ? 'bg-green-50/50 border-green-200' : 'bg-gray-50 border-gray-200 hover:border-theme-20 hover:bg-white'}`}>
                             <div className="flex justify-between items-start">
                                 <span className="text-xs font-bold text-gray-700 truncate" title={status.name}>{status.name}</span>
                                 {status.isMapped ? (
@@ -845,7 +845,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                             ) : (
                                 <button 
                                     onClick={() => triggerPlatformUpload(status.name)}
-                                    className="mt-auto w-full text-[10px] bg-white border border-gray-300 text-gray-500 py-1 rounded font-medium hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 flex items-center justify-center gap-1"
+                                    className="mt-auto w-full text-[10px] bg-white border border-gray-300 text-gray-500 py-1 rounded font-medium hover:bg-theme-10 hover:text-theme hover:border-theme-20 flex items-center justify-center gap-1"
                                 >
                                     <Upload className="w-3 h-3" /> Upload
                                 </button>
@@ -983,7 +983,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                              ))}
                              <button
                                 onClick={addBufferRule}
-                                className="mt-2 flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
+                                className="mt-2 flex items-center gap-1 text-xs font-bold text-theme hover:text-indigo-800 px-2 py-1 rounded hover:bg-theme-10 transition-colors"
                              >
                                 <Plus className="w-3 h-3" /> Add Condition
                              </button>
@@ -1003,7 +1003,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                 <div className={`p-6 rounded-xl border flex flex-col justify-between h-56 transition-all ${masterFile ? 'bg-green-50 border-green-200' : 'bg-custom-glass border-custom-glass shadow-sm'}`}>
                     <div>
                         <div className="flex items-center gap-2 mb-2">
-                            <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5"/></div>
+                            <div className="bg-theme-10 p-2 rounded-lg text-theme"><Database className="w-5 h-5"/></div>
                             <h4 className="font-bold text-gray-800">1. Master Inventory</h4>
                         </div>
                         <p className="text-xs text-gray-500 mb-4">Upload the source of truth (ERP export) with total stock levels.</p>
@@ -1033,7 +1033,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                             <select 
                                 value={targetPlatform}
                                 onChange={(e) => setTargetPlatform(e.target.value)}
-                                className="w-full border rounded p-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500"
+                                className="w-full border rounded p-2 text-sm bg-white focus:ring-2 focus:ring-theme"
                             >
                                 <option value="" disabled>Select Target Platform</option>
                                 {platformOptions.map(p => <option key={p} value={p}>{p}</option>)}
@@ -1146,13 +1146,13 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                                 <div className="flex bg-white border border-gray-300 rounded p-0.5">
                                     <button 
                                         onClick={() => setUnmatchedAction('SKIP')}
-                                        className={`px-3 py-1 text-[10px] font-bold rounded transition-colors ${unmatchedAction === 'SKIP' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:text-gray-900'}`}
+                                        className={`px-3 py-1 text-[10px] font-bold rounded transition-colors ${unmatchedAction === 'SKIP' ? 'bg-theme-10 text-theme' : 'text-gray-500 hover:text-gray-900'}`}
                                     >
                                         Skip (Safe)
                                     </button>
                                     <button 
                                         onClick={() => setUnmatchedAction('ZERO')}
-                                        className={`px-3 py-1 text-[10px] font-bold rounded transition-colors ${unmatchedAction === 'ZERO' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:text-gray-900'}`}
+                                        className={`px-3 py-1 text-[10px] font-bold rounded transition-colors ${unmatchedAction === 'ZERO' ? 'bg-theme-10 text-theme' : 'text-gray-500 hover:text-gray-900'}`}
                                     >
                                         Set to 0
                                     </button>
@@ -1167,7 +1167,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
 
                         <button 
                             onClick={handleExport}
-                            className="px-8 py-4 bg-indigo-600 text-white rounded-xl shadow-xl hover:bg-indigo-700 hover:shadow-2xl transition-all font-bold text-lg flex items-center gap-3"
+                            className="px-8 py-4 bg-theme text-white rounded-xl shadow-xl hover:bg-theme hover:shadow-2xl transition-all font-bold text-lg flex items-center gap-3"
                             style={{ backgroundColor: themeColor }}
                         >
                             <Download className="w-6 h-6" />
@@ -1188,7 +1188,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                             ))}
                              <button
                                 onClick={addBufferRule}
-                                className="mt-2 flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
+                                className="mt-2 flex items-center gap-1 text-xs font-bold text-theme hover:text-indigo-800 px-2 py-1 rounded hover:bg-theme-10 transition-colors"
                              >
                                 <Plus className="w-3 h-3" /> Add Condition
                              </button>
@@ -1203,7 +1203,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh]">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
                             <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                <Link className="w-4 h-4 text-indigo-600" /> 
+                                <Link className="w-4 h-4 text-theme" /> 
                                 Manual SKU Match
                             </h3>
                             <button onClick={() => setIsFixingModalOpen(false)}><X className="w-5 h-5 text-gray-400 hover:text-gray-600"/></button>
@@ -1218,7 +1218,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                                 placeholder="Filter unmatched items..." 
                                 value={fixerSearch}
                                 onChange={e => setFixerSearch(e.target.value)}
-                                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-theme"
                             />
                         </div>
                         <div className="flex-1 overflow-y-auto p-0">
@@ -1238,7 +1238,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                                                 <td className="p-3 font-mono text-gray-700">{item}</td>
                                                 <td className="p-3">
                                                     {matched ? (
-                                                        <span className="font-bold text-indigo-700">{matched}</span>
+                                                        <span className="font-bold text-theme">{matched}</span>
                                                     ) : (
                                                         <MatchInput 
                                                             onConfirm={(val) => handleApplyManualMatch(item, val)}
@@ -1281,7 +1281,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
                                     }
                                     setIsFixingModalOpen(false);
                                 }}
-                                className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-sm"
+                                className="px-6 py-2 bg-theme text-white font-bold rounded-lg hover:bg-theme shadow-sm"
                             >
                                 Done
                             </button>

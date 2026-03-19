@@ -279,7 +279,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+                        <div className="p-2 bg-theme-10 rounded-lg text-theme">
                             <Database className="w-5 h-5" />
                         </div>
                         <div>
@@ -293,19 +293,19 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 <div className="p-6 flex-1 overflow-y-auto">
                     {!parsedItems ? (
                         <div
-                            className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-indigo-500 bg-indigo-50 scale-[1.02]' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                            className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-theme bg-theme-10 scale-[1.02]' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
                                 }`}
                             onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
                         >
                             <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept=".csv, .xlsx, .xls" />
                             {isProcessing ? (
                                 <div className="flex flex-col items-center py-4">
-                                    <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
-                                    <p className="text-indigo-600 font-medium">{t('processing_file')}</p>
+                                    <Loader2 className="w-8 h-8 animate-spin text-theme mb-2" />
+                                    <p className="text-theme font-medium">{t('processing_file')}</p>
                                 </div>
                             ) : (
                                 <>
-                                    <div className="w-14 h-14 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-4">
+                                    <div className="w-14 h-14 bg-theme-10 text-theme rounded-full flex items-center justify-center mb-4">
                                         <Upload className="w-7 h-7" />
                                     </div>
                                     <p className="text-gray-900 font-medium text-lg">{t('modal_click_to_upload_erp')}</p>
@@ -337,8 +337,8 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                                     </div>
                                     <div className="w-px h-8 bg-gray-200"></div>
                                     <div className="flex flex-col">
-                                        <span className="text-xs text-indigo-600 uppercase font-medium">{t('new_skus')}</span>
-                                        <span className="text-xl font-bold text-indigo-600">{newProductCount}</span>
+                                        <span className="text-xs text-theme uppercase font-medium">{t('new_skus')}</span>
+                                        <span className="text-xl font-bold text-theme">{newProductCount}</span>
                                     </div>
                                 </div>
                                 <button
@@ -395,7 +395,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                                                 <div className="font-medium text-sm text-gray-900 flex items-center gap-2">
                                                     {item.sku}
                                                     {!existingSkus.has(item.sku) && (
-                                                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 uppercase">{t('new')}</span>
+                                                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-theme-10 text-theme font-bold border border-theme-20 uppercase">{t('new')}</span>
                                                     )}
                                                     {item.inventoryStatus === 'New Product' && (
                                                         <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-100 text-green-700 font-bold border border-green-200 uppercase">{t('status_new')}</span>
@@ -430,7 +430,7 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                     {parsedItems && parsedItems.length > 0 && (
                         <button
                             onClick={() => onConfirm(parsedItems)}
-                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors flex items-center gap-2"
                         >
                             <Check className="w-4 h-4" />
                             {t('confirm_import')}

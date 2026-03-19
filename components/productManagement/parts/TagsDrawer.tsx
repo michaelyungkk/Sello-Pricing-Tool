@@ -74,12 +74,12 @@ export const TagsDrawer: React.FC<TagsDrawerProps> = ({ product, products, onClo
     ) => (
         <div>
             <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">{label}</label>
-            <div className="flex flex-wrap items-center gap-2 p-2 border rounded-lg mt-1 focus-within:ring-2 focus-within:ring-indigo-500 bg-white">
+            <div className="flex flex-wrap items-center gap-2 p-2 border rounded-lg mt-1 focus-within:ring-2 focus-within:ring-theme bg-white">
                 {tags.map((tag, index) => (
-                    <span key={`${type}-${index}`} className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs font-medium border border-indigo-200 animate-in fade-in zoom-in-95 duration-200">
+                    <span key={`${type}-${index}`} className="flex items-center gap-1.5 px-2 py-1 bg-theme-10 text-theme rounded text-xs font-medium border border-theme-20 animate-in fade-in zoom-in-95 duration-200">
                         {tag}
                         <button onClick={() => removeTag(index, type)} className="hover:bg-indigo-200 rounded-full p-0.5">
-                            <X className="w-3 h-3 text-indigo-500" />
+                            <X className="w-3 h-3 text-theme" />
                         </button>
                     </span>
                 ))}
@@ -110,7 +110,7 @@ export const TagsDrawer: React.FC<TagsDrawerProps> = ({ product, products, onClo
                 </div>
                 <div className="p-6 flex-1 overflow-y-auto space-y-6">
                     <div>
-                        <div className="font-mono text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 inline-block">
+                        <div className="font-mono text-sm font-bold text-theme bg-theme-10 px-2 py-1 rounded border border-indigo-100 inline-block">
                             {product.sku}
                         </div>
                         <p className="text-lg font-semibold text-gray-800 mt-1">{product.name}</p>

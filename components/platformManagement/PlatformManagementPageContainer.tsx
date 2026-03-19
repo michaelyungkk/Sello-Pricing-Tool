@@ -633,25 +633,25 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
           <div className="flex bg-gray-100 p-0.5 rounded-lg h-8 items-center">
             <button
               onClick={() => setReturnDateBasis('refundDate')}
-              className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <Clock className="w-3 h-3" />
               Refund Date
             </button>
             <button
               onClick={() => setReturnDateBasis('orderDate')}
-              className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-indigo-700' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <Calendar className="w-3 h-3" />
               Order Date
             </button>
           </div>
-          <label className="flex items-center h-8 gap-2 px-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+          <label className="flex items-center h-8 gap-2 px-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20 transition-colors">
             <input
               type="checkbox"
               checked={deductRefunds}
               onChange={e => setDeductRefunds(e.target.checked)}
-              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+              className="w-4 h-4 text-theme rounded focus:ring-theme border-gray-300"
             />
             <div className="flex items-center gap-1.5">
               <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />

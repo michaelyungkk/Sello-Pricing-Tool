@@ -59,7 +59,7 @@ export const PriceChangeHistoryPanel: React.FC<PriceChangeHistoryPanelProps> = (
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-3">
-          <div className={`p-1.5 rounded-lg ${relevantHistory.length > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500'}`}>
+          <div className={`p-1.5 rounded-lg ${relevantHistory.length > 0 ? 'bg-theme-10 text-theme' : 'bg-gray-100 text-gray-500'}`}>
              <History className="w-4 h-4" />
           </div>
           <div>

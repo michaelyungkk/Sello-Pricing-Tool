@@ -32,7 +32,7 @@ import {
 import { formatMoney, formatSmartMoney, formatPct, formatNumber } from '../utils/format';
 import { GradeBadge } from './GradeBadge';
 import { SelectFilter } from './common/SelectFilter';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 
 // Local alias so existing usages inside this file need no changes
 const MultiSelectDropdown = SelectFilter;
@@ -82,6 +82,13 @@ const DIMENSIONS = [
     { id: 'sku', label: 'SKU', icon: FileText },
 ];
 
+// Filter-only dimensions (not usable as row/column pivots)
+const FILTER_ONLY_DIMS = [
+    { id: 'grade', label: 'Grade', icon: Layout },
+];
+
+const GRADE_LABELS: Record<number, string> = { 1: 'G1', 2: 'G2', 3: 'G3', 4: 'G4', 5: 'G5' };
+
 const METRICS = [
     { id: 'revenue', label: 'Revenue', icon: BarChart3, type: 'currency' },
     { id: 'profit', label: 'Profit', icon: BarChart3, type: 'currency' },
@@ -114,7 +121,7 @@ interface FilterRule {
     id: string;
     type: 'dim' | 'metric';
     field: string;
-    operator: 'equals' | 'contains' | 'gt' | 'lt';
+    operator: 'equals' | 'contains' | 'gt' | 'lt' | 'top_n' | 'bottom_n';
     value: string | string[];
 }
 
@@ -242,7 +249,7 @@ const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, o
                             <button
                                 key={m}
                                 onClick={() => setMode(m)}
-                                className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${mode === m ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}
+                                className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${mode === m ? 'bg-theme text-white border-theme' : 'bg-white text-gray-600 border-gray-200 hover:border-theme-20'}`}
                             >
                                 {m === 'table' ? 'From Table' : 'Standalone'}
                             </button>
@@ -385,10 +392,11 @@ interface SortPriorityDropdownProps {
     setSortRules: (rules: SortRule[]) => void;
     getSortKeyLabel: (key: string) => string;
     disabled?: boolean;
+    iconOnly?: boolean;
 }
 
 const SortPriorityDropdown: React.FC<SortPriorityDropdownProps> = ({
-    sortRules, setSortRules, getSortKeyLabel, disabled
+    sortRules, setSortRules, getSortKeyLabel, disabled, iconOnly
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
@@ -433,18 +441,30 @@ const SortPriorityDropdown: React.FC<SortPriorityDropdownProps> = ({
                     setIsOpen(!isOpen);
                 }}
                 disabled={disabled}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm disabled:opacity-40 transition-all"
-                style={{ borderColor: sortRules.length > 0 ? '#4f46e5' : 'rgba(209,213,219,0.8)', color: sortRules.length > 0 ? '#4f46e5' : undefined }}
+                className={iconOnly
+                    ? "relative p-1.5 rounded-md border bg-white hover:bg-theme-10 disabled:opacity-40 transition-all"
+                    : "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm disabled:opacity-40 transition-all"
+                }
+                style={{ borderColor: sortRules.length > 0 ? 'var(--theme)' : 'rgba(209,213,219,0.8)', color: sortRules.length > 0 ? 'var(--theme)' : undefined }}
+                title="Sort Priority"
             >
                 <ListFilter className="w-3.5 h-3.5" />
-                Sort Priority
-                {sortRules.length > 0 && (
-                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black"
-                        style={{ background: '#4f46e5', color: 'white' }}>
+                {!iconOnly && <>
+                    Sort Priority
+                    {sortRules.length > 0 && (
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black"
+                            style={{ background: 'var(--theme)', color: 'white' }}>
+                            {sortRules.length}
+                        </span>
+                    )}
+                    <ChevronDown className="w-3 h-3" />
+                </>}
+                {iconOnly && sortRules.length > 0 && (
+                    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[8px] font-black"
+                        style={{ background: 'var(--theme)', color: 'white' }}>
                         {sortRules.length}
                     </span>
                 )}
-                <ChevronDown className="w-3 h-3" />
             </button>
 
             {isOpen && createPortal(
@@ -538,6 +558,9 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     const [cmFormula, setCmFormula] = useState<'arithmetic' | 'share_of_total'>('arithmetic');
 
     const [savedLayouts, setSavedLayouts] = useState<ReportLayout[]>(getReportLayouts());
+    const [isSaveNaming, setIsSaveNaming] = useState(false);
+    const [saveNameInput, setSaveNameInput] = useState('');
+    const saveNameRef = React.useRef<HTMLInputElement>(null);
     const [activePopover, setActivePopover] = useState<string | null>(null);
 
     const [isGenerating, setIsGenerating] = useState(false);
@@ -551,6 +574,11 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
     const [skuSearchTags, setSkuSearchTags] = useState<string[]>([]);
     const [skuSearchInput, setSkuSearchInput] = useState('');
+    const [skuSearchDebounced, setSkuSearchDebounced] = useState('');
+    useEffect(() => {
+        const t = setTimeout(() => setSkuSearchDebounced(skuSearchInput), 200);
+        return () => clearTimeout(t);
+    }, [skuSearchInput]);
     const [colOrder, setColOrder] = useState<string[]>([]);
     const [dragOverCol, setDragOverCol] = useState<string | null>(null);
     const [isReorderOpen, setIsReorderOpen] = useState(false);
@@ -560,6 +588,27 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     const dragColRef = useRef<string | null>(null);
     const dragOverColRef = useRef<string | null>(null);
     const filtersRef = useRef<FilterRule[]>([]);
+
+    // ── Virtualised table ──────────────────────────────────────────────────
+    const VIRT_ROW_H   = 52;   // px — matches two-line SKU row height
+    const VIRT_OVERSCAN = 8;   // extra rows above/below viewport
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    const [virtRange, setVirtRange] = useState<{ start: number; end: number }>({ start: 0, end: 60 });
+
+    useEffect(() => {
+        const el = tableScrollRef.current;
+        if (!el) return;
+        const onScroll = () => {
+            const scrollTop = el.scrollTop;
+            const viewH    = el.clientHeight;
+            const start = Math.max(0, Math.floor(scrollTop / VIRT_ROW_H) - VIRT_OVERSCAN);
+            const end   = Math.ceil((scrollTop + viewH) / VIRT_ROW_H) + VIRT_OVERSCAN;
+            setVirtRange(prev => (prev.start === start && prev.end === end) ? prev : { start, end });
+        };
+        el.addEventListener('scroll', onScroll, { passive: true });
+        onScroll(); // initialise
+        return () => el.removeEventListener('scroll', onScroll);
+    }, [reportResult]); // re-attach when report changes
 
     // Auto-save draft to localStorage whenever config changes
     React.useEffect(() => {
@@ -624,11 +673,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         const newColDims = [...rowDims];
         setRowDims(newRowDims);
         setColDims(newColDims);
-        setNeedsGeneration(true);
-        // Trigger immediate generation with new dims
-        setTimeout(() => {
-            generateReport(newRowDims, newColDims);
-        }, 0);
+        generateReport(newRowDims, newColDims);
     };
 
     const handleAddMetric = (metricId: string) => {
@@ -683,10 +728,11 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         setPendingFilters(pendingFilters.filter(f => f.id !== id));
     };
 
-    const handleSave = () => {
+    const handleSave = (nameOverride?: string) => {
+        const name = (nameOverride || saveNameInput || reportName || 'My Report').trim();
         const layout: any = {
             id: Math.random().toString(36).substr(2, 9),
-            name: reportName,
+            name,
             rowDims,
             colDims,
             metrics: pendingMetrics,
@@ -694,6 +740,9 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         };
         saveReportLayout(layout);
         setSavedLayouts(getReportLayouts());
+        setReportName(name);
+        setIsSaveNaming(false);
+        setSaveNameInput('');
     };
 
     const handleLoadLayout = (layout: any) => {
@@ -824,6 +873,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         const effectiveFilters = overrideFilters || filtersRef.current;
 
         if (effectiveRowDims.length === 0 || committedMetrics.filter(m => !m.isHidden).length === 0) return;
+        setReportResult(null);  // free old result for GC before building new one
         setIsGenerating(true);
 
         setTimeout(() => {
@@ -902,6 +952,10 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                     else if (dim === 'category') val = p.category || 'Uncategorized';
                     else if (dim === 'platform') val = item.platform || 'General';
                     else if (dim === 'sku') val = item.rawSku || item.sku;
+                    else if (dim === 'grade') {
+                        const g = p.gradeLevel;
+                        val = g != null ? (GRADE_LABELS[g] || `G${g}`) : 'No Grade';
+                    }
                     colValueSets[idx].add(val);
                     return val;
                 });
@@ -1089,7 +1143,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         let rows = [...reportResult.rows];
 
         // Apply SKU tag search (matches against any row key part)
-        if (skuSearchTags.length > 0 || skuSearchInput.trim()) {
+        if (skuSearchTags.length > 0 || skuSearchDebounced.trim()) {
             rows = rows.filter(row => {
                 const keyStr = (row.rowKey || row.rowKeyParts?.join(' ') || '').toLowerCase();
                 const skuMeta = row.metadata?.sku;
@@ -1100,7 +1154,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                         return keyStr.includes(t) || skuName.includes(t);
                     });
                 }
-                const q = skuSearchInput.trim().toLowerCase();
+                const q = skuSearchDebounced.trim().toLowerCase();
                 return keyStr.includes(q) || skuName.includes(q);
             });
         }
@@ -1109,7 +1163,18 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         if (filters.length > 0) {
             rows = rows.filter(row => {
                 return filters.every(f => {
-                    if (f.type === 'dim') return true; // Handled in generation
+                    if (f.type === 'dim') {
+                        // Grade filter — applied post-generation
+                        if (f.field === 'grade') {
+                            const g = row.metadata?.sku?.gradeLevel;
+                            const gradeStr = g != null ? (GRADE_LABELS[g] || `G${g}`) : 'No Grade';
+                            const selected = Array.isArray(f.value) ? f.value : [f.value as string];
+                            return selected.length === 0 || selected.includes(gradeStr);
+                        }
+                        return true;
+                    }
+                    // top_n / bottom_n are handled separately below (need full row set)
+                    if (f.operator === 'top_n' || f.operator === 'bottom_n') return true;
                     // f.field is the metric instance id — maps directly to total_${id}
                     const val = row[`total_${f.field}`] ?? 0;
                     const targetVal = f.value;
@@ -1124,20 +1189,63 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         }
 
         // Apply Sorting
-        if (sortRules.length > 0) {
+        if (sortRules.length > 0 && reportResult) {
             rows.sort((a, b) => {
                 for (const rule of sortRules) {
-                    const valA = a[rule.key] ?? 0;
-                    const valB = b[rule.key] ?? 0;
-                    if (valA < valB) return rule.dir === 'asc' ? -1 : 1;
-                    if (valA > valB) return rule.dir === 'asc' ? 1 : -1;
+                    let valA: any, valB: any;
+                    // Check if this is a dimension key (sku, brand, category, etc.)
+                    const dimIdx = reportResult.rowHeaders.indexOf(rule.key);
+                    if (dimIdx >= 0) {
+                        // Sort by grade level for SKU, otherwise by string value
+                        if (rule.key === 'sku') {
+                            const gradeA = a.metadata?.sku?.gradeLevel ?? 99;
+                            const gradeB = b.metadata?.sku?.gradeLevel ?? 99;
+                            if (gradeA !== gradeB) {
+                                const cmp = gradeA - gradeB;
+                                if (cmp !== 0) return rule.dir === 'asc' ? cmp : -cmp;
+                            }
+                        } else if (rule.key === 'grade') {
+                            const gradeA = a.metadata?.sku?.gradeLevel ?? 99;
+                            const gradeB = b.metadata?.sku?.gradeLevel ?? 99;
+                            const cmp = gradeA - gradeB;
+                            if (cmp !== 0) return rule.dir === 'asc' ? cmp : -cmp;
+                        }
+                        valA = a.rowKeyParts?.[dimIdx] ?? '';
+                        valB = b.rowKeyParts?.[dimIdx] ?? '';
+                        const cmp = String(valA).localeCompare(String(valB));
+                        if (cmp !== 0) return rule.dir === 'asc' ? cmp : -cmp;
+                    } else {
+                        valA = a[rule.key] ?? 0;
+                        valB = b[rule.key] ?? 0;
+                        if (valA < valB) return rule.dir === 'asc' ? -1 : 1;
+                        if (valA > valB) return rule.dir === 'asc' ? 1 : -1;
+                    }
                 }
                 return 0;
             });
         }
 
+        // Apply Top-N / Bottom-N filters (operate on the already-filtered set)
+        for (const f of filters) {
+            if (f.type !== 'metric') continue;
+            if (f.operator !== 'top_n' && f.operator !== 'bottom_n') continue;
+            const n = Math.max(1, parseInt(String(f.value)) || 10);
+            // Sort by this metric to determine top/bottom
+            const sorted = [...rows].sort((a, b) => {
+                const va = a[`total_${f.field}`] ?? 0;
+                const vb = b[`total_${f.field}`] ?? 0;
+                return vb - va; // descending
+            });
+            const topIds = new Set(
+                f.operator === 'top_n'
+                    ? sorted.slice(0, n).map(r => r.rowKeyParts?.join('|'))
+                    : sorted.slice(-n).map(r => r.rowKeyParts?.join('|'))
+            );
+            rows = rows.filter(r => topIds.has(r.rowKeyParts?.join('|')));
+        }
+
         return rows;
-    }, [reportResult, filters, sortRules, skuSearchTags, skuSearchInput]);
+    }, [reportResult, filters, sortRules, skuSearchTags, skuSearchDebounced]);
 
     // Ordered col headers — respects user drag-reorder
     const orderedColHeaders = useMemo(() => {
@@ -1184,6 +1292,10 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                 p.channels?.forEach(c => values.add(c.platform));
             }
             else if (field === 'sku') values.add(p.sku);
+            else if (field === 'grade') {
+                const g = p.gradeLevel;
+                values.add(g != null ? (GRADE_LABELS[g] || `G${g}`) : 'No Grade');
+            }
         });
         return Array.from(values).filter(Boolean).sort();
     };
@@ -1208,14 +1320,64 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
     const handleExport = () => {
         if (!reportResult) return;
-        const headers = [...reportResult.rowHeaders.map(getDimLabel)];
-        reportResult.colHeaders.forEach(ch => {
-            metrics.forEach(m => headers.push(`${ch.label} - ${getMetricLabel(m.metricId)} (${m.timeRange})`));
-        });
-        metrics.forEach(m => headers.push(`Grand Total - ${getMetricLabel(m.metricId)} (${m.timeRange})`));
 
-        const data = (processedData || []).map(row => {
-            const r = [...row.rowKeyParts];
+        // ── Build product name lookup ──────────────────────────────────────
+        const skuNameMap = new Map<string, string>();
+        products.forEach(p => skuNameMap.set(p.sku, p.name || ''));
+
+        // ── Metric type lookup for number formatting ───────────────────────
+        const getMetricType = (metricId: string): string => {
+            return getMetricConfig(metricId)?.type || 'number';
+        };
+
+        // ── Human-readable time range label ───────────────────────────────
+        const getTimeLabel = (m: MetricInstance): string => {
+            if (m.timeRange === 'custom' && m.startDate && m.endDate)
+                return `${m.startDate.slice(5)} → ${m.endDate.slice(5)}`;
+            return TIME_RANGES.find(t => t.id === m.timeRange)?.label || m.timeRange;
+        };
+
+        // ── Row 1: platform group header (merged cells) ────────────────────
+        // ── Row 2: metric sub-headers ──────────────────────────────────────
+        // ── Row 3+: data ──────────────────────────────────────────────────
+        const hasSku = reportResult.rowHeaders.includes('sku');
+        const dimHeaders = reportResult.rowHeaders.map(getDimLabel);
+        // Insert "Name" column after SKU column if SKU is a row dim
+        const skuIdx = reportResult.rowHeaders.indexOf('sku');
+
+        // Build group row (row 1) and metric row (row 2)
+        const groupRow: (string | null)[] = [...dimHeaders.map(() => null)];
+        if (hasSku) groupRow.splice(skuIdx + 1, 0, null); // Name column placeholder
+        const metricRow: string[] = [...dimHeaders];
+        if (hasSku) metricRow.splice(skuIdx + 1, 0, 'Name');
+
+        const allColGroups: { label: string; metricCount: number }[] = [];
+
+        reportResult.colHeaders.forEach(ch => {
+            groupRow.push(ch.label);
+            metrics.forEach((m, mi) => {
+                if (mi > 0) groupRow.push(null); // null = part of merged group
+                metricRow.push(`${getMetricLabel(m.metricId)} | ${getTimeLabel(m)}`);
+            });
+            allColGroups.push({ label: ch.label, metricCount: metrics.length });
+        });
+        // Grand Total group
+        groupRow.push('Grand Total');
+        metrics.forEach((m, mi) => {
+            if (mi > 0) groupRow.push(null);
+            metricRow.push(`${getMetricLabel(m.metricId)} | ${getTimeLabel(m)}`);
+        });
+        allColGroups.push({ label: 'Grand Total', metricCount: metrics.length });
+
+        // ── Data rows ─────────────────────────────────────────────────────
+        const dataRows = (processedData || []).map(row => {
+            const r: any[] = [...row.rowKeyParts];
+            if (hasSku) {
+                // Insert product name after SKU
+                const skuVal = row.rowKeyParts[skuIdx] || '';
+                const name = row.metadata?.sku?.name || skuNameMap.get(skuVal) || '';
+                r.splice(skuIdx + 1, 0, name);
+            }
             reportResult.colHeaders.forEach(ch => {
                 metrics.forEach(m => r.push(row[`${ch.id}_${m.id}`]));
             });
@@ -1223,51 +1385,170 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
             return r;
         });
 
-        const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+        // ── Build worksheet ───────────────────────────────────────────────
+        const aoa = [groupRow, metricRow, ...dataRows];
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+        // ── Merge platform group header cells ─────────────────────────────
+        const dimColCount = dimHeaders.length + (hasSku ? 1 : 0); // +1 for Name col
+        let colCursor = dimColCount;
+        if (!ws['!merges']) ws['!merges'] = [];
+        allColGroups.forEach(grp => {
+            if (grp.metricCount > 1) {
+                ws['!merges']!.push({
+                    s: { r: 0, c: colCursor },
+                    e: { r: 0, c: colCursor + grp.metricCount - 1 }
+                });
+            }
+            colCursor += grp.metricCount;
+        });
+        // Merge dim header cells vertically (row 1 + row 2)
+        for (let c = 0; c < dimColCount; c++) {
+            ws['!merges']!.push({ s: { r: 0, c }, e: { r: 1, c } });
+        }
+
+        // ── Number formatting ─────────────────────────────────────────────
+        const totalCols = dimColCount + allColGroups.reduce((s, g) => s + g.metricCount, 0);
+        const totalRows = aoa.length;
+        // Build metric type array in column order
+        const metricTypes: string[] = [];
+        [...reportResult.colHeaders.map(() => metrics), [metrics]].flat().forEach(mArr => {
+            (Array.isArray(mArr) ? mArr : [mArr]).forEach((m: MetricInstance) => {
+                metricTypes.push(getMetricType(m.metricId));
+            });
+        });
+        // Actually build flat list properly
+        const flatMetricTypes: string[] = [];
+        reportResult.colHeaders.forEach(() => metrics.forEach(m => flatMetricTypes.push(getMetricType(m.metricId))));
+        metrics.forEach(m => flatMetricTypes.push(getMetricType(m.metricId)));
+
+        for (let r = 2; r < totalRows; r++) {
+            for (let ci = 0; ci < flatMetricTypes.length; ci++) {
+                const colIdx = dimColCount + ci;
+                const cellAddr = XLSX.utils.encode_cell({ r, c: colIdx });
+                if (!ws[cellAddr] || ws[cellAddr].v == null) continue;
+                const typ = flatMetricTypes[ci];
+                if (typ === 'currency') {
+                    ws[cellAddr].t = 'n';
+                    ws[cellAddr].z = '£#,##0.00';
+                } else if (typ === 'percent') {
+                    // Values are already 0–100 scale, display as e.g. 12.3%
+                    ws[cellAddr].t = 'n';
+                    ws[cellAddr].z = '0.0"%"';
+                } else {
+                    ws[cellAddr].t = 'n';
+                    ws[cellAddr].z = '#,##0';
+                }
+            }
+        }
+
+        // ── Cell colours + alignment ──────────────────────────────────────
+        // Colour per metric matches the on-screen table: blue=revenue/asp/ad_spend,
+        // green=profit/margin/roi, red=refund_rate/refund_value, none=everything else
+        const getMetricColor = (metricId: string): string | null => {
+            if (['revenue', 'ad_spend', 'asp'].includes(metricId)) return 'DBEAFE';        // blue-100
+            if (['profit', 'margin', 'roi'].includes(metricId)) return 'D1FAE5';           // green-100
+            if (['refund_rate', 'refund_value'].includes(metricId)) return 'FEE2E2';       // red-100
+            return null;
+        };
+
+        // Header row colours (slightly darker shade for headers)
+        const getHeaderColor = (metricId: string): string | null => {
+            if (['revenue', 'ad_spend', 'asp'].includes(metricId)) return 'BFDBFE';        // blue-200
+            if (['profit', 'margin', 'roi'].includes(metricId)) return 'A7F3D0';           // green-200
+            if (['refund_rate', 'refund_value'].includes(metricId)) return 'FECACA';       // red-200
+            return null;
+        };
+
+        // Build flat metric id list in column order (parallel to flatMetricTypes)
+        const flatMetricIds: string[] = [];
+        reportResult.colHeaders.forEach(() => metrics.forEach(m => flatMetricIds.push(m.metricId)));
+        metrics.forEach(m => flatMetricIds.push(m.metricId));
+
+        const centerAlign = { horizontal: 'center' as const, vertical: 'middle' as const };
+        const leftAlign   = { horizontal: 'left'   as const, vertical: 'middle' as const };
+
+        // Style all cells
+        for (let r = 0; r < totalRows; r++) {
+            for (let ci = 0; ci < totalCols; ci++) {
+                const cellAddr = XLSX.utils.encode_cell({ r, c: ci });
+                if (!ws[cellAddr]) {
+                    // Create empty cell so we can still style it
+                    ws[cellAddr] = { t: 'z', v: undefined };
+                }
+                const cell = ws[cellAddr];
+                const isDimCol = ci < dimColCount;
+                const metricColIdx = ci - dimColCount;
+                const metricId = !isDimCol ? flatMetricIds[metricColIdx] : null;
+
+                // Alignment
+                cell.s = cell.s || {};
+                cell.s.alignment = isDimCol ? leftAlign : centerAlign;
+
+                // Background colour
+                if (r <= 1) {
+                    // Header rows
+                    const hColor = metricId ? getHeaderColor(metricId) : null;
+                    if (hColor) {
+                        cell.s.fill = { patternType: 'solid', fgColor: { rgb: hColor } };
+                    } else if (r === 0 || r === 1) {
+                        // Dim header — light grey
+                        cell.s.fill = { patternType: 'solid', fgColor: { rgb: 'F3F4F6' } };
+                    }
+                    // Bold header text
+                    cell.s.font = { bold: true, sz: 9 };
+                } else {
+                    // Data rows
+                    const dColor = metricId ? getMetricColor(metricId) : null;
+                    if (dColor) {
+                        cell.s.fill = { patternType: 'solid', fgColor: { rgb: dColor } };
+                    }
+                    cell.s.font = { sz: 9 };
+                }
+
+                // Thin border on all cells
+                const thinBorder = { style: 'thin' as const, color: { rgb: 'E5E7EB' } };
+                cell.s.border = {
+                    top: thinBorder, bottom: thinBorder,
+                    left: thinBorder, right: thinBorder
+                };
+            }
+        }
+
+        // ── Column widths ─────────────────────────────────────────────────
+        const colWidths: { wch: number }[] = [];
+        for (let ci = 0; ci < dimColCount; ci++) {
+            colWidths.push({ wch: ci === skuIdx ? 18 : ci === skuIdx + 1 && hasSku ? 32 : 14 });
+        }
+        flatMetricTypes.forEach(typ => {
+            colWidths.push({ wch: typ === 'currency' ? 12 : typ === 'percent' ? 9 : 8 });
+        });
+        ws['!cols'] = colWidths;
+
+        // ── Freeze panes: lock dim columns + 2 header rows ────────────────
+        ws['!freeze'] = { xSplit: dimColCount, ySplit: 2 } as any;
+
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Report");
-        XLSX.writeFile(wb, `${reportName}.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, 'Report');
+        XLSX.writeFile(wb, `${reportName}.xlsx`, { cellStyles: true });
     };
 
     return (
         <div className="flex flex-col h-[calc(100vh-140px)] space-y-4 ">
             {/* Builder Panel */}
-            <div className="relative z-50 bg-custom-glass rounded-xl border border-custom-glass shadow-md shrink-0 p-4" style={{backdropFilter:'var(--glass-blur)',WebkitBackdropFilter:'var(--glass-blur)'}}>
+            <div className="relative z-30 bg-custom-glass rounded-xl border border-custom-glass shadow-md shrink-0 p-4" style={{backdropFilter:'var(--glass-blur)',WebkitBackdropFilter:'var(--glass-blur)'}}>
 
                 {/* Top row: Report Builder label + name + actions */}
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Report Builder</span>
-                        <span className="text-[11px] font-semibold text-gray-900 px-2.5 py-1 rounded-lg border" style={{background:'rgba(79,70,229,0.07)',borderColor:'rgba(79,70,229,0.18)',color:'#4f46e5'}}>
+                        <span className="text-[11px] font-semibold text-gray-900 px-2.5 py-1 rounded-lg border" style={{background:'rgba(var(--theme-rgb), 0.07)',borderColor:'rgba(var(--theme-rgb), 0.18)',color:'var(--theme)'}}>
                             {reportName || 'Untitled Report'}
                         </span>
-                        <button
-                            onClick={() => setShowBuilder(!showBuilder)}
-                            className="text-[10px] font-bold text-gray-400 hover:text-indigo-600 transition-colors"
-                        >{showBuilder ? '▲ collapse' : '▼ expand'}</button>
+
                     </div>
                     <div className="flex items-center gap-2">
-                        <SortPriorityDropdown
-                            sortRules={sortRules}
-                            setSortRules={setSortRules}
-                            getSortKeyLabel={getSortKeyLabel}
-                            disabled={!reportResult}
-                        />
-                        <button
-                            onClick={handleExport}
-                            disabled={!reportResult}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm disabled:opacity-40 transition-all"
-                            style={{borderColor:'rgba(209,213,219,0.8)'}}
-                        >
-                            <Download className="w-3.5 h-3.5" /> Export XLSX
-                        </button>
-                        <button
-                            onClick={handleSave}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all"
-                            style={{borderColor:'rgba(209,213,219,0.8)'}}
-                        >
-                            <Save className="w-3.5 h-3.5" /> Save Layout
-                        </button>
+                        {/* Load template */}
                         {savedLayouts.length > 0 && (
                             <div className="relative group">
                                 <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all" style={{borderColor:'rgba(209,213,219,0.8)'}}>
@@ -1280,6 +1561,67 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 </div>
                             </div>
                         )}
+
+                        {/* Save template — inline naming */}
+                        {isSaveNaming ? (
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    ref={saveNameRef}
+                                    type="text"
+                                    value={saveNameInput}
+                                    onChange={e => setSaveNameInput(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') handleSave();
+                                        if (e.key === 'Escape') { setIsSaveNaming(false); setSaveNameInput(''); }
+                                    }}
+                                    placeholder="Template name…"
+                                    autoFocus
+                                    className="px-2.5 py-1.5 rounded-lg border text-[11px] bg-white focus:outline-none focus:ring-1 w-36"
+                                    style={{borderColor:'rgba(var(--theme-rgb),0.4)',boxShadow:'0 0 0 2px rgba(var(--theme-rgb),0.08)'}}
+                                />
+                                <button
+                                    onClick={() => handleSave()}
+                                    disabled={!saveNameInput.trim()}
+                                    className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white bg-theme disabled:opacity-40 transition-all"
+                                >Save</button>
+                                <button
+                                    onClick={() => { setIsSaveNaming(false); setSaveNameInput(''); }}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+                                ><X className="w-3.5 h-3.5" /></button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => { setIsSaveNaming(true); setSaveNameInput(reportName !== 'New Custom Report' ? reportName : ''); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all"
+                                style={{borderColor:'rgba(209,213,219,0.8)'}}
+                            >
+                                <Save className="w-3.5 h-3.5" /> Save Template
+                            </button>
+                        )}
+
+                        {/* Export */}
+                        <button
+                            onClick={handleExport}
+                            disabled={!reportResult}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm disabled:opacity-40 transition-all"
+                            style={{borderColor:'rgba(209,213,219,0.8)'}}
+                        >
+                            <Download className="w-3.5 h-3.5" /> Export XLSX
+                        </button>
+
+                        {/* Collapse */}
+                        <button
+                            onClick={() => setShowBuilder(!showBuilder)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all"
+                            style={{borderColor:'rgba(209,213,219,0.8)'}}
+                        >
+                            {showBuilder
+                                ? <><ChevronDown className="w-3.5 h-3.5" /> Collapse</>
+                                : <><ChevronDown className="w-3.5 h-3.5 rotate-180" /> Expand</>
+                            }
+                        </button>
+
+                        {/* Generate — primary action, always far right */}
                         <button
                             onClick={() => generateReport()}
                             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[11px] font-bold shadow-sm transition-all ${
@@ -1289,7 +1631,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                     return needsNewGenerate
                                         ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse'
                                         : needsGeneration
-                                            ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                            ? 'bg-theme text-white hover:bg-theme'
                                             : 'bg-gray-100 text-gray-400 cursor-not-allowed';
                                 })()
                             }`}
@@ -1319,7 +1661,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                         onClick={() => { if (!rowDims.includes(dim.id)) setRowDims(prev => [...prev, dim.id]); }}
                                         className="flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold cursor-grab active:cursor-grabbing transition-all"
                                         style={inUse
-                                            ? {background:'rgba(79,70,229,0.08)',borderColor:'rgba(79,70,229,0.2)',color:'#4f46e5'}
+                                            ? {background:'rgba(var(--theme-rgb), 0.08)',borderColor:'rgba(var(--theme-rgb), 0.2)',color:'var(--theme)'}
                                             : {background:'rgba(255,255,255,0.6)',borderColor:'rgba(209,213,219,0.7)',color:'#374151'}}
                                     >
                                         <dim.icon className="w-2.5 h-2.5" style={{opacity:0.6}} />
@@ -1379,7 +1721,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => onDropRow(e)}
                                 className="flex items-center flex-wrap gap-2 px-2.5 py-2 rounded-xl min-h-[38px]"
-                                style={{border:'1.5px dashed rgba(79,70,229,0.25)',background:'rgba(79,70,229,0.03)'}}
+                                style={{border:'1.5px dashed rgba(var(--theme-rgb), 0.25)',background:'rgba(var(--theme-rgb), 0.03)'}}
                             >
                                 {rowDims.map((id, idx) => (
                                     <div
@@ -1389,7 +1731,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                         onDragOver={(e) => e.preventDefault()}
                                         onDrop={(e) => { e.stopPropagation(); onDropRow(e, idx); }}
                                         className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold cursor-move"
-                                        style={{background:'rgba(79,70,229,0.08)',border:'1px solid rgba(79,70,229,0.2)',color:'#4f46e5'}}
+                                        style={{background:'rgba(var(--theme-rgb), 0.08)',border:'1px solid rgba(var(--theme-rgb), 0.2)',color:'var(--theme)'}}
                                     >
                                         {(() => { const d = DIMENSIONS.find(x => x.id === id); return d ? <d.icon className="w-2.5 h-2.5 opacity-60" /> : null; })()}
                                         {getDimLabel(id)}
@@ -1407,7 +1749,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => onDropCol(e)}
                                 className="flex items-center flex-wrap gap-2 px-2.5 py-2 rounded-xl min-h-[38px]"
-                                style={{border:'1.5px dashed rgba(79,70,229,0.25)',background:'rgba(79,70,229,0.03)'}}
+                                style={{border:'1.5px dashed rgba(var(--theme-rgb), 0.25)',background:'rgba(var(--theme-rgb), 0.03)'}}
                             >
                                 {colDims.map((id, idx) => (
                                     <div
@@ -1417,7 +1759,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                         onDragOver={(e) => e.preventDefault()}
                                         onDrop={(e) => { e.stopPropagation(); onDropCol(e, idx); }}
                                         className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold cursor-move"
-                                        style={{background:'rgba(79,70,229,0.08)',border:'1px solid rgba(79,70,229,0.2)',color:'#4f46e5'}}
+                                        style={{background:'rgba(var(--theme-rgb), 0.08)',border:'1px solid rgba(var(--theme-rgb), 0.2)',color:'var(--theme)'}}
                                     >
                                         {(() => { const d = DIMENSIONS.find(x => x.id === id); return d ? <d.icon className="w-2.5 h-2.5 opacity-60" /> : null; })()}
                                         {getDimLabel(id)}
@@ -1467,31 +1809,42 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             {getMetricLabel(m.metricId)}
                                             <button
                                                 onClick={() => setActivePopover(activePopover === m.id ? null : m.id)}
-                                                className="text-[9px] font-bold opacity-50 hover:opacity-100 transition-opacity"
-                                            >{m.timeRange}</button>
+                                                className="text-[9px] font-bold opacity-60 hover:opacity-100 transition-opacity px-1 py-0.5 rounded bg-black/10"
+                                            >{m.timeRange === 'custom' && m.startDate && m.endDate
+                                                ? `${m.startDate.slice(5)} → ${m.endDate.slice(5)}`
+                                                : TIME_RANGES.find(t => t.id === m.timeRange)?.label || m.timeRange
+                                            }</button>
                                             <button onClick={() => handleRemoveMetric(m.id)} className="opacity-40 hover:opacity-100 ml-0.5"><X className="w-2.5 h-2.5" /></button>
 
                                             {activePopover === m.id && (
-                                                <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-gray-100 rounded-lg shadow-xl z-[9999] p-2">
-                                                    <div className="space-y-1">
-                                                        {TIME_RANGES.map(tr => (
-                                                            <button
-                                                                key={tr.id}
-                                                                onClick={() => {
-                                                                    setPendingMetrics(prev => { const next=[...prev]; next[idx]={...next[idx],timeRange:tr.id}; return next; });
-                                                                    if (tr.id !== 'custom') setActivePopover(null);
-                                                                }}
-                                                                className={`w-full text-left px-2 py-1.5 rounded text-[10px] transition-colors ${m.timeRange === tr.id ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}
-                                                            >{tr.label}</button>
-                                                        ))}
-                                                    </div>
-                                                    {m.timeRange === 'custom' && (
-                                                        <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
-                                                            <input type="date" value={m.startDate||''} onChange={(e) => setPendingMetrics(prev => { const next=[...prev]; next[idx]={...next[idx],startDate:e.target.value}; return next; })} className="w-full text-[9px] p-1 border border-gray-200 rounded" />
-                                                            <input type="date" value={m.endDate||''} onChange={(e) => setPendingMetrics(prev => { const next=[...prev]; next[idx]={...next[idx],endDate:e.target.value}; return next; })} className="w-full text-[9px] p-1 border border-gray-200 rounded" />
+                                                <>
+                                                    <div className="fixed inset-0 z-[9998]" onClick={() => setActivePopover(null)} />
+                                                    <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-100 rounded-lg shadow-xl z-[9999] p-2">
+                                                        <div className="space-y-1">
+                                                            {TIME_RANGES.map(tr => (
+                                                                <button
+                                                                    key={tr.id}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setPendingMetrics(prev => { const next=[...prev]; next[idx]={...next[idx],timeRange:tr.id}; return next; });
+                                                                        if (tr.id !== 'custom') setActivePopover(null);
+                                                                    }}
+                                                                    className={`w-full text-left px-2 py-1.5 rounded text-[10px] transition-colors ${m.timeRange === tr.id ? 'bg-theme-10 text-theme font-bold' : 'text-gray-600 hover:bg-gray-50'}`}
+                                                                >{tr.label}</button>
+                                                            ))}
                                                         </div>
-                                                    )}
-                                                </div>
+                                                        {m.timeRange === 'custom' && (
+                                                            <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
+                                                                <input type="date" value={m.startDate||''} onChange={(e) => { e.stopPropagation(); setPendingMetrics(prev => { const next=[...prev]; next[idx]={...next[idx],startDate:e.target.value}; return next; }); }} className="w-full text-[9px] p-1 border border-gray-200 rounded" />
+                                                                <input type="date" value={m.endDate||''} onChange={(e) => { e.stopPropagation(); setPendingMetrics(prev => { const next=[...prev]; next[idx]={...next[idx],endDate:e.target.value}; return next; }); }} className="w-full text-[9px] p-1 border border-gray-200 rounded" />
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setActivePopover(null); }}
+                                                                    className="w-full py-1 bg-theme text-white text-[10px] font-bold rounded-md"
+                                                                >Done</button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </>
                                             )}
                                         </div>
                                     );
@@ -1526,28 +1879,33 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             options={getUniqueValues(f.field)}
                                         />
                                     ) : (
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
                                             <select
                                                 value={f.operator}
-                                                onChange={(e) => setPendingFilters(prev => prev.map((pf, i) => i === idx ? { ...pf, operator: e.target.value as any } : pf))}
+                                                onChange={(e) => setPendingFilters(prev => prev.map((pf, i) => i === idx ? { ...pf, operator: e.target.value as any, value: '' } : pf))}
                                                 className="text-[10px] border rounded px-1 py-0.5 bg-white focus:ring-0"
                                                 style={{borderColor:'rgba(209,213,219,0.7)'}}
                                             >
-                                                <option value="gt">&gt;</option>
-                                                <option value="lt">&lt;</option>
-                                                <option value="equals">=</option>
+                                                <option value="gt">&gt; Greater than</option>
+                                                <option value="lt">&lt; Less than</option>
+                                                <option value="equals">= Equals</option>
+                                                <option value="top_n">↑ Top N</option>
+                                                <option value="bottom_n">↓ Bottom N</option>
                                             </select>
                                             <input
-                                                type="text"
+                                                type="number"
                                                 value={f.value as string}
                                                 onChange={(e) => setPendingFilters(prev => prev.map((pf, i) => i === idx ? { ...pf, value: e.target.value } : pf))}
-                                                placeholder="Value…"
-                                                className="text-[10px] border rounded px-1.5 py-0.5 w-16 bg-white focus:ring-0"
+                                                placeholder={f.operator === 'top_n' || f.operator === 'bottom_n' ? 'N…' : 'Value…'}
+                                                className="text-[10px] border rounded px-1.5 py-0.5 w-14 bg-white focus:ring-0"
                                                 style={{borderColor:'rgba(209,213,219,0.7)'}}
+                                                min="1"
                                             />
-                                            <span className="font-bold" style={{color: Number(f.value) > 0 ? '#047857' : '#374151'}}>
-                                                {f.value ? `${f.value}` : ''}
-                                            </span>
+                                            {(f.operator === 'top_n' || f.operator === 'bottom_n') && f.value && (
+                                                <span className="text-[10px] font-bold text-theme">
+                                                    {f.operator === 'top_n' ? '↑' : '↓'} {f.value}
+                                                </span>
+                                            )}
                                             <button onClick={() => handleRemoveFilter(f.id)} className="ml-auto opacity-40 hover:opacity-100"><X className="w-3 h-3" /></button>
                                         </div>
                                     )}
@@ -1558,7 +1916,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             ))}
 
                             {/* Add filter button */}
-                            <div className="relative z-50">
+                            <div className="relative z-30">
                                 <button
                                     onClick={() => setIsFilterMenuOpen(v => !v)}
                                     className="w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-all"
@@ -1569,7 +1927,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                         <div className="fixed inset-0 z-[9998]" onClick={() => setIsFilterMenuOpen(false)} />
                                         <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-[9999] p-2">
                                             <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Dimensions</div>
-                                            {DIMENSIONS.map(d => (
+                                            {[...DIMENSIONS, ...FILTER_ONLY_DIMS].map(d => (
                                                 <button key={d.id} onClick={() => { handleAddFilter(d.id, 'dim'); setIsFilterMenuOpen(false); }} className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded">{d.label}</button>
                                             ))}
                                             {reportResult && metrics.length > 0 && (
@@ -1593,7 +1951,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 <button
                                     onClick={applyFilters}
                                     className="w-full py-1.5 rounded-lg text-[10px] font-bold text-white transition-all"
-                                    style={{background:'#4f46e5'}}
+                                    style={{background:'var(--theme)'}}
                                 >Apply Filters</button>
                             )}
 
@@ -1619,7 +1977,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                     <div className="absolute inset-0 z-30 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
                         <button
                             onClick={() => generateReport()}
-                            className="flex items-center gap-3 px-10 py-5 bg-indigo-600 text-white rounded-2xl font-bold shadow-2xl hover:bg-indigo-700 hover:scale-105 transition-all "
+                            className="flex items-center gap-3 px-10 py-5 bg-theme text-white rounded-2xl font-bold shadow-2xl hover:bg-theme hover:scale-105 transition-all "
                         >
                             <Play className="w-6 h-6 fill-current" />
                             Generate Pivot Report
@@ -1629,7 +1987,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
                 {isGenerating && (
                     <div className="absolute inset-0 z-30 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center space-y-4">
-                        <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
+                        <Loader2 className="w-12 h-12 text-theme animate-spin" />
                         <p className="text-lg font-bold text-gray-900">Crunching Data...</p>
                         <p className="text-xs text-gray-400">Aggregating dimensions and calculating metrics</p>
                     </div>
@@ -1670,7 +2028,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             setDragPanelOver(null);
                                         }}
                                         onDragEnd={() => { dragPanelIdx.current = null; setDragPanelOver(null); }}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-grab active:cursor-grabbing ${isDragOver ? 'bg-indigo-50 border-indigo-300 scale-[1.02]' : 'bg-gray-50 border-gray-100'}`}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-grab active:cursor-grabbing ${isDragOver ? 'bg-theme-10 border-theme-20 scale-[1.02]' : 'bg-gray-50 border-gray-100'}`}
                                     >
                                         <GripVertical className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
                                         <span style={platformBadgeStyle(hex)} className="flex-1 text-[11px] truncate">{ch.label}</span>
@@ -1681,9 +2039,9 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                 [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
                                                 return next;
                                             })}
-                                            className="p-1 rounded hover:bg-indigo-50 disabled:opacity-20 disabled:cursor-not-allowed"
+                                            className="p-1 rounded hover:bg-theme-10 disabled:opacity-20 disabled:cursor-not-allowed"
                                         >
-                                            <ArrowUp className="w-3.5 h-3.5 text-indigo-500" />
+                                            <ArrowUp className="w-3.5 h-3.5 text-theme" />
                                         </button>
                                         <button
                                             disabled={idx === draftOrder.length - 1}
@@ -1692,9 +2050,9 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                 [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
                                                 return next;
                                             })}
-                                            className="p-1 rounded hover:bg-indigo-50 disabled:opacity-20 disabled:cursor-not-allowed"
+                                            className="p-1 rounded hover:bg-theme-10 disabled:opacity-20 disabled:cursor-not-allowed"
                                         >
-                                            <ArrowDown className="w-3.5 h-3.5 text-indigo-500" />
+                                            <ArrowDown className="w-3.5 h-3.5 text-theme" />
                                         </button>
                                     </div>
                                 );
@@ -1703,7 +2061,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                         <div className="px-4 py-3 border-t border-gray-100 flex flex-col gap-2">
                             <button
                                 onClick={() => { setColOrder([...draftOrder]); setIsReorderOpen(false); }}
-                                className="w-full py-1.5 bg-indigo-600 text-white text-[11px] font-bold rounded-lg hover:bg-indigo-700 transition-colors"
+                                className="w-full py-1.5 bg-theme text-white text-[11px] font-bold rounded-lg hover:bg-theme transition-colors"
                             >
                                 Apply Order
                             </button>
@@ -1717,7 +2075,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                     </div>
                 )}
 
-                <div className="flex-1 overflow-auto">
+                <div className="flex-1 overflow-auto" ref={tableScrollRef}>
                     {!reportResult ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4 p-12 text-center">
                             <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center">
@@ -1729,26 +2087,41 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             </div>
                         </div>
                     ) : (
+                        <>
                         <table className="sello-table">
                             <thead className="sticky top-0 z-20">
                                 <tr>
                                     {reportResult.rowHeaders.map((rh, idx) => (
-                                        <th key={rh} rowSpan={2} className="pin truncate" style={{ left: idx * 160, width: 160, minWidth: 160, maxWidth: 160 }}>
-                                            <div className="flex items-center justify-between cursor-pointer w-full">
-                                                <div className="flex items-center gap-2" onClick={() => handleSort(rh)}>
+                                        <th key={rh} rowSpan={2} className="pin truncate" style={{ left: idx === 0 ? 0 : 220 + (idx - 1) * 160, width: idx === 0 ? 220 : 160, minWidth: idx === 0 ? 220 : 160, maxWidth: idx === 0 ? 220 : 160, cursor: 'pointer' }}
+                                            onClick={() => handleSort(rh)}
+                                        >
+                                            <div className="flex items-center justify-between w-full">
+                                                <div className="flex items-center gap-1.5">
                                                     <span className="truncate">{getDimLabel(rh)}</span>
-                                                    {sortRules[0]?.key === rh && (
-                                                        sortRules[0].dir === 'asc' ? <ArrowUp className="w-2.5 h-2.5 text-indigo-600 flex-shrink-0 ml-1" /> : <ArrowDown className="w-2.5 h-2.5 text-indigo-600 flex-shrink-0 ml-1" />
-                                                    )}
+                                                    {sortRules[0]?.key === rh
+                                                        ? (sortRules[0].dir === 'asc'
+                                                            ? <ArrowUp className="w-2.5 h-2.5 text-theme flex-shrink-0" />
+                                                            : <ArrowDown className="w-2.5 h-2.5 text-theme flex-shrink-0" />)
+                                                        : <ArrowDown className="w-2.5 h-2.5 text-gray-300 flex-shrink-0" />
+                                                    }
                                                 </div>
                                                 {idx === 0 && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleSwapDims(); }}
-                                                        className="p-1.5 bg-white hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 rounded-md transition-all shadow-sm border border-gray-200 hover:border-indigo-200 group"
-                                                        title="Swap Rows/Columns"
-                                                    >
-                                                        <ArrowLeftRight className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                                                    </button>
+                                                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                                        <SortPriorityDropdown
+                                                            sortRules={sortRules}
+                                                            setSortRules={setSortRules}
+                                                            getSortKeyLabel={getSortKeyLabel}
+                                                            disabled={!reportResult}
+                                                            iconOnly
+                                                        />
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleSwapDims(); }}
+                                                            className="p-1.5 bg-white hover:bg-theme-10 text-gray-400 hover:text-theme rounded-md transition-all shadow-sm border border-gray-200 hover:border-theme-20 group"
+                                                            title="Swap Rows/Columns"
+                                                        >
+                                                            <ArrowLeftRight className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                         </th>
@@ -1771,7 +2144,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             </th>
                                         );
                                     })}
-                                    <th colSpan={metrics.length} className="c" style={{ borderLeft: '2px solid rgba(79,70,229,0.15)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', color: '#4f46e5', fontWeight: 800 }}>
+                                    <th colSpan={metrics.length} className="c" style={{ borderLeft: '2px solid rgba(var(--theme-rgb), 0.15)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', color: 'var(--theme)', fontWeight: 800 }}>
                                         <div className="flex items-center gap-2">
                                             <span>Grand Total</span>
                                             {orderedColHeaders.length > 1 && (
@@ -1783,7 +2156,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                         setIsReorderOpen(v => !v);
                                     }}
                                                     title="Reorder columns"
-                                                    className={`p-1 rounded transition-colors ${isReorderOpen ? 'bg-indigo-100 text-indigo-600' : 'text-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                                                    className={`p-1 rounded transition-colors ${isReorderOpen ? 'bg-theme-10 text-theme' : 'text-indigo-300 hover:text-theme hover:bg-theme-10'}`}
                                                 >
                                                     <GripVertical className="w-3.5 h-3.5" />
                                                 </button>
@@ -1815,7 +2188,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                                     : <path d="M7 15l5 5 5-5M7 9l5-5 5 5"/>}
                                                             </svg>
                                                         </div>
-                                                        <span style={{ fontSize: 8, opacity: 0.4, lineHeight: 1 }}>{m.timeRange}</span>
+                                                        <span style={{ fontSize: 8, opacity: 0.4, lineHeight: 1 }}>{m.timeRange === 'custom' && m.startDate && m.endDate ? `${m.startDate.slice(5)} → ${m.endDate.slice(5)}` : TIME_RANGES.find(t => t.id === m.timeRange)?.label || m.timeRange}</span>
                                                     </div>
                                                 </th>
                                             );
@@ -1832,7 +2205,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                 key={`total_${m.id}`}
                                                 onClick={(e) => handleSort(`total_${m.id}`, e)}
                                                 className={`r metric-sub ${colClass} ${isSorted ? 'sorted' : ''}`}
-                                                style={{ borderLeft: mIdx === 0 ? '2px solid rgba(79,70,229,0.15)' : undefined, minWidth: 80 }}
+                                                style={{ borderLeft: mIdx === 0 ? '2px solid rgba(var(--theme-rgb), 0.15)' : undefined, minWidth: 80 }}
                                             >
                                                 <div className="sw r" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -1843,7 +2216,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                                 : <path d="M7 15l5 5 5-5M7 9l5-5 5 5"/>}
                                                         </svg>
                                                     </div>
-                                                    <span style={{ fontSize: 8, opacity: 0.4, lineHeight: 1 }}>{m.timeRange}</span>
+                                                    <span style={{ fontSize: 8, opacity: 0.4, lineHeight: 1 }}>{m.timeRange === 'custom' && m.startDate && m.endDate ? `${m.startDate.slice(5)} → ${m.endDate.slice(5)}` : TIME_RANGES.find(t => t.id === m.timeRange)?.label || m.timeRange}</span>
                                                 </div>
                                             </th>
                                         );
@@ -1851,7 +2224,13 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                 </tr>
                             </thead>
                             <tbody>
-                                {processedData?.map((row, idx) => (
+                                {/* Spacer row above visible rows */}
+                                {(processedData?.length ?? 0) > 0 && virtRange.start > 0 && (
+                                    <tr style={{ height: virtRange.start * VIRT_ROW_H }} aria-hidden="true"><td /></tr>
+                                )}
+                                {processedData?.slice(virtRange.start, virtRange.end).map((row, relIdx) => {
+                                    const idx = virtRange.start + relIdx;
+                                    return (
                                     <tr key={idx} className="group">
                                         {row.rowKeyParts.map((part: string, pIdx: number) => {
                                             const dim = reportResult.rowHeaders[pIdx];
@@ -1859,7 +2238,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
                                             if (dim === 'sku' && meta) {
                                                 return (
-                                                    <td key={pIdx} className="pin whitespace-nowrap" style={{ left: pIdx * 160, width: 160, minWidth: 160, maxWidth: 160 }}>
+                                                    <td key={pIdx} className="pin whitespace-nowrap" style={{ left: pIdx === 0 ? 0 : 220 + (pIdx - 1) * 160, width: pIdx === 0 ? 220 : 160, minWidth: pIdx === 0 ? 220 : 160, maxWidth: pIdx === 0 ? 220 : 160 }}>
                                                         <div className="flex items-center gap-2 truncate">
                                                             <span className="font-bold text-gray-900 font-mono text-xs truncate">{meta.sku}</span>
                                                             <GradeBadge gradeLevel={meta.gradeLevel} />
@@ -1870,7 +2249,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             }
 
                                             return (
-                                                <td key={pIdx} className="pin text-xs font-bold text-gray-900 whitespace-nowrap truncate" style={{ left: pIdx * 160, width: 160, minWidth: 160, maxWidth: 160 }}>
+                                                <td key={pIdx} className="pin text-xs font-bold text-gray-900 whitespace-nowrap truncate" style={{ left: pIdx === 0 ? 0 : 220 + (pIdx - 1) * 160, width: pIdx === 0 ? 220 : 160, minWidth: pIdx === 0 ? 220 : 160, maxWidth: pIdx === 0 ? 220 : 160 }}>
                                                     {part}
                                                 </td>
                                             );
@@ -1915,7 +2294,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                 : formatNumber(val);
 
                                             return (
-                                                <td key={`total_${m.id}`} className={`r ${colClass}`} style={{ borderLeft: mIdx === 0 ? '2px solid rgba(79,70,229,0.15)' : undefined, fontWeight: 800 }}>
+                                                <td key={`total_${m.id}`} className={`r ${colClass}`} style={{ borderLeft: mIdx === 0 ? '2px solid rgba(var(--theme-rgb), 0.15)' : undefined, fontWeight: 800 }}>
                                                     {isEmpty
                                                         ? <span className="v-dim">—</span>
                                                         : <span className={isNeg ? 'v-neg' : 'v-num'} style={{ fontWeight: 800 }}>{formatted}</span>
@@ -1924,9 +2303,15 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             );
                                         })}
                                     </tr>
-                                ))}
+                                    );
+                                })}
+                                {/* Spacer row below visible rows */}
+                                {(processedData?.length ?? 0) > virtRange.end && (
+                                    <tr style={{ height: ((processedData?.length ?? 0) - virtRange.end) * VIRT_ROW_H }} aria-hidden="true"><td /></tr>
+                                )}
                             </tbody>
                         </table>
+                        </>
                     )}
                 </div>
             </div>

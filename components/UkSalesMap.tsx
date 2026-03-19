@@ -276,7 +276,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
                 <span>{label}</span>
                 {isActive ? (
-                    tableSort.direction === 'asc' ? <ChevronUp className="w-3 h-3 text-indigo-500" /> : <ChevronDown className="w-3 h-3 text-indigo-500" />
+                    tableSort.direction === 'asc' ? <ChevronUp className="w-3 h-3 text-theme" /> : <ChevronDown className="w-3 h-3 text-theme" />
                 ) : (
                     <ArrowUpDown className="w-3 h-3 text-gray-300" />
                 )}
@@ -291,7 +291,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         <div className="flex flex-row justify-between items-center mb-4 gap-4 p-4 bg-white/50 rounded-xl border border-gray-200">
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+                    <div className="p-2 bg-theme-10 text-theme rounded-lg">
                         <MapIcon className="w-5 h-5" />
                     </div>
                     <div>
@@ -308,13 +308,13 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                     <div className="flex bg-gray-200 p-1 rounded-lg">
                         <button 
                             onClick={() => setMode('ABSOLUTE')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${mode === 'ABSOLUTE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${mode === 'ABSOLUTE' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}
                         >
                             <BarChart2 className="w-3 h-3" /> Absolute
                         </button>
                         <button 
                             onClick={() => setMode('CHANGE')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${mode === 'CHANGE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${mode === 'CHANGE' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}
                         >
                             <TrendingUp className="w-3 h-3" /> Change (PoP)
                         </button>
@@ -324,13 +324,13 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                     <div className="flex bg-gray-200 p-1 rounded-lg">
                         <button 
                             onClick={() => setMetric('REVENUE')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${metric === 'REVENUE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${metric === 'REVENUE' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}
                         >
                             <DollarSign className="w-3 h-3" /> Revenue
                         </button>
                         <button 
                             onClick={() => setMetric('VOLUME')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${metric === 'VOLUME' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${metric === 'VOLUME' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}
                         >
                             <Package className="w-3 h-3" /> Volume
                         </button>
@@ -342,11 +342,11 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                     <div className="flex items-center gap-1 text-[10px] font-medium text-gray-500">
                         COLOR:
                         <div className="flex bg-gray-200 p-1 rounded-lg">
-                            <button onClick={() => setColorMetric('REVENUE')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'REVENUE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Revenue</button>
-                            <button onClick={() => setColorMetric('PROFIT')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'PROFIT' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Profit</button>
-                            <button onClick={() => setColorMetric('MARGIN')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'MARGIN' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Margin %</button>
-                            <button onClick={() => setColorMetric('TACOS')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'TACOS' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>TACoS %</button>
-                            <button onClick={() => setColorMetric('RETURN_RATE')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'RETURN_RATE' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`} title="Return Rate %">
+                            <button onClick={() => setColorMetric('REVENUE')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'REVENUE' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}>Revenue</button>
+                            <button onClick={() => setColorMetric('PROFIT')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'PROFIT' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}>Profit</button>
+                            <button onClick={() => setColorMetric('MARGIN')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'MARGIN' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}>Margin %</button>
+                            <button onClick={() => setColorMetric('TACOS')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'TACOS' ? 'bg-white shadow text-theme' : 'text-gray-500'}`}>TACoS %</button>
+                            <button onClick={() => setColorMetric('RETURN_RATE')} className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${colorMetric === 'RETURN_RATE' ? 'bg-white shadow text-theme' : 'text-gray-500'}`} title="Return Rate %">
                                 <RotateCcw className="w-3 h-3 inline" />
                             </button>
                         </div>
@@ -359,7 +359,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         <select 
                             value={selectedCategory}
                             onChange={e => { setSelectedCategory(e.target.value); setSelectedSubcategory('All'); }}
-                            className="pl-8 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-indigo-500"
+                            className="pl-8 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-theme"
                         >
                             <option value="All">All Categories</option>
                             {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -371,7 +371,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         <select 
                             value={selectedSubcategory}
                             onChange={e => setSelectedSubcategory(e.target.value)}
-                            className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-indigo-500"
+                            className="pl-3 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-theme"
                             disabled={selectedCategory === 'All'}
                         >
                             <option value="All">All Subcategories</option>
@@ -384,7 +384,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         <select 
                             value={selectedCarrier}
                             onChange={e => setSelectedCarrier(e.target.value)}
-                            className="pl-8 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-indigo-500"
+                            className="pl-8 pr-8 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium appearance-none focus:ring-2 focus:ring-theme"
                         >
                             <option value="All">All Carriers</option>
                             {carriers.map(c => <option key={c} value={c}>{c}</option>)}
@@ -512,7 +512,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                 <>
                                     <div className="flex justify-between">
                                         <span className="text-gray-500">Revenue</span>
-                                        <span className="font-bold text-indigo-600">£{areaToShow.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                                        <span className="font-bold text-theme">£{areaToShow.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-gray-500">Volume</span>
@@ -555,7 +555,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                 <>
                                     <div className="flex justify-between">
                                         <span className="text-gray-500">Current</span>
-                                        <span className="font-bold text-indigo-600">{metric === 'REVENUE' ? `£${areaToShow.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `${areaToShow.volume} u`}</span>
+                                        <span className="font-bold text-theme">{metric === 'REVENUE' ? `£${areaToShow.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `${areaToShow.volume} u`}</span>
                                     </div>
                                      <div className="flex justify-between">
                                         <span className="text-gray-500">Previous</span>
@@ -659,8 +659,8 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         
                         {/* High Level Stats */}
                         <div className="grid grid-cols-2 gap-3 text-center mb-4">
-                            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-2">
-                                <div className="text-xs text-indigo-700 font-medium uppercase">Revenue</div>
+                            <div className="bg-theme-10 border border-indigo-100 rounded-lg p-2">
+                                <div className="text-xs text-theme font-medium uppercase">Revenue</div>
                                 <div className="text-lg font-bold text-indigo-900">£{pinnedArea.revenue.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                             </div>
                              <div className="bg-green-50 border border-green-100 rounded-lg p-2">
@@ -749,7 +749,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="font-bold text-indigo-600 text-sm">
+                                            <div className="font-bold text-theme text-sm">
                                                 {mode === 'ABSOLUTE'
                                                   ? (metric === 'REVENUE' ? `£${area.revenue.toLocaleString()}` : area.volume)
                                                   : (area.value > 0 ? '+' : '') + (metric === 'REVENUE' ? `£${Math.abs(area.value).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `${area.value}`)
@@ -757,7 +757,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                             </div>
                                             <div className="w-16 h-1 bg-gray-100 rounded-full mt-1 ml-auto overflow-hidden">
                                                 <div 
-                                                    className="h-full bg-indigo-500 rounded-full" 
+                                                    className="h-full bg-theme rounded-full" 
                                                     style={{ width: `${(area.sizeValue / sortedAreas[0].sizeValue) * 100}%` }}
                                                 />
                                             </div>
@@ -771,11 +771,11 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             </div>
                         </div>
 
-                        <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
+                        <div className="bg-theme-10 border border-indigo-100 p-4 rounded-xl">
                             <h5 className="font-bold text-indigo-800 text-xs uppercase mb-2 flex items-center gap-2">
                                 <Info className="w-3 h-3" /> Insight
                             </h5>
-                            <p className="text-xs text-indigo-700 leading-relaxed">
+                            <p className="text-xs text-theme leading-relaxed">
                                 {sortedAreas.length > 0 ? (
                                     <>
                                         The <strong>{getAreaDisplayName(sortedAreas[0].code)}</strong> is your strongest market, contributing 
@@ -796,7 +796,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                 <div className="flex gap-2">
                     {(selectedCategory !== 'All' || selectedSubcategory !== 'All') && (
                         <div className="flex items-center gap-1 text-[10px] font-medium bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-600">
-                            <Layers className="w-3 h-3 text-indigo-500" />
+                            <Layers className="w-3 h-3 text-theme" />
                             {selectedCategory}
                             {selectedSubcategory !== 'All' && <span className="text-gray-400">/ {selectedSubcategory}</span>}
                         </div>
@@ -832,7 +832,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             return (
                                 <React.Fragment key={d.code}>
                                     <tr 
-                                        className={`cursor-pointer ${isPinned ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''}`}
+                                        className={`cursor-pointer ${isPinned ? 'bg-theme-10 border-l-2 border-theme' : ''}`}
                                         onClick={() => setPinnedArea(prev => (prev && prev.code === d.code) ? null : d)}
                                     >
                                         <td className="font-bold text-gray-800">{getAreaDisplayName(d.code)}</td>
@@ -851,7 +851,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                                     e.stopPropagation();
                                                     handleAreaDeepDive(d.code);
                                                 }}
-                                                className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                                className="p-1 text-gray-400 hover:text-theme hover:bg-theme-10 rounded transition-colors"
                                                 title={`Deep Dive transactions in ${d.code}`}
                                             >
                                                 <Search className="w-3.5 h-3.5" />

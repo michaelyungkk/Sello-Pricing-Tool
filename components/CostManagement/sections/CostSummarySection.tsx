@@ -22,7 +22,7 @@ export const CostSummarySection: React.FC<CostSummarySectionProps> = ({
                 <div className="flex items-center gap-3">
                     <button 
                         onClick={() => setIncludeVat(!includeVat)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${includeVat ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200'}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${includeVat ? 'bg-theme-10 text-theme border-theme-20' : 'bg-white text-gray-500 border-gray-200'}`}
                     >
                         {includeVat ? t('vat_included') : t('vat_excluded')}
                     </button>
@@ -63,7 +63,7 @@ export const CostSummarySection: React.FC<CostSummarySectionProps> = ({
                 </div>
                 <div className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 min-w-[180px]">
                     <span className="text-xs font-bold text-gray-500 uppercase mr-2">{t('show_inactive')}</span>
-                    <button onClick={() => setShowInactive(!showInactive)} className="text-gray-500 hover:text-indigo-600 focus:outline-none" style={showInactive ? { color: themeColor } : {}}>{showInactive ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}</button>
+                    <button onClick={() => setShowInactive(!showInactive)} className="text-gray-500 hover:text-theme focus:outline-none" style={showInactive ? { color: themeColor } : {}}>{showInactive ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}</button>
                 </div>
             </div>
         </div>

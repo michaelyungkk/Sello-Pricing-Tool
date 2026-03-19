@@ -22,9 +22,8 @@ import {
 } from 'lucide-react';
 import { AdGroup, SkuFamily, Product, PricingRules } from '../../../types';
 import { formatMoney, formatSmartMoney } from '../../../utils/format';
-import { MetricCard } from '../../common/MetricCard';
+import { MetricCard } from '../../productManagement/parts/MetricCard';
 import { FilterBar } from '../../common/FilterBar';
-import { MetricValue } from '../../common/MetricValue';
 
 interface AdGroupsTabProps {
     adGroups: AdGroup[];
@@ -328,12 +327,12 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <Target className="w-5 h-5 text-indigo-600" />
+                        <Target className="w-5 h-5 text-theme" />
                         Ad Spend Groups
                     </h2>
-                    <div className="mt-1 flex items-start gap-2 max-w-2xl bg-indigo-50/50 border border-indigo-100 p-2 rounded-lg">
-                        <Info className="w-4 h-4 text-indigo-500 mt-0.5 shrink-0" />
-                        <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
+                    <div className="mt-1 flex items-start gap-2 max-w-2xl bg-theme-10/50 border border-indigo-100 p-2 rounded-lg">
+                        <Info className="w-4 h-4 text-theme mt-0.5 shrink-0" />
+                        <p className="text-[11px] text-theme leading-relaxed font-medium">
                             Ad spend is redistributed equally across all group members
                             for transactions within each group's active date range.
                             Applied to full history on every upload.
@@ -346,7 +345,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                         onClick={() => setIsSyncModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 transition-all group"
                     >
-                        <RefreshCw className="w-4 h-4 text-indigo-500 group-hover:rotate-180 transition-transform duration-500" />
+                        <RefreshCw className="w-4 h-4 text-theme group-hover:rotate-180 transition-transform duration-500" />
                         Sync from Family Groups
                     </button>
                     <button
@@ -399,7 +398,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
             <div className="bg-custom-glass backdrop-blur-custom rounded-xl shadow-sm border border-custom-glass overflow-hidden relative">
                 {/* Bulk Actions Bar */}
                 {selectedIds.size > 0 && (
-                    <div className="absolute top-0 left-0 right-0 h-14 bg-indigo-600 px-6 flex items-center justify-between text-white z-20">
+                    <div className="absolute top-0 left-0 right-0 h-14 bg-theme px-6 flex items-center justify-between text-white z-20">
                         <div className="flex items-center gap-4">
                             <span className="text-sm font-bold">{selectedIds.size} groups selected</span>
                             <div className="h-4 w-px bg-white/30" />
@@ -436,38 +435,38 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                 <th className="p-4 w-10">
                                     <input
                                         type="checkbox"
-                                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                        className="rounded border-gray-300 text-theme focus:ring-theme cursor-pointer"
                                         checked={selectedIds.size === filteredAndSortedGroups.length && filteredAndSortedGroups.length > 0}
                                         onChange={toggleSelectAll}
                                     />
                                 </th>
                                 <th
-                                    className="p-4 cursor-pointer hover:text-indigo-600 transition-colors"
+                                    className="p-4 cursor-pointer hover:text-theme transition-colors"
                                     onClick={() => handleSort('name')}
                                 >
                                     <div className="flex items-center gap-2">
                                         Group Name
-                                        <ArrowUpDown className={`w-3 h-3 ${sort.key === 'name' ? 'text-indigo-600' : 'text-gray-300'}`} />
+                                        <ArrowUpDown className={`w-3 h-3 ${sort.key === 'name' ? 'text-theme' : 'text-gray-300'}`} />
                                     </div>
                                 </th>
                                 <th className="p-4">Member SKUs</th>
                                 <th className="p-4">Platform</th>
                                 <th
-                                    className="p-4 cursor-pointer hover:text-indigo-600 transition-colors"
+                                    className="p-4 cursor-pointer hover:text-theme transition-colors"
                                     onClick={() => handleSort('status')}
                                 >
                                     <div className="flex items-center gap-2 text-center justify-center">
                                         Status
-                                        <ArrowUpDown className={`w-3 h-3 ${sort.key === 'status' ? 'text-indigo-600' : 'text-gray-300'}`} />
+                                        <ArrowUpDown className={`w-3 h-3 ${sort.key === 'status' ? 'text-theme' : 'text-gray-300'}`} />
                                     </div>
                                 </th>
                                 <th
-                                    className="p-4 cursor-pointer hover:text-indigo-600 transition-colors"
+                                    className="p-4 cursor-pointer hover:text-theme transition-colors"
                                     onClick={() => handleSort('dateRange')}
                                 >
                                     <div className="flex items-center gap-2 text-right justify-end">
                                         Date Range
-                                        <ArrowUpDown className={`w-3 h-3 ${sort.key === 'dateRange' ? 'text-indigo-600' : 'text-gray-300'}`} />
+                                        <ArrowUpDown className={`w-3 h-3 ${sort.key === 'dateRange' ? 'text-theme' : 'text-gray-300'}`} />
                                     </div>
                                 </th>
                                 <th className="p-4 text-right">Actions</th>
@@ -477,11 +476,11 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                             {filteredAndSortedGroups.length > 0 ? filteredAndSortedGroups.map(group => {
                                 const isSelected = selectedIds.has(group.id);
                                 return (
-                                    <tr key={group.id} className={`${isSelected ? 'bg-indigo-50/30' : ''}`}>
+                                    <tr key={group.id} className={`${isSelected ? 'bg-theme-10/30' : ''}`}>
                                         <td className="p-4">
                                             <input
                                                 type="checkbox"
-                                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                className="rounded border-gray-300 text-theme focus:ring-theme cursor-pointer"
                                                 checked={isSelected}
                                                 onChange={() => toggleSelect(group.id)}
                                             />
@@ -492,7 +491,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                         <td className="p-4">
                                             <div className="flex flex-wrap gap-1 max-w-sm">
                                                 {group.memberSkus.map(sku => (
-                                                    <span key={sku} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[9px] font-bold border border-indigo-100">
+                                                    <span key={sku} className="px-1.5 py-0.5 bg-theme-10 text-theme rounded text-[9px] font-bold border border-indigo-100">
                                                         {sku}
                                                     </span>
                                                 ))}
@@ -513,7 +512,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                             <div className="flex justify-end gap-1">
                                                 <button
                                                     onClick={() => openEditModal(group)}
-                                                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                                    className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-all"
                                                     title="Edit"
                                                 >
                                                     <Edit2 className="w-3.5 h-3.5" />
@@ -554,7 +553,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                <Target className="w-5 h-5 text-indigo-500" />
+                                <Target className="w-5 h-5 text-theme" />
                                 {editingGroup ? 'Edit Ad Group' : 'Create New Ad Group'}
                             </h3>
                             <button onClick={() => setIsAddModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full text-gray-400 transition-colors">
@@ -571,7 +570,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                         value={modalData.name || ''}
                                         onChange={e => setModalData({ ...modalData, name: e.target.value })}
                                         placeholder="e.g. Memory Foam Pillows"
-                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-theme outline-none transition-all font-medium text-sm"
                                     />
                                 </div>
                                 <div className="space-y-1.5">
@@ -579,7 +578,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                     <select
                                         value={modalData.platform || ''}
                                         onChange={e => setModalData({ ...modalData, platform: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-theme outline-none transition-all font-medium text-sm"
                                     >
                                         <option value="" disabled>Select Platform</option>
                                         {platforms.map(p => (
@@ -596,7 +595,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                         type="date"
                                         value={modalData.startDate || ''}
                                         onChange={e => setModalData({ ...modalData, startDate: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-theme outline-none transition-all font-medium text-sm"
                                     />
                                 </div>
                                 <div className="space-y-1.5">
@@ -604,7 +603,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                         <label className="text-[10px] font-bold text-gray-400 uppercase">End Date (Optional)</label>
                                         <div className="flex gap-2">
                                             {modalData.endDate && (
-                                                <button onClick={() => setModalData({ ...modalData, endDate: '' })} className="text-[9px] font-bold text-indigo-600 hover:text-indigo-700">Set as Ongoing</button>
+                                                <button onClick={() => setModalData({ ...modalData, endDate: '' })} className="text-[9px] font-bold text-theme hover:text-theme">Set as Ongoing</button>
                                             )}
                                             <button onClick={() => setModalData({ ...modalData, endDate: todayStr })} className="text-[9px] font-bold text-gray-500 hover:text-gray-700">End Today</button>
                                         </div>
@@ -613,7 +612,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                         type="date"
                                         value={modalData.endDate || ''}
                                         onChange={e => setModalData({ ...modalData, endDate: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-theme outline-none transition-all font-medium text-sm"
                                     />
                                 </div>
                             </div>
@@ -642,7 +641,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                             value={skuSearch}
                                             onChange={e => setSkuSearch(e.target.value)}
                                             placeholder="Search SKUs..."
-                                            className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-theme"
                                         />
                                     </div>
                                 </div>
@@ -661,13 +660,13 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                                             memberSkus: isSelected ? current.filter(s => s !== product.sku) : [...current, product.sku]
                                                         });
                                                     }}
-                                                    className={`p-3 flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50' : 'hover:bg-white'}`}
+                                                    className={`p-3 flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-theme-10' : 'hover:bg-white'}`}
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="text-xs font-bold text-gray-900">{product.sku}</span>
                                                         <span className="text-[10px] text-gray-500 truncate max-w-[300px]">{product.name}</span>
                                                     </div>
-                                                    {isSelected && <Check className="w-4 h-4 text-indigo-600" />}
+                                                    {isSelected && <Check className="w-4 h-4 text-theme" />}
                                                 </div>
                                             );
                                         })}
@@ -676,9 +675,9 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
                                 {/* Active Selection Badges */}
                                 {modalData.memberSkus && modalData.memberSkus.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5 p-2 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                                    <div className="flex flex-wrap gap-1.5 p-2 bg-theme-10/50 rounded-xl border border-indigo-100">
                                         {modalData.memberSkus.map(sku => (
-                                            <span key={sku} className="flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 bg-white text-indigo-600 rounded text-[10px] font-bold border border-indigo-200 shadow-sm">
+                                            <span key={sku} className="flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 bg-white text-theme rounded text-[10px] font-bold border border-theme-20 shadow-sm">
                                                 {sku}
                                                 <button
                                                     onClick={() => setModalData({ ...modalData, memberSkus: modalData.memberSkus?.filter(s => s !== sku) })}
@@ -729,7 +728,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                     type="date"
                                     value={bulkEndDate}
                                     onChange={e => setBulkEndDate(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm"
+                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-theme outline-none transition-all font-medium text-sm"
                                 />
                             </div>
                         </div>
@@ -738,7 +737,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                             <button
                                 onClick={handleBulkSetEndDate}
                                 disabled={!bulkEndDate}
-                                className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold disabled:opacity-50"
+                                className="px-6 py-2 bg-theme text-white rounded-xl text-sm font-bold disabled:opacity-50"
                             >
                                 Apply to Selected
                             </button>
@@ -753,7 +752,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                <RefreshCw className="w-5 h-5 text-indigo-500" />
+                                <RefreshCw className="w-5 h-5 text-theme" />
                                 Sync Platforms
                             </h3>
                             <button onClick={() => setIsSyncModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full text-gray-400 transition-colors">
@@ -771,7 +770,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                                 <select
                                     value={selectedSyncPlatform}
                                     onChange={e => setSelectedSyncPlatform(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm"
+                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-theme outline-none transition-all font-medium text-sm"
                                 >
                                     {platforms.map(p => (
                                         <option key={p} value={p}>{p}</option>

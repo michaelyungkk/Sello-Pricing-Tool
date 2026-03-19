@@ -46,7 +46,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                         {/* Inventory Health Section */}
                         <DefinitionSection>
                             <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-                                <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                                <div className="p-2 bg-theme-10 rounded-lg text-theme">
                                     <ShieldAlert className="w-5 h-5" />
                                 </div>
                                 <div>
@@ -70,7 +70,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                     </span>
                                 </div>
                                 <div className="bg-white/60 p-3 rounded-lg border border-blue-200">
-                                    <p className="font-bold mb-2 flex items-center gap-2 text-xs uppercase text-indigo-600">
+                                    <p className="font-bold mb-2 flex items-center gap-2 text-xs uppercase text-theme">
                                         <Ship className="w-3 h-3" /> Strategy Engine: &quot;Include Incoming&quot; Toggle
                                     </p>
                                     <p className="text-xs text-gray-600 mb-2">
@@ -81,9 +81,9 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                             <span className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Standard Mode (Conservative)</span>
                                             <code className="text-xs text-gray-700 bg-gray-100 px-1 rounded">Effective Stock = On Hand</code>
                                         </div>
-                                        <div className="bg-white p-2 rounded border border-indigo-200">
-                                            <span className="block text-[10px] uppercase font-bold text-indigo-600 mb-1">Incoming Included</span>
-                                            <code className="text-xs text-indigo-700 bg-indigo-50 px-1 rounded">Effective Stock = On Hand + Incoming</code>
+                                        <div className="bg-white p-2 rounded border border-theme-20">
+                                            <span className="block text-[10px] uppercase font-bold text-theme mb-1">Incoming Included</span>
+                                            <code className="text-xs text-theme bg-theme-10 px-1 rounded">Effective Stock = On Hand + Incoming</code>
                                         </div>
                                     </div>
                                 </div>
@@ -216,7 +216,7 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
 
                         <DefinitionSection>
                              <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                                <div className="p-2 bg-theme-10 rounded-lg text-theme">
                                     <Calendar className="w-5 h-5" />
                                 </div>
                                 <h3 className="text-lg font-semibold text-gray-900">Weekly Reporting Cycles</h3>

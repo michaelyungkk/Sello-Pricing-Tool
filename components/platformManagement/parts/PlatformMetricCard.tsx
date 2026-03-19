@@ -20,7 +20,7 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
     return (
         <div 
             onClick={onSelect}
-            className={`bg-white p-4 rounded-xl border shadow-sm flex flex-col relative overflow-hidden group hover:border-indigo-300 transition-all hover:shadow-md h-full cursor-pointer ${isSelected ? 'ring-2 ring-indigo-500 border-indigo-500' : 'border-gray-200'}`}
+            className={`bg-white p-4 rounded-xl border shadow-sm flex flex-col relative overflow-hidden group hover:border-theme-20 transition-all hover:shadow-md h-full cursor-pointer ${isSelected ? 'ring-2 ring-theme border-theme' : 'border-gray-200'}`}
         >
             {isTop && (
                 <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 px-2 py-0.5 rounded-bl-lg flex items-center gap-1 shadow-sm animate-in fade-in slide-in-from-top-1 z-10">
@@ -55,9 +55,9 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
                         </span>
                         <div className="text-sm font-bold text-gray-900 leading-none">{formatSmartMoney(summary.revenue)}</div>
                     </div>
-                    <div className="space-y-0.5 text-right bg-indigo-50/50 -m-1 p-1 rounded">
-                        <span className="text-[10px] font-medium text-indigo-500 uppercase tracking-wide">Net Profit</span>
-                        <div className={`text-sm font-bold leading-none ${summary.netProfit >= 0 ? 'text-indigo-700' : 'text-red-600'}`}>
+                    <div className="space-y-0.5 text-right bg-theme-10/50 -m-1 p-1 rounded">
+                        <span className="text-[10px] font-medium text-theme uppercase tracking-wide">Net Profit</span>
+                        <div className={`text-sm font-bold leading-none ${summary.netProfit >= 0 ? 'text-theme' : 'text-red-600'}`}>
                             {formatSmartMoney(summary.netProfit)}
                         </div>
                     </div>
@@ -110,7 +110,7 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
             
             {isSelected && (
                 <div className="absolute bottom-1 right-1 opacity-50">
-                    <ChevronRight className="w-3 h-3 text-indigo-500" />
+                    <ChevronRight className="w-3 h-3 text-theme" />
                 </div>
             )}
         </div>

@@ -53,7 +53,7 @@ export const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: a
                             <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Campaign Name <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
-                                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 ${errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-theme ${errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                                 value={formData.name}
                                 onChange={e => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: false }); }}
                                 placeholder="e.g. Winter Clearance"
@@ -112,13 +112,13 @@ export const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: a
 
                     {/* Shop Discount Settings - ONLY if scope is SHOP */}
                     {formData.promotionScope === 'SHOP' && (
-                        <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 animate-in zoom-in-95 duration-200">
-                            <h4 className="text-[10px] font-black text-indigo-500 uppercase mb-3 tracking-widest">Global Shop Discount Rule</h4>
+                        <div className="bg-theme-10/50 p-4 rounded-xl border border-indigo-100 animate-in zoom-in-95 duration-200">
+                            <h4 className="text-[10px] font-black text-theme uppercase mb-3 tracking-widest">Global Shop Discount Rule</h4>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Discount Type</label>
                                     <select
-                                        className="w-full border rounded-lg px-3 py-2 text-sm border-indigo-200 bg-white"
+                                        className="w-full border rounded-lg px-3 py-2 text-sm border-theme-20 bg-white"
                                         value={formData.shopDiscountType}
                                         onChange={e => setFormData({ ...formData, shopDiscountType: e.target.value as any })}
                                     >
@@ -133,7 +133,7 @@ export const CreateEventModal = ({ onClose, onCreate, platforms, themeColor }: a
                                     </label>
                                     <input
                                         type="number"
-                                        className="w-full border rounded-lg px-3 py-2 text-sm border-indigo-200"
+                                        className="w-full border rounded-lg px-3 py-2 text-sm border-theme-20"
                                         value={formData.shopDiscountValue}
                                         onChange={e => setFormData({ ...formData, shopDiscountValue: parseFloat(e.target.value) || 0 })}
                                     />

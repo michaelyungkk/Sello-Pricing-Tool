@@ -233,7 +233,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
                 <div className="p-6 border-b border-custom-glass bg-gray-50/50">
                     <div className="flex items-center gap-4">
-                        <div className="p-3 bg-indigo-100 text-indigo-600 rounded-lg shadow-sm border border-indigo-200">
+                        <div className="p-3 bg-theme-10 text-theme rounded-lg shadow-sm border border-theme-20">
                             <CheckSquare className="w-6 h-6" />
                         </div>
                         <div>
@@ -252,7 +252,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                         <select
                             value={platform}
                             onChange={e => { setPlatform(e.target.value); setResults(null); }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-theme"
                         >
                             <option value="" disabled>Choose a platform...</option>
                             {Object.keys(pricingRules).sort().map(p => <option key={p} value={p}>{p}</option>)}
@@ -271,7 +271,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                             type="date"
                             value={checkDate}
                             onChange={e => setCheckDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-theme"
                         />
                     </div>
                     
@@ -281,7 +281,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                             Upload Price Change File
                         </h4>
                         <div 
-                            className={`border-2 border-dashed rounded-lg p-4 flex items-center justify-center text-center transition-all cursor-pointer ${file ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-indigo-400 bg-white hover:bg-indigo-50/50'}`}
+                            className={`border-2 border-dashed rounded-lg p-4 flex items-center justify-center text-center transition-all cursor-pointer ${file ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-indigo-400 bg-white hover:bg-theme-10/50'}`}
                             onClick={() => fileInputRef.current?.click()}
                         >
                             <input ref={fileInputRef} type="file" className="hidden" accept=".csv, .xlsx" onChange={handleFileChange} />
@@ -311,7 +311,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                     <button
                         onClick={handleProcess}
                         disabled={!file || !platform || isProcessing}
-                        className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-6 py-3 bg-theme text-white font-bold rounded-lg shadow-md hover:bg-theme disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         style={{ backgroundColor: themeColor }}
                     >
                         {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" /> Analyzing...</> : 'Run Cross-Check'}
@@ -353,7 +353,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
                             <tbody>
                                 {results.map((item, idx) => (
                                     <tr key={idx} className={item.status === 'On Promotion' ? 'bg-amber-50/30' : item.status === 'Skipped' ? 'bg-gray-50 text-gray-400' : ''}>
-                                        <td className="p-3 font-mono font-bold text-indigo-700">
+                                        <td className="p-3 font-mono font-bold text-theme">
                                             {item.platformSku || item.sku}
                                         </td>
                                         <td className="p-3 font-mono text-xs text-gray-500">

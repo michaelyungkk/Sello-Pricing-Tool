@@ -690,7 +690,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">SKU Deep Dive</h2>
                         {initialTimeWindow && (
-                            <div className="text-[10px] text-indigo-600 font-medium flex items-center gap-1 mt-0.5 bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100">
+                            <div className="text-[10px] text-theme font-medium flex items-center gap-1 mt-0.5 bg-theme-10 px-2 py-0.5 rounded w-fit border border-indigo-100">
                                 <Info className="w-3 h-3" />
                                 Dashboard window: Last {txDays} days
                             </div>
@@ -770,7 +770,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
 
             {/* ── 5. Transaction Ledger — light indigo tint ── */}
             {sortedTransactions.length > 0 && (
-                <div ref={ledgerRef} className={`${band} bg-indigo-50/40 border-y border-indigo-100/60`}>
+                <div ref={ledgerRef} className={`${band} bg-theme-10/40 border-y border-indigo-100/60`}>
                     <TransactionLedgerSection
                         ledgerStats={ledgerStats}
                         platformSubtotals={platformSubtotals}

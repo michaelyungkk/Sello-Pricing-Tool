@@ -106,7 +106,7 @@ export const DataNormalizationSection: React.FC<DataNormalizationSectionProps> =
                                 placeholder={`Search raw ${activeTab}s...`}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 bg-gray-50 border-none rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                className="w-full pl-9 pr-4 py-2 bg-gray-50 border-none rounded-lg text-sm focus:ring-2 focus:ring-theme/20 transition-all"
                             />
                             <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                         </div>
@@ -128,13 +128,13 @@ export const DataNormalizationSection: React.FC<DataNormalizationSectionProps> =
                                         onClick={() => handleToggleSelect(raw)}
                                         className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
                                             isSelected 
-                                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' 
+                                                ? 'bg-theme-10 text-theme border border-indigo-100' 
                                                 : 'text-gray-600 hover:bg-gray-50 border border-transparent'
                                         }`}
                                     >
                                         <div className="flex items-center gap-2">
                                             <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
-                                                isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'
+                                                isSelected ? 'bg-theme border-theme' : 'bg-white border-gray-300'
                                             }`}>
                                                 {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
                                             </div>
@@ -161,7 +161,7 @@ export const DataNormalizationSection: React.FC<DataNormalizationSectionProps> =
                                 placeholder="e.g. Levede"
                                 value={targetValue}
                                 onChange={(e) => setTargetValue(e.target.value)}
-                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-theme/20 transition-all"
                             />
                         </div>
                         <button

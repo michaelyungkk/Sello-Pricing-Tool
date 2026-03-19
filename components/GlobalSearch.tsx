@@ -181,7 +181,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platfo
     return (
         <div className="relative w-full" ref={containerRef}>
             <div 
-                className={`relative flex flex-wrap items-center gap-x-2 gap-y-1 p-2 border rounded-xl bg-white/80 transition-all shadow-sm min-h-[50px] cursor-text ${searchMode === 'SKU' ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-300 focus-within:ring-2 focus-within:ring-indigo-500'}`}
+                className={`relative flex flex-wrap items-center gap-x-2 gap-y-1 p-2 border rounded-xl bg-white/80 transition-all shadow-sm min-h-[50px] cursor-text ${searchMode === 'SKU' ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-300 focus-within:ring-2 focus-within:ring-theme'}`}
                 onClick={() => inputRef.current?.focus()}
             >
                 <Search 
@@ -195,7 +195,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platfo
                         <div 
                             key={index} 
                             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border animate-in fade-in zoom-in-90 ${
-                                chip.type === 'METRIC' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' :
+                                chip.type === 'METRIC' ? 'bg-theme-10 text-theme border-theme-20' :
                                 chip.type === 'TIME' ? 'bg-blue-100 text-blue-700 border-blue-200' :
                                 chip.type === 'PLATFORM' ? 'bg-purple-100 text-purple-700 border-purple-200' :
                                 chip.type === 'CONDITION' ? 'bg-amber-100 text-amber-700 border-amber-200' :
@@ -232,7 +232,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSearch, isLoading, platfo
                 />
 
                 {isLoading && (
-                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-indigo-600 animate-spin" />
+                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-theme animate-spin" />
                 )}
             </div>
 
