@@ -4,10 +4,10 @@ import { ArrowLeft, Upload, Zap, Activity, BarChart3, Target, RotateCcw, AlertCi
 import { PromotionEvent, Product, PriceLog, PriceChangeRecord, PromotionItem } from '../../../types';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
-import { GradeBadge } from '../../GradeBadge';
+import { GradeBadge } from '../../common/GradeBadge';
 import { asDateKey, getTodayKeyMelbourne } from '../../../services/dateUtils';
 import { computePromoWindows, computePromoEffectiveness, deriveDiscountedPrice } from '../../../services/promotionAnalytics';
-import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
+import { formatMoney, formatSmartMoney, formatNumber, formatPct, localDateStamp} from '../../../utils/format';
 import { PromoUploadModal, UploadDiscountMode } from './PromoUploadModal';
 
 // Local helper to ensure price consistency
@@ -301,7 +301,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `Post_Mortem_${promo.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute('download', `Post_Mortem_${promo.name.replace(/\s+/g, '_')}_${localDateStamp()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

@@ -2,19 +2,19 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, PricingRules, PriceLog, RefundLog, PriceChangeRecord, SearchChip, PromotionEvent } from '../../types';
 import { ThresholdConfig, getThresholdConfig } from '../../services/thresholdsConfig';
-import { getDiagnosisMeta, CanonicalDiagnosisId } from '../diagnostics/diagnosisRegistry';
+import { getDiagnosisMeta, CanonicalDiagnosisId } from '../../services/diagnosisRegistry';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../../services/dateUtils';
 import { buildWindow } from '../../services/dateWindow';
 import { VAT_MULTIPLIER } from '../../constants';
 import { MetricCard } from '../productManagement/parts/MetricCard';
 import { AlertCard } from '../productManagement/parts/AlertCard';
-import { GradeBadge } from '../GradeBadge';
+import { GradeBadge } from '../common/GradeBadge';
 import { SortState, sortRows } from '../../utils/tableSort';
 import { SortableHeader } from '../common/SortableHeader';
-import UkSalesMap from '../UkSalesMap';
-import { CategoryPerformanceSlide } from '../CategoryPerformanceSlide';
+import UkSalesMap from './tabs/MapTab';
+import { CategoryPerformanceSlide } from './tabs/CategoriesTab';
 import { aggregateCategoryData } from '../../services/categoryAgg';
-import AuditPanel from '../AuditPanel';
+import AuditPanel from '../common/AuditPanel';
 import { FilterBar } from '../common/FilterBar';
 import { Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
 import { formatSmartMoney, formatNumber, formatPct } from '../../utils/format';
@@ -38,8 +38,7 @@ interface OverviewPageContainerProps {
     onSearch?: (query: string | SearchChip[]) => void;
     thresholds?: ThresholdConfig;
     headerStyle?: React.CSSProperties;
-    deductRefunds: boolean;
-    setDeductRefunds: (v: boolean) => void;
+
     mapJumpState?: {
         carrier: string;
         metric: 'RETURN_RATE' | 'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS';
@@ -71,9 +70,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     onDeepDive,
     onSearch,
     thresholds: propThresholds,
-    deductRefunds,
-    setDeductRefunds,
-    mapJumpState
+        mapJumpState
 }) => {
     const [debouncedProducts, setDebouncedProducts] = useState(products);
 
@@ -98,7 +95,36 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
     const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
+    const [deductRefunds, setDeductRefunds] = React.useState<boolean>(() => {
+        const saved = localStorage.getItem('sello_deduct_refunds_overview');
+        return saved === null ? true : saved === 'true';
+    });
+    React.useEffect(() => {
+        localStorage.setItem('sello_deduct_refunds_overview', deductRefunds.toString());
+    }, [deductRefunds]);
+
     const thresholds = useMemo(() => propThresholds || getThresholdConfig(), [propThresholds]);
+
+    // Pre-compute refund totals per SKU for the selected window — same pattern as StrategyPageContainer
+    // Keeps deductRefunds toggle instant by avoiding re-running the full product loop
+    const refundTotalsBySku = useMemo(() => {
+        const map = new Map<string, number>();
+        const { startKey, endKey } = buildWindow({
+            mode: range === 'custom' ? 'custom' : 'days',
+            days: range === 'yesterday' ? 1 : range === '7d' ? 7 : range === '14d' ? 14 :
+                  range === '30d' ? 30 : range === '90d' ? 90 : 30,
+            startKey: customStart, endKey: customEnd, excludeToday: true
+        });
+        refundHistory.forEach(r => {
+            if (!r.sku || !r.date) return;
+            if (platformScope.length > 0 && !platformScope.includes(r.platform || '')) return;
+            const dKey = asDateKey(r.date);
+            if (!dKey || !isDateKeyBetween(dKey, startKey, endKey)) return;
+            const amt = (Number(r.amount) + Number(r.freightAmount || 0));
+            map.set(r.sku, (map.get(r.sku) || 0) + amt);
+        });
+        return map;
+    }, [refundHistory, range, customStart, customEnd, platformScope]);
 
     // Handle map jump state
     useEffect(() => {
@@ -231,20 +257,9 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 isDateKeyBetween(asDateKey(c.date) || '', startKey, endKey)
             ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-            let refundLoss = 0;
-            if (deductRefunds) {
-                const skuRefunds = refundHistory.filter(r => {
-                    if (r.sku !== p.sku) return false;
-                    if (platformScope.length > 0 && !platformScope.includes(r.platform)) return false;
-                    const dKey = asDateKey(r.date);
-                    return dKey && isDateKeyBetween(dKey, startKey, endKey);
-                });
-                skuRefunds.forEach(r => {
-                    const refundAmt = (Number(r.amount) + Number(r.freightAmount || 0));
-                    refundLoss += refundAmt;
-                    curProfit -= refundAmt;
-                });
-            }
+            // Use pre-computed refundTotalsBySku — deductRefunds applied cheaply below
+            const refundLoss = refundTotalsBySku.get(p.sku) || 0;
+            const curProfitGross = curProfit; // before refund deduction
 
             const netMargin = curRev > 0 ? (curProfit / curRev) * 100 : 0;
             const velocityChange = prevUnits > 0 ? ((curUnits - prevUnits) / prevUnits) * 100 : (curUnits > 0 ? 100 : 0);
@@ -326,7 +341,8 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 ...p,
                 periodUnits: curUnits,
                 periodRevenue: curRev * VAT_MULTIPLIER,
-                periodProfit: curProfit * VAT_MULTIPLIER,
+                periodProfit: (curProfitGross - refundLoss) * VAT_MULTIPLIER,
+                periodProfitGross: curProfitGross * VAT_MULTIPLIER,
                 periodAdSpend: curAdSpend * VAT_MULTIPLIER,
                 periodMargin: netMargin,
                 prevPeriodUnits: prevUnits,
@@ -371,13 +387,25 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         });
 
         return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, startKey, endKey, distinctDaysFound: distinctDaysSet.size, expectedDays };
-    }, [debouncedProducts, priceHistoryMap, refundHistory, deductRefunds, range, customStart, customEnd, platformScope, thresholds, pricingRules, promotions, priceChangeHistory]);
+    }, [debouncedProducts, priceHistoryMap, refundTotalsBySku, range, customStart, customEnd, platformScope, thresholds, pricingRules, promotions, priceChangeHistory]);
+
+    // Cheap: apply deductRefunds toggle without re-running the full product loop
+    const processedDataWithToggle = useMemo(() => {
+        if (deductRefunds) return processedData;
+        return processedData.map(row => ({
+            ...row,
+            periodProfit: row.periodProfitGross ?? row.periodProfit,
+            periodMargin: row.periodRevenue > 0 
+                ? ((row.periodProfitGross ?? row.periodProfit) / row.periodRevenue) * 100 
+                : 0,
+        }));
+    }, [processedData, deductRefunds]);
 
     const alerts = useMemo(() => ({
-        margin: processedData.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
-        velocity: processedData.filter(p => p.stockLevel > 0 && p.volumeDropPct <= -30 && p.historicalMedianUnits >= 5),
+        margin: processedDataWithToggle.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
+        velocity: processedDataWithToggle.filter(p => p.stockLevel > 0 && p.volumeDropPct <= -30 && p.historicalMedianUnits >= 5),
         // STOCK ALERTS: Updated logic - only alert if we HAVE an incoming shipment (Lead Time < 999) and runway is tight
-        stock: processedData.filter(p => p.stockLevel > 2 && p.effectiveAlertLeadTime < 999 && p.periodRunway < (p.effectiveAlertLeadTime * 1.2)),
+        stock: processedDataWithToggle.filter(p => p.stockLevel > 2 && p.effectiveAlertLeadTime < 999 && p.periodRunway < (p.effectiveAlertLeadTime * 1.2)),
         // DEAD STOCK BUCKET: Updated logic per requirements
         dead: processedData.filter(p => p.inventoryValue > 200 && p.periodUnits === 0 && p.periodDailyVelocity < p.historicalMedianDemand)
     }), [processedData, thresholds]);
@@ -417,16 +445,16 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const paginatedData = workbenchData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     const categoryData = useMemo(() => {
         if (activeTab !== 'categories') return [];
-        const result = aggregateCategoryData(products, priceHistoryMap, dateRange, refundHistory, deductRefunds);
+        const result = aggregateCategoryData(products, priceHistoryMap, dateRange);
         return result.mainCategories;
-    }, [activeTab, products, priceHistoryMap, dateRange, refundHistory, deductRefunds]);
+    }, [activeTab, products, priceHistoryMap, dateRange]);
 
     const totalPages = Math.ceil(workbenchData.length / itemsPerPage);
 
     const financialStats = useMemo(() => {
-        const totalRevenue = processedData.reduce((acc, p) => acc + p.periodRevenue, 0);
-        const totalProfit = processedData.reduce((acc, p) => acc + p.periodProfit, 0);
-        const totalAdSpend = processedData.reduce((acc, p) => acc + p.periodAdSpend, 0);
+        const totalRevenue = processedDataWithToggle.reduce((acc, p) => acc + p.periodRevenue, 0);
+        const totalProfit = processedDataWithToggle.reduce((acc, p) => acc + p.periodProfit, 0);
+        const totalAdSpend = processedDataWithToggle.reduce((acc, p) => acc + p.periodAdSpend, 0);
         const tacos = totalRevenue > 0 ? (totalAdSpend / totalRevenue) * 100 : 0;
 
         const days = [];
@@ -453,18 +481,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             });
         });
 
-        if (deductRefunds) {
-            const validSkus = new Set(products.map(p => p.sku));
-            refundHistory.forEach(r => {
-                if (r.sku && validSkus.has(r.sku) && r.date) {
-                    const dKey = r.date.split('T')[0];
-                    const agg = dailyAggs.get(dKey);
-                    if (agg) {
-                        agg.profit -= (Number(r.amount) + Number(r.freightAmount || 0));
-                    }
-                }
-            });
-        }
+        // Profit deduction via deductRefunds already reflected in processedDataWithToggle.periodProfit
 
         const chartData = days.map(day => {
             const agg = dailyAggs.get(day) || { rev: 0, ads: 0, profit: 0 };
@@ -478,7 +495,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         });
 
         return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
-    }, [processedData, dateRange, priceHistoryMap, refundHistory, deductRefunds, products, pricingRules, platformScope]);
+    }, [processedDataWithToggle, dateRange, priceHistoryMap, products, pricingRules, platformScope]);
 
     return (
         <div className="space-y-6 pb-20 max-w-[1600px] mx-auto min-h-full flex flex-col">
@@ -518,13 +535,11 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                     onChange={sel => setPlatformScope(sel)}
                     allLabel="Global View (All)"
                 />
-                {activeTab !== 'map' && (
-                    <label className="flex items-center gap-2 px-3 h-8 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20 transition-colors">
-                        <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-theme rounded focus:ring-theme border-gray-300" />
-                        <div className="flex items-center gap-1.5"><RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} /><span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span></div>
-                    </label>
-                )}
-                {(activeTab === 'actions' || activeTab === 'financials') && (
+                <label className="flex items-center gap-2 px-3 h-8 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20 transition-colors">
+                    <input type="checkbox" checked={deductRefunds} onChange={e => setDeductRefunds(e.target.checked)} className="w-4 h-4 text-theme rounded focus:ring-theme border-gray-300" />
+                    <div className="flex items-center gap-1.5"><RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} /><span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span></div>
+                </label>
+                {(activeTab === 'actions' || activeTab === 'financials' || activeTab === 'map') && (
                     <button onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)} className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditPanelVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><Activity className="w-4 h-4" />Audit</button>
                 )}
                 {activeTab === 'categories' && (
@@ -872,13 +887,15 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                             </td>
                                                             <td className="p-4">
                                                                 <div className="flex items-center gap-2 group relative inline-block">
-                                                                    <span className={`text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded border shadow-sm ${p.primaryDrag === "Ad Spend Heavy" ? 'text-purple-700 bg-purple-50 border-purple-100' :
-                                                                        p.primaryDrag === "Heavy Returns" ? 'text-red-700 bg-red-50 border-red-100' :
-                                                                            p.primaryDrag === "Selling at a Loss" ? 'text-rose-700 bg-rose-50 border-rose-100' :
-                                                                                p.primaryDrag === "Price Below Master" ? 'text-theme bg-theme-10 border-indigo-100' :
-                                                                                    p.primaryDrag === "High Returns" ? 'text-amber-700 bg-amber-50 border-amber-100' :
-                                                                                        'text-gray-700 bg-gray-50 border-gray-100'
-                                                                        }`}>
+                                                                    <span className={`sello-badge ${
+                                                                        p.primaryDrag === 'Ad Spend Heavy' ? 'badge-purple' :
+                                                                        p.primaryDrag === 'Heavy Returns' ? 'badge-red' :
+                                                                        p.primaryDrag === 'Selling at a Loss' ? 'badge-red' :
+                                                                        p.primaryDrag === 'Price Below Master' ? 'badge-indigo' :
+                                                                        p.primaryDrag === 'High Returns' ? 'badge-orange' :
+                                                                        p.primaryDrag === 'Margin Compression' ? 'badge-amber' :
+                                                                        'badge-gray'
+                                                                    }`}>
                                                                         {p.primaryDrag}
                                                                     </span>
                                                                      <div className="absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none border border-gray-700">
@@ -894,7 +911,13 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                             </td>
                                                             <td className="p-4 text-right pr-6">
                                                                 <div className="flex flex-col items-end">
-                                                                    <span className="text-[11px] font-black uppercase text-theme tracking-wider bg-theme-10 px-2 py-0.5 rounded border border-indigo-100 shadow-sm">
+                                                                    <span className={`sello-badge ${
+                                                                        p.suggestedAction?.toLowerCase().includes('urgent') ? 'badge-red' :
+                                                                        p.suggestedAction?.toLowerCase().includes('optimize') ? 'badge-purple' :
+                                                                        p.suggestedAction?.toLowerCase().includes('investigate') ? 'badge-orange' :
+                                                                        p.suggestedAction?.toLowerCase().includes('raise') || p.suggestedAction?.toLowerCase().includes('increase') ? 'badge-indigo' :
+                                                                        'badge-gray'
+                                                                    }`}>
                                                                         {p.suggestedAction}
                                                                     </span>
                                                                 </div>
@@ -945,7 +968,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                         </div>
                     </div>
                 )}
-                {activeTab === 'map' && (<div className="h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope.length === 1 ? platformScope[0] : 'All'} themeColor={themeColor} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
+                {activeTab === 'map' && (<div className="h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope.length === 1 ? platformScope[0] : 'All'} themeColor={themeColor} refundHistory={refundHistory} deductRefunds={deductRefunds} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
                 {activeTab === 'categories' && (
                     <div className="space-y-4 pb-24 h-auto">
 
@@ -973,6 +996,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                             themeColor={themeColor}
                             refundHistory={refundHistory}
                             deductRefunds={deductRefunds}
+                            platformScope={platformScope}
                         />
                     </div>
                 )}

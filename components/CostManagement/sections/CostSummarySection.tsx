@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { TagSearchInput } from '../../TagSearchInput';
+import { TagSearchInput } from '../../common/TagSearchInput';
 import { Percent, Hash, Divide, Eye, EyeOff, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ViewMode, CostSummarySectionProps } from '../types';

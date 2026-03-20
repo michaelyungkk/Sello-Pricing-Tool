@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { localDateStamp } from '../../../utils/format';
 import { Settings, Check, Upload, Trash2, Database, FileSpreadsheet, AlertCircle, Play, Download, AlertTriangle, ArrowRightLeft, Sliders, ShieldCheck, XCircle, FileWarning, FileText, Plus, X, Search, Link, Edit2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { InventorySyncToolProps } from '../types';
@@ -570,7 +571,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
         const ws = XLSX.utils.aoa_to_sheet([["Missing Platform SKU"], ...unmatchedItems.map(s => [s])]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Unmatched");
-        XLSX.writeFile(wb, `unmatched_skus_${new Date().toISOString().slice(0,10)}.csv`);
+        XLSX.writeFile(wb, `unmatched_skus_${localDateStamp()}.csv`);
     };
 
     const handleExport = () => {
@@ -726,7 +727,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
         XLSX.utils.book_append_sheet(wb, ws, "InventoryUpdate");
         
         // Generate filename
-        const stamp = new Date().toISOString().slice(0,10);
+        const stamp = localDateStamp();
         const hasBuffer = bufferRulesList.some(r => r.trigger !== '');
         const suffix = hasBuffer ? '_Buffered' : '';
         const filename = `${template.name}_InventoryUpdate${suffix}_${stamp}`;

@@ -7,7 +7,7 @@ import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../../constants';
 import { Activity, History, Coins, Database, Ship, Settings, Download, X, ArrowRight, RotateCcw, TrendingUp, TrendingDown, Save, Edit2, CheckCircle, Info, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../../services/dateUtils';
-import { formatSmartMoney } from '../../utils/format';
+import { formatSmartMoney, localDateStamp} from '../../utils/format';
 import { SortState, sortRows } from '../../utils/tableSort';
 import { resolveEffectiveVelocity } from '../../services/metrics';
 
@@ -15,11 +15,11 @@ import { resolveEffectiveVelocity } from '../../services/metrics';
 import { ConfigParametersPanel } from './panels/ConfigParametersPanel';
 import { AuditReconciliationPanel } from './panels/AuditReconciliationPanel';
 import { RecommendationsTable } from './panels/RecommendationsTable';
-import { TagSearchInput } from '../TagSearchInput'; // Keep for non-engine tabs
+import { TagSearchInput } from '../common/TagSearchInput'; // Keep for non-engine tabs
 import { SortableHeader } from '../common/SortableHeader'; // For history tables
 import { TabSwitcher } from '../common/TabSwitcher';
-import ManualPriceChangeModal from '../ManualPriceChangeModal';
-import ManualCostChangeModal from '../ManualCostChangeModal';
+import ManualPriceChangeModal from '../shared/modals/ManualPriceChangeModal';
+import ManualCostChangeModal from '../shared/modals/ManualCostChangeModal';
 
 interface StrategyPageContainerProps {
     products: Product[];
@@ -29,8 +29,7 @@ interface StrategyPageContainerProps {
     themeColor: string;
     priceHistoryMap: Map<string, PriceLog[]>;
     refundHistory?: RefundLog[];
-    deductRefunds: boolean;
-    setDeductRefunds: (v: boolean) => void;
+
     promotions: PromotionEvent[];
     priceChangeHistory: PriceChangeRecord[];
     costChangeHistory: CostChangeRecord[];
@@ -49,7 +48,7 @@ interface StrategyPageContainerProps {
 
 const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
     products, pricingRules, currentConfig, onSaveConfig, themeColor,
-    priceHistoryMap, refundHistory = [], deductRefunds, setDeductRefunds, promotions, priceChangeHistory = [], costChangeHistory = [],
+    priceHistoryMap, refundHistory = [], promotions, priceChangeHistory = [], costChangeHistory = [],
     inventoryChangeHistory = [],
     velocityLookback, thresholds,
     skuFamilies = [],
@@ -84,11 +83,19 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
         return '30';
     });
     const [customStart, setCustomStart] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-    const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
+    const [customEnd, setCustomEnd] = useState(localDateStamp());
     const [isManualLodgeOpen, setIsManualLodgeOpen] = useState(false);
     const [isManualCostLodgeOpen, setIsManualCostLodgeOpen] = useState(false);
 
     const [activeTab, setActiveTab] = useState<'ENGINE' | 'HISTORY' | 'COST_HISTORY' | 'INVENTORY_HISTORY'>('ENGINE');
+    const [deductRefunds, setDeductRefunds] = React.useState<boolean>(() => {
+        const saved = localStorage.getItem('sello_deduct_refunds_strategy');
+        return saved === null ? true : saved === 'true';
+    });
+    React.useEffect(() => {
+        localStorage.setItem('sello_deduct_refunds_strategy', deductRefunds.toString());
+    }, [deductRefunds]);
+
     const [filterTab, setFilterTab] = useState<'All' | 'INCREASE' | 'DECREASE' | 'MAINTAIN'>('All');
 
     // Pagination State
@@ -168,6 +175,21 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
         return `${format(start, !sameYear)} – ${format(end, true)}`;
     }, [selectedWindow, customStart, customEnd]);
 
+    // Pre-compute refund totals per SKU — only re-runs when refundHistory or dates change
+    // This avoids re-filtering refundHistory inside every product's calculateMetrics call
+    const refundTotalsBySku = useMemo(() => {
+        const { startKey, endKey } = getCalculationWindow(selectedWindow, customStart, customEnd);
+        const totals: Record<string, number> = {};
+        refundHistory.forEach(r => {
+            if (r.platform && pricingRules[r.platform]?.isExcluded) return;
+            const dKey = asDateKey(r.date);
+            if (!dKey || !isDateKeyBetween(dKey, startKey, endKey)) return;
+            const key = r.sku;
+            totals[key] = (totals[key] || 0) + (Number(r.amount) || 0) + (Number(r.freightAmount) || 0);
+        });
+        return totals;
+    }, [refundHistory, selectedWindow, customStart, customEnd, pricingRules]);
+
     // --- METRICS CALCULATION ---
     const calculateMetrics = (product: Product, setting: string, isLocal: boolean) => {
         const { startKey, endKey, days: fixedDays } = getCalculationWindow(setting, isLocal ? customStart : undefined, isLocal ? customEnd : undefined);
@@ -213,20 +235,8 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
             }
         });
 
-        // Deduct Returns if requested
-        if (deductRefunds) {
-            const skuRefunds = refundHistory.filter(r => {
-                if (r.sku !== product.sku) return false;
-                if (r.platform && pricingRules[r.platform]?.isExcluded) return false;
-                const dKey = asDateKey(r.date);
-                return dKey && isDateKeyBetween(dKey, startKey, endKey);
-            });
-            skuRefunds.forEach(r => {
-                const refundAmount = Number(r.amount) || 0;
-                const freightAmount = Number(r.freightAmount) || 0;
-                totalProfit -= (refundAmount + freightAmount);
-            });
-        }
+        // Note: refund deduction is applied separately in tableData memo
+        // to avoid re-running the full product loop on every deductRefunds toggle
 
         const rawAvgPrice = totalQty > 0 ? weightedPriceSum / totalQty : safeNum(product.currentPrice);
         const netPmPercent = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
@@ -410,13 +420,21 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
                     }
                 });
 
+                // Always store both gross and net profit — toggle applied cheaply downstream
+                const refundDeduction = refundTotalsBySku[p.sku] || 0;
+                const adjProfit = local.totalProfit - refundDeduction;
+                const adjNetPm  = local.totalSales > 0 ? (adjProfit / local.totalSales) * 100 : 0;
+
                 return {
                     ...p,
                     recentTotalSales: local.totalSales,
                     recentTotalQty: local.totalQty,
                     averagePrice: local.averagePrice,
-                    netPmPercent: local.netPmPercent,
-                    totalProfit: local.totalProfit,
+                    // Store both so deductRefunds toggle is instant (no re-computation)
+                    netPmPercent: adjNetPm,
+                    netPmPercentGross: local.totalSales > 0 ? (local.totalProfit / local.totalSales) * 100 : 0,
+                    totalProfit: adjProfit,
+                    totalProfitGross: local.totalProfit,
                     dailyVelocity: effectiveDailySales,
                     recentChanges: weeklyChanges,
                     ...rec
@@ -429,10 +447,21 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
                 if (isOOS && !showOOS) return false;
                 return true;
             });
-    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, refundHistory, deductRefunds, includeIncoming, pricingRules, showOOS, thresholds, promotions, inventoryChangeHistory, priceChangeHistory]);
+    }, [products, config, searchQuery, searchTags, selectedWindow, customStart, customEnd, velocityLookback, priceHistoryMap, refundTotalsBySku, includeIncoming, pricingRules, showOOS, thresholds, promotions, inventoryChangeHistory, priceChangeHistory]);
+
+    // Cheap: apply deductRefunds toggle without re-running tableData
+    // tableData always has both adjProfit (with deduction) and totalProfitGross (without)
+    const tableDataWithToggle = useMemo(() => {
+        if (deductRefunds) return tableData; // already has refund deducted
+        return tableData.map(row => ({
+            ...row,
+            totalProfit: row.totalProfitGross ?? row.totalProfit,
+            netPmPercent: row.netPmPercentGross ?? row.netPmPercent,
+        }));
+    }, [tableData, deductRefunds]);
 
     const filteredAndSortedData = useMemo(() => {
-        let data = tableData.filter(row => filterTab === 'All' || row.action === filterTab);
+        let data = tableDataWithToggle.filter(row => filterTab === 'All' || row.action === filterTab);
 
         if (sort) {
             const getValue = (row: any, key: string) => {
@@ -463,7 +492,7 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
             });
         }
         return data;
-    }, [tableData, filterTab, sort]);
+    }, [tableDataWithToggle, filterTab, sort]);
 
     const paginatedData = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
@@ -645,7 +674,7 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
         const link = document.createElement('a');
         link.style.display = 'none';
         link.href = url;
-        const filename = `strategy_report_full_${new Date().toISOString().slice(0, 10)}.csv`;
+        const filename = `strategy_report_full_${localDateStamp()}.csv`;
         link.download = filename;
         link.setAttribute('download', filename);
         document.body.appendChild(link);
@@ -668,21 +697,21 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
                 (row.percentChange || 0).toFixed(2) + '%', row.oldPrice.toFixed(2), row.newPrice.toFixed(2),
                 row.preVel.toFixed(2), row.postVel.toFixed(2), row.velocityChange.toFixed(1) + '%'
             ]);
-            filename = `price_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
+            filename = `price_change_log_${localDateStamp()}.csv`;
         } else if (type === 'cost') {
             headers = ['Date', 'SKU', 'Product Name', 'Change Type', 'Change %', 'Old Cost', 'New Cost'];
             rows = costHistoryTableData.map(row => [
                 row.date, clean(row.sku), clean(row.productName || ''), row.changeType,
                 (row.percentChange || 0).toFixed(2) + '%', row.oldCost.toFixed(2), row.newCost.toFixed(2),
             ]);
-            filename = `cost_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
+            filename = `cost_change_log_${localDateStamp()}.csv`;
         } else if (type === 'inventory') {
             headers = ['Date', 'SKU', 'Product Name', 'Stock Before', 'Stock After', '+Delta', 'Source', 'Is Strategic', 'Reason'];
             rows = inventoryHistoryTableData.map(row => [
                 row.date, clean(row.sku), clean(row.productName), row.prevStock, row.newStock,
                 row.deltaStock, row.source, row.isStrategic ? 'YES' : 'NO', clean(row.reason)
             ]);
-            filename = `inventory_change_log_${new Date().toISOString().slice(0, 10)}.csv`;
+            filename = `inventory_change_log_${localDateStamp()}.csv`;
         }
 
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');

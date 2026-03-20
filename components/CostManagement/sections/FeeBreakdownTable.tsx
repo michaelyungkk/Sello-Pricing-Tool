@@ -5,7 +5,7 @@ import { Product } from '../../../types';
 import { SortState } from '../../../utils/tableSort';
 import { SortKey, ViewMode } from '../types';
 import { SortableHeader } from '../../common/SortableHeader';
-import { GradeBadge } from '../../GradeBadge';
+import { GradeBadge } from '../../common/GradeBadge';
 import { Hash, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

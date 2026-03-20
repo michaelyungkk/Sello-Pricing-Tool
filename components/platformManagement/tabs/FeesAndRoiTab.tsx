@@ -8,7 +8,7 @@ import { SortableHeader } from '../../common/SortableHeader';
 import { formatSmartMoney, formatPct } from '../../../utils/format';
 import { PlatformFeesRoi, PlatformSortKey } from '../platformManagement.types';
 import { PricingRules } from '../../../types';
-import AuditPanel from '../../AuditPanel';
+import AuditPanel from '../../common/AuditPanel';
 
 interface FeesAndRoiTabProps {
     roiData: PlatformFeesRoi[];

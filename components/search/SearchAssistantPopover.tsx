@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ChipSelectionState, Suggestion, SuggestionPriority } from './types';
-import { getSuggestions } from './suggestionEngine';
+import { getSuggestions } from '../../services/search/suggestionEngine';
 import { TrendingUp, AlertTriangle, Package, Search, Zap, TrendingDown, DollarSign, Activity, BarChart2, ShoppingBag, Clock, ArrowRight, Filter, Globe, Tag } from 'lucide-react';
 import { Product } from '../../types';
 import { useTranslation } from 'react-i18next';

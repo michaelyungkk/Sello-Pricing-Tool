@@ -2,7 +2,7 @@
 import React from 'react';
 import { Package, Activity, Warehouse, Ship, Box, BarChart2, History, FileText, RotateCcw } from 'lucide-react';
 import { Product } from '../../../types';
-import { GradeBadge } from '../../GradeBadge';
+import { GradeBadge } from '../../common/GradeBadge';
 import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 
 interface SkuOverviewSectionProps {

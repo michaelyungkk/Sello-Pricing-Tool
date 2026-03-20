@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product } from '../../../types';
 import { Ship, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import { TagSearchInput } from '../../TagSearchInput';
+import { TagSearchInput } from '../../common/TagSearchInput';
 
 interface ShipmentsTabProps {
     products: Product[];

@@ -1,11 +1,11 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, PricingRules, PromotionEvent } from '../../../types';
-import { TagSearchInput } from '../../TagSearchInput';
+import { TagSearchInput } from '../../common/TagSearchInput';
 import { Download, Info, DollarSign, Activity, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { getTodayKeyMelbourne } from '../../../services/dateUtils';
-import { formatSmartMoney } from '../../../utils/format';
+import { formatSmartMoney, localDateStamp} from '../../../utils/format';
 
 interface PriceMatrixTabProps {
     products: Product[];
@@ -18,6 +18,8 @@ const VAT = VAT_MULTIPLIER;
 
 export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricingRules, promotions, themeColor }) => {
     const [search, setSearch] = useState('');
+    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+    const exportBtnRef = React.useRef<HTMLButtonElement>(null);
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -110,11 +112,12 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
         return calculated;
     };
 
-    const handleExport = () => {
+    const handleExport = (targetPlatform: string = 'All') => {
         const clean = (val: any) => {
             if (val === null || val === undefined) return '';
             return `"${String(val).replace(/"/g, '""')}"`;
         };
+        const normalize = (s: string) => (s || '').toLowerCase().trim();
 
         const headers = ['SKU', 'Name', 'CA Price'];
         platforms.forEach(p => {
@@ -122,7 +125,8 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
             headers.push(`${p} Velocity`);
         });
 
-        const rows = filtered.map(p => {
+        const rows: string[] = [];
+        filtered.forEach(p => {
             const rowData = [
                 clean(p.sku),
                 clean(p.name),
@@ -134,18 +138,27 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                 const rawPrice = channel?.price || p.currentPrice;
                 const displayPrice = rawPrice * VAT;
                 const velocity = channel?.velocity || 0;
-
                 const promo = getActivePromo(p.sku, platform);
                 const promoItem = promo?.items.find(i => i.sku.toUpperCase() === p.sku.toUpperCase());
                 const effectivePromoPrice = (promo && promoItem) ? calculatePromoPrice(p, promo, promoItem) : 0;
-
                 const finalExportPrice = effectivePromoPrice > 0 ? effectivePromoPrice : displayPrice;
-
                 rowData.push(finalExportPrice.toFixed(2));
                 rowData.push(velocity.toFixed(2));
             });
 
-            return rowData.join(',');
+            // Resolve SKU: use alias for target platform if selected
+            if (targetPlatform === 'All') {
+                rows.push([clean(p.sku), ...rowData.slice(1)].join(','));
+            } else {
+                const ch = p.channels.find(c => normalize(c.platform) === normalize(targetPlatform))
+                    || p.channels.find(c => normalize(c.platform).includes(normalize(targetPlatform)));
+                const aliases = ch?.skuAlias ? ch.skuAlias.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+                if (aliases.length > 0) {
+                    aliases.forEach((alias: string) => rows.push([clean(alias), ...rowData.slice(1)].join(',')));
+                } else {
+                    rows.push([clean(p.sku), ...rowData.slice(1)].join(','));
+                }
+            }
         });
 
         const csvContent = [headers.join(','), ...rows].join('\n');
@@ -153,10 +166,14 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `price_matrix_export_${new Date().toISOString().split('T')[0]}.csv`);
+        const filename = targetPlatform === 'All'
+            ? `price_matrix_export_${localDateStamp()}.csv`
+            : `price_matrix_export_${targetPlatform.toLowerCase().replace(/\s+/g, '_')}_${localDateStamp()}.csv`;
+        link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setIsExportMenuOpen(false);
     };
 
     return (
@@ -208,9 +225,32 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                     </div>
 
                 </div>
-                <button onClick={handleExport} className="sello-btn cta">
-                    <Download className="w-4 h-4" /> Export CSV
-                </button>
+                <div className="relative">
+                    <button ref={exportBtnRef} onClick={() => setIsExportMenuOpen(v => !v)} className="sello-btn cta flex items-center gap-1.5">
+                        <Download className="w-4 h-4" /> Export CSV
+                    </button>
+                    {isExportMenuOpen && createPortal(
+                        <div className="fixed inset-0 z-[100] flex items-start justify-end" onClick={() => setIsExportMenuOpen(false)}>
+                            <div className="mt-10 mr-4 bg-white rounded-xl shadow-2xl w-56 overflow-hidden border border-gray-200" onClick={e => e.stopPropagation()}>
+                                <div className="p-2">
+                                    <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div>
+                                    <button onClick={() => handleExport('All')} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">Standard (Master SKUs)</button>
+                                    <div className="my-1 border-t border-gray-100"></div>
+                                    <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div>
+                                    <div className="max-h-48 overflow-y-auto">
+                                        {platforms.map(platform => (
+                                            <button key={platform} onClick={() => handleExport(platform)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between rounded-lg">
+                                                <span>{platform}</span>
+                                                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Alias Mode</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+                </div>
             </div>
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-auto flex-1">
                 <table className="sello-table">

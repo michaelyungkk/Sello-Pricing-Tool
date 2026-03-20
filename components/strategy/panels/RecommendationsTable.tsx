@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { GradeBadge } from '../../GradeBadge';
+import { GradeBadge } from '../../common/GradeBadge';
 import { FilterBar } from '../../common/FilterBar';
 import { SortableHeader } from '../../common/SortableHeader';
 import { SortState } from '../../../utils/tableSort';

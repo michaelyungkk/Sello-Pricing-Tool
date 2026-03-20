@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { RefreshCw, X, CheckCircle } from 'lucide-react';
-import ProductList from '../../ProductList';
+import ProductList from '../parts/ProductList';
 import {
     Product,
     PricingRules,

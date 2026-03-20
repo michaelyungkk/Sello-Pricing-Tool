@@ -21,8 +21,6 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
   products = [],
   priceHistoryMap = new Map<string, PriceLog[]>(),
   refundHistory = [],
-  deductRefunds,
-  setDeductRefunds,
   pricingRules = {},
   themeColor,
   headerStyle,
@@ -56,6 +54,14 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
   const [refAreaLeft, setRefAreaLeft] = useState<string>('');
   const [refAreaRight, setRefAreaRight] = useState<string>('');
+  const [deductRefunds, setDeductRefunds] = React.useState<boolean>(() => {
+    const saved = localStorage.getItem('sello_deduct_refunds_platform');
+    return saved === null ? true : saved === 'true';
+  });
+  React.useEffect(() => {
+    localStorage.setItem('sello_deduct_refunds_platform', deductRefunds.toString());
+  }, [deductRefunds]);
+
   const [zoomState, setZoomState] = useState({ startIndex: 0, endIndex: 0, isZoomed: false, lastDataLen: 0 });
 
   // Alert Rules State

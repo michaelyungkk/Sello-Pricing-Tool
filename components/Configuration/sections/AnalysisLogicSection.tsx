@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { SearchConfig } from '../../../types';
-import AlertThresholdSettings from '../../AlertThresholdSettings';
+import AlertThresholdSettings from './AlertThresholdSettings';
 import { BarChart2, Scale } from 'lucide-react';
 
 interface AnalysisLogicSectionProps {

@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Product, PricingRules, SearchConfig, PriceChangeRecord, OptimalPriceResult } from '../../../types';
 import { SearchIntent } from '../../../services/geminiService';
 import { isAdsEnabled } from '../../../services/platformCapabilities';
-import SkuDeepDivePage from '../../SkuDeepDivePage';
+import SkuDeepDivePage from '../../skuDeepDive/SkuDeepDivePage';
 import { ThresholdConfig } from '../../../services/thresholdsConfig';
 import { SearchHeader } from './parts/SearchHeader';
 import { SearchResultPanels } from './parts/SearchResultPanels';

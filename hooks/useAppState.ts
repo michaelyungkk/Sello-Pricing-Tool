@@ -277,15 +277,6 @@ export const useAppState = () => {
     const [brandMap, setBrandMap] = useState<AttributeMap>({});
     const [categoryMap, setCategoryMap] = useState<AttributeMap>({});
 
-    const [deductRefunds, setDeductRefunds] = useState<boolean>(() => {
-        const saved = localStorage.getItem('sello_global_deduct_refunds');
-        return saved === null ? true : saved === 'true';
-    });
-
-    useEffect(() => {
-        localStorage.setItem('sello_global_deduct_refunds', deductRefunds.toString());
-    }, [deductRefunds]);
-
     const [uploadTimestamps, setUploadTimestamps] = useState<Record<string, string>>(() => {
         try {
             return JSON.parse(localStorage.getItem('sello_upload_timestamps') || '{}') || {};
@@ -1568,8 +1559,6 @@ export const useAppState = () => {
         categoryMap,
         setCategoryMap,
         handleSaveCategoryMap,
-        deductRefunds,
-        setDeductRefunds,
         uploadTimestamps,
         thresholds,
         velocityLookback,

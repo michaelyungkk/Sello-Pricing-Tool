@@ -1,42 +1,43 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppState } from './hooks/useAppState';
-import { QuickUploadMenu } from './components/QuickUploadMenu';
+import { QuickUploadMenu } from './components/shared/QuickUploadMenu';
 
 // Components
 import { OverviewPageContainer } from './components/overview/OverviewPageContainer';
 
-import ProductManagementPage from './components/ProductManagementPage';
-import StrategyPage from './components/StrategyPage';
-import PlatformManagementPage from './components/PlatformManagementPage';
+import ProductManagementPage from './components/productManagement/ProductManagementPage';
+import StrategyPage from './components/strategy/StrategyPage';
+import PlatformManagementPage from './components/platformManagement/PlatformManagementPage';
 
 import {
-    LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X,
+    LayoutDashboard, FlaskConical, BadgePoundSterling, Tag, ToolCase, Settings, BookOpen, Search, X,
     Download, Upload, Database, CheckCircle, FileBarChart, Bell, History,
-    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Globe,
-    ArrowUp, Package, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2
+    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Store,
+    ArrowUp, ShoppingBasket, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2
 } from 'lucide-react';
 
-import GlobalSearch from './components/GlobalSearch';
-import UserProfile from './components/UserProfile';
-import SearchResultsPage from './components/SearchResultsPage';
-import CostManagementPage from './components/CostManagementPage';
-import PromotionPage from './components/PromotionPage';
-import ToolboxPage from './components/ToolboxPage';
-import DefinitionsPage from './components/Definitions';
-import SettingsPage from './components/SettingsPage';
-import { CustomReportPage } from './components/CustomReportPage';
-import BatchUploadModal from './components/BatchUploadModal';
-import SalesImportModal from './components/SalesImportModal';
-import SkuDetailUploadModal from './components/SkuDetailUploadModal';
-import MappingUploadModal from './components/MappingUploadModal';
-import ReturnsUploadModal from './components/ReturnsUploadModal';
-import CAUploadModal from './components/CAUploadModal';
-import ShipmentUploadModal from './components/ShipmentUploadModal';
-import PriceElasticityModal from './components/PriceElasticityModal';
-import AnalysisModal from './components/AnalysisModal';
+import GlobalSearch from './components/shared/GlobalSearch';
+import UserProfile from './components/shared/UserProfile';
+import SearchResultsPage from './components/search/SearchResultsPage';
+import CostManagementPage from './components/costManagement/CostManagementPage';
+import PromotionPage from './components/promotionManager/PromotionPage';
+import ToolboxPage from './components/toolbox/ToolboxPage';
+import DefinitionsPage from './components/definitions/DefinitionsPageContainer';
+import SettingsPage from './components/settings/SettingsPage';
+import { CustomReportPage } from './components/customReport/CustomReportPage';
+import BatchUploadModal from './components/shared/modals/BatchUploadModal';
+import SalesImportModal from './components/shared/modals/SalesImportModal';
+import SkuDetailUploadModal from './components/shared/modals/SkuDetailUploadModal';
+import MappingUploadModal from './components/shared/modals/MappingUploadModal';
+import ReturnsUploadModal from './components/shared/modals/ReturnsUploadModal';
+import CAUploadModal from './components/shared/modals/CAUploadModal';
+import ShipmentUploadModal from './components/shared/modals/ShipmentUploadModal';
+import PriceElasticityModal from './components/skuDeepDive/PriceElasticityModal';
+import AnalysisModal from './components/skuDeepDive/AnalysisModal';
 
 import { TAX_NOTE_SHORT } from './services/taxPolicy';
+import { hexToRgb } from './utils/color';
 import { StrategyConfig, OptimalPriceResult } from './types';
 import type { CohortShiftWarning } from './services/cohortAnalysis';
 
@@ -48,6 +49,53 @@ const PageSpinner = () => (
         </svg>
     </div>
 );
+
+
+// ── Admin Modal — own component so password typing doesn't re-render the whole app ──
+interface AdminModalProps {
+    onClose: () => void;
+    onSuccess: () => void;
+    handleAdminToggle: (pw: string) => Promise<{ success: boolean; error?: string }>;
+}
+const AdminModal: React.FC<AdminModalProps> = ({ onClose, onSuccess, handleAdminToggle }) => {
+    const [password, setPassword] = React.useState('');
+    const [error, setError] = React.useState('');
+
+    const tryLogin = async () => {
+        const r = await handleAdminToggle(password);
+        if (r.success) { onSuccess(); } else { setError(r.error || 'Invalid password'); }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                    <h3 className="text-base font-bold text-gray-900">Enter Admin Mode</h3>
+                    <button onClick={onClose} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400"><X className="w-4 h-4" /></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-500">Enter the admin password to unlock push-to-database controls.</p>
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={e => { setPassword(e.target.value); setError(''); }}
+                        onKeyDown={async e => { if (e.key === 'Enter') await tryLogin(); }}
+                        placeholder="Admin password..."
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-theme outline-none transition-all text-sm"
+                        autoFocus
+                    />
+                    {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+                </div>
+                <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+                    <button onClick={onClose} className="px-5 py-2 text-gray-500 font-bold text-sm hover:text-gray-700">Cancel</button>
+                    <button onClick={tryLogin} className="px-6 py-2 bg-theme hover:bg-theme text-white rounded-xl text-sm font-bold shadow-md transition-all opacity-90 hover:opacity-100">
+                        Unlock
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const App: React.FC = () => {
     const {
@@ -91,8 +139,6 @@ const App: React.FC = () => {
         handleSaveBrandMap,
         categoryMap,
         handleSaveCategoryMap,
-        deductRefunds,
-        setDeductRefunds,
         uploadTimestamps,
         thresholds,
         velocityLookback,
@@ -217,12 +263,10 @@ const App: React.FC = () => {
 
     // Admin mode local UI state
     const [showAdminModal, setShowAdminModal] = useState(false);
-    const [adminPasswordInput, setAdminPasswordInput] = useState('');
-    const [adminLoginError, setAdminLoginError] = useState('');
     const [showExitConfirm, setShowExitConfirm] = useState(false);
 
     const quickUploadActions = [
-        { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-indigo-600' },
+        { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-theme' },
         { label: t('quick_upload_sales'), icon: FileBarChart, action: () => setIsSalesImportModalOpen(true), color: 'text-blue-600' },
         { label: t('quick_upload_refunds'), icon: RotateCcw, action: () => setIsReturnsModalOpen(true), color: 'text-red-600' },
         { label: t('quick_upload_sku_detail'), icon: FileText, action: () => setIsSkuDetailModalOpen(true), color: 'text-teal-600' },
@@ -233,6 +277,7 @@ const App: React.FC = () => {
 
     const headerTextColor = userProfile.textColor || '#111827';
     const textShadowStyle = userProfile.backgroundImage && userProfile.backgroundImage !== 'none' ? { textShadow: '0 1px 3px rgba(0,0,0,0.3)' } : {};
+    const _themeRgb = (() => { const rgb = hexToRgb(userProfile.themeColor); return rgb ? `${rgb.r}, ${rgb.g}, ${rgb.b}` : '19, 78, 74'; })();
     const headerStyle = { color: headerTextColor, ...textShadowStyle };
     const hasInventory = products && products.length > 0;
     const activeSearch = (searchSessions || []).find(s => s.id === activeSearchId);
@@ -269,7 +314,7 @@ const App: React.FC = () => {
 
     return (
         <>
-            <style>{` html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity ?? 90) / 100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity ?? 90) / 100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur ?? 10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur ?? 10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity ?? 15) / 100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur ?? 10) + 4)}px); --glass-header-bg: rgba(249,250,251,0.72); --glass-row-even: rgba(249,250,251,0.30); --glass-row-hover: rgba(243,244,246,0.60); --glass-divider: rgba(229,231,235,0.55); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } .tbl thead { position: sticky; top: 0; z-index: 20; background: var(--glass-header-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #9ca3af; box-shadow: 0 1px 0 rgba(229,231,235,0.55); } .tbl thead th { padding: 10px 16px; border-bottom: 1px solid var(--glass-divider); white-space: nowrap; } .tbl tbody tr { border-bottom: 1px solid var(--glass-divider); transition: background 0.1s; } .tbl tbody tr:last-child { border-bottom: none; } .tbl tbody tr:nth-child(even) { background: var(--glass-row-even); } .tbl tbody tr:hover { background: var(--glass-row-hover); } .tbl tbody td { padding: 10px 16px; font-size: 12px; } .tbl-compact thead th { padding: 8px 12px; font-size: 9px; } .tbl-compact tbody td { padding: 7px 12px; font-size: 11px; } .tbl-pin-col { position: sticky; left: 0; z-index: 10; background: var(--glass-header-bg); box-shadow: 2px 0 6px -2px rgba(0,0,0,0.06); } .tbl tbody tr .tbl-pin-col { background: var(--glass-bg); } .tbl tbody tr:hover .tbl-pin-col { background: var(--glass-row-hover); }
+            <style>{` html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity ?? 90) / 100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity ?? 90) / 100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur ?? 10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur ?? 10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity ?? 15) / 100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur ?? 10) + 4)}px); --glass-header-bg: rgba(249,250,251,0.72); --glass-row-even: rgba(249,250,251,0.30); --glass-row-hover: rgba(243,244,246,0.60); --glass-divider: rgba(229,231,235,0.55); --theme: ${userProfile.themeColor}; --theme-rgb: ${_themeRgb}; --theme-10: rgba(${_themeRgb}, 0.10); --theme-20: rgba(${_themeRgb}, 0.20); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } .tbl thead { position: sticky; top: 0; z-index: 20; background: var(--glass-header-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #9ca3af; box-shadow: 0 1px 0 rgba(229,231,235,0.55); } .tbl thead th { padding: 10px 16px; border-bottom: 1px solid var(--glass-divider); white-space: nowrap; } .tbl tbody tr { border-bottom: 1px solid var(--glass-divider); transition: background 0.1s; } .tbl tbody tr:last-child { border-bottom: none; } .tbl tbody tr:nth-child(even) { background: var(--glass-row-even); } .tbl tbody tr:hover { background: var(--glass-row-hover); } .tbl tbody td { padding: 10px 16px; font-size: 12px; } .tbl-compact thead th { padding: 8px 12px; font-size: 9px; } .tbl-compact tbody td { padding: 7px 12px; font-size: 11px; } .tbl-pin-col { position: sticky; left: 0; z-index: 10; background: var(--glass-header-bg); box-shadow: 2px 0 6px -2px rgba(0,0,0,0.06); } .tbl tbody tr .tbl-pin-col { background: var(--glass-bg); } .tbl tbody tr:hover .tbl-pin-col { background: var(--glass-row-hover); }
 
 /* ── COLUMN TINTS ── */
 .tbl thead th.cb { background: rgba(219,234,254,0.38); } .tbl thead th.cb:hover { background: rgba(219,234,254,0.52); }
@@ -284,9 +329,9 @@ const App: React.FC = () => {
 
 /* ── TH HOVER & SORTED STATE ── */
 .tbl thead th { cursor: pointer; user-select: none; transition: background 0.1s, color 0.1s; }
-.tbl thead th:hover { color: #4f46e5; background: rgba(79,70,229,0.04); }
-.tbl thead th.sorted { color: #4f46e5; background: rgba(79,70,229,0.10); }
-.tbl thead th.sorted .ico { opacity: 1; color: #4f46e5; }
+.tbl thead th:hover { color: var(--theme); background: var(--theme-10); }
+.tbl thead th.sorted { color: var(--theme); background: var(--theme-20); }
+.tbl thead th.sorted .ico { opacity: 1; color: var(--theme); }
 
 /* ── SORTABLE HEADER WRAPPER ── */
 .sw { display: inline-flex; align-items: center; gap: 4px; }
@@ -312,7 +357,7 @@ const App: React.FC = () => {
 .b-red    { background: rgba(254,242,242,0.9); color: #b91c1c; border-color: rgba(254,202,202,0.7); }
 .b-amber  { background: rgba(255,251,235,0.9); color: #b45309; border-color: rgba(253,230,138,0.7); }
 .b-blue   { background: rgba(219,234,254,0.9); color: #1d4ed8; border-color: rgba(147,197,253,0.7); }
-.b-indigo { background: rgba(79,70,229,0.10);  color: #4f46e5; border-color: rgba(79,70,229,0.20); }
+.b-indigo { background: var(--theme-10);  color: var(--theme); border-color: var(--theme-20); }
 .b-gray   { background: rgba(249,250,251,0.9); color: #6b7280; border-color: rgba(229,231,235,0.7); }
 .b-orange { background: rgba(255,237,213,0.9); color: #c2410c; border-color: rgba(253,186,116,0.7); }
 .b-purple { background: rgba(245,243,255,0.9); color: #7c3aed; border-color: rgba(221,214,254,0.7); }
@@ -327,12 +372,12 @@ const App: React.FC = () => {
 /* ── ROW STATE CLASSES ── */
 .tbl tbody tr.tr-warn { background: rgba(251,191,36,0.06) !important; }
 .tbl tbody tr.tr-neg  { background: rgba(254,226,226,0.10) !important; }
-.tbl tbody tr.tr-sel  { background: rgba(79,70,229,0.05)  !important; }
+.tbl tbody tr.tr-sel  { background: var(--theme-10) !important; }
 .tbl tbody tr.tr-ad   { background: rgba(255,237,213,0.10) !important; }
 
 /* ── INLINE ACTION BUTTONS ── */
 .tbtn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 7px; border: 1px solid rgba(209,213,219,0.8); font-size: 10px; font-weight: 700; cursor: pointer; background: white; color: #6b7280; font-family: inherit; transition: all 0.12s; }
-.tbtn:hover { background: rgba(79,70,229,0.10); color: #4f46e5; border-color: rgba(79,70,229,0.20); }
+.tbtn:hover { background: var(--theme-10); color: var(--theme); border-color: var(--theme-20); }
 .tbtn.del:hover { background: rgba(254,242,242,0.9); color: #b91c1c; border-color: rgba(254,202,202,0.7); }
 
 /* ── PRODUCT COLUMN STRUCTURES ── */
@@ -352,7 +397,7 @@ const App: React.FC = () => {
 .g4  { background: rgba(255,251,235,0.9); color: #b45309; border-color: rgba(253,230,138,0.8); }
 .g5  { background: rgba(255,241,242,0.9); color: #be123c; border-color: rgba(254,205,211,0.8); }
 .dd-btn { width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0; border: 1px solid rgba(209,213,219,0.7); background: white; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.12s; color: #9ca3af; }
-.dd-btn:hover { background: rgba(79,70,229,0.10); color: #4f46e5; border-color: rgba(79,70,229,0.20); }
+.dd-btn:hover { background: var(--theme-10); color: var(--theme); border-color: var(--theme-20); }
 .dd-btn svg { width: 12px; height: 12px; }
 
 /* ── RUNWAY WRAP ── */
@@ -369,13 +414,13 @@ const App: React.FC = () => {
                     <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
                         {[
                             { id: 'overview', icon: LayoutDashboard, label: t('nav_overview') },
-                            { id: 'products', icon: Package, label: t('nav_products') },
-                            { id: 'platforms', icon: Globe, label: t('nav_platforms') },
-                            { id: 'strategy', icon: Calculator, label: t('nav_strategy') },
-                            { id: 'costs', icon: DollarSign, label: t('nav_costs') },
+                            { id: 'products', icon: ShoppingBasket, label: t('nav_products') },
+                            { id: 'platforms', icon: Store, label: t('nav_platforms') },
+                            { id: 'strategy', icon: FlaskConical, label: t('nav_strategy') },
+                            { id: 'costs', icon: BadgePoundSterling, label: t('nav_costs') },
                             { id: 'promotions', icon: Tag, label: t('nav_promotions') },
                             { id: 'custom-report', icon: Table, label: 'Custom Reports' },
-                            { id: 'tools', icon: Wrench, label: t('nav_toolbox') },
+                            { id: 'tools', icon: ToolCase, label: t('nav_toolbox') },
                             { id: 'settings', icon: Settings, label: t('nav_config') },
                             { id: 'definitions', icon: BookOpen, label: t('nav_definitions') }
                         ].map((item) => {
@@ -445,7 +490,7 @@ const App: React.FC = () => {
                             disabled={syncStatus === 'pushing' || syncStatus === 'syncing'}
                             className={`w-full flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg text-[10px] font-bold transition-all border ${syncStatus === 'error'
                                 ? 'text-red-600 border-red-200 bg-red-50/50 hover:bg-red-50'
-                                : 'text-indigo-600 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50'
+                                : 'text-theme border-theme-20 bg-theme-10 hover:bg-theme-10'
                                 } disabled:opacity-40 disabled:cursor-not-allowed`}
                         >
                             <div className="flex items-center gap-1.5 w-full">
@@ -462,7 +507,7 @@ const App: React.FC = () => {
                                         {syncTotal > 0 && (
                                             <div className="w-full bg-gray-200 rounded-full h-1">
                                                 <div
-                                                    className="bg-indigo-500 rounded-full h-1 transition-all duration-300"
+                                                    className="bg-theme rounded-full h-1 transition-all duration-300"
                                                     style={{ width: `${Math.round((syncProgress / syncTotal) * 100)}%` }}
                                                 />
                                             </div>
@@ -542,12 +587,12 @@ const App: React.FC = () => {
                                             onClick={handleAdminPush}
                                             disabled={(!isDirty && syncStatus === 'idle') || syncStatus === 'pushing'}
                                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${syncStatus === 'pushing'
-                                                ? 'bg-indigo-100 text-indigo-500 border-indigo-200 cursor-wait'
+                                                ? 'bg-theme-10 text-theme border-theme-20 cursor-wait'
                                                 : syncStatus === 'error'
                                                     ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-pointer'
                                                     : !isDirty
                                                         ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                        : 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 cursor-pointer shadow-indigo-200'
+                                                        : 'bg-theme text-white border-theme hover:opacity-90 cursor-pointer'
                                                 }`}
                                         >
                                             {syncStatus === 'pushing' ? (
@@ -588,7 +633,7 @@ const App: React.FC = () => {
                                     </div>
                                 ) : (
                                     <button
-                                        onClick={() => { setShowAdminModal(true); setAdminPasswordInput(''); setAdminLoginError(''); }}
+                                        onClick={() => setShowAdminModal(true)}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100/60 text-gray-500 border border-gray-200 rounded-lg text-[10px] font-bold hover:bg-gray-200/60 transition-all"
                                     >
                                         <Lock className="w-3 h-3" />
@@ -709,7 +754,7 @@ const App: React.FC = () => {
                                                     {hasInventory ? t('reupload_inventory') : t('upload_inventory')}
                                                 </button>
                                             </div>
-                                            <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}>
+                                            <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-theme-20 shadow-lg scale-105 z-10'}`}>
                                                 <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`}
                                                     style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
                                                     {t('step_2')}
@@ -761,8 +806,6 @@ const App: React.FC = () => {
                                     onDeepDive={handleDeepDiveRequest}
                                     onSearch={handleSearch}
                                     thresholds={thresholds}
-                                    deductRefunds={deductRefunds}
-                                    setDeductRefunds={setDeductRefunds}
                                     mapJumpState={mapJumpState}
                                 />
                             )}
@@ -785,8 +828,6 @@ const App: React.FC = () => {
                                 onDeepDive={handleDeepDiveRequest}
                                 onSearch={handleSearch}
                                 thresholds={thresholds}
-                                deductRefunds={deductRefunds}
-                                setDeductRefunds={setDeductRefunds}
                                 onAnalyzeCarrier={handleAnalyzeCarrier}
                                 skuFamilies={skuFamilies}
                                 setSkuFamilies={setSkuFamilies}
@@ -805,8 +846,6 @@ const App: React.FC = () => {
                                 products={products}
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory}
-                                deductRefunds={deductRefunds}
-                                setDeductRefunds={setDeductRefunds}
                                 pricingRules={pricingRules}
                                 themeColor={userProfile.themeColor}
                                 adGroups={adGroups}
@@ -830,8 +869,6 @@ const App: React.FC = () => {
                                 themeColor={userProfile.themeColor}
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory}
-                                deductRefunds={deductRefunds}
-                                setDeductRefunds={setDeductRefunds}
                                 promotions={promotions || []}
                                 priceChangeHistory={priceChangeHistory || []}
                                 costChangeHistory={costChangeHistory || []}
@@ -875,9 +912,11 @@ const App: React.FC = () => {
                                 onSaveTemplates={setInventoryTemplates}
                                 learnedAliases={learnedAliases}
                                 onSaveLearnedAliases={(aliases) => setLearnedAliases(prev => ({ ...prev, ...aliases }))}
-                                products={products}
+                                products={products || []}
                                 themeColor={userProfile.themeColor}
                                 headerStyle={headerStyle}
+                                salesHistory={salesHistory || []}
+                                refundHistory={refundHistory || []}
                             />
                         </div>)}
                         {mountedPages.has('definitions') && (
@@ -1033,47 +1072,11 @@ const App: React.FC = () => {
             {/* Admin Password Modal */}
             {
                 showAdminModal && (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-                            <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                    <Lock className="w-5 h-5 text-indigo-600" />
-                                    Enter Admin Mode
-                                </h3>
-                                <button onClick={() => setShowAdminModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400"><X className="w-4 h-4" /></button>
-                            </div>
-                            <div className="p-6 space-y-4">
-                                <p className="text-sm text-gray-500">Enter the admin password to unlock push-to-database controls.</p>
-                                <input
-                                    type="password"
-                                    value={adminPasswordInput}
-                                    onChange={e => { setAdminPasswordInput(e.target.value); setAdminLoginError(''); }}
-                                    onKeyDown={async e => {
-                                        if (e.key === 'Enter') {
-                                            const r = await handleAdminToggle(adminPasswordInput);
-                                            if (r.success) { setShowAdminModal(false); } else { setAdminLoginError(r.error || 'Invalid password'); }
-                                        }
-                                    }}
-                                    placeholder="Admin password..."
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
-                                    autoFocus
-                                />
-                                {adminLoginError && <p className="text-xs text-red-600 font-medium">{adminLoginError}</p>}
-                            </div>
-                            <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
-                                <button onClick={() => setShowAdminModal(false)} className="px-5 py-2 text-gray-500 font-bold text-sm hover:text-gray-700">Cancel</button>
-                                <button
-                                    onClick={async () => {
-                                        const r = await handleAdminToggle(adminPasswordInput);
-                                        if (r.success) { setShowAdminModal(false); } else { setAdminLoginError(r.error || 'Invalid password'); }
-                                    }}
-                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all"
-                                >
-                                    Unlock
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <AdminModal
+                        onClose={() => setShowAdminModal(false)}
+                        onSuccess={() => setShowAdminModal(false)}
+                        handleAdminToggle={handleAdminToggle}
+                    />
                 )
             }
 
@@ -1089,7 +1092,7 @@ const App: React.FC = () => {
                             <div className="px-6 pb-6 flex flex-col gap-2">
                                 <button
                                     onClick={async () => { setShowExitConfirm(false); await handleAdminPush(); handleAdminExit(true); }}
-                                    className="w-full px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
+                                    className="w-full px-4 py-2.5 bg-theme text-white rounded-xl text-sm font-bold hover:opacity-90 transition-all"
                                 >
                                     Push Now
                                 </button>

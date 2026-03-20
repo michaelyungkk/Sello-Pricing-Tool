@@ -1,6 +1,6 @@
 
 import { Product, PriceLog } from '../types';
-import { POSTCODE_COORDS } from '../components/UkPostcodeMapCoords';
+import { POSTCODE_COORDS } from '../data/ukPostcodeMapCoords';
 import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from './metrics';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey } from './dateUtils';
 import { scaleMoneyInclTax, assertNotAlreadyScaled } from './taxPolicy';

@@ -1,40 +1,40 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppState } from './hooks/useAppState';
-import { QuickUploadMenu } from './components/QuickUploadMenu';
+import { QuickUploadMenu } from './components/shared/QuickUploadMenu';
 
 // Components
 import { OverviewPageContainer } from './components/overview/OverviewPageContainer';
 
-import ProductManagementPage from './components/ProductManagementPage';
-import StrategyPage from './components/StrategyPage';
-import PlatformManagementPage from './components/PlatformManagementPage';
+import ProductManagementPage from './components/productManagement/ProductManagementPage';
+import StrategyPage from './components/strategy/StrategyPage';
+import PlatformManagementPage from './components/platformManagement/PlatformManagementPage';
 
 import {
-    LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X,
+    LayoutDashboard, FlaskConical, BadgePoundSterling, Tag, Briefcase, Settings, BookOpen, Search, X,
     Download, Upload, Database, CheckCircle, FileBarChart, Bell, History,
-    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Globe,
-    ArrowUp, Package, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2
+    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Store,
+    ArrowUp, ShoppingBasket, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2
 } from 'lucide-react';
 
-import GlobalSearch from './components/GlobalSearch';
-import UserProfile from './components/UserProfile';
-import SearchResultsPage from './components/SearchResultsPage';
-import CostManagementPage from './components/CostManagementPage';
-import PromotionPage from './components/PromotionPage';
-import ToolboxPage from './components/ToolboxPage';
-import DefinitionsPage from './components/Definitions';
-import SettingsPage from './components/SettingsPage';
-import { CustomReportPage } from './components/CustomReportPage';
-import BatchUploadModal from './components/BatchUploadModal';
-import SalesImportModal from './components/SalesImportModal';
-import SkuDetailUploadModal from './components/SkuDetailUploadModal';
-import MappingUploadModal from './components/MappingUploadModal';
-import ReturnsUploadModal from './components/ReturnsUploadModal';
-import CAUploadModal from './components/CAUploadModal';
-import ShipmentUploadModal from './components/ShipmentUploadModal';
-import PriceElasticityModal from './components/PriceElasticityModal';
-import AnalysisModal from './components/AnalysisModal';
+import GlobalSearch from './components/shared/GlobalSearch';
+import UserProfile from './components/shared/UserProfile';
+import SearchResultsPage from './components/search/SearchResultsPage';
+import CostManagementPage from './components/costManagement/CostManagementPage';
+import PromotionPage from './components/promotionManager/PromotionPage';
+import ToolboxPage from './components/toolbox/ToolboxPage';
+import DefinitionsPage from './components/definitions/DefinitionsPageContainer';
+import SettingsPage from './components/settings/SettingsPage';
+import { CustomReportPage } from './components/customReport/CustomReportPage';
+import BatchUploadModal from './components/shared/modals/BatchUploadModal';
+import SalesImportModal from './components/shared/modals/SalesImportModal';
+import SkuDetailUploadModal from './components/shared/modals/SkuDetailUploadModal';
+import MappingUploadModal from './components/shared/modals/MappingUploadModal';
+import ReturnsUploadModal from './components/shared/modals/ReturnsUploadModal';
+import CAUploadModal from './components/shared/modals/CAUploadModal';
+import ShipmentUploadModal from './components/shared/modals/ShipmentUploadModal';
+import PriceElasticityModal from './components/skuDeepDive/PriceElasticityModal';
+import AnalysisModal from './components/skuDeepDive/AnalysisModal';
 
 import { TAX_NOTE_SHORT } from './services/taxPolicy';
 import { hexToRgb } from './utils/color';
@@ -49,6 +49,53 @@ const PageSpinner = () => (
         </svg>
     </div>
 );
+
+
+// ── Admin Modal — own component so password typing doesn't re-render the whole app ──
+interface AdminModalProps {
+    onClose: () => void;
+    onSuccess: () => void;
+    handleAdminToggle: (pw: string) => Promise<{ success: boolean; error?: string }>;
+}
+const AdminModal: React.FC<AdminModalProps> = ({ onClose, onSuccess, handleAdminToggle }) => {
+    const [password, setPassword] = React.useState('');
+    const [error, setError] = React.useState('');
+
+    const tryLogin = async () => {
+        const r = await handleAdminToggle(password);
+        if (r.success) { onSuccess(); } else { setError(r.error || 'Invalid password'); }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                    <h3 className="text-base font-bold text-gray-900">Enter Admin Mode</h3>
+                    <button onClick={onClose} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400"><X className="w-4 h-4" /></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-500">Enter the admin password to unlock push-to-database controls.</p>
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={e => { setPassword(e.target.value); setError(''); }}
+                        onKeyDown={async e => { if (e.key === 'Enter') await tryLogin(); }}
+                        placeholder="Admin password..."
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-theme outline-none transition-all text-sm"
+                        autoFocus
+                    />
+                    {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+                </div>
+                <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+                    <button onClick={onClose} className="px-5 py-2 text-gray-500 font-bold text-sm hover:text-gray-700">Cancel</button>
+                    <button onClick={tryLogin} className="px-6 py-2 bg-theme hover:bg-theme text-white rounded-xl text-sm font-bold shadow-md transition-all opacity-90 hover:opacity-100">
+                        Unlock
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const App: React.FC = () => {
     const {
@@ -92,8 +139,6 @@ const App: React.FC = () => {
         handleSaveBrandMap,
         categoryMap,
         handleSaveCategoryMap,
-        deductRefunds,
-        setDeductRefunds,
         uploadTimestamps,
         thresholds,
         velocityLookback,
@@ -189,6 +234,14 @@ const App: React.FC = () => {
     // Progressive page mounting — pages stagger-mount during browser idle time after initial render
     const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','tools','definitions','settings','custom-report'];
     const [mountedPages, setMountedPages] = useState<Set<string>>(() => new Set<string>());
+    const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+        try { return localStorage.getItem('sello_sidebar_collapsed') === 'true'; } catch { return false; }
+    });
+    const toggleSidebar = () => setSidebarCollapsed(prev => {
+        const next = !prev;
+        try { localStorage.setItem('sello_sidebar_collapsed', String(next)); } catch {}
+        return next;
+    });
 
     // Optimal price curve modal state (extends useAppState's selectedElasticityProduct)
     const [elasticityResult, setElasticityResult] = useState<OptimalPriceResult | null>(null);
@@ -218,12 +271,10 @@ const App: React.FC = () => {
 
     // Admin mode local UI state
     const [showAdminModal, setShowAdminModal] = useState(false);
-    const [adminPasswordInput, setAdminPasswordInput] = useState('');
-    const [adminLoginError, setAdminLoginError] = useState('');
     const [showExitConfirm, setShowExitConfirm] = useState(false);
 
     const quickUploadActions = [
-        { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-indigo-600' },
+        { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-theme' },
         { label: t('quick_upload_sales'), icon: FileBarChart, action: () => setIsSalesImportModalOpen(true), color: 'text-blue-600' },
         { label: t('quick_upload_refunds'), icon: RotateCcw, action: () => setIsReturnsModalOpen(true), color: 'text-red-600' },
         { label: t('quick_upload_sku_detail'), icon: FileText, action: () => setIsSkuDetailModalOpen(true), color: 'text-teal-600' },
@@ -286,9 +337,9 @@ const App: React.FC = () => {
 
 /* ── TH HOVER & SORTED STATE ── */
 .tbl thead th { cursor: pointer; user-select: none; transition: background 0.1s, color 0.1s; }
-.tbl thead th:hover { color: #4f46e5; background: rgba(79,70,229,0.04); }
-.tbl thead th.sorted { color: #4f46e5; background: rgba(79,70,229,0.10); }
-.tbl thead th.sorted .ico { opacity: 1; color: #4f46e5; }
+.tbl thead th:hover { color: var(--theme); background: var(--theme-10); }
+.tbl thead th.sorted { color: var(--theme); background: var(--theme-20); }
+.tbl thead th.sorted .ico { opacity: 1; color: var(--theme); }
 
 /* ── SORTABLE HEADER WRAPPER ── */
 .sw { display: inline-flex; align-items: center; gap: 4px; }
@@ -314,7 +365,7 @@ const App: React.FC = () => {
 .b-red    { background: rgba(254,242,242,0.9); color: #b91c1c; border-color: rgba(254,202,202,0.7); }
 .b-amber  { background: rgba(255,251,235,0.9); color: #b45309; border-color: rgba(253,230,138,0.7); }
 .b-blue   { background: rgba(219,234,254,0.9); color: #1d4ed8; border-color: rgba(147,197,253,0.7); }
-.b-indigo { background: rgba(79,70,229,0.10);  color: #4f46e5; border-color: rgba(79,70,229,0.20); }
+.b-indigo { background: var(--theme-10);  color: var(--theme); border-color: var(--theme-20); }
 .b-gray   { background: rgba(249,250,251,0.9); color: #6b7280; border-color: rgba(229,231,235,0.7); }
 .b-orange { background: rgba(255,237,213,0.9); color: #c2410c; border-color: rgba(253,186,116,0.7); }
 .b-purple { background: rgba(245,243,255,0.9); color: #7c3aed; border-color: rgba(221,214,254,0.7); }
@@ -329,12 +380,12 @@ const App: React.FC = () => {
 /* ── ROW STATE CLASSES ── */
 .tbl tbody tr.tr-warn { background: rgba(251,191,36,0.06) !important; }
 .tbl tbody tr.tr-neg  { background: rgba(254,226,226,0.10) !important; }
-.tbl tbody tr.tr-sel  { background: rgba(79,70,229,0.05)  !important; }
+.tbl tbody tr.tr-sel  { background: var(--theme-10) !important; }
 .tbl tbody tr.tr-ad   { background: rgba(255,237,213,0.10) !important; }
 
 /* ── INLINE ACTION BUTTONS ── */
 .tbtn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 7px; border: 1px solid rgba(209,213,219,0.8); font-size: 10px; font-weight: 700; cursor: pointer; background: white; color: #6b7280; font-family: inherit; transition: all 0.12s; }
-.tbtn:hover { background: rgba(79,70,229,0.10); color: #4f46e5; border-color: rgba(79,70,229,0.20); }
+.tbtn:hover { background: var(--theme-10); color: var(--theme); border-color: var(--theme-20); }
 .tbtn.del:hover { background: rgba(254,242,242,0.9); color: #b91c1c; border-color: rgba(254,202,202,0.7); }
 
 /* ── PRODUCT COLUMN STRUCTURES ── */
@@ -354,7 +405,7 @@ const App: React.FC = () => {
 .g4  { background: rgba(255,251,235,0.9); color: #b45309; border-color: rgba(253,230,138,0.8); }
 .g5  { background: rgba(255,241,242,0.9); color: #be123c; border-color: rgba(254,205,211,0.8); }
 .dd-btn { width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0; border: 1px solid rgba(209,213,219,0.7); background: white; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.12s; color: #9ca3af; }
-.dd-btn:hover { background: rgba(79,70,229,0.10); color: #4f46e5; border-color: rgba(79,70,229,0.20); }
+.dd-btn:hover { background: var(--theme-10); color: var(--theme); border-color: var(--theme-20); }
 .dd-btn svg { width: 12px; height: 12px; }
 
 /* ── RUNWAY WRAP ── */
@@ -363,35 +414,43 @@ const App: React.FC = () => {
 `}</style>
             <div className="h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent overflow-hidden">
                 {userProfile.ambientGlass && <div className="fixed inset-0 z-[1] pointer-events-none transition-all duration-500 bg-custom-ambient backdrop-blur-custom-ambient" />}
-                <aside className={`w-60 border-r border-custom-glass hidden md:flex flex-col fixed h-full z-40 shadow-sm transition-all duration-300 bg-custom-glass`}>
-                    <div className="p-4 flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: userProfile.themeColor }}>S</div>
-                        <span className="font-bold text-lg tracking-tight text-gray-900">Sello UK Hub</span>
+                <div className="group/sidebar hidden md:block fixed h-full z-40" style={{ width: sidebarCollapsed ? 64 : 240, transition: 'width 300ms' }}>
+                <aside className="w-full h-full flex flex-col border-r border-custom-glass shadow-sm bg-custom-glass overflow-hidden">
+                    <div className={`flex items-center border-b border-custom-glass transition-all duration-300 ${sidebarCollapsed ? 'p-3 justify-center' : 'p-4 gap-3'}`}>
+                        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: userProfile.themeColor }}>S</div>
+                        {!sidebarCollapsed && <span className="font-bold text-lg tracking-tight text-gray-900 flex-1 truncate">Sello UK Hub</span>}
                     </div>
                     <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
                         {[
                             { id: 'overview', icon: LayoutDashboard, label: t('nav_overview') },
-                            { id: 'products', icon: Package, label: t('nav_products') },
-                            { id: 'platforms', icon: Globe, label: t('nav_platforms') },
-                            { id: 'strategy', icon: Calculator, label: t('nav_strategy') },
-                            { id: 'costs', icon: DollarSign, label: t('nav_costs') },
+                            { id: 'products', icon: ShoppingBasket, label: t('nav_products') },
+                            { id: 'platforms', icon: Store, label: t('nav_platforms') },
+                            { id: 'strategy', icon: FlaskConical, label: t('nav_strategy') },
+                            { id: 'costs', icon: BadgePoundSterling, label: t('nav_costs') },
                             { id: 'promotions', icon: Tag, label: t('nav_promotions') },
                             { id: 'custom-report', icon: Table, label: 'Custom Reports' },
-                            { id: 'tools', icon: Wrench, label: t('nav_toolbox') },
+                            { id: 'tools', icon: Briefcase, label: t('nav_toolbox') },
                             { id: 'settings', icon: Settings, label: t('nav_config') },
                             { id: 'definitions', icon: BookOpen, label: t('nav_definitions') }
                         ].map((item) => {
                             const isActive = currentView === item.id;
                             return (
-                                <button
-                                    key={item.id}
-                                    onClick={() => setCurrentView(item.id as any)}
-                                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all text-sm ${isActive ? 'bg-opacity-10' : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'}`}
-                                    style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
-                                >
-                                    <item.icon className="w-4 h-4" style={isActive ? { color: userProfile.themeColor } : {}} />
-                                    {item.label}
-                                </button>
+                                <div key={item.id} className="relative group">
+                                    <button
+                                        onClick={() => setCurrentView(item.id as any)}
+                                        className={`w-full flex items-center rounded-lg font-medium transition-all text-sm ${sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'} ${isActive ? 'bg-opacity-10' : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'}`}
+                                        style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
+                                        title={sidebarCollapsed ? item.label : undefined}
+                                    >
+                                        <item.icon className="w-4 h-4 flex-shrink-0" style={isActive ? { color: userProfile.themeColor } : {}} />
+                                        {!sidebarCollapsed && item.label}
+                                    </button>
+                                    {sidebarCollapsed && (
+                                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-gray-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                            {item.label}
+                                        </div>
+                                    )}
+                                </div>
                             );
                         })}
                         {searchSessions && searchSessions.length > 0 && (
@@ -424,8 +483,8 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </nav>
-                    <div className="p-3 border-t border-custom-glass space-y-2">
-                        <div className="px-1 flex gap-1">
+                    <div className={`border-t border-custom-glass space-y-2 ${sidebarCollapsed ? 'p-2' : 'p-3'}`}>
+                        {!sidebarCollapsed && <div className="px-1 flex gap-1">
                             <button
                                 onClick={handleBackup}
                                 disabled={syncStatus === 'syncing' || syncStatus === 'pushing'}
@@ -441,13 +500,14 @@ const App: React.FC = () => {
                                 <Upload className="w-3 h-3" /> {t('restore_db')}
                             </button>
                             <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />
-                        </div>
-                        <button
+                        </div>}
+                        {sidebarCollapsed && <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />}
+                        {!sidebarCollapsed && <button
                             onClick={handleSync}
                             disabled={syncStatus === 'pushing' || syncStatus === 'syncing'}
                             className={`w-full flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg text-[10px] font-bold transition-all border ${syncStatus === 'error'
                                 ? 'text-red-600 border-red-200 bg-red-50/50 hover:bg-red-50'
-                                : 'text-indigo-600 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50'
+                                : 'text-theme border-theme-20 bg-theme-10 hover:bg-theme-10'
                                 } disabled:opacity-40 disabled:cursor-not-allowed`}
                         >
                             <div className="flex items-center gap-1.5 w-full">
@@ -464,7 +524,7 @@ const App: React.FC = () => {
                                         {syncTotal > 0 && (
                                             <div className="w-full bg-gray-200 rounded-full h-1">
                                                 <div
-                                                    className="bg-indigo-500 rounded-full h-1 transition-all duration-300"
+                                                    className="bg-theme rounded-full h-1 transition-all duration-300"
                                                     style={{ width: `${Math.round((syncProgress / syncTotal) * 100)}%` }}
                                                 />
                                             </div>
@@ -486,8 +546,8 @@ const App: React.FC = () => {
                                     {new Date(lastSyncedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                 </span>
                             )}
-                        </button>
-                        <div className="bg-gray-50/50 rounded-lg border border-custom-glass overflow-hidden transition-all duration-300">
+                        </button>}
+                        {!sidebarCollapsed && <div className="bg-gray-50/50 rounded-lg border border-custom-glass overflow-hidden transition-all duration-300">
                             <button onClick={() => setIsFreshnessExpanded(!isFreshnessExpanded)} className="w-full flex justify-between items-center p-2 hover:bg-gray-100/50 transition-colors">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">Data Freshness</span>
@@ -515,26 +575,40 @@ const App: React.FC = () => {
                                     ))}
                                 </div>
                             )}
-                        </div>
+                        </div>}
                     </div>
                 </aside>
-                <main className="flex-1 md:ml-60 min-0 relative z-10 flex flex-col h-full overflow-hidden">
-                    <header className="sticky top-0 z-50 flex justify-between items-center gap-8 px-8 py-4 bg-custom-glass border-b border-custom-glass/50 shadow-sm transition-all duration-300">
-                        <div>
-                            <h1 className="text-2xl font-bold transition-colors" style={headerStyle}>
+                {/* Floating sidebar toggle — appears on hover at vertical centre of sidebar edge */}
+                <button
+                    onClick={toggleSidebar}
+                    className="absolute top-1/2 -translate-y-1/2 -right-3 w-6 h-6 rounded-full border border-custom-glass bg-white shadow-md flex items-center justify-center text-gray-400 hover:text-gray-700 hover:shadow-lg transition-all duration-150 opacity-0 group-hover/sidebar:opacity-100 z-50"
+                    title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        {sidebarCollapsed
+                            ? <path d="M9 18l6-6-6-6"/>
+                            : <path d="M15 18l-6-6 6-6"/>
+                        }
+                    </svg>
+                </button>
+                </div>
+                <main className={`flex-1 ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-60'} min-0 relative z-10 flex flex-col h-full overflow-hidden transition-all duration-300`}>
+                    <header className="sticky top-0 z-50 flex items-center gap-4 px-6 h-[60px] bg-custom-glass border-b border-custom-glass/50 shadow-sm transition-all duration-300">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <h1 className="text-sm font-bold transition-colors whitespace-nowrap" style={headerStyle}>
                                 {pageTitles[currentView] || pageTitles.settings}
                             </h1>
-                            <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
+                            <span className="text-gray-300 text-xs">·</span>
+                            <p className="text-xs truncate" style={{ ...headerStyle, opacity: 0.6 }}>
                                 {pageDescs[currentView] || pageDescs.settings}
                             </p>
                         </div>
                         <div className="flex-1 max-w-2xl"> <GlobalSearch onSearch={handleSearch} isLoading={isSearchLoading} platforms={Object.keys(pricingRules)} products={products} /> </div>
-                        <div className="flex flex-col items-end gap-1">
-                            <div className="flex items-center gap-4">
-                                {userProfile.name && <span className="text-sm font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>}
+                        <div className="flex items-center gap-3">
+                                {userProfile.name && <span className="text-xs font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>}
                                 {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />}
-                                <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button>
-                                <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
+                                <button className="relative p-1.5 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-4 h-4" /></button>
+                                <div className="h-4 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
 
                                 {/* Admin Mode Controls */}
                                 {isAdminMode ? (
@@ -543,13 +617,13 @@ const App: React.FC = () => {
                                         <button
                                             onClick={handleAdminPush}
                                             disabled={(!isDirty && syncStatus === 'idle') || syncStatus === 'pushing'}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${syncStatus === 'pushing'
-                                                ? 'bg-indigo-100 text-indigo-500 border-indigo-200 cursor-wait'
+                                            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all border shadow-sm ${syncStatus === 'pushing'
+                                                ? 'bg-theme-10 text-theme border-theme-20 cursor-wait'
                                                 : syncStatus === 'error'
                                                     ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-pointer'
                                                     : !isDirty
                                                         ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                        : 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 cursor-pointer shadow-indigo-200'
+                                                        : 'bg-theme text-white border-theme hover:opacity-90 cursor-pointer'
                                                 }`}
                                         >
                                             {syncStatus === 'pushing' ? (
@@ -581,7 +655,7 @@ const App: React.FC = () => {
                                                 const result = handleAdminExit();
                                                 if (result.needsConfirmation) setShowExitConfirm(true);
                                             }}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100 transition-all shadow-sm"
+                                            className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100 transition-all shadow-sm"
                                         >
                                             <Lock className="w-3 h-3" />
                                             ADMIN MODE
@@ -590,8 +664,8 @@ const App: React.FC = () => {
                                     </div>
                                 ) : (
                                     <button
-                                        onClick={() => { setShowAdminModal(true); setAdminPasswordInput(''); setAdminLoginError(''); }}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100/60 text-gray-500 border border-gray-200 rounded-lg text-[10px] font-bold hover:bg-gray-200/60 transition-all"
+                                        onClick={() => setShowAdminModal(true)}
+                                        className="flex items-center gap-1.5 px-3 py-1 bg-gray-100/60 text-gray-500 border border-gray-200 rounded-lg text-[10px] font-bold hover:bg-gray-200/60 transition-all"
                                     >
                                         <Lock className="w-3 h-3" />
                                         USER MODE
@@ -599,8 +673,6 @@ const App: React.FC = () => {
                                 )}
 
                                 <UserProfile profile={userProfile} onUpdate={setUserProfile} />
-                            </div>
-                            <span className="text-[10px]" style={{ ...headerStyle, opacity: 0.6 }}>{TAX_NOTE_SHORT}</span>
                         </div>
                     </header>
                     <div ref={mainContentRef} className="flex-1 overflow-y-auto relative p-4 md:p-8">
@@ -711,7 +783,7 @@ const App: React.FC = () => {
                                                     {hasInventory ? t('reupload_inventory') : t('upload_inventory')}
                                                 </button>
                                             </div>
-                                            <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-indigo-200 shadow-lg scale-105 z-10'}`}>
+                                            <div className={`rounded-xl p-8 border transition-all flex flex-col items-center relative ${!hasInventory ? 'bg-gray-50/50 border-gray-200 opacity-60' : 'bg-custom-glass border-theme-20 shadow-lg scale-105 z-10'}`}>
                                                 <div className={`absolute -top-4 px-4 py-1 rounded-full text-sm font-bold shadow-sm ${!hasInventory ? 'bg-gray-400 text-white' : 'text-white'}`}
                                                     style={hasInventory ? { backgroundColor: userProfile.themeColor } : {}}>
                                                     {t('step_2')}
@@ -763,8 +835,6 @@ const App: React.FC = () => {
                                     onDeepDive={handleDeepDiveRequest}
                                     onSearch={handleSearch}
                                     thresholds={thresholds}
-                                    deductRefunds={deductRefunds}
-                                    setDeductRefunds={setDeductRefunds}
                                     mapJumpState={mapJumpState}
                                 />
                             )}
@@ -787,8 +857,6 @@ const App: React.FC = () => {
                                 onDeepDive={handleDeepDiveRequest}
                                 onSearch={handleSearch}
                                 thresholds={thresholds}
-                                deductRefunds={deductRefunds}
-                                setDeductRefunds={setDeductRefunds}
                                 onAnalyzeCarrier={handleAnalyzeCarrier}
                                 skuFamilies={skuFamilies}
                                 setSkuFamilies={setSkuFamilies}
@@ -807,8 +875,6 @@ const App: React.FC = () => {
                                 products={products}
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory}
-                                deductRefunds={deductRefunds}
-                                setDeductRefunds={setDeductRefunds}
                                 pricingRules={pricingRules}
                                 themeColor={userProfile.themeColor}
                                 adGroups={adGroups}
@@ -832,8 +898,6 @@ const App: React.FC = () => {
                                 themeColor={userProfile.themeColor}
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory}
-                                deductRefunds={deductRefunds}
-                                setDeductRefunds={setDeductRefunds}
                                 promotions={promotions || []}
                                 priceChangeHistory={priceChangeHistory || []}
                                 costChangeHistory={costChangeHistory || []}
@@ -1037,47 +1101,11 @@ const App: React.FC = () => {
             {/* Admin Password Modal */}
             {
                 showAdminModal && (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-                            <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                    <Lock className="w-5 h-5 text-indigo-600" />
-                                    Enter Admin Mode
-                                </h3>
-                                <button onClick={() => setShowAdminModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400"><X className="w-4 h-4" /></button>
-                            </div>
-                            <div className="p-6 space-y-4">
-                                <p className="text-sm text-gray-500">Enter the admin password to unlock push-to-database controls.</p>
-                                <input
-                                    type="password"
-                                    value={adminPasswordInput}
-                                    onChange={e => { setAdminPasswordInput(e.target.value); setAdminLoginError(''); }}
-                                    onKeyDown={async e => {
-                                        if (e.key === 'Enter') {
-                                            const r = await handleAdminToggle(adminPasswordInput);
-                                            if (r.success) { setShowAdminModal(false); } else { setAdminLoginError(r.error || 'Invalid password'); }
-                                        }
-                                    }}
-                                    placeholder="Admin password..."
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
-                                    autoFocus
-                                />
-                                {adminLoginError && <p className="text-xs text-red-600 font-medium">{adminLoginError}</p>}
-                            </div>
-                            <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
-                                <button onClick={() => setShowAdminModal(false)} className="px-5 py-2 text-gray-500 font-bold text-sm hover:text-gray-700">Cancel</button>
-                                <button
-                                    onClick={async () => {
-                                        const r = await handleAdminToggle(adminPasswordInput);
-                                        if (r.success) { setShowAdminModal(false); } else { setAdminLoginError(r.error || 'Invalid password'); }
-                                    }}
-                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all"
-                                >
-                                    Unlock
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <AdminModal
+                        onClose={() => setShowAdminModal(false)}
+                        onSuccess={() => setShowAdminModal(false)}
+                        handleAdminToggle={handleAdminToggle}
+                    />
                 )
             }
 
@@ -1093,7 +1121,7 @@ const App: React.FC = () => {
                             <div className="px-6 pb-6 flex flex-col gap-2">
                                 <button
                                     onClick={async () => { setShowExitConfirm(false); await handleAdminPush(); handleAdminExit(true); }}
-                                    className="w-full px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
+                                    className="w-full px-4 py-2.5 bg-theme text-white rounded-xl text-sm font-bold hover:opacity-90 transition-all"
                                 >
                                     Push Now
                                 </button>

@@ -1,5 +1,6 @@
 
 import { useState, useMemo, useEffect } from 'react';
+import { localDateStamp } from '../../../utils/format';
 import { Product, SkuCostDetail } from '../../../types';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortKey, ViewMode } from '../types';
@@ -130,7 +131,7 @@ export const useCostManagementState = (products: Product[]) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `cost_breakdown_${modeLabel}_${includeVat ? 'IncVAT' : 'ExVAT'}_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute('download', `cost_breakdown_${modeLabel}_${includeVat ? 'IncVAT' : 'ExVAT'}_${localDateStamp()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

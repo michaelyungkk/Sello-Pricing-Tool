@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { formatSmartMoney } from '../../../utils/format';
+import { formatSmartMoney, localDateStamp} from '../../../utils/format';
 import { Upload, X, Check, AlertCircle, Loader2, CheckSquare, ShieldCheck, Tag, Filter, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product, PromotionItem } from '../../../types';
@@ -9,7 +9,7 @@ import { PromoCheckerToolProps, UploadedItem, ProcessedResult } from '../types';
 export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, pricingRules, products = [], themeColor }) => {
     const [file, setFile] = useState<File | null>(null);
     const [platform, setPlatform] = useState<string>('');
-    const [checkDate, setCheckDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [checkDate, setCheckDate] = useState<string>(localDateStamp());
     
     const [results, setResults] = useState<ProcessedResult[] | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);

@@ -2,7 +2,7 @@
 import React from 'react';
 import { Activity, Calendar, Search, Info, Rows } from 'lucide-react';
 import { SelectFilter } from '../../common/SelectFilter';
-import AuditPanel from '../../AuditPanel';
+import AuditPanel from '../../common/AuditPanel';
 import { formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { asDateKey } from '../../../services/dateUtils';
 import { VAT_MULTIPLIER } from '../../../constants';

@@ -1,11 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { formatSmartMoney } from '../../../utils/format';
+import { formatSmartMoney, localDateStamp} from '../../../utils/format';
 import { PromotionEvent, Product, PromotionItem } from '../../../types';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
-import { TagSearchInput } from '../../TagSearchInput';
-import { GradeBadge } from '../../GradeBadge';
+import { TagSearchInput } from '../../common/TagSearchInput';
+import { GradeBadge } from '../../common/GradeBadge';
 import { StatusBadge } from './StatusBadge';
 import { getTodayKeyMelbourne } from '../../../services/dateUtils';
 import { Download } from 'lucide-react';
@@ -178,7 +178,7 @@ export const AllPromoSkusView: React.FC<AllPromoSkusViewProps> = ({ promotions, 
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `master_promo_log_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute('download', `master_promo_log_${localDateStamp()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

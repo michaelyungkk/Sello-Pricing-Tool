@@ -10,7 +10,7 @@ import { buildRefundOverview } from '../../../services/refundAgg';
 import { sortRows, SortState } from '../../../utils/tableSort';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { parseReturnsReason } from '../../../services/returnsReasonCodes';
-import AuditPanel from '../../AuditPanel';
+import AuditPanel from '../../common/AuditPanel';
 
 interface ReturnsAndRefundsTabProps {
     refundHistory: RefundLog[];

@@ -158,10 +158,11 @@ function parseReturnsFile(buffer: ArrayBuffer, startKey: string, endKey: string)
         const monthI = idx('month');
         const dayI   = idx('day');
 
-        // First pass: collect all rows in window, group resend rows by base order ID
-        // to detect multi-SKU resend orders and apply qty/amt correction
-        const rawRows: { plat: string; sku: string; oid: string; amt: number; qty: number; isResend: boolean; d: string }[] = [];
-        const resendOrderGroups = new Map<string, number>(); // baseOid -> SKU line count
+        // Single pass: ERP now exports correct qty/amt per SKU line (fixed Mar 2026)
+        // The old two-pass correction for multi-SKU resend orders is no longer needed
+        const platforms: ParsedReturnData['platforms'] = {};
+        const dates: string[] = [];
+        let rowCount = 0;
 
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
@@ -180,51 +181,16 @@ function parseReturnsFile(buffer: ArrayBuffer, startKey: string, endKey: string)
 
             const plat = String(row[l2I] || '').trim();
             const sku  = skuI !== -1 ? String(row[skuI] || '').trim().toLowerCase() : '';
-            const oid  = orderI !== -1 ? String(row[orderI] || '').trim() : '';
             const amt  = parseFloat(String(row[amtI] || 0)) || 0;
             const qty  = parseFloat(String(row[qtyI] || 0)) || 0;
-            const otype = typeI !== -1 ? String(row[typeI] || '').toLowerCase() : '';
 
             if (sku === 'freight' || sku === 'addfreight') continue;
             if (!plat || amt === 0) continue;
 
-            const isResend = otype.includes('resend') || oid.toLowerCase().includes('-resend');
-
-            if (isResend && oid) {
-                // Normalise to base order ID
-                let base = oid;
-                while (/-resend$/i.test(base)) base = base.replace(/-resend$/i, '');
-                resendOrderGroups.set(base, (resendOrderGroups.get(base) || 0) + 1);
-            }
-
-            rawRows.push({ plat, sku, oid, amt, qty, isResend, d });
-        }
-
-        // Second pass: aggregate with resend correction applied
-        const platforms: ParsedReturnData['platforms'] = {};
-        const dates: string[] = [];
-        let rowCount = 0;
-
-        for (const r of rawRows) {
-            let amt = r.amt;
-            let qty = r.qty;
-
-            if (r.isResend && r.oid) {
-                // Get base order ID
-                let base = r.oid;
-                while (/-resend$/i.test(base)) base = base.replace(/-resend$/i, '');
-                const nSkuLines = resendOrderGroups.get(base) || 1;
-                // Apply correction for multi-SKU resend orders
-                if (nSkuLines > 1 && qty > 1) {
-                    amt = amt / qty;   // per-unit cost
-                    qty = 1;           // actual qty per SKU line
-                }
-            }
-
-            dates.push(r.d);
-            if (!platforms[r.plat]) platforms[r.plat] = { qty: 0, amt: 0 };
-            platforms[r.plat].amt += amt;
-            platforms[r.plat].qty += qty;
+            dates.push(d);
+            if (!platforms[plat]) platforms[plat] = { qty: 0, amt: 0 };
+            platforms[plat].amt += amt;
+            platforms[plat].qty += qty;
             rowCount++;
         }
 
@@ -557,9 +523,15 @@ export const ERPCrossCheckTool: React.FC<ERPCrossCheckToolProps> = ({
     const startKey = useCustomRange ? customStart : salesData?.dateRange.start || '';
     const endKey   = useCustomRange ? customEnd   : salesData?.dateRange.end   || '';
 
+    // Expensive: iterates all salesHistory/refundHistory — only re-runs when data or date range changes
+    // deductReturns is intentionally excluded — it doesn't affect aggregation, only final assembly
+    const appAgg = React.useMemo(() => {
+        return getAppAggregates(salesHistory, refundHistory, returnsData, startKey, endKey, true);
+    }, [salesHistory, refundHistory, returnsData, startKey, endKey]);
+
+    // Cheap: assembles rows from pre-computed aggregates — re-runs instantly on deductReturns toggle
     const rows: PlatformRow[] = React.useMemo(() => {
         if (!salesData) return [];
-        const appAgg = getAppAggregates(salesHistory, refundHistory, returnsData, startKey, endKey, deductReturns);
         const allPlatforms = new Set([...Object.keys(salesData.platforms), ...Object.keys(appAgg)]);
 
         return Array.from(allPlatforms).map(plat => {
@@ -599,7 +571,7 @@ export const ERPCrossCheckTool: React.FC<ERPCrossCheckToolProps> = ({
                 status: classify(worst)
             } as PlatformRow;
         }).sort((a, b) => b.file_revenue - a.file_revenue);
-    }, [salesData, returnsData, salesHistory, refundHistory, startKey, endKey, deductReturns]);
+    }, [salesData, returnsData, appAgg, startKey, endKey, deductReturns]);
 
     const summary = React.useMemo(() => ({
         ok:    rows.filter(r => r.status === 'ok').length,

@@ -7,10 +7,10 @@ import { FilterBar } from '../../common/FilterBar';
 import { Columns, ChevronDown, CheckSquare, Square, Download, GripVertical, Settings2, ArrowUp, ArrowDown, Plus, Trash2, ListFilter, Trophy } from 'lucide-react';
 import { asDateKey, isDateKeyBetween } from '../../../services/dateUtils';
 import { calcRevenue, calcProfit, calcUnits } from '../../../services/metrics';
-import { formatPct, formatNumber, formatMoney, formatSmartMoney } from '../../../utils/format';
+import { formatPct, formatNumber, formatMoney, formatSmartMoney, localDateStamp} from '../../../utils/format';
 import { VAT_MULTIPLIER } from '../../../constants';
-import { GradeBadge } from '../../GradeBadge';
-import AuditPanel from '../../AuditPanel';
+import { GradeBadge } from '../../common/GradeBadge';
+import AuditPanel from '../../common/AuditPanel';
 import { hexToRgb } from '../../../utils/color';
 import * as XLSX from 'xlsx';
 
@@ -156,6 +156,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
 
     // Updated Sort State to support hierarchy
     const [sortRules, setSortRules] = useState<SortRule[]>([{ key: 'totalQty', dir: 'desc' }]);
+    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
     const [draggedPlatform, setDraggedPlatform] = useState<string | null>(null);
     const [visibleColumns, setVisibleColumns] = useState<string[]>(['qty', 'share', 'pm']);
@@ -303,7 +304,8 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         return { processedData: sorted };
     }, [products, priceHistoryMap, dateWindow, selectedPlatforms, searchTags, searchQuery, deductRefunds, sortRules, refundHistory]);
 
-    const handleExport = () => {
+    const handleExport = (targetPlatform: string = 'All') => {
+        const normalize = (s: string) => (s || '').toLowerCase().trim();
         const headers = ['SKU', 'Name', 'Total Qty'];
         selectedPlatforms.forEach(p => {
             if (visibleColumns.includes('qty')) headers.push(`${p} QTY`);
@@ -315,7 +317,17 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         });
 
         const csvData = processedData.map(row => {
-            const r = [row.sku, row.name, row.totalQty];
+            // Resolve SKU alias for target platform
+            let skuCell = row.sku;
+            if (targetPlatform !== 'All') {
+                const product = products.find(p => p.sku === row.sku);
+                const ch = product?.channels?.find(c => normalize(c.platform) === normalize(targetPlatform))
+                    || product?.channels?.find(c => normalize(c.platform).includes(normalize(targetPlatform)));
+                const aliases = ch?.skuAlias ? ch.skuAlias.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+                if (aliases.length > 0) skuCell = aliases[0]; // use first alias
+            }
+
+            const r: any[] = [skuCell, row.name, row.totalQty];
             selectedPlatforms.forEach(p => {
                 if (visibleColumns.includes('qty')) r.push(row[`${p}_qty`]);
                 if (visibleColumns.includes('share')) r.push(row[`${p}_share`].toFixed(1) + '%');
@@ -330,7 +342,11 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
         const ws = XLSX.utils.aoa_to_sheet([headers, ...csvData]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "PlatformComparison");
-        XLSX.writeFile(wb, `platform_comparison_${new Date().toISOString().split('T')[0]}.xlsx`);
+        const filename = targetPlatform === 'All'
+            ? `platform_comparison_${localDateStamp()}.xlsx`
+            : `platform_comparison_${targetPlatform.toLowerCase().replace(/\s+/g, '_')}_${localDateStamp()}.xlsx`;
+        XLSX.writeFile(wb, filename);
+        setIsExportMenuOpen(false);
     };
 
     // Header Sort Helper: Shift+Click appends, Click replaces
@@ -477,11 +493,32 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
                             icon={Settings2}
                         />
                         <button
-                            onClick={handleExport}
+                            onClick={() => setIsExportMenuOpen(v => !v)}
                             className="px-3 h-8 text-xs font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm flex items-center gap-2 transition-colors"
                         >
                             <Download className="w-4 h-4" /> Export
                         </button>
+                        {isExportMenuOpen && createPortal(
+                            <div className="fixed inset-0 z-[100]" onClick={() => setIsExportMenuOpen(false)}>
+                                <div className="absolute bg-white rounded-xl shadow-2xl w-56 overflow-hidden border border-gray-200" style={{top: 120, right: 16}} onClick={e => e.stopPropagation()}>
+                                    <div className="p-2">
+                                        <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Select Format</div>
+                                        <button onClick={() => handleExport('All')} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">Standard (Master SKUs)</button>
+                                        <div className="my-1 border-t border-gray-100"></div>
+                                        <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export for Platform</div>
+                                        <div className="max-h-48 overflow-y-auto">
+                                            {selectedPlatforms.map(platform => (
+                                                <button key={platform} onClick={() => handleExport(platform)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between rounded-lg">
+                                                    <span>{platform}</span>
+                                                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Alias Mode</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>,
+                            document.body
+                        )}
                     </div>
                 }
             />

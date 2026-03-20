@@ -4,9 +4,9 @@ import { Activity, Search, ArrowUpRight, ArrowDownRight, Minus, Trophy, LayoutGr
 import { Product, PriceLog, RefundLog } from '../../../types';
 import { aggregateProductTrends, ProductTrendData } from '../../../services/productTrendAgg';
 import { formatSmartMoney, formatPct } from '../../../utils/format';
-import { GradeBadge } from '../../GradeBadge';
+import { GradeBadge } from '../../common/GradeBadge';
 import { SortableHeader } from '../../common/SortableHeader';
-import AuditPanel from '../../AuditPanel';
+import AuditPanel from '../../common/AuditPanel';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { BcgMatrix } from '../parts/BcgMatrix';
 

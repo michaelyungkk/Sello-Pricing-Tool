@@ -8,7 +8,7 @@ import { TAX_NOTE_SHORT } from '../../../services/taxPolicy';
 import { PlatformSummary, PlatformSortKey } from '../platformManagement.types';
 import { PricingRules } from '../../../types';
 import { PlatformMetricCard } from '../parts/PlatformMetricCard';
-import AuditPanel from '../../AuditPanel';
+import AuditPanel from '../../common/AuditPanel';
 import { FilterBar } from '../../common/FilterBar';
 
 interface PlatformOverviewTabProps {

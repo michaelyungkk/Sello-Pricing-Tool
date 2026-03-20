@@ -54,7 +54,8 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [searchInput, setSearchInput] = useState('');
-    const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+    const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, flipUp: false });
+    const [draft, setDraft] = useState<string[]>([]);
     const triggerRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -70,13 +71,23 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
 
     const clearSearch = () => { setSearchTags([]); setSearchInput(''); };
 
-    // Position the portal dropdown below the trigger
+    // Position the portal dropdown — flips upward if not enough space below
+    const DROPDOWN_HEIGHT = 360; // max-h of the dropdown list
     const openDropdown = () => {
         if (triggerRef.current) {
             const rect = triggerRef.current.getBoundingClientRect();
-            setDropdownPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const flipUp = spaceBelow < DROPDOWN_HEIGHT && rect.top > DROPDOWN_HEIGHT;
+            setDropdownPos({
+                top: flipUp
+                    ? rect.top + window.scrollY - DROPDOWN_HEIGHT - 4
+                    : rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                flipUp
+            });
         }
         setIsOpen(true);
+        if (!singleSelect) setDraft(currentSelected);
     };
 
     useEffect(() => {
@@ -95,21 +106,23 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen]);
 
+    const applyAndClose = (sel: string[]) => {
+        onChange(sel);
+        setIsOpen(false);
+        clearSearch();
+    };
+
     const toggleOption = (option: string) => {
         if (singleSelect) {
             if (currentSelected.includes(option)) {
                 onChange([]);
             } else {
-                onChange([option]);
-                setIsOpen(false);
-                clearSearch();
+                applyAndClose([option]);
             }
         } else {
-            if (currentSelected.includes(option)) {
-                onChange(currentSelected.filter(item => item !== option));
-            } else {
-                onChange([...currentSelected, option]);
-            }
+            setDraft(prev =>
+                prev.includes(option) ? prev.filter(o => o !== option) : [...prev, option]
+            );
         }
     };
 
@@ -159,7 +172,10 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
                 <div
                     ref={dropdownRef}
                     className="fixed w-64 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] overflow-hidden animate-in fade-in zoom-in duration-100"
-                    style={{ top: dropdownPos.top, left: dropdownPos.left }}
+                    style={{
+                        top: dropdownPos.top,
+                        left: Math.min(dropdownPos.left, window.innerWidth - 264 - 8),
+                    }}
                 >
                     {/* Header: tag chip search + actions */}
                     <div className="p-2 border-b border-gray-100 space-y-2">
@@ -192,11 +208,10 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
                                             addTags(searchInput);
                                         } else if (filteredOptions.length > 0) {
                                             if (singleSelect) {
-                                                onChange([filteredOptions[0]]);
-                                                setIsOpen(false); clearSearch();
+                                                applyAndClose([filteredOptions[0]]);
                                             } else {
-                                                const toAdd = filteredOptions.filter(o => !currentSelected.includes(o));
-                                                onChange([...currentSelected, ...toAdd]);
+                                                const toAdd = filteredOptions.filter(o => !draft.includes(o));
+                                                setDraft(prev => [...prev, ...toAdd]);
                                                 clearSearch();
                                             }
                                         }
@@ -222,12 +237,12 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
                             {!singleSelect && (
                                 <button
                                     className="text-[10px] text-gray-500 hover:text-gray-800 font-medium"
-                                    onClick={e => { e.stopPropagation(); onChange(options); }}
+                                    onClick={e => { e.stopPropagation(); setDraft(options || []); }}
                                 >Select All</button>
                             )}
                             <button
                                 className="text-[10px] text-gray-500 hover:text-gray-800 font-medium ml-auto"
-                                onClick={e => { e.stopPropagation(); onChange([]); if (singleSelect) setIsOpen(false); }}
+                                onClick={e => { e.stopPropagation(); if (singleSelect) { onChange([]); setIsOpen(false); } else setDraft([]); }}
                             >Clear</button>
                         </div>
                     </div>
@@ -235,7 +250,7 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
                     <div className="max-h-60 overflow-y-auto p-1">
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map(opt => {
-                                const isSelected = currentSelected.includes(opt);
+                                const isSelected = singleSelect ? currentSelected.includes(opt) : draft.includes(opt);
                                 return (
                                     <div
                                         key={opt}
@@ -262,6 +277,16 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
                             <div className="p-4 text-center text-[10px] text-gray-400 italic">No matches found</div>
                         )}
                     </div>
+                    {!singleSelect && (
+                        <div className="px-2 py-2 border-t border-gray-100 flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-gray-400">{draft.length} selected</span>
+                            <button
+                                onClick={e => { e.stopPropagation(); applyAndClose(draft); }}
+                                className="flex-1 py-1.5 rounded-lg text-[11px] font-bold text-white transition-all"
+                                style={{ background: 'var(--theme)' }}
+                            >Apply</button>
+                        </div>
+                    )}
                 </div>,
                 document.body
             )}

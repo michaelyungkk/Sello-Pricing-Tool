@@ -1,8 +1,8 @@
 
 
 import { Product, AnalysisResult, PlatformConfig } from "../types";
-import { buildQueryPlanFromText } from "../components/search/aiParser";
-import { QueryPlan } from "../components/search/queryPlan";
+import { buildQueryPlanFromText } from "./search/aiParser";
+import { QueryPlan } from "./search/queryPlan";
 import { ThresholdConfig, DEFAULT_THRESHOLDS } from "../services/thresholdsConfig";
 import { VAT_MULTIPLIER } from "../constants";
 

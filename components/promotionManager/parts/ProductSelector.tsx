@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Product, PromotionEvent, PromotionItem } from '../../../types';
-import { TagSearchInput } from '../../TagSearchInput';
+import { TagSearchInput } from '../../common/TagSearchInput';
 import { ArrowLeft, Check, Minus } from 'lucide-react';
 import { formatSmartMoney } from '../../../utils/format';
 

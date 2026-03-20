@@ -9,7 +9,7 @@ import { Flag } from '../platformManagement.types';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
 import { SelectFilter } from '../../common/SelectFilter';
-import AuditPanel from '../../AuditPanel';
+import AuditPanel from '../../common/AuditPanel';
 import { FilterBar } from '../../common/FilterBar';
 
 interface PerformanceTrendTabProps {

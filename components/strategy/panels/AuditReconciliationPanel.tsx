@@ -1,6 +1,6 @@
 
 import React from 'react';
-import AuditPanel from '../../AuditPanel';
+import AuditPanel from '../../common/AuditPanel';
 import { VAT_MULTIPLIER } from '../../../constants';
 
 interface AuditReconciliationPanelProps {

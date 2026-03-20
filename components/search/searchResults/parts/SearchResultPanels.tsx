@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Layers, Package, MapPin, TrendingDown, TrendingUp, Info, ChevronDown, ChevronRight, ArrowRight } from 'lucide-react';
-import { GradeBadge } from '../../../GradeBadge';
+import { GradeBadge } from '../../../common/GradeBadge';
 import { formatNumber, formatMoney, formatSmartMoney, formatPct } from '../../../../utils/format';
 import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct } from '../../../../services/metrics';
 import { ThresholdConfig } from '../../../../services/thresholdsConfig';

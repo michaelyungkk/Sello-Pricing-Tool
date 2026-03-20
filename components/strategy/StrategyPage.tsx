@@ -1,0 +1,36 @@
+
+import React from 'react';
+import { StrategyPageContainer } from './StrategyPageContainer';
+import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog, SkuFamily, OptimalPriceResult } from '../../types';
+import { ThresholdConfig } from '../../services/thresholdsConfig';
+
+interface StrategyPageProps {
+    products: Product[];
+    pricingRules: PricingRules;
+    currentConfig: StrategyConfig;
+    onSaveConfig: (config: StrategyConfig) => void;
+    themeColor: string;
+    priceHistoryMap: Map<string, PriceLog[]>;
+    refundHistory?: RefundLog[];
+    deductRefunds: boolean;
+    setDeductRefunds: (v: boolean) => void;
+    promotions: PromotionEvent[];
+    priceChangeHistory: PriceChangeRecord[];
+    costChangeHistory: CostChangeRecord[];
+    inventoryChangeHistory: InventoryChangeRecord[];
+    velocityLookback: VelocityLookback;
+    thresholds?: ThresholdConfig;
+    skuFamilies: SkuFamily[];
+    onUpdatePriceChangeRecord?: (record: PriceChangeRecord) => void;
+    onUpdateCostChangeRecord?: (record: CostChangeRecord) => void;
+    onUpdateInventoryChangeRecord?: (record: InventoryChangeRecord) => void;
+    onManualPriceChange?: (data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
+    onManualCostChange?: (data: Omit<CostChangeRecord, 'id' | 'changeType' | 'percentChange'>) => void;
+    optimalPriceResults?: Map<string, OptimalPriceResult>;
+}
+
+const StrategyPage: React.FC<StrategyPageProps> = (props) => {
+    return <StrategyPageContainer {...props} />;
+};
+
+export default StrategyPage;
