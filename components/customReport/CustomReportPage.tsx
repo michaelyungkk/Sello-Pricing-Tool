@@ -735,7 +735,17 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
     };
 
     const handleRemoveFilter = (id: string) => {
-        setPendingFilters(pendingFilters.filter(f => f.id !== id));
+        const updated = pendingFilters.filter(f => f.id !== id);
+        setPendingFilters(updated);
+        // Immediately apply so table reflects the removal without needing Apply Filters click
+        const prevFilters = filtersRef.current;
+        filtersRef.current = updated;
+        setFilters(updated);
+        const prevHasDim = prevFilters.some(f => f.type === 'dim');
+        const newHasDim = updated.some(f => f.type === 'dim');
+        if (prevHasDim || newHasDim) {
+            setTimeout(() => generateReport(undefined, undefined, updated), 0);
+        }
     };
 
     const handleSave = (nameOverride?: string) => {
@@ -2087,7 +2097,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             </div>
 
                             {/* Apply filters */}
-                            {pendingFilters.length > 0 && (
+                            {pendingFilters.length > 0 && JSON.stringify(pendingFilters) !== JSON.stringify(filters) && (
                                 <button
                                     onClick={applyFilters}
                                     className="w-full py-1.5 rounded-lg text-[10px] font-bold text-white transition-all"
@@ -2294,11 +2304,13 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             </th>
                                         );
                                     })}
-                                    <th colSpan={metrics.length} className="c" style={{ borderLeft: '2px solid rgba(var(--theme-rgb), 0.15)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', color: 'var(--theme)', fontWeight: 800 }}>
-                                        <div className="flex items-center gap-2">
-                                            <span>Grand Total</span>
-                                        </div>
-                                    </th>
+                                    {orderedColHeaders.length > 1 && (
+                                        <th colSpan={metrics.length} className="c" style={{ borderLeft: '2px solid rgba(var(--theme-rgb), 0.15)', borderBottom: '1px solid var(--glass-divider)', padding: '6px 14px', color: 'var(--theme)', fontWeight: 800 }}>
+                                            <div className="flex items-center gap-2">
+                                                <span>Grand Total</span>
+                                            </div>
+                                        </th>
+                                    )}
                                 </tr>
                                 <tr>
                                     {orderedColHeaders.map((ch: any, chIdx: number) => (
@@ -2330,7 +2342,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             );
                                         })
                                     ))}
-                                    {metrics.map((m, mIdx) => {
+                                    {orderedColHeaders.length > 1 && metrics.map((m, mIdx) => {
                                         const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
                                             : m.metricId === 'profit' || m.metricId === 'margin' || m.metricId === 'roi' ? 'cg'
                                             : m.metricId === 'refund_rate' || m.metricId === 'refund_value' ? 'cr'
@@ -2416,7 +2428,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                 );
                                             })
                                         ))}
-                                        {metrics.map((m, mIdx) => {
+                                        {orderedColHeaders.length > 1 && metrics.map((m, mIdx) => {
                                             const val = row[`total_${m.id}`];
                                             const mConfig = getMetricConfig(m.metricId);
                                             const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
