@@ -11,10 +11,10 @@ import StrategyPage from './components/strategy/StrategyPage';
 import PlatformManagementPage from './components/platformManagement/PlatformManagementPage';
 
 import {
-    LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X,
+    LayoutDashboard, FlaskConical, BadgePoundSterling, Tag, Briefcase, Settings, BookOpen, Search, X,
     Download, Upload, Database, CheckCircle, FileBarChart, Bell, History,
-    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Globe,
-    ArrowUp, Package, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2
+    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Store,
+    ArrowUp, ShoppingBasket, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2
 } from 'lucide-react';
 
 import GlobalSearch from './components/shared/GlobalSearch';
@@ -234,6 +234,14 @@ const App: React.FC = () => {
     // Progressive page mounting — pages stagger-mount during browser idle time after initial render
     const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','tools','definitions','settings','custom-report'];
     const [mountedPages, setMountedPages] = useState<Set<string>>(() => new Set<string>());
+    const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+        try { return localStorage.getItem('sello_sidebar_collapsed') === 'true'; } catch { return false; }
+    });
+    const toggleSidebar = () => setSidebarCollapsed(prev => {
+        const next = !prev;
+        try { localStorage.setItem('sello_sidebar_collapsed', String(next)); } catch {}
+        return next;
+    });
 
     // Optimal price curve modal state (extends useAppState's selectedElasticityProduct)
     const [elasticityResult, setElasticityResult] = useState<OptimalPriceResult | null>(null);
@@ -406,35 +414,63 @@ const App: React.FC = () => {
 `}</style>
             <div className="h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent overflow-hidden">
                 {userProfile.ambientGlass && <div className="fixed inset-0 z-[1] pointer-events-none transition-all duration-500 bg-custom-ambient backdrop-blur-custom-ambient" />}
-                <aside className={`w-60 border-r border-custom-glass hidden md:flex flex-col fixed h-full z-40 shadow-sm transition-all duration-300 bg-custom-glass`}>
-                    <div className="p-4 flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: userProfile.themeColor }}>S</div>
-                        <span className="font-bold text-lg tracking-tight text-gray-900">Sello UK Hub</span>
+                <div className="group/sidebar hidden md:block fixed h-full z-40" style={{ width: sidebarCollapsed ? 64 : 240, transition: 'width 300ms' }}>
+                <aside className="w-full h-full flex flex-col border-r border-custom-glass shadow-sm bg-custom-glass overflow-hidden">
+                    <div className="h-[60px] flex items-center px-3 gap-6 border-b border-custom-glass">
+                        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: userProfile.themeColor, marginLeft: '6px' }}>S</div>
+                        <span
+                            className="overflow-hidden whitespace-nowrap transition-[width,opacity] duration-300 ease-in-out"
+                            style={{
+                                width: sidebarCollapsed ? 0 : '160px',
+                                opacity: sidebarCollapsed ? 0 : 1,
+                                marginLeft: sidebarCollapsed ? 0 : '0px',
+                            }}
+                        >
+                            <span className="font-bold text-lg tracking-tight text-gray-900 whitespace-nowrap">Sello UK Hub</span>
+                        </span>
                     </div>
-                    <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+                    <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
                         {[
                             { id: 'overview', icon: LayoutDashboard, label: t('nav_overview') },
-                            { id: 'products', icon: Package, label: t('nav_products') },
-                            { id: 'platforms', icon: Globe, label: t('nav_platforms') },
-                            { id: 'strategy', icon: Calculator, label: t('nav_strategy') },
-                            { id: 'costs', icon: DollarSign, label: t('nav_costs') },
+                            { id: 'products', icon: ShoppingBasket, label: t('nav_products') },
+                            { id: 'platforms', icon: Store, label: t('nav_platforms') },
+                            { id: 'strategy', icon: FlaskConical, label: t('nav_strategy') },
+                            { id: 'costs', icon: BadgePoundSterling, label: t('nav_costs') },
                             { id: 'promotions', icon: Tag, label: t('nav_promotions') },
                             { id: 'custom-report', icon: Table, label: 'Custom Reports' },
-                            { id: 'tools', icon: Wrench, label: t('nav_toolbox') },
+                            { id: 'tools', icon: Briefcase, label: t('nav_toolbox') },
                             { id: 'settings', icon: Settings, label: t('nav_config') },
                             { id: 'definitions', icon: BookOpen, label: t('nav_definitions') }
                         ].map((item) => {
                             const isActive = currentView === item.id;
                             return (
-                                <button
-                                    key={item.id}
-                                    onClick={() => setCurrentView(item.id as any)}
-                                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all text-sm ${isActive ? 'bg-opacity-10' : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'}`}
-                                    style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
-                                >
-                                    <item.icon className="w-4 h-4" style={isActive ? { color: userProfile.themeColor } : {}} />
-                                    {item.label}
-                                </button>
+                                <div key={item.id} className="relative group">
+                                    <button
+                                        onClick={() => setCurrentView(item.id as any)}
+                                        className={`w-full flex items-center px-3 py-2 rounded-lg font-medium text-sm ${isActive ? 'bg-opacity-10' : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'}`}
+                                        style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
+                                        title={sidebarCollapsed ? item.label : undefined}
+                                    >
+                                        <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
+                                            <item.icon className="w-4 h-4" style={isActive ? { color: userProfile.themeColor } : {}} />
+                                        </span>
+                                        <span
+                                            className="overflow-hidden whitespace-nowrap transition-[width,opacity] duration-300 ease-in-out"
+                                            style={{
+                                                width: sidebarCollapsed ? 0 : 'auto',
+                                                opacity: sidebarCollapsed ? 0 : 1,
+                                                marginLeft: sidebarCollapsed ? 0 : '30px',
+                                            }}
+                                        >
+                                            {item.label}
+                                        </span>
+                                    </button>
+                                    {sidebarCollapsed && (
+                                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-gray-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                            {item.label}
+                                        </div>
+                                    )}
+                                </div>
                             );
                         })}
                         {searchSessions && searchSessions.length > 0 && (
@@ -467,8 +503,8 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </nav>
-                    <div className="p-3 border-t border-custom-glass space-y-2">
-                        <div className="px-1 flex gap-1">
+                    <div className={`border-t border-custom-glass space-y-2 ${sidebarCollapsed ? 'p-2' : 'p-3'}`}>
+                        {!sidebarCollapsed && <div className="px-1 flex gap-1">
                             <button
                                 onClick={handleBackup}
                                 disabled={syncStatus === 'syncing' || syncStatus === 'pushing'}
@@ -484,8 +520,9 @@ const App: React.FC = () => {
                                 <Upload className="w-3 h-3" /> {t('restore_db')}
                             </button>
                             <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />
-                        </div>
-                        <button
+                        </div>}
+                        {sidebarCollapsed && <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />}
+                        {!sidebarCollapsed && <button
                             onClick={handleSync}
                             disabled={syncStatus === 'pushing' || syncStatus === 'syncing'}
                             className={`w-full flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg text-[10px] font-bold transition-all border ${syncStatus === 'error'
@@ -529,8 +566,8 @@ const App: React.FC = () => {
                                     {new Date(lastSyncedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                 </span>
                             )}
-                        </button>
-                        <div className="bg-gray-50/50 rounded-lg border border-custom-glass overflow-hidden transition-all duration-300">
+                        </button>}
+                        {!sidebarCollapsed && <div className="bg-gray-50/50 rounded-lg border border-custom-glass overflow-hidden transition-all duration-300">
                             <button onClick={() => setIsFreshnessExpanded(!isFreshnessExpanded)} className="w-full flex justify-between items-center p-2 hover:bg-gray-100/50 transition-colors">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">Data Freshness</span>
@@ -558,26 +595,40 @@ const App: React.FC = () => {
                                     ))}
                                 </div>
                             )}
-                        </div>
+                        </div>}
                     </div>
                 </aside>
-                <main className="flex-1 md:ml-60 min-0 relative z-10 flex flex-col h-full overflow-hidden">
-                    <header className="sticky top-0 z-50 flex justify-between items-center gap-8 px-8 py-4 bg-custom-glass border-b border-custom-glass/50 shadow-sm transition-all duration-300">
-                        <div>
-                            <h1 className="text-2xl font-bold transition-colors" style={headerStyle}>
+                {/* Floating sidebar toggle — appears on hover at vertical centre of sidebar edge */}
+                <button
+                    onClick={toggleSidebar}
+                    className="absolute top-1/2 -translate-y-1/2 -right-3 w-6 h-6 rounded-full border border-custom-glass bg-white shadow-md flex items-center justify-center text-gray-400 hover:text-gray-700 hover:shadow-lg transition-all duration-150 opacity-0 group-hover/sidebar:opacity-100 z-50"
+                    title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        {sidebarCollapsed
+                            ? <path d="M9 18l6-6-6-6"/>
+                            : <path d="M15 18l-6-6 6-6"/>
+                        }
+                    </svg>
+                </button>
+                </div>
+                <main className={`flex-1 ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-60'} min-0 relative z-10 flex flex-col h-full overflow-hidden transition-all duration-300`}>
+                    <header className="sticky top-0 z-50 flex items-center gap-4 px-6 h-[60px] bg-custom-glass border-b border-custom-glass/50 shadow-sm transition-all duration-300">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <h1 className="text-sm font-bold transition-colors whitespace-nowrap" style={headerStyle}>
                                 {pageTitles[currentView] || pageTitles.settings}
                             </h1>
-                            <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
+                            <span className="text-gray-300 text-xs">·</span>
+                            <p className="text-xs truncate" style={{ ...headerStyle, opacity: 0.6 }}>
                                 {pageDescs[currentView] || pageDescs.settings}
                             </p>
                         </div>
                         <div className="flex-1 max-w-2xl"> <GlobalSearch onSearch={handleSearch} isLoading={isSearchLoading} platforms={Object.keys(pricingRules)} products={products} /> </div>
-                        <div className="flex flex-col items-end gap-1">
-                            <div className="flex items-center gap-4">
-                                {userProfile.name && <span className="text-sm font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>}
+                        <div className="flex items-center gap-3">
+                                {userProfile.name && <span className="text-xs font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>}
                                 {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />}
-                                <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button>
-                                <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
+                                <button className="relative p-1.5 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-4 h-4" /></button>
+                                <div className="h-4 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
 
                                 {/* Admin Mode Controls */}
                                 {isAdminMode ? (
@@ -586,7 +637,7 @@ const App: React.FC = () => {
                                         <button
                                             onClick={handleAdminPush}
                                             disabled={(!isDirty && syncStatus === 'idle') || syncStatus === 'pushing'}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${syncStatus === 'pushing'
+                                            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all border shadow-sm ${syncStatus === 'pushing'
                                                 ? 'bg-theme-10 text-theme border-theme-20 cursor-wait'
                                                 : syncStatus === 'error'
                                                     ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-pointer'
@@ -624,7 +675,7 @@ const App: React.FC = () => {
                                                 const result = handleAdminExit();
                                                 if (result.needsConfirmation) setShowExitConfirm(true);
                                             }}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100 transition-all shadow-sm"
+                                            className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100 transition-all shadow-sm"
                                         >
                                             <Lock className="w-3 h-3" />
                                             ADMIN MODE
@@ -634,7 +685,7 @@ const App: React.FC = () => {
                                 ) : (
                                     <button
                                         onClick={() => setShowAdminModal(true)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100/60 text-gray-500 border border-gray-200 rounded-lg text-[10px] font-bold hover:bg-gray-200/60 transition-all"
+                                        className="flex items-center gap-1.5 px-3 py-1 bg-gray-100/60 text-gray-500 border border-gray-200 rounded-lg text-[10px] font-bold hover:bg-gray-200/60 transition-all"
                                     >
                                         <Lock className="w-3 h-3" />
                                         USER MODE
@@ -642,8 +693,6 @@ const App: React.FC = () => {
                                 )}
 
                                 <UserProfile profile={userProfile} onUpdate={setUserProfile} />
-                            </div>
-                            <span className="text-[10px]" style={{ ...headerStyle, opacity: 0.6 }}>{TAX_NOTE_SHORT}</span>
                         </div>
                     </header>
                     <div ref={mainContentRef} className="flex-1 overflow-y-auto relative p-4 md:p-8">
