@@ -9,7 +9,7 @@
   --glass-bg:        rgba(255, 255, 255, 0.88);
   --glass-border:    rgba(255, 255, 255, 0.50);
   --glass-blur:      blur(14px);
-  --glass-head-bg:   rgba(249, 250, 251, 0.97);
+  --glass-head-bg:   rgba(249, 250, 251, 0.80);
   --glass-row-even:  rgba(249, 250, 251, 0.28);
   --glass-row-hover: rgba(243, 244, 246, 0.65);
   --glass-divider:   rgba(229, 231, 235, 0.55);
@@ -116,22 +116,6 @@
   position: sticky;
   top: 0;
   z-index: 20;
-}
-
-/* ── tfoot — sticky grand total row ── */
-.sello-table tfoot {
-  position: sticky;
-  bottom: 0;
-  z-index: 20;
-}
-
-.sello-table tfoot td {
-  padding: 10px 14px;
-  font-size: 12px;
-  border-top: 2px solid rgba(var(--theme-rgb), 0.15);
-  background: rgba(var(--theme-rgb), 0.04);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 .sello-table thead tr {
@@ -264,18 +248,8 @@
   position: sticky;
   left: 0;
   z-index: 5;
-  background: rgba(255, 255, 255, 0.97);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: inherit;
   box-shadow: 2px 0 6px -2px rgba(0, 0, 0, 0.06);
-}
-
-.sello-table tbody tr:nth-child(even) td.pin {
-  background: rgba(249, 250, 251, 0.97);
-}
-
-.sello-table tbody tr:hover td.pin {
-  background: rgba(243, 244, 246, 0.99) !important;
 }
 
 /* ── Column group dividers ── */

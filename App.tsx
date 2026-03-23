@@ -11,10 +11,10 @@ import StrategyPage from './components/strategy/StrategyPage';
 import PlatformManagementPage from './components/platformManagement/PlatformManagementPage';
 
 import {
-    LayoutDashboard, FlaskConical, BadgePoundSterling, Tag, Briefcase, Settings, BookOpen, Search, X,
+    LayoutDashboard, Calculator, DollarSign, Tag, Wrench, Settings, BookOpen, Search, X,
     Download, Upload, Database, CheckCircle, FileBarChart, Bell, History,
-    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Store,
-    ArrowUp, ShoppingBasket, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2
+    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Globe,
+    ArrowUp, Package, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2
 } from 'lucide-react';
 
 import GlobalSearch from './components/shared/GlobalSearch';
@@ -234,14 +234,6 @@ const App: React.FC = () => {
     // Progressive page mounting — pages stagger-mount during browser idle time after initial render
     const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','tools','definitions','settings','custom-report'];
     const [mountedPages, setMountedPages] = useState<Set<string>>(() => new Set<string>());
-    const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-        try { return localStorage.getItem('sello_sidebar_collapsed') === 'true'; } catch { return false; }
-    });
-    const toggleSidebar = () => setSidebarCollapsed(prev => {
-        const next = !prev;
-        try { localStorage.setItem('sello_sidebar_collapsed', String(next)); } catch {}
-        return next;
-    });
 
     // Optimal price curve modal state (extends useAppState's selectedElasticityProduct)
     const [elasticityResult, setElasticityResult] = useState<OptimalPriceResult | null>(null);
@@ -322,7 +314,7 @@ const App: React.FC = () => {
 
     return (
         <>
-            <style>{` html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity ?? 90) / 100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity ?? 90) / 100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur ?? 10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur ?? 10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity ?? 15) / 100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur ?? 10) + 4)}px); --glass-header-bg: rgba(249,250,251,0.72); --glass-row-even: rgba(249,250,251,0.30); --glass-row-hover: rgba(243,244,246,0.60); --glass-divider: rgba(229,231,235,0.55); --theme: ${userProfile.themeColor}; --theme-rgb: ${_themeRgb}; --theme-10: rgba(${_themeRgb}, 0.10); --theme-20: rgba(${_themeRgb}, 0.20); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } .tbl thead { position: sticky; top: 0; z-index: 20; background: var(--glass-header-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #9ca3af; box-shadow: 0 1px 0 rgba(229,231,235,0.55); } .tbl thead th { padding: 10px 16px; border-bottom: 1px solid var(--glass-divider); white-space: nowrap; } .tbl tbody tr { border-bottom: 1px solid var(--glass-divider); transition: background 0.1s; } .tbl tbody tr:last-child { border-bottom: none; } .tbl tbody tr:nth-child(even) { background: var(--glass-row-even); } .tbl tbody tr:hover { background: var(--glass-row-hover); } .tbl tbody td { padding: 10px 16px; font-size: 12px; } .tbl-compact thead th { padding: 8px 12px; font-size: 9px; } .tbl-compact tbody td { padding: 7px 12px; font-size: 11px; } .tbl-pin-col { position: sticky; left: 0; z-index: 10; background: var(--glass-header-bg); box-shadow: 2px 0 6px -2px rgba(0,0,0,0.06); } .tbl tbody tr .tbl-pin-col { background: var(--glass-bg); } .tbl tbody tr:hover .tbl-pin-col { background: var(--glass-row-hover); }
+            <style>{` html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity ?? 90) / 100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity ?? 90) / 100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur ?? 10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur ?? 10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity ?? 15) / 100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur ?? 10) + 4)}px); --glass-header-bg: rgba(249,250,251,0.97); --glass-row-even: rgba(249,250,251,0.30); --glass-row-hover: rgba(243,244,246,0.60); --glass-divider: rgba(229,231,235,0.55); --theme: ${userProfile.themeColor}; --theme-rgb: ${_themeRgb}; --theme-10: rgba(${_themeRgb}, 0.10); --theme-20: rgba(${_themeRgb}, 0.20); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); } .tbl thead { position: sticky; top: 0; z-index: 20; background: var(--glass-header-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #9ca3af; box-shadow: 0 1px 0 rgba(229,231,235,0.55); } .tbl thead th { padding: 10px 16px; border-bottom: 1px solid var(--glass-divider); white-space: nowrap; } .tbl tbody tr { border-bottom: 1px solid var(--glass-divider); transition: background 0.1s; } .tbl tbody tr:last-child { border-bottom: none; } .tbl tbody tr:nth-child(even) { background: var(--glass-row-even); } .tbl tbody tr:hover { background: var(--glass-row-hover); } .tbl tbody td { padding: 10px 16px; font-size: 12px; } .tbl-compact thead th { padding: 8px 12px; font-size: 9px; } .tbl-compact tbody td { padding: 7px 12px; font-size: 11px; } .tbl-pin-col { position: sticky; left: 0; z-index: 10; background: var(--glass-header-bg); box-shadow: 2px 0 6px -2px rgba(0,0,0,0.06); } .tbl tbody tr .tbl-pin-col { background: var(--glass-bg); } .tbl tbody tr:hover .tbl-pin-col { background: var(--glass-row-hover); }
 
 /* ── COLUMN TINTS ── */
 .tbl thead th.cb { background: rgba(219,234,254,0.38); } .tbl thead th.cb:hover { background: rgba(219,234,254,0.52); }
@@ -414,43 +406,35 @@ const App: React.FC = () => {
 `}</style>
             <div className="h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent overflow-hidden">
                 {userProfile.ambientGlass && <div className="fixed inset-0 z-[1] pointer-events-none transition-all duration-500 bg-custom-ambient backdrop-blur-custom-ambient" />}
-                <div className="group/sidebar hidden md:block fixed h-full z-40" style={{ width: sidebarCollapsed ? 64 : 240, transition: 'width 300ms' }}>
-                <aside className="w-full h-full flex flex-col border-r border-custom-glass shadow-sm bg-custom-glass overflow-hidden">
-                    <div className={`flex items-center border-b border-custom-glass transition-all duration-300 ${sidebarCollapsed ? 'p-3 justify-center' : 'p-4 gap-3'}`}>
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: userProfile.themeColor }}>S</div>
-                        {!sidebarCollapsed && <span className="font-bold text-lg tracking-tight text-gray-900 flex-1 truncate">Sello UK Hub</span>}
+                <aside className={`w-60 border-r border-custom-glass hidden md:flex flex-col fixed h-full z-40 shadow-sm transition-all duration-300 bg-custom-glass`}>
+                    <div className="p-4 flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: userProfile.themeColor }}>S</div>
+                        <span className="font-bold text-lg tracking-tight text-gray-900">Sello UK Hub</span>
                     </div>
                     <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
                         {[
                             { id: 'overview', icon: LayoutDashboard, label: t('nav_overview') },
-                            { id: 'products', icon: ShoppingBasket, label: t('nav_products') },
-                            { id: 'platforms', icon: Store, label: t('nav_platforms') },
-                            { id: 'strategy', icon: FlaskConical, label: t('nav_strategy') },
-                            { id: 'costs', icon: BadgePoundSterling, label: t('nav_costs') },
+                            { id: 'products', icon: Package, label: t('nav_products') },
+                            { id: 'platforms', icon: Globe, label: t('nav_platforms') },
+                            { id: 'strategy', icon: Calculator, label: t('nav_strategy') },
+                            { id: 'costs', icon: DollarSign, label: t('nav_costs') },
                             { id: 'promotions', icon: Tag, label: t('nav_promotions') },
                             { id: 'custom-report', icon: Table, label: 'Custom Reports' },
-                            { id: 'tools', icon: Briefcase, label: t('nav_toolbox') },
+                            { id: 'tools', icon: Wrench, label: t('nav_toolbox') },
                             { id: 'settings', icon: Settings, label: t('nav_config') },
                             { id: 'definitions', icon: BookOpen, label: t('nav_definitions') }
                         ].map((item) => {
                             const isActive = currentView === item.id;
                             return (
-                                <div key={item.id} className="relative group">
-                                    <button
-                                        onClick={() => setCurrentView(item.id as any)}
-                                        className={`w-full flex items-center rounded-lg font-medium transition-all text-sm ${sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'} ${isActive ? 'bg-opacity-10' : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'}`}
-                                        style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
-                                        title={sidebarCollapsed ? item.label : undefined}
-                                    >
-                                        <item.icon className="w-4 h-4 flex-shrink-0" style={isActive ? { color: userProfile.themeColor } : {}} />
-                                        {!sidebarCollapsed && item.label}
-                                    </button>
-                                    {sidebarCollapsed && (
-                                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-gray-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                            {item.label}
-                                        </div>
-                                    )}
-                                </div>
+                                <button
+                                    key={item.id}
+                                    onClick={() => setCurrentView(item.id as any)}
+                                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-all text-sm ${isActive ? 'bg-opacity-10' : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'}`}
+                                    style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
+                                >
+                                    <item.icon className="w-4 h-4" style={isActive ? { color: userProfile.themeColor } : {}} />
+                                    {item.label}
+                                </button>
                             );
                         })}
                         {searchSessions && searchSessions.length > 0 && (
@@ -483,8 +467,8 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </nav>
-                    <div className={`border-t border-custom-glass space-y-2 ${sidebarCollapsed ? 'p-2' : 'p-3'}`}>
-                        {!sidebarCollapsed && <div className="px-1 flex gap-1">
+                    <div className="p-3 border-t border-custom-glass space-y-2">
+                        <div className="px-1 flex gap-1">
                             <button
                                 onClick={handleBackup}
                                 disabled={syncStatus === 'syncing' || syncStatus === 'pushing'}
@@ -500,9 +484,8 @@ const App: React.FC = () => {
                                 <Upload className="w-3 h-3" /> {t('restore_db')}
                             </button>
                             <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />
-                        </div>}
-                        {sidebarCollapsed && <input ref={fileRestoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />}
-                        {!sidebarCollapsed && <button
+                        </div>
+                        <button
                             onClick={handleSync}
                             disabled={syncStatus === 'pushing' || syncStatus === 'syncing'}
                             className={`w-full flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg text-[10px] font-bold transition-all border ${syncStatus === 'error'
@@ -546,8 +529,8 @@ const App: React.FC = () => {
                                     {new Date(lastSyncedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                 </span>
                             )}
-                        </button>}
-                        {!sidebarCollapsed && <div className="bg-gray-50/50 rounded-lg border border-custom-glass overflow-hidden transition-all duration-300">
+                        </button>
+                        <div className="bg-gray-50/50 rounded-lg border border-custom-glass overflow-hidden transition-all duration-300">
                             <button onClick={() => setIsFreshnessExpanded(!isFreshnessExpanded)} className="w-full flex justify-between items-center p-2 hover:bg-gray-100/50 transition-colors">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">Data Freshness</span>
@@ -575,40 +558,26 @@ const App: React.FC = () => {
                                     ))}
                                 </div>
                             )}
-                        </div>}
+                        </div>
                     </div>
                 </aside>
-                {/* Floating sidebar toggle — appears on hover at vertical centre of sidebar edge */}
-                <button
-                    onClick={toggleSidebar}
-                    className="absolute top-1/2 -translate-y-1/2 -right-3 w-6 h-6 rounded-full border border-custom-glass bg-white shadow-md flex items-center justify-center text-gray-400 hover:text-gray-700 hover:shadow-lg transition-all duration-150 opacity-0 group-hover/sidebar:opacity-100 z-50"
-                    title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        {sidebarCollapsed
-                            ? <path d="M9 18l6-6-6-6"/>
-                            : <path d="M15 18l-6-6 6-6"/>
-                        }
-                    </svg>
-                </button>
-                </div>
-                <main className={`flex-1 ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-60'} min-0 relative z-10 flex flex-col h-full overflow-hidden transition-all duration-300`}>
-                    <header className="sticky top-0 z-50 flex items-center gap-4 px-6 h-[60px] bg-custom-glass border-b border-custom-glass/50 shadow-sm transition-all duration-300">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <h1 className="text-sm font-bold transition-colors whitespace-nowrap" style={headerStyle}>
+                <main className="flex-1 md:ml-60 min-0 relative z-10 flex flex-col h-full overflow-hidden">
+                    <header className="sticky top-0 z-50 flex justify-between items-center gap-8 px-8 py-4 bg-custom-glass border-b border-custom-glass/50 shadow-sm transition-all duration-300">
+                        <div>
+                            <h1 className="text-2xl font-bold transition-colors" style={headerStyle}>
                                 {pageTitles[currentView] || pageTitles.settings}
                             </h1>
-                            <span className="text-gray-300 text-xs">·</span>
-                            <p className="text-xs truncate" style={{ ...headerStyle, opacity: 0.6 }}>
+                            <p className="text-sm mt-1 transition-colors" style={{ ...headerStyle, opacity: 0.8 }}>
                                 {pageDescs[currentView] || pageDescs.settings}
                             </p>
                         </div>
                         <div className="flex-1 max-w-2xl"> <GlobalSearch onSearch={handleSearch} isLoading={isSearchLoading} platforms={Object.keys(pricingRules)} products={products} /> </div>
-                        <div className="flex items-center gap-3">
-                                {userProfile.name && <span className="text-xs font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>}
+                        <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-4">
+                                {userProfile.name && <span className="text-sm font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>}
                                 {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />}
-                                <button className="relative p-1.5 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-4 h-4" /></button>
-                                <div className="h-4 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
+                                <button className="relative p-2 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-6 h-6" /></button>
+                                <div className="h-6 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
 
                                 {/* Admin Mode Controls */}
                                 {isAdminMode ? (
@@ -617,7 +586,7 @@ const App: React.FC = () => {
                                         <button
                                             onClick={handleAdminPush}
                                             disabled={(!isDirty && syncStatus === 'idle') || syncStatus === 'pushing'}
-                                            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all border shadow-sm ${syncStatus === 'pushing'
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${syncStatus === 'pushing'
                                                 ? 'bg-theme-10 text-theme border-theme-20 cursor-wait'
                                                 : syncStatus === 'error'
                                                     ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-pointer'
@@ -655,7 +624,7 @@ const App: React.FC = () => {
                                                 const result = handleAdminExit();
                                                 if (result.needsConfirmation) setShowExitConfirm(true);
                                             }}
-                                            className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100 transition-all shadow-sm"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100 transition-all shadow-sm"
                                         >
                                             <Lock className="w-3 h-3" />
                                             ADMIN MODE
@@ -665,7 +634,7 @@ const App: React.FC = () => {
                                 ) : (
                                     <button
                                         onClick={() => setShowAdminModal(true)}
-                                        className="flex items-center gap-1.5 px-3 py-1 bg-gray-100/60 text-gray-500 border border-gray-200 rounded-lg text-[10px] font-bold hover:bg-gray-200/60 transition-all"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100/60 text-gray-500 border border-gray-200 rounded-lg text-[10px] font-bold hover:bg-gray-200/60 transition-all"
                                     >
                                         <Lock className="w-3 h-3" />
                                         USER MODE
@@ -673,6 +642,8 @@ const App: React.FC = () => {
                                 )}
 
                                 <UserProfile profile={userProfile} onUpdate={setUserProfile} />
+                            </div>
+                            <span className="text-[10px]" style={{ ...headerStyle, opacity: 0.6 }}>{TAX_NOTE_SHORT}</span>
                         </div>
                     </header>
                     <div ref={mainContentRef} className="flex-1 overflow-y-auto relative p-4 md:p-8">
