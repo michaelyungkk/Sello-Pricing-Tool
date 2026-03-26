@@ -65,7 +65,8 @@ import {
     verifyPassword, pushSnapshot, pullSnapshot,
     pushTransactions, pullTransactions, getLatestTransactionDate,
     pullTransactionPage, checkVersion,
-    pushRefundsAndShipments, pullRefundsAndShipments
+    pushRefundsAndShipments, pullRefundsAndShipments,
+    pushAdData, pullAdData
 } from '../services/dbService';
 import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
 
@@ -1225,6 +1226,19 @@ export const useAppState = () => {
             }
             console.log(`[push] refunds pushed`);
 
+            // Push ad campaign data to separate table
+            const adPushRes = await pushAdData(
+                storedAdminPassword,
+                adSnapshots || [],
+                adRosterChanges || [],
+                adBudgets || {}
+            );
+            if (!adPushRes.success) {
+                console.warn('[push] ad data push failed (non-fatal):', adPushRes.error);
+            } else {
+                console.log(`[push] ad data pushed — ${adSnapshots?.length || 0} snapshots`);
+            }
+
             setPushProgress(0);
             setPushTotal(0);
             setIsDirty(false);
@@ -1242,7 +1256,7 @@ export const useAppState = () => {
             setPushTotal(0);
         }
     }, [isAdminMode, storedAdminPassword, getSharedSnapshot,
-        salesHistory, refundHistory]);
+        salesHistory, refundHistory, adSnapshots, adRosterChanges, adBudgets]);
 
     const applyLoadedState = useCallback((
         snapshot: any,
@@ -1385,6 +1399,26 @@ export const useAppState = () => {
             // Pull refunds only
             const refundRes = await pullRefundsAndShipments();
             const refunds = refundRes.success ? (refundRes.refunds || []) : [];
+
+            // Pull ad campaign data from separate table
+            const adRes = await pullAdData();
+            if (adRes.success) {
+                if (Array.isArray(adRes.adSnapshots) && adRes.adSnapshots.length > 0) {
+                    setAdSnapshots(adRes.adSnapshots);
+                    try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(adRes.adSnapshots)); } catch {}
+                }
+                if (Array.isArray(adRes.adRosterChanges)) {
+                    setAdRosterChanges(adRes.adRosterChanges);
+                    try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(adRes.adRosterChanges)); } catch {}
+                }
+                if (adRes.adBudgets && typeof adRes.adBudgets === 'object') {
+                    setAdBudgets(adRes.adBudgets);
+                    try { localStorage.setItem('sello_ad_budgets', JSON.stringify(adRes.adBudgets)); } catch {}
+                }
+                console.log(`[sync] ad data loaded — ${adRes.adSnapshots?.length || 0} snapshots`);
+            } else {
+                console.warn('[sync] ad data pull failed (non-fatal):', adRes.error);
+            }
 
             applyLoadedState(incoming, allTransactions, refunds);
 
