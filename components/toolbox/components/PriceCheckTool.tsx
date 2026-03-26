@@ -288,10 +288,22 @@ export const PriceCheckTool: React.FC<PriceCheckToolProps> = ({
                         </button>
                         <input ref={fileRef} type="file" hidden accept=".csv,.xlsx" onChange={handleFileUpload} />
                         {currentTemplate && (
-                            <span className="text-xs text-green-600 flex items-center gap-1">
-                                <Check className="w-3.5 h-3.5" />
-                                Template saved — SKU: <strong>{currentTemplate.skuColumn}</strong>, Price: <strong>{currentTemplate.priceColumn}</strong>
-                            </span>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs text-green-600 flex items-center gap-1">
+                                    <Check className="w-3.5 h-3.5" />
+                                    Template saved — SKU: <strong>{currentTemplate.skuColumn}</strong>, Price: <strong>{currentTemplate.priceColumn}</strong>
+                                </span>
+                                <button
+                                    onClick={() => {
+                                        setSkuCol(currentTemplate.skuColumn);
+                                        setPriceCol(currentTemplate.priceColumn);
+                                        setIsMappingTemplate(true);
+                                    }}
+                                    className="text-xs text-gray-400 hover:text-theme underline"
+                                >
+                                    Edit
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -304,7 +316,7 @@ export const PriceCheckTool: React.FC<PriceCheckToolProps> = ({
             </div>
 
             {/* ── STEP 2: Column mapping ── */}
-            {isMappingTemplate && headers.length > 0 && (
+            {isMappingTemplate && (headers.length > 0 || currentTemplate) && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-4">
                     <div className="flex items-center justify-between">
                         <h4 className="font-bold text-amber-800 flex items-center gap-2">
@@ -318,25 +330,31 @@ export const PriceCheckTool: React.FC<PriceCheckToolProps> = ({
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-bold text-gray-500 uppercase block mb-1">SKU Column</label>
-                            <select
-                                value={skuCol}
-                                onChange={e => setSkuCol(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white"
-                            >
-                                <option value="" disabled>Select column…</option>
-                                {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                            </select>
+                            {headers.length > 0 ? (
+                                <select value={skuCol} onChange={e => setSkuCol(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white">
+                                    <option value="" disabled>Select column…</option>
+                                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                </select>
+                            ) : (
+                                <input value={skuCol} onChange={e => setSkuCol(e.target.value)}
+                                    placeholder="e.g. SKU"
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm" />
+                            )}
                         </div>
                         <div>
                             <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Price Column</label>
-                            <select
-                                value={priceCol}
-                                onChange={e => setPriceCol(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white"
-                            >
-                                <option value="" disabled>Select column…</option>
-                                {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                            </select>
+                            {headers.length > 0 ? (
+                                <select value={priceCol} onChange={e => setPriceCol(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white">
+                                    <option value="" disabled>Select column…</option>
+                                    {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                </select>
+                            ) : (
+                                <input value={priceCol} onChange={e => setPriceCol(e.target.value)}
+                                    placeholder="e.g. Price"
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm" />
+                            )}
                         </div>
                     </div>
 
