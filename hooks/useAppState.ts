@@ -9,6 +9,9 @@ import {
 } from '../constants';
 import {
     Product,
+    AdSnapshot,
+    AdRosterChange,
+    AdCampaignState,
     PricingRules,
     PriceLog,
     PromotionEvent,
@@ -61,7 +64,8 @@ import {
     verifyPassword, pushSnapshot, pullSnapshot,
     pushTransactions, pullTransactions, getLatestTransactionDate,
     pullTransactionPage, checkVersion,
-    pushRefundsAndShipments, pullRefundsAndShipments
+    pushRefundsAndShipments, pullRefundsAndShipments,
+    pushAdData, pullAdData
 } from '../services/dbService';
 import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
 
@@ -245,6 +249,17 @@ export const useAppState = () => {
     const [searchConfig, setSearchConfig] = useState<SearchConfig>(DEFAULT_SEARCH_CONFIG);
     const [skuFamilies, setSkuFamilies] = useState<SkuFamily[]>([]);
     const [adGroups, setAdGroups] = useState<AdGroup[]>([]);
+
+    // --- AD CAMPAIGN STATE ---
+    const [adSnapshots, setAdSnapshots] = useState<AdSnapshot[]>(() => {
+        try { return JSON.parse(localStorage.getItem('sello_ad_snapshots') || '[]'); } catch { return []; }
+    });
+    const [adRosterChanges, setAdRosterChanges] = useState<AdRosterChange[]>(() => {
+        try { return JSON.parse(localStorage.getItem('sello_ad_roster_changes') || '[]'); } catch { return []; }
+    });
+    const [adBudgets, setAdBudgets] = useState<Record<string, number>>(() => {
+        try { return JSON.parse(localStorage.getItem('sello_ad_budgets') || '{}'); } catch { return {}; }
+    });
     const [lastRecalculationSummary, setLastRecalculationSummary] = useState<{ affectedTransactions: number; totalSpreadAmount: number; daysProcessed: number } | null>(null);
     const [pendingFamilySuggestions, setPendingFamilySuggestions] = useState<SkuFamily[]>([]);
 
@@ -585,6 +600,27 @@ export const useAppState = () => {
         thresholds, brandMap, categoryMap, skuFamilies, adGroups,
         inventoryTemplates, freightRates,
         cohortSnapshot, optimalPriceResults, benchmarkUpdateNotices]);
+
+    // --- AD CAMPAIGN HANDLERS ---
+    const handleAdCampaignImport = useCallback((snapshot: AdSnapshot, updatedBudgets: Record<string, number>) => {
+        setAdSnapshots(prev => {
+            // Replace if same week+platform exists, otherwise prepend
+            const filtered = prev.filter(s => !(s.platform === snapshot.platform && s.weekStartDate === snapshot.weekStartDate));
+            const next = [snapshot, ...filtered];
+            try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(next)); } catch {}
+            return next;
+        });
+        setAdBudgets(updatedBudgets);
+        try { localStorage.setItem('sello_ad_budgets', JSON.stringify(updatedBudgets)); } catch {}
+    }, []);
+
+    const handleAdRosterChange = useCallback((change: AdRosterChange) => {
+        setAdRosterChanges(prev => {
+            const next = [change, ...prev];
+            try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(next)); } catch {}
+            return next;
+        });
+    }, []);
 
     const handleBackup = useCallback(() => {
         const data = {
@@ -1178,6 +1214,20 @@ export const useAppState = () => {
             }
             console.log(`[push] refunds pushed`);
 
+            // Push ad campaign data
+            console.log(`[push] pushing ${adSnapshots?.length || 0} ad snapshots`);
+            const adPushRes = await pushAdData(
+                storedAdminPassword,
+                adSnapshots || [],
+                adRosterChanges || [],
+                adBudgets || {}
+            );
+            if (!adPushRes.success) {
+                console.warn('[push] ad data push failed (non-fatal):', adPushRes.error);
+            } else {
+                console.log(`[push] ad data pushed`);
+            }
+
             setPushProgress(0);
             setPushTotal(0);
             setIsDirty(false);
@@ -1195,7 +1245,7 @@ export const useAppState = () => {
             setPushTotal(0);
         }
     }, [isAdminMode, storedAdminPassword, getSharedSnapshot,
-        salesHistory, refundHistory]);
+        salesHistory, refundHistory, adSnapshots, adRosterChanges, adBudgets]);
 
     const applyLoadedState = useCallback((
         snapshot: any,
@@ -1338,6 +1388,26 @@ export const useAppState = () => {
             // Pull refunds only
             const refundRes = await pullRefundsAndShipments();
             const refunds = refundRes.success ? (refundRes.refunds || []) : [];
+
+            // Pull ad campaign data
+            const adRes = await pullAdData();
+            if (adRes.success) {
+                if (adRes.adSnapshots) {
+                    setAdSnapshots(adRes.adSnapshots);
+                    try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(adRes.adSnapshots)); } catch {}
+                }
+                if (adRes.adRosterChanges) {
+                    setAdRosterChanges(adRes.adRosterChanges);
+                    try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(adRes.adRosterChanges)); } catch {}
+                }
+                if (adRes.adBudgets) {
+                    setAdBudgets(adRes.adBudgets);
+                    try { localStorage.setItem('sello_ad_budgets', JSON.stringify(adRes.adBudgets)); } catch {}
+                }
+                console.log(`[sync] ad data loaded — ${adRes.adSnapshots?.length || 0} snapshots`);
+            } else {
+                console.warn('[sync] ad data pull failed (non-fatal):', adRes.error);
+            }
 
             applyLoadedState(incoming, allTransactions, refunds);
 
@@ -1652,6 +1722,12 @@ export const useAppState = () => {
         handleSync,
         resolveConflicts,
         getSharedSnapshot,
+        // Ad Campaign
+        adSnapshots,
+        adRosterChanges,
+        adBudgets,
+        handleAdCampaignImport,
+        handleAdRosterChange,
         // Optimal Pricing
         cohortSnapshot,
         setCohortSnapshot,

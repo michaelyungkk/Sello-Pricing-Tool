@@ -221,7 +221,21 @@ export const SelectFilter: React.FC<SelectFilterProps> = ({
                                 }}
                                 onPaste={e => {
                                     e.preventDefault();
-                                    addTags(e.clipboardData.getData('text'));
+                                    const raw = e.clipboardData.getData('text');
+                                    const tags = raw.split(/[,\n\t\s]+/).map((s: string) => s.trim().toUpperCase()).filter(Boolean);
+                                    if (tags.length === 0) return;
+                                    // Find all options that match the pasted values
+                                    const matched = (options || []).filter(o =>
+                                        tags.includes(o.toUpperCase())
+                                    );
+                                    if (matched.length > 0) {
+                                        // Matches found — select them immediately and apply
+                                        const newSelection = [...new Set([...currentSelected, ...matched])];
+                                        applyAndClose(newSelection);
+                                    } else {
+                                        // No direct matches — fall back to tag-filter mode so user can see what was pasted
+                                        addTags(raw);
+                                    }
                                 }}
                             />
                             {(searchTags.length > 0 || searchInput) && (

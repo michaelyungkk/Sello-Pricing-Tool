@@ -110,6 +110,52 @@ export default async (req: Request) => {
             ON shipment_history(sku)
         `;
 
+        // ── Ad Campaign tables ──
+        await sql`
+            CREATE TABLE IF NOT EXISTS ad_snapshots (
+                id          TEXT PRIMARY KEY,
+                platform    TEXT NOT NULL,
+                week_start  TEXT NOT NULL,
+                week_end    TEXT NOT NULL,
+                data        JSONB NOT NULL,
+                updated_at  TIMESTAMPTZ DEFAULT NOW()
+            )
+        `;
+
+        await sql`
+            CREATE INDEX IF NOT EXISTS idx_ad_snapshots_platform
+            ON ad_snapshots(platform)
+        `;
+
+        await sql`
+            CREATE TABLE IF NOT EXISTS ad_roster_changes (
+                id          TEXT PRIMARY KEY,
+                platform    TEXT,
+                week_of     TEXT,
+                campaign    TEXT,
+                ad_group    TEXT,
+                sku         TEXT NOT NULL,
+                action      TEXT NOT NULL,
+                reason      TEXT,
+                date        TEXT,
+                updated_at  TIMESTAMPTZ DEFAULT NOW()
+            )
+        `;
+
+        await sql`
+            CREATE TABLE IF NOT EXISTS ad_budgets (
+                id          INTEGER PRIMARY KEY,
+                data        JSONB NOT NULL DEFAULT '{}',
+                updated_at  TIMESTAMPTZ DEFAULT NOW()
+            )
+        `;
+
+        await sql`
+            INSERT INTO ad_budgets (id, data, updated_at)
+            VALUES (1, '{}', NOW())
+            ON CONFLICT (id) DO NOTHING
+        `;
+
         await sql`
             INSERT INTO app_snapshot (id, data, updated_at, updated_by)
             VALUES (1, '{}', NOW(), 'system')

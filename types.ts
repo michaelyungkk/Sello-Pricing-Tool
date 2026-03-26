@@ -547,3 +547,198 @@ export interface OptimalPriceResult {
     // Data quality
     warnings: string[];
 }
+
+
+// ════════════════════════════════════════════════════════════
+//  AD CAMPAIGN TYPES
+//  Append these to the bottom of types.ts
+// ════════════════════════════════════════════════════════════
+
+export type AdSkuFlag =
+    | 'ZERO_SALES'
+    | 'MONITORING'
+    | 'DOWNTREND'
+    | 'BUDGET_HOG_LOW_ROAS'
+    | 'BUDGET_HOG_HIGH_ROAS'
+    | 'GRADE_CHANGED'
+    | 'LOW_STOCK'
+    | 'HIGH_PERFORMER'
+    | 'LOW_CTR'
+    | 'HIGH_CLICKS_NO_CONVERSION'
+    | 'HALO_ONLY';
+
+export interface AdGroupSnapshot {
+    name: string;
+    adGroupId?: string;
+
+    // Config
+    dailyBudget: number;
+    bidStrategy: 'auto' | 'manual';
+    bidPrice?: number;
+
+    // Broad metrics
+    impressions: number;
+    clicks: number;
+    spend: number;
+    spendOptIn: number;
+    conversions: number;
+    orders: number;
+    sales: number;
+    ctr: number;
+    cpc: number;
+    acosOptIn: number;
+    roasOptIn: number;
+
+    // Direct metrics
+    directConversions: number;
+    directOrders: number;
+    directSales: number;
+    directRoas: number;
+
+    // Derived
+    utilisation: number;
+    spendToSalesRatio: number;
+    haloEffect: number;
+
+    // Member SKUs this week
+    memberSkus: string[];
+
+    // Auto-generated summary
+    weeklySummary: string;
+
+    // Free-text notes
+    notes?: string;
+}
+
+export interface AdCampaign {
+    name: string;
+    campaignId?: string;
+    account: string;
+    adGroups: AdGroupSnapshot[];
+    weeklySummary: string;
+    notes?: string;
+}
+
+export interface DailySkuRow {
+    date: string;
+    campaign: string;
+    adGroup: string;
+    offerSku: string;
+    mappedSku: string;
+    productName: string;
+    productCategory: string;
+    brand: string;
+    impressions: number;
+    clicks: number;
+    spend: number;
+    conversions: number;
+    orders: number;
+    sales: number;
+    directConversions: number;
+    directOrders: number;
+    directSales: number;
+}
+
+export interface AdSnapshot {
+    id: string;
+    platform: string;
+    weekStartDate: string;
+    weekEndDate: string;
+    importedAt: string;
+    campaigns: AdCampaign[];
+    dailySkuData: DailySkuRow[];
+}
+
+export interface AdSkuWeeklySummary {
+    sku: string;
+    offerSku: string;
+    adGroup: string;
+    campaign: string;
+    productName: string;
+    brand: string;
+    category: string;
+
+    // Broad
+    impressions: number;
+    clicks: number;
+    spend: number;
+    sales: number;
+    orders: number;
+    conversions: number;
+    roas: number;
+    ctr: number;
+    cpc: number;
+    spendShare: number;
+
+    // Direct
+    directSales: number;
+    directOrders: number;
+    directConversions: number;
+    directRoas: number;
+    haloSales: number;
+
+    // Profit
+    poas: number;
+
+    // Product context
+    gradeLevel: number;
+    stockQty: number;
+    runway: number;
+    isLowStock: boolean;
+
+    // WoW
+    prevWeekSales: number;
+    prevWeekSpend: number;
+    prevWeekOrders: number;
+    salesTrend: 'up' | 'down' | 'flat' | 'new' | 'no-data';
+    salesDelta: string;
+    ordersDelta: string;
+
+    // CTR benchmark
+    ctrVsGroupAvg: number;
+
+    // Grace period
+    weeksInGroup: number;
+    addedDate?: string;
+
+    // Flags
+    flags: AdSkuFlag[];
+}
+
+export interface AdRosterChange {
+    id: string;
+    date: string;
+    weekOf: string;
+    platform: string;
+    campaign: string;
+    adGroup: string;
+    sku: string;
+    action: 'ADD' | 'REMOVE';
+    reason: string;
+    performedBy?: string;
+}
+
+export interface AdCandidate {
+    sku: string;
+    productName: string;
+    brand: string;
+    category: string;
+    gradeLevel: number;
+    stockQty: number;
+    runway: number;
+    platformSales30d: number;
+    platformUnits30d: number;
+    platformSalesShare: number;
+    score: number;
+    reasons: string[];
+    isAlreadyInAdGroup: boolean;
+    currentAdGroup?: string;
+}
+
+// Stored in useAppState
+export interface AdCampaignState {
+    snapshots: AdSnapshot[];
+    rosterChanges: AdRosterChange[];
+    // budgets persisted per adGroup name, per platform
+    budgets: Record<string, number>; // key: `${platform}::${adGroupName}`
+}

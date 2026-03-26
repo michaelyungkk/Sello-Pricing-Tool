@@ -198,3 +198,33 @@ export async function checkVersion():
         return { success: false, lastPushAt: null, error: 'Network error' };
     }
 }
+
+export async function pushAdData(
+    password: string,
+    adSnapshots: any[],
+    adRosterChanges: any[],
+    adBudgets: Record<string, number>
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const res = await fetch(`${BASE}/db-push-ad`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password, adSnapshots, adRosterChanges, adBudgets })
+        });
+        return await res.json();
+    } catch { return { success: false, error: 'Network error' }; }
+}
+
+export async function pullAdData():
+    Promise<{
+        success: boolean;
+        adSnapshots?: any[];
+        adRosterChanges?: any[];
+        adBudgets?: Record<string, number>;
+        error?: string;
+    }> {
+    try {
+        const res = await fetch(`${BASE}/db-pull-ad`);
+        return await res.json();
+    } catch { return { success: false, error: 'Network error' }; }
+}

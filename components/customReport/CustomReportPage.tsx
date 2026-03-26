@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PriceLog, RefundLog, PricingRules } from '../../types';
 import { getReportLayouts, saveReportLayout, ReportLayout } from '../../services/persistenceService';
+import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne } from '../../services/dateUtils';
 import {
     Layout,
     Plus,
@@ -166,7 +167,7 @@ interface CustomMetric {
     metricB?: string;
     metricATime?: string; // Mode B standalone time
     metricBTime?: string;
-    operator: '+' | '-' | '*' | '/';
+    operator: '+' | '-' | '*' | '/' | '%change';
     // share_of_total operand
     shareMetric?: string;
     shareMetricTime?: string;
@@ -193,7 +194,7 @@ const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, o
     const [shareMetric, setShareMetric] = useState(pendingMetrics[0]?.id || METRICS[0].id);
     const [shareMetricStandalone, setShareMetricStandalone] = useState(METRICS[0].id);
     const [shareMetricTime, setShareMetricTime] = useState('30d');
-    const [operator, setOperator] = useState<'+' | '-' | '*' | '/'>('/');
+    const [operator, setOperator] = useState<'+' | '-' | '*' | '/' | '%change'>('/');
     const [displayType, setDisplayType] = useState<'currency' | 'percent' | 'number'>('number');
 
     const labelCls = "text-[10px] font-bold text-gray-400 uppercase mb-1 block";
@@ -219,7 +220,7 @@ const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, o
                 metricB: mode === 'table' ? metricB : metricBStandalone,
                 metricBTime: mode === 'standalone' ? metricBTime : undefined,
                 operator,
-                type: displayType,
+                type: operator === '%change' ? 'percent' : displayType,
             });
         }
     };
@@ -289,7 +290,7 @@ const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, o
                                     <label className={labelCls}>Metric A</label>
                                     <select value={metricA} onChange={e => setMetricA(e.target.value)} className={selectCls}>
                                         {pendingMetrics.map(m => (
-                                            <option key={m.id} value={m.id}>{METRICS.find(x => x.id === m.metricId)?.label || m.metricId} ({m.timeRange})</option>
+                                            <option key={m.id} value={m.id}>{METRICS.find(x => x.id === m.metricId)?.label || m.metricId} ({m.timeRange === 'custom' && m.startDate && m.endDate ? `${m.startDate.slice(5)} → ${m.endDate.slice(5)}` : TIME_RANGES.find(t => t.id === m.timeRange)?.label || m.timeRange})</option>
                                         ))}
                                     </select>
                                 </div>
@@ -298,13 +299,14 @@ const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, o
                                     <select value={operator} onChange={e => setOperator(e.target.value as any)} className={selectCls}>
                                         <option value="+">+</option><option value="-">-</option>
                                         <option value="*">×</option><option value="/">/</option>
+                                        <option value="%change">% Change (PoP)</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className={labelCls}>Metric B</label>
                                     <select value={metricB} onChange={e => setMetricB(e.target.value)} className={selectCls}>
                                         {pendingMetrics.map(m => (
-                                            <option key={m.id} value={m.id}>{METRICS.find(x => x.id === m.metricId)?.label || m.metricId} ({m.timeRange})</option>
+                                            <option key={m.id} value={m.id}>{METRICS.find(x => x.id === m.metricId)?.label || m.metricId} ({m.timeRange === 'custom' && m.startDate && m.endDate ? `${m.startDate.slice(5)} → ${m.endDate.slice(5)}` : TIME_RANGES.find(t => t.id === m.timeRange)?.label || m.timeRange})</option>
                                         ))}
                                     </select>
                                 </div>
@@ -329,6 +331,7 @@ const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, o
                                     <select value={operator} onChange={e => setOperator(e.target.value as any)} className="p-2 border border-gray-200 rounded-lg text-xs w-20 text-center">
                                         <option value="+">+</option><option value="-">-</option>
                                         <option value="*">×</option><option value="/">/</option>
+                                        <option value="%change">% Change (PoP)</option>
                                     </select>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
@@ -358,7 +361,7 @@ const CustomMetricModal: React.FC<CustomMetricModalProps> = ({ pendingMetrics, o
                                 <label className={labelCls}>Metric</label>
                                 <select value={shareMetric} onChange={e => setShareMetric(e.target.value)} className={selectCls}>
                                     {pendingMetrics.map(m => (
-                                        <option key={m.id} value={m.id}>{METRICS.find(x => x.id === m.metricId)?.label || m.metricId} ({m.timeRange})</option>
+                                        <option key={m.id} value={m.id}>{METRICS.find(x => x.id === m.metricId)?.label || m.metricId} ({m.timeRange === 'custom' && m.startDate && m.endDate ? `${m.startDate.slice(5)} → ${m.endDate.slice(5)}` : TIME_RANGES.find(t => t.id === m.timeRange)?.label || m.timeRange})</option>
                                     ))}
                                 </select>
                             </div>
@@ -726,6 +729,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         const prevFilters = filtersRef.current;
         filtersRef.current = newFilters;
         setFilters(newFilters);
+        setShowBuilder(false);
         // Re-generate if dim filters changed in any way (added, removed, or value changed)
         const prevHasDim = prevFilters.some(f => f.type === 'dim');
         const newHasDim = newFilters.some(f => f.type === 'dim');
@@ -915,32 +919,35 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
         setTimeout(() => {
             const now = new Date();
 
-            // Helper to get start/end dates for a specific time range
-            const getDates = (range: string, customStart?: string, customEnd?: string) => {
-                let start: Date | null = null;
-                let end: Date = now;
+            // Helper to get start/end date keys (YYYY-MM-DD strings) for a time range
+            const todayKey = getTodayKeyMelbourne(now);
+            const getDates = (range: string, customStart?: string, customEnd?: string): { startKey: string | null; endKey: string } => {
                 if (range === 'custom' && customStart) {
-                    start = new Date(customStart);
-                    if (customEnd) end = new Date(customEnd);
-                } else {
-                    start = new Date();
-                    if (range === '7d') start.setDate(now.getDate() - 7);
-                    else if (range === '30d') start.setDate(now.getDate() - 30);
-                    else if (range === '90d') start.setDate(now.getDate() - 90);
-                    else if (range === 'ytd') start = new Date(now.getFullYear(), 0, 1);
-                    else start = null;
+                    return {
+                        startKey: customStart.slice(0, 10),
+                        endKey: (customEnd || todayKey).slice(0, 10),
+                    };
                 }
-                return { start, end };
+                let startKey: string | null = null;
+                if (range === '7d')  startKey = addDaysToDateKey(todayKey, -7);
+                else if (range === '30d') startKey = addDaysToDateKey(todayKey, -30);
+                else if (range === '90d') startKey = addDaysToDateKey(todayKey, -90);
+                else if (range === 'ytd') startKey = `${now.getFullYear()}-01-01`;
+                return { startKey, endKey: todayKey };
             };
 
-            // Returns the previous equivalent period for PoP calculation
+            // Returns the previous equivalent period as date keys
             const getPrevDates = (range: string, customStart?: string, customEnd?: string) => {
-                const { start, end } = getDates(range, customStart, customEnd);
-                if (!start) return { prevStart: null, prevEnd: null };
-                const periodMs = end.getTime() - start.getTime();
-                const prevEnd = new Date(start.getTime() - 1);
-                const prevStart = new Date(prevEnd.getTime() - periodMs);
-                return { prevStart, prevEnd };
+                const { startKey, endKey } = getDates(range, customStart, customEnd);
+                if (!startKey) return { prevStartKey: null, prevEndKey: null };
+                // Count days in period (inclusive)
+                const startMs = new Date(startKey).getTime();
+                const endMs   = new Date(endKey).getTime();
+                const days = Math.round((endMs - startMs) / 86400000) + 1;
+                // Previous period ends the day before startKey
+                const prevEndKey   = addDaysToDateKey(startKey, -1);
+                const prevStartKey = addDaysToDateKey(prevEndKey, -(days - 1));
+                return { prevStartKey, prevEndKey };
             };
 
             // 2. Create product lookup
@@ -1071,10 +1078,10 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                 const data: any = { ...row };
 
                 const calculateMetricValue = (items: any[], mConfig: MetricInstance, rowSkus: Set<string>) => {
-                    const { start, end } = getDates(mConfig.timeRange, mConfig.startDate, mConfig.endDate);
+                    const { startKey, endKey } = getDates(mConfig.timeRange, mConfig.startDate, mConfig.endDate);
                     const filtered = items.filter(l => {
-                        const d = new Date(l.date);
-                        return (!start || d >= start) && d <= end;
+                        const dk = asDateKey(l.date) || '';
+                        return (!startKey || isDateKeyBetween(dk, startKey, endKey));
                     });
 
                     const sales = filtered.filter(l => l._type === 'SALE');
@@ -1155,6 +1162,9 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                             case '-': return valA - valB;
                                             case '*': return valA * valB;
                                             case '/': return valB !== 0 ? valA / valB : 0;
+                                            case '%change':
+                                                if (valB === 0) return valA > 0 ? 100 : 0;
+                                                return ((valA - valB) / Math.abs(valB)) * 100;
                                         }
                                     }
                                 }
@@ -1167,11 +1177,11 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
                     // PoP: compute previous period and return % change
                     if (mConfig.isPop) {
-                        const { prevStart, prevEnd } = getPrevDates(mConfig.timeRange, mConfig.startDate, mConfig.endDate);
-                        if (!prevStart) return 0;
+                        const { prevStartKey, prevEndKey } = getPrevDates(mConfig.timeRange, mConfig.startDate, mConfig.endDate);
+                        if (!prevStartKey) return 0;
                         const prevFiltered = items.filter(l => {
-                            const d = new Date(l.date);
-                            return d >= prevStart && d <= prevEnd;
+                            const dk = asDateKey(l.date) || '';
+                            return isDateKeyBetween(dk, prevStartKey, prevEndKey);
                         });
                         const prevSales = prevFiltered.filter(l => l._type === 'SALE');
                         const prevRefunds = prevFiltered.filter(l => l._type === 'REFUND');
@@ -1197,7 +1207,8 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                             }
                         };
                         const prevVal = getPrevBase(mConfig.metricId);
-                        if (prevVal === 0) return currentVal > 0 ? 100 : 0;
+                        if (prevVal === 0 && currentVal === 0) return NaN; // both zero → renders as —
+                        if (prevVal === 0) return currentVal > 0 ? 100 : -100; // rose from / dropped to zero
                         return ((currentVal - prevVal) / Math.abs(prevVal)) * 100;
                     }
 
@@ -1885,7 +1896,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 
                 {/* Builder grid */}
                 {showBuilder && (
-                <div className="grid gap-4" style={{gridTemplateColumns:'200px 1fr 200px'}}>
+                <div className="grid gap-4" style={{gridTemplateColumns:'400px 1fr 300px'}}>
 
                     {/* LEFT: palette */}
                     <div className="pr-4" style={{borderRight:'1px solid var(--glass-divider)'}}>
@@ -2193,7 +2204,7 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
                                                     <div className="text-[9px] font-bold text-gray-400 uppercase mb-1 px-2">Metrics</div>
                                                     {metrics.filter(m => !m.isHidden).map(m => (
                                                         <button key={m.id} onClick={() => { handleAddFilter(m.id, 'metric'); setIsFilterMenuOpen(false); }} className="w-full text-left px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50 rounded">
-                                                            {getMetricLabel(m.metricId)} ({m.timeRange})
+                                                            {getMetricLabel(m.metricId)} ({m.timeRange === 'custom' && m.startDate && m.endDate ? `${m.startDate.slice(5)} → ${m.endDate.slice(5)}` : TIME_RANGES.find(t => t.id === m.timeRange)?.label || m.timeRange})
                                                         </button>
                                                     ))}
                                                 </>

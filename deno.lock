@@ -32,7 +32,7 @@
         "npm:i18next-browser-languagedetector@^7.2.0",
         "npm:i18next@^23.10.0",
         "npm:idb-keyval@^6.2.1",
-        "npm:lucide-react@0.344",
+        "npm:lucide-react@0.577",
         "npm:motion@^12.34.3",
         "npm:react-dom@^18.3.1",
         "npm:react-i18next@^14.0.5",
@@ -42,6 +42,7 @@
         "npm:topojson-client@^3.1.0",
         "npm:typescript@^5.2.2",
         "npm:vite@^5.1.6",
+        "npm:xlsx-js-style@^1.2.0",
         "npm:xlsx@~0.18.5"
       ]
     }
