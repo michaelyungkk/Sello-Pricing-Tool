@@ -28,6 +28,7 @@ import {
     SearchConfig,
     SkuCostDetail,
     InventoryTemplate,
+    PriceCheckTemplate,
     SearchSession,
     CostChangeRecord,
     InventoryChangeRecord,
@@ -64,8 +65,7 @@ import {
     verifyPassword, pushSnapshot, pullSnapshot,
     pushTransactions, pullTransactions, getLatestTransactionDate,
     pullTransactionPage, checkVersion,
-    pushRefundsAndShipments, pullRefundsAndShipments,
-    pushAdData, pullAdData
+    pushRefundsAndShipments, pullRefundsAndShipments
 } from '../services/dbService';
 import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
 
@@ -243,6 +243,14 @@ export const useAppState = () => {
     const [promotions, setPromotions] = useState<PromotionEvent[]>([]);
     const [learnedAliases, setLearnedAliases] = useState<Record<string, string>>({});
     const [inventoryTemplates, setInventoryTemplates] = useState<InventoryTemplate[]>([]);
+    const [priceCheckTemplates, setPriceCheckTemplates] = useState<PriceCheckTemplate[]>(() => {
+        try { return JSON.parse(localStorage.getItem('sello_price_check_templates') || '[]'); } catch { return []; }
+    });
+    const handleSavePriceCheckTemplates = (templates: PriceCheckTemplate[]) => {
+        setPriceCheckTemplates(templates);
+        try { localStorage.setItem('sello_price_check_templates', JSON.stringify(templates)); } catch {}
+    };
+
     const [pricingRules, setPricingRules] = useState<PricingRules>(DEFAULT_PRICING_RULES);
     const [logisticsRules, setLogisticsRules] = useState<LogisticsRule[]>(DEFAULT_LOGISTICS_RULES);
     const [strategyRules, setStrategyRules] = useState<StrategyConfig>(DEFAULT_STRATEGY_RULES);
@@ -585,6 +593,7 @@ export const useAppState = () => {
         skuFamilies,
         adGroups,
         inventoryTemplates,
+        priceCheckTemplates,
         freightRates,
         cohortSnapshot: cohortSnapshot ? {
             ...cohortSnapshot,
@@ -598,7 +607,7 @@ export const useAppState = () => {
         inventoryChangeHistory, promotions, learnedAliases,
         pricingRules, logisticsRules, strategyRules, searchConfig,
         thresholds, brandMap, categoryMap, skuFamilies, adGroups,
-        inventoryTemplates, freightRates,
+        inventoryTemplates, priceCheckTemplates, freightRates,
         cohortSnapshot, optimalPriceResults, benchmarkUpdateNotices]);
 
     // --- AD CAMPAIGN HANDLERS ---
@@ -682,6 +691,7 @@ export const useAppState = () => {
                     searchConfig: migrated.searchConfig || DEFAULT_SEARCH_CONFIG,
                     userProfile: migrated.userProfile && typeof migrated.userProfile === 'object' ? migrated.userProfile : {},
                     inventoryTemplates: Array.isArray(migrated.inventoryTemplates) ? migrated.inventoryTemplates : [],
+                    priceCheckTemplates: Array.isArray(migrated.priceCheckTemplates) ? migrated.priceCheckTemplates : [],
                     uploadTimestamps: migrated.uploadTimestamps && typeof migrated.uploadTimestamps === 'object' ? migrated.uploadTimestamps : {},
                     thresholds: hasThresholds ? migrated.thresholds : null,
                     velocityLookback: hasVelocity ? migrated.velocityLookback : null,
@@ -705,6 +715,7 @@ export const useAppState = () => {
                 setStrategyRules(restored.strategyRules);
                 setSearchConfig(restored.searchConfig);
                 setInventoryTemplates(restored.inventoryTemplates);
+                if (Array.isArray(restored.priceCheckTemplates)) setPriceCheckTemplates(restored.priceCheckTemplates);
                 setUploadTimestamps(restored.uploadTimestamps);
                 setBrandMap(restored.brandMap);
                 setCategoryMap(restored.categoryMap);
@@ -1214,20 +1225,6 @@ export const useAppState = () => {
             }
             console.log(`[push] refunds pushed`);
 
-            // Push ad campaign data
-            console.log(`[push] pushing ${adSnapshots?.length || 0} ad snapshots`);
-            const adPushRes = await pushAdData(
-                storedAdminPassword,
-                adSnapshots || [],
-                adRosterChanges || [],
-                adBudgets || {}
-            );
-            if (!adPushRes.success) {
-                console.warn('[push] ad data push failed (non-fatal):', adPushRes.error);
-            } else {
-                console.log(`[push] ad data pushed`);
-            }
-
             setPushProgress(0);
             setPushTotal(0);
             setIsDirty(false);
@@ -1245,7 +1242,7 @@ export const useAppState = () => {
             setPushTotal(0);
         }
     }, [isAdminMode, storedAdminPassword, getSharedSnapshot,
-        salesHistory, refundHistory, adSnapshots, adRosterChanges, adBudgets]);
+        salesHistory, refundHistory]);
 
     const applyLoadedState = useCallback((
         snapshot: any,
@@ -1388,26 +1385,6 @@ export const useAppState = () => {
             // Pull refunds only
             const refundRes = await pullRefundsAndShipments();
             const refunds = refundRes.success ? (refundRes.refunds || []) : [];
-
-            // Pull ad campaign data
-            const adRes = await pullAdData();
-            if (adRes.success) {
-                if (adRes.adSnapshots) {
-                    setAdSnapshots(adRes.adSnapshots);
-                    try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(adRes.adSnapshots)); } catch {}
-                }
-                if (adRes.adRosterChanges) {
-                    setAdRosterChanges(adRes.adRosterChanges);
-                    try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(adRes.adRosterChanges)); } catch {}
-                }
-                if (adRes.adBudgets) {
-                    setAdBudgets(adRes.adBudgets);
-                    try { localStorage.setItem('sello_ad_budgets', JSON.stringify(adRes.adBudgets)); } catch {}
-                }
-                console.log(`[sync] ad data loaded — ${adRes.adSnapshots?.length || 0} snapshots`);
-            } else {
-                console.warn('[sync] ad data pull failed (non-fatal):', adRes.error);
-            }
 
             applyLoadedState(incoming, allTransactions, refunds);
 
@@ -1603,6 +1580,8 @@ export const useAppState = () => {
         setLearnedAliases,
         inventoryTemplates,
         setInventoryTemplates,
+        priceCheckTemplates,
+        handleSavePriceCheckTemplates,
         pricingRules,
         setPricingRules,
         logisticsRules,

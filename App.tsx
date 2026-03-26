@@ -22,7 +22,7 @@ import UserProfile from './components/shared/UserProfile';
 import SearchResultsPage from './components/search/SearchResultsPage';
 import CostManagementPage from './components/costManagement/CostManagementPage';
 import PromotionPage from './components/promotionManager/PromotionPage';
-import ToolboxPage from './components/toolbox/ToolboxPage';
+import ToolboxPage from './components/toolbox/ToolboxPageContainer';
 import DefinitionsPage from './components/definitions/DefinitionsPageContainer';
 import SettingsPage from './components/settings/SettingsPage';
 import { CustomReportPage } from './components/customReport/CustomReportPage';
@@ -116,6 +116,8 @@ const App: React.FC = () => {
         setLearnedAliases,
         inventoryTemplates,
         setInventoryTemplates,
+        priceCheckTemplates,
+        handleSavePriceCheckTemplates,
         pricingRules,
         setPricingRules,
         logisticsRules,
@@ -900,6 +902,8 @@ const App: React.FC = () => {
                                 headerStyle={headerStyle}
                                 salesHistory={salesHistory || []}
                                 refundHistory={refundHistory || []}
+                                priceCheckTemplates={priceCheckTemplates || []}
+                                onSavePriceCheckTemplates={handleSavePriceCheckTemplates}
                             />
                         </div>)}
                         {mountedPages.has('definitions') && (

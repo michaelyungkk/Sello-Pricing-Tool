@@ -365,6 +365,13 @@ export interface BufferRules {
     valueB?: string;
 }
 
+export interface PriceCheckTemplate {
+    id: string;
+    platform: string;
+    skuColumn: string;
+    priceColumn: string;
+}
+
 export interface InventoryTemplate {
     id: string;
     name: string;

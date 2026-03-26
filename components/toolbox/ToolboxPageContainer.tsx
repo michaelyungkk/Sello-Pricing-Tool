@@ -1,12 +1,13 @@
 
 import React from 'react';
-import { Tag, RefreshCw, GitCompare } from 'lucide-react';
+import { Tag, RefreshCw, GitCompare, ShieldCheck } from 'lucide-react';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { ToolboxPageProps } from './types';
 import { useToolBox } from './hooks/useToolBox';
 import { PromoCheckerTool } from './components/PromoCheckerTool';
 import { InventorySyncTool } from './components/InventorySyncTool';
 import { ERPCrossCheckTool } from './components/ERPCrossCheckTool';
+import { PriceCheckTool } from './components/PriceCheckTool';
 
 const ToolboxPage: React.FC<ToolboxPageProps> = ({
     promotions,
@@ -20,6 +21,8 @@ const ToolboxPage: React.FC<ToolboxPageProps> = ({
     headerStyle,
     salesHistory,
     refundHistory,
+    priceCheckTemplates,
+    onSavePriceCheckTemplates,
 }) => {
     const { activeTab, setActiveTab } = useToolBox();
 
@@ -30,6 +33,7 @@ const ToolboxPage: React.FC<ToolboxPageProps> = ({
                     { key: 'PROMO', label: 'Promo Cross-Check', icon: Tag },
                     { key: 'SYNC', label: 'Inventory Sync', icon: RefreshCw },
                     { key: 'ERP', label: 'ERP Cross-Check', icon: GitCompare },
+                    { key: 'PRICE', label: 'Price Check', icon: ShieldCheck },
                 ]}
                 activeTab={activeTab}
                 onChange={(key) => setActiveTab(key as any)}
@@ -65,6 +69,16 @@ const ToolboxPage: React.FC<ToolboxPageProps> = ({
                     products={products || []}
                     learnedAliases={learnedAliases || {}}
                     themeColor={themeColor}
+                />
+            )}
+
+            {activeTab === 'PRICE' && (
+                <PriceCheckTool
+                    products={products || []}
+                    learnedAliases={learnedAliases || {}}
+                    pricingRules={pricingRules}
+                    priceCheckTemplates={priceCheckTemplates || []}
+                    onSaveTemplates={onSavePriceCheckTemplates}
                 />
             )}
         </div>

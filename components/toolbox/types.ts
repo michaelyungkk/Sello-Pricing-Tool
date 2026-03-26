@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { PromotionEvent, PricingRules, InventoryTemplate, Product } from '../../types';
+import { PromotionEvent, PricingRules, InventoryTemplate, PriceCheckTemplate, Product } from '../../types';
 
 export interface ERPCrossCheckToolProps {
     salesHistory: import('../../types').PriceLog[];
@@ -23,6 +23,8 @@ export interface ToolboxPageProps {
     headerStyle: React.CSSProperties;
     salesHistory: import('../../types').PriceLog[];
     refundHistory: import('../../types').RefundLog[];
+    priceCheckTemplates: PriceCheckTemplate[];
+    onSavePriceCheckTemplates: (templates: PriceCheckTemplate[]) => void;
 }
 
 export interface UploadedItem {
@@ -53,4 +55,12 @@ export interface InventorySyncToolProps {
     themeColor: string;
     pricingRules: PricingRules;
     products?: Product[];
+}
+
+export interface PriceCheckToolProps {
+    products: Product[];
+    learnedAliases: Record<string, string>;
+    pricingRules: PricingRules;
+    priceCheckTemplates: PriceCheckTemplate[];
+    onSaveTemplates: (templates: PriceCheckTemplate[]) => void;
 }
