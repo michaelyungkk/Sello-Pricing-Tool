@@ -32,6 +32,40 @@ interface EventDetailViewProps {
     themeColor: string;
 }
 
+// ── Local row component to buffer price edits — prevents god-state re-render on every keystroke ──
+const DiscountRow: React.FC<{
+    item: any;
+    isSkuScope: boolean;
+    onUpdateItem: (sku: string, updates: any) => void;
+    children: (discountValue: string, handlers: {
+        onTypeChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+        onValueChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+        onValueBlur: () => void;
+    }) => React.ReactNode;
+}> = ({ item, isSkuScope, onUpdateItem, children }) => {
+    const [localValue, setLocalValue] = React.useState(String(item.discountValue || ''));
+
+    // Sync if parent value changes (e.g. batch upload)
+    React.useEffect(() => {
+        setLocalValue(String(item.discountValue || ''));
+    }, [item.discountValue]);
+
+    const onTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        onUpdateItem(item.sku, { discountType: e.target.value });
+    };
+    const onValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setLocalValue(e.target.value); // local only — no parent update
+    };
+    const onValueBlur = () => {
+        const parsed = parseFloat(localValue) || 0;
+        if (parsed !== (item.discountValue || 0)) {
+            onUpdateItem(item.sku, { discountValue: parsed });
+        }
+    };
+
+    return <>{children(localValue, { onTypeChange, onValueChange, onValueBlur })}</>;
+};
+
 export const EventDetailView = ({ promo, allPromotions = [], products, priceHistoryMap, priceChangeHistory, onBack, onAddProducts, onDeleteItem, onUpdateMeta, onUpdateItem, themeColor }: EventDetailViewProps) => {
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<SortState<string> | null>({ key: 'startDate', dir: 'asc' });
@@ -48,11 +82,53 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
         return 'ACTIVE';
     }, [promo.startDate, promo.endDate]);
 
+    // Use priceHistoryMap directly — O(1) per-SKU lookup, no flattening 80K records.
+    const txMap = priceHistoryMap || new Map<string, PriceLog[]>();
+
+    // Heavy computation: baseline prices + actual velocity from txLogs.
+    // Depends only on stable promo fields (dates, platform, baselineMode) — NOT on items' discount values.
+    // SKU list is NOT included in the key — adding a SKU only computes metrics for the NEW sku,
+    // not all existing ones. The heavyMetricsRef accumulates results incrementally.
+    const promoStableKey = `${promo?.id}|${promo?.startDate}|${promo?.endDate}|${promo?.platform}|${promo?.baselineMode}`;
+    const heavyMetricsRef = React.useRef(new Map<string, any>());
+
+    const heavyMetrics = useMemo(() => {
+        const prev = heavyMetricsRef.current;
+        const next = new Map<string, any>();
+        const itemSkus = (promo?.items || []).map((i: any) => i.sku.toUpperCase());
+
+        itemSkus.forEach((skuUp: string) => {
+            // Reuse cached result if promo config hasn't changed
+            if (prev.has(skuUp) && prev.get('__stableKey') === promoStableKey) {
+                next.set(skuUp, prev.get(skuUp));
+            } else {
+                const item = (promo?.items || []).find((i: any) => i.sku.toUpperCase() === skuUp);
+                if (!item) return;
+                const product = products.find(p => p.sku.toUpperCase() === skuUp);
+                next.set(skuUp, computePromoEffectiveness(promo, item.sku, txMap, priceChangeHistory || [], product));
+            }
+        });
+        next.set('__stableKey', promoStableKey);
+        heavyMetricsRef.current = next;
+        return next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [promoStableKey, (promo?.items || []).map((i: any) => i.sku).join(','), txMap, priceChangeHistory, products]);
+
+    // Light computation: merge heavy metrics with current discount values for display.
+    // Reruns when items change (discount edits) but does NO txLog scanning.
     const aggregatedEffectiveness = useMemo(() => {
         const results = (promo?.items || []).map((item: any) => {
-            const product = products.find(p => p.sku.toUpperCase() === item.sku.toUpperCase());
-            return computePromoEffectiveness(promo, item.sku, Array.from((priceHistoryMap || new Map()).values()).flat(), priceChangeHistory || [], product);
-        });
+            const heavy = heavyMetrics.get(item.sku.toUpperCase());
+            if (!heavy) return null;
+            // Override promoPrice with current discount value for live display
+            const basePrice = heavy.baselinePrice || 0;
+            let promoPrice = heavy.promoPrice;
+            if (promo.promotionScope !== 'SHOP' && item.discountValue) {
+                promoPrice = deriveDiscountedPrice(basePrice, item.discountType || 'FIXED_PRICE', item.discountValue || 0);
+            }
+            const discountPercent = basePrice > 0 ? ((basePrice - promoPrice) / basePrice * 100) : 0;
+            return { ...heavy, promoPrice, discountPercent };
+        }).filter(Boolean);
         
         const totals = {
             baselineDailyUnits: results.reduce((sum, r) => sum + (r.baselineDailyUnits || 0), 0),
@@ -67,7 +143,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
         };
         
         return { items: results, totals };
-    }, [promo, priceHistoryMap, priceChangeHistory, windows.event.days, products]);
+    }, [promo?.items, heavyMetrics, promo?.promotionScope, windows.event?.days]);
 
     const formatPromoDate = (dStr: string, withYear: boolean = true) => {
         if (!dStr) return '-';
@@ -127,13 +203,14 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
 
     // SMART LIFT SUGGESTION (Data Driven)
     const suggestedLiftData = useMemo(() => {
-        if (!sortedItems || sortedItems.length === 0) return { val: 0, source: 'None' };
+        if (!promo?.items || promo.items.length === 0) return { val: 0, source: 'None' };
         
-        // 1. Calculate Average Discount Depth for Current Promo
-        const validItems = sortedItems.filter(i => i.discountPercent > 0);
+        // 1. Calculate Average Discount Depth using heavyMetrics (already computed)
+        const heavyItems = Array.from(heavyMetrics.values()).filter((r: any) => r.promoPrice > 0);
+        const validItems = heavyItems.filter((r: any) => r.baselinePrice > 0 && r.promoPrice < r.baselinePrice);
         if (validItems.length === 0) return { val: 0, source: 'None' };
         
-        const avgCurrentDiscount = validItems.reduce((sum, i) => sum + i.discountPercent, 0) / validItems.length;
+        const avgCurrentDiscount = validItems.reduce((sum: number, r: any) => sum + ((r.baselinePrice - r.promoPrice) / r.baselinePrice * 100), 0) / validItems.length;
 
         // 2. Look for Historical Campaigns on same Platform
         const today = getTodayKeyMelbourne();
@@ -157,7 +234,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                 (pastP.items || []).forEach(item => {
                     const product = products.find(prod => prod.sku === item.sku);
                     // Heavy computation, but necessary for data-driven insights
-                    const metrics = computePromoEffectiveness(pastP, item.sku, Array.from((priceHistoryMap || new Map()).values()).flat(), priceChangeHistory || [], product);
+                    const metrics = computePromoEffectiveness(pastP, item.sku, txMap, priceChangeHistory || [], product);
                     
                     const baseline = metrics.actualUnits - metrics.upliftUnits;
                     if (baseline > 1) { // Filter out noise
@@ -215,7 +292,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             elasticity: elasticityToUse
         };
 
-    }, [sortedItems, promo.platform, allPromotions, priceHistoryMap]);
+    }, [heavyMetrics, promo.platform, promo.id, allPromotions, txMap, priceChangeHistory, products]);
 
     const handleExportPostMortem = () => {
         const { totals } = aggregatedEffectiveness;
@@ -507,11 +584,13 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                             <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[150px]">{item.product?.name}</div>
                                         </td>
                                         <td className="r text-gray-500 font-medium">{formatSmartMoney(item.baselinePrice)}</td>
+                                        <DiscountRow item={item} isSkuScope={isSkuScope} onUpdateItem={onUpdateItem}>
+                                            {(localValue, { onTypeChange, onValueChange, onValueBlur }) => (<>
                                         <td>
                                             {isSkuScope ? (
-                                                <select 
+                                                <select
                                                     value={item.discountType || 'FIXED_PRICE'}
-                                                    onChange={(e) => onUpdateItem(item.sku, { discountType: e.target.value })}
+                                                    onChange={onTypeChange}
                                                     className="text-xs font-bold border-gray-200 rounded-lg p-1.5 bg-white group-hover:border-theme-20 transition-colors focus:ring-2 focus:ring-theme"
                                                 >
                                                     <option value="PERCENT_OFF">% Off</option>
@@ -526,15 +605,18 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                         </td>
                                         <td className="r">
                                             {isSkuScope && (
-                                                <input 
+                                                <input
                                                     type="number"
-                                                    value={item.discountValue || ''}
-                                                    onChange={(e) => onUpdateItem(item.sku, { discountValue: parseFloat(e.target.value) || 0 })}
+                                                    value={localValue}
+                                                    onChange={onValueChange}
+                                                    onBlur={onValueBlur}
                                                     placeholder="0.00"
                                                     className="w-20 text-right text-xs font-bold border-gray-200 rounded-lg p-1.5 bg-white group-hover:border-theme-20 transition-colors focus:ring-2 focus:ring-theme"
                                                 />
                                             )}
                                         </td>
+                                        </>)}
+                                        </DiscountRow>
                                         <td className="r">
                                             <div className="flex flex-col items-end">
                                                 <span className="text-sm font-black text-gray-900">{formatSmartMoney(item.promoPrice)}</span>

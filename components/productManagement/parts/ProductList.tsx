@@ -7,7 +7,7 @@ import { VAT_MULTIPLIER } from '../../../constants';
 import { getCanonicalSku } from '../../../services/skuNormalization';
 import { TagSearchInput } from '../../common/TagSearchInput';
 import { GradeBadge } from '../../common/GradeBadge';
-import { Search, Filter, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, SlidersHorizontal, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart, Zap } from 'lucide-react';
+import { Search, Filter, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ImageOff, ArrowRight, ChevronDown, SlidersHorizontal, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart, Zap } from 'lucide-react';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
 
@@ -928,6 +928,31 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
         setIsExportMenuOpen(false);
     };
 
+    const handleExportMissingImages = () => {
+        const missing = (filteredProducts || []).filter(p => !p.imageUrl || p.imageUrl.trim() === '');
+        if (missing.length === 0) {
+            alert('All products have image URLs — nothing to export.');
+            return;
+        }
+        const headers = ['SKU', 'Name', 'Brand', 'Category'];
+        const rows = missing.map(p => [
+            `"${(p.sku || '').replace(/"/g, '""')}"`,
+            `"${(p.name || '').replace(/"/g, '""')}"`,
+            `"${(p.brand || '').replace(/"/g, '""')}"`,
+            `"${(p.category || '').replace(/"/g, '""')}"`,
+        ]);
+        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob(['\uFEFF', csv], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = url;
+        link.download = 'missing_images.csv';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => { if (document.body.contains(link)) document.body.removeChild(link); URL.revokeObjectURL(url); }, 60000);
+    };
+
     const tooltipProduct = hoveredProduct ? (filteredProducts || []).find(p => p.id === hoveredProduct.id) : null;
 
     return (
@@ -959,7 +984,19 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                     )}
                 </div>
 
-                <div className="w-full xl:w-auto flex justify-end relative">
+                <div className="w-full xl:w-auto flex justify-end gap-2 relative">
+                    <button
+                        onClick={handleExportMissingImages}
+                        className="sello-btn"
+                        title={`Export SKUs missing image URL`}
+                    >
+                        <ImageOff className="w-3.5 h-3.5" />
+                        Missing Images
+                        {(() => {
+                            const count = (filteredProducts || []).filter(p => !p.imageUrl || p.imageUrl.trim() === '').length;
+                            return count > 0 ? <span className="sello-badge badge-amber text-[10px] ml-1">{count}</span> : null;
+                        })()}
+                    </button>
                     <button
                         onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
                         className="sello-btn"

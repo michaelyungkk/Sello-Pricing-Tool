@@ -58,14 +58,33 @@ export function deriveDiscountedPrice(
 }
 
 /**
+ * Helper: resolve txLogs for a specific SKU.
+ * Accepts either a flat PriceLog[] or a pre-indexed Map<string, PriceLog[]>.
+ * When a Map is provided, does O(1) lookup instead of O(n) filter.
+ */
+function resolveSkuLogs(
+  txLogsOrMap: PriceLog[] | Map<string, PriceLog[]>,
+  sku: string
+): PriceLog[] {
+  if (txLogsOrMap instanceof Map) {
+    // Try exact key first, then uppercase
+    return txLogsOrMap.get(sku) || txLogsOrMap.get(sku.toUpperCase()) || [];
+  }
+  // Flat array fallback — filter by SKU
+  const target = sku.toUpperCase();
+  return txLogsOrMap.filter(l => l.sku.toUpperCase() === target);
+}
+
+/**
  * B) computeBaselinePrice
- * Determines the 'normal' price before an event
+ * Determines the 'normal' price before an event.
+ * txLogs can be a flat PriceLog[] OR a pre-indexed Map<string, PriceLog[]>.
  */
 export function computeBaselinePrice(
   event: PromotionEvent,
   sku: string,
   platform: string,
-  txLogs: PriceLog[],
+  txLogs: PriceLog[] | Map<string, PriceLog[]>,
   priceChangeHistory: PriceChangeRecord[] = [],
   product?: Product
 ): number {
@@ -90,8 +109,9 @@ export function computeBaselinePrice(
     }
 
     // 3. Last Resort: Use latest known transaction price before or during start
-    const latestTx = txLogs
-      .filter(l => l.sku.toUpperCase() === targetSku && (l.platform === platform || platform === 'All'))
+    const skuLogs = resolveSkuLogs(txLogs, sku);
+    const latestTx = skuLogs
+      .filter(l => l.platform === platform || platform === 'All')
       .sort((a, b) => b.date.localeCompare(a.date))[0];
     
     return latestTx?.price || (product?.currentPrice || 0);
@@ -101,8 +121,8 @@ export function computeBaselinePrice(
     const preEnd = addDaysToDateKey(eventStart, -1);
     const preStart = addDaysToDateKey(preEnd, -13); // 14 day window
 
-    const windowLogs = txLogs.filter(l => 
-      l.sku.toUpperCase() === targetSku && 
+    const skuLogs = resolveSkuLogs(txLogs, sku);
+    const windowLogs = skuLogs.filter(l => 
       (l.platform === platform || platform === 'All') &&
       isDateKeyBetween(asDateKey(l.date)!, preStart, preEnd)
     );
@@ -151,11 +171,13 @@ export function computePromoWindows(event: PromotionEvent, nowKey: string): {
 
 /**
  * D) computePromoEffectiveness
+ * txLogs can be a flat PriceLog[] OR a pre-indexed Map<string, PriceLog[]>.
+ * When Map is provided, does O(1) SKU lookup instead of scanning the entire array.
  */
 export function computePromoEffectiveness(
   event: PromotionEvent,
   sku: string,
-  txLogs: PriceLog[],
+  txLogs: PriceLog[] | Map<string, PriceLog[]>,
   priceChangeHistory: PriceChangeRecord[] = [],
   product?: Product
 ): PromoEffectivenessMetrics {
@@ -163,6 +185,10 @@ export function computePromoEffectiveness(
   const nowKey = asDateKey(new Date())!;
   const windows = computePromoWindows(event, nowKey);
   const targetSku = sku.toUpperCase();
+  
+  // Resolve logs for this SKU once — O(1) if Map, O(n) if array
+  const skuLogs = resolveSkuLogs(txLogs, sku);
+  const platformLogs = skuLogs.filter(l => l.platform === platform || platform === 'All');
   
   // 1. Resolve Pricing with Product Fallback
   const baselinePrice = computeBaselinePrice(event, sku, platform, txLogs, priceChangeHistory, product);
@@ -176,9 +202,7 @@ export function computePromoEffectiveness(
   }
 
   // 2. Pre-Window Analysis (Baseline Velocity)
-  const preLogs = txLogs.filter(l => 
-    l.sku.toUpperCase() === targetSku && 
-    (l.platform === platform || platform === 'All') &&
+  const preLogs = platformLogs.filter(l => 
     isDateKeyBetween(asDateKey(l.date)!, windows.pre.start, windows.pre.end)
   );
   const baselineDailyUnits = preLogs.length > 0 
@@ -187,9 +211,7 @@ export function computePromoEffectiveness(
 
   // 3. During-Window Analysis (Actuals to current date)
   const limitDate = nowKey < windows.event.end ? nowKey : windows.event.end;
-  const eventLogs = txLogs.filter(l => 
-    l.sku.toUpperCase() === targetSku && 
-    (l.platform === platform || platform === 'All') &&
+  const eventLogs = platformLogs.filter(l => 
     isDateKeyBetween(asDateKey(l.date)!, windows.event.start, limitDate)
   );
 

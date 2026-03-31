@@ -44,6 +44,15 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
     const [editingPromo, setEditingPromo] = useState<PromotionEvent | null>(null);
 
     // Dynamic Status & Lift Calculation
+    // Build product lookup Map once to avoid O(n) find per item
+    const productMap = useMemo(() => {
+        const m = new Map<string, Product>();
+        (products || []).forEach(p => m.set(p.sku.toUpperCase(), p));
+        return m;
+    }, [products]);
+
+    const txMap = priceHistoryMap || new Map<string, PriceLog[]>();
+
     const effectivePromotions = useMemo(() => {
         const today = getTodayKeyMelbourne();
         return (promotions || []).map(p => {
@@ -58,9 +67,9 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                 let totalBaseline = 0;
 
                 p.items.forEach(item => {
-                    const product = products.find(prod => prod.sku === item.sku);
-                    const logs = priceHistoryMap?.get(item.sku) || [];
-                    const metrics = computePromoEffectiveness(p, item.sku, logs, priceChangeHistory, product);
+                    const product = productMap.get(item.sku.toUpperCase());
+                    // Pass the Map directly — computePromoEffectiveness does O(1) SKU lookup
+                    const metrics = computePromoEffectiveness(p, item.sku, txMap, priceChangeHistory, product);
                     
                     const baseline = metrics.actualUnits - metrics.upliftUnits;
                     
@@ -77,7 +86,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
 
             return { ...p, status: derivedStatus, lift };
         });
-    }, [promotions, products, priceHistoryMap, priceChangeHistory]);
+    }, [promotions, productMap, txMap, priceChangeHistory]);
 
     const handleDeleteClick = (e: React.MouseEvent, id: string, name: string) => {
         e.stopPropagation();
@@ -318,7 +327,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                     onClose={() => setIsCreateOpen(false)}
                     onCreate={onCreateEvent}
                     platforms={pricingRules ? Object.keys(pricingRules) : []}
-                   
+                    themeColor={themeColor}
                 />
             )}
 

@@ -1,5 +1,5 @@
 
-import React, { startTransition, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { QuickUploadMenu } from './components/shared/QuickUploadMenu';
 
@@ -243,28 +243,6 @@ const App: React.FC = () => {
     // Progressive page mounting — pages stagger-mount during browser idle time after initial render
     const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','ad-campaigns','tools','definitions','settings','custom-report'];
     const [mountedPages, setMountedPages] = useState<Set<string>>(() => new Set<string>());
-    // Frozen props for background-mounted pages — only update when page is active
-    // Prevents expensive useMemo recalcs in hidden pages when unrelated state changes
-    const frozenPromotionsRef = React.useRef(promotions || []);
-    if (currentView === 'strategy' || !mountedPages.has('strategy')) {
-        frozenPromotionsRef.current = promotions || [];
-    }
-    const strategyPromotions = frozenPromotionsRef.current;
-
-    const frozenPromoOverviewRef = React.useRef(promotions || []);
-    if (currentView === 'overview' || !mountedPages.has('overview')) {
-        frozenPromoOverviewRef.current = promotions || [];
-    }
-
-    const frozenPromoProductsRef = React.useRef(promotions || []);
-    if (currentView === 'products' || !mountedPages.has('products')) {
-        frozenPromoProductsRef.current = promotions || [];
-    }
-
-    const frozenPromoToolboxRef = React.useRef(promotions || []);
-    if (currentView === 'tools' || !mountedPages.has('tools')) {
-        frozenPromoToolboxRef.current = promotions || [];
-    }
     const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
         try { return localStorage.getItem('sello_sidebar_collapsed') === 'true'; } catch { return false; }
     });
@@ -356,10 +334,10 @@ const App: React.FC = () => {
     return (
         <>
             <style>{`html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity ?? 90) / 100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity ?? 90) / 100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur ?? 10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur ?? 10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity ?? 15) / 100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur ?? 10) + 4)}px); --glass-header-bg: rgba(249,250,251,0.97); --glass-row-even: rgba(249,250,251,0.30); --glass-row-hover: rgba(243,244,246,0.60); --glass-divider: rgba(229,231,235,0.55); --theme: ${userProfile.themeColor}; --theme-rgb: ${_themeRgb}; --theme-10: rgba(${_themeRgb}, 0.10); --theme-20: rgba(${_themeRgb}, 0.20); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); }`}</style>
-            <div className="h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent">
+            <div className="h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent overflow-hidden">
                 {userProfile.ambientGlass && <div className="fixed inset-0 z-[1] pointer-events-none transition-all duration-500 bg-custom-ambient backdrop-blur-custom-ambient" />}
                 <div className="group/sidebar hidden md:block fixed h-full z-40" style={{ width: sidebarCollapsed ? 64 : 240, transition: 'width 300ms' }}>
-                <aside className="w-full h-full flex flex-col border-r border-custom-glass shadow-sm bg-custom-glass">
+                <aside className="w-full h-full flex flex-col border-r border-custom-glass shadow-sm bg-custom-glass overflow-hidden">
                     <div className="h-[60px] flex items-center px-3 gap-6 border-b border-custom-glass">
                         <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: userProfile.themeColor, marginLeft: '6px' }}>S</div>
                         <span
@@ -373,7 +351,7 @@ const App: React.FC = () => {
                             <span className="font-bold text-lg tracking-tight text-gray-900 whitespace-nowrap">Sello UK Hub</span>
                         </span>
                     </div>
-                    <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+                    <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
                         {[
                             { id: 'overview', icon: LayoutDashboard, label: t('nav_overview') },
                             { id: 'products', icon: ShoppingBasket, label: t('nav_products') },
@@ -389,18 +367,15 @@ const App: React.FC = () => {
                         ].map((item) => {
                             const isActive = currentView === item.id;
                             return (
-                                <div key={item.id}>
+                                <div key={item.id} className="relative group">
                                     <button
                                         onClick={() => setCurrentView(item.id as any)}
-                                        className={`w-full flex items-center px-3 py-2 rounded-lg font-medium text-sm transition-colors duration-150 ${isActive ? 'bg-opacity-10' : 'text-gray-500'}`}
-                                        style={isActive
-                                            ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }
-                                            : undefined}
-                                        onMouseEnter={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.backgroundColor = `${userProfile.themeColor}12`; (e.currentTarget as HTMLElement).style.color = userProfile.themeColor; } }}
-                                        onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.backgroundColor = ''; (e.currentTarget as HTMLElement).style.color = ''; } }}
+                                        className={`w-full flex items-center px-3 py-2 rounded-lg font-medium text-sm ${isActive ? 'bg-opacity-10' : 'text-gray-600 hover:bg-gray-50/50 hover:text-gray-900'}`}
+                                        style={isActive ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
+                                        title={sidebarCollapsed ? item.label : undefined}
                                     >
                                         <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
-                                            <item.icon className="w-4 h-4" />
+                                            <item.icon className="w-4 h-4" style={isActive ? { color: userProfile.themeColor } : {}} />
                                         </span>
                                         <span
                                             className="overflow-hidden whitespace-nowrap transition-[width,opacity] duration-300 ease-in-out"
@@ -413,6 +388,11 @@ const App: React.FC = () => {
                                             {item.label}
                                         </span>
                                     </button>
+                                    {sidebarCollapsed && (
+                                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-gray-900 text-white text-xs font-medium rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                            {item.label}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
@@ -793,7 +773,7 @@ const App: React.FC = () => {
                                     refundHistory={refundHistory}
                                     pricingRules={pricingRules}
                                     priceChangeHistory={priceChangeHistory}
-                                    promotions={frozenPromoOverviewRef.current}
+                                    promotions={promotions}
                                     themeColor={userProfile.themeColor}
                                     onAnalyze={handleAnalyze}
                                     onDeepDive={handleDeepDiveRequest}
@@ -808,7 +788,7 @@ const App: React.FC = () => {
                             <ProductManagementPage
                                 products={products}
                                 pricingRules={pricingRules}
-                                promotions={frozenPromoProductsRef.current}
+                                promotions={promotions || []}
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory || []}
                                 priceChangeHistory={priceChangeHistory || []}
@@ -862,7 +842,7 @@ const App: React.FC = () => {
                                 themeColor={userProfile.themeColor}
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory}
-                                promotions={strategyPromotions}
+                                promotions={promotions || []}
                                 priceChangeHistory={priceChangeHistory || []}
                                 costChangeHistory={costChangeHistory || []}
                                 inventoryChangeHistory={inventoryChangeHistory || []}
@@ -889,9 +869,9 @@ const App: React.FC = () => {
                                 logisticsRules={logisticsRules || []}
                                 promotions={promotions || []}
                                 priceHistoryMap={priceHistoryMap}
-                                onAddPromotion={(p) => startTransition(() => setPromotions(prev => [...(prev || []), p]))}
-                                onUpdatePromotion={(p) => startTransition(() => setPromotions(prev => (prev || []).map(o => o.id === p.id ? p : o)))}
-                                onDeletePromotion={(id) => startTransition(() => setPromotions(prev => (prev || []).filter(p => p.id !== id)))}
+                                onAddPromotion={(p) => setPromotions(prev => [...(prev || []), p])}
+                                onUpdatePromotion={(p) => setPromotions(prev => (prev || []).map(o => o.id === p.id ? p : o))}
+                                onDeletePromotion={(id) => setPromotions(prev => (prev || []).filter(p => p.id !== id))}
                                 themeColor={userProfile.themeColor}
                                 headerStyle={headerStyle}
                             />
@@ -912,7 +892,7 @@ const App: React.FC = () => {
                         {mountedPages.has('tools') && (
                         <div style={{ display: currentView === 'tools' ? 'block' : 'none' }}>
                             <ToolboxPage
-                                promotions={frozenPromoToolboxRef.current}
+                                promotions={promotions || []}
                                 pricingRules={pricingRules}
                                 inventoryTemplates={inventoryTemplates || []}
                                 onSaveTemplates={setInventoryTemplates}

@@ -43,7 +43,7 @@ const fmt = (n: number, dp = 2) => n.toFixed(dp);
 const fmtGBP = (n: number) => `£${n.toFixed(2)}`;
 const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
 const roasColor = (r: number) => r >= 3 ? 'text-emerald-600' : r >= 1.5 ? 'text-amber-600' : 'text-red-600';
-const utilColor = (u: number) => u > 0.95 ? 'text-amber-600' : u >= 0.65 ? 'text-emerald-600' : 'text-red-600';
+const utilColor = (u: number) => u > 1.0 ? 'text-red-600' : u > 0.95 ? 'text-amber-600' : u >= 0.65 ? 'text-emerald-600' : 'text-red-600';
 
 type SkuSortKey = 'impressions' | 'clicks' | 'ctr' | 'spend' | 'spendShare' |
     'sales' | 'directSales' | 'roas' | 'directRoas' | 'poas' | 'orders';
@@ -133,7 +133,8 @@ function FolderTabs({ tabs, active, onChange }: {
                         {tab.label}
                         {tab.badge !== undefined && (
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full
-                                ${isActive ? 'bg-theme-10 text-theme' : 'bg-gray-200 text-gray-500'}`}>
+                                ${isActive ? 'text-white' : 'bg-gray-200 text-gray-500'}`}
+                style={isActive ? { background: 'var(--theme)' } : {}}>
                                 {tab.badge}
                             </span>
                         )}
@@ -148,7 +149,7 @@ function FolderTabs({ tabs, active, onChange }: {
 //  SUMMARY TAB — weekly comparison table (Excel master style)
 // ─────────────────────────────────────────────────────────────
 
-function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesChange, campaignNotes, setCampaignNotes }: {
+function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesChange, campaignNotes, setCampaignNotes, salesHistory, snapshot, budgets }: {
     campaign: AdCampaign;
     platformSnapshots: AdSnapshot[];
     prevCampaign: AdCampaign | null;
@@ -156,6 +157,9 @@ function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesC
     onNotesChange: (v: string) => void;
     campaignNotes: Record<string, string>;
     setCampaignNotes: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+    salesHistory: import('../../types').PriceLog[];
+    snapshot: AdSnapshot;
+    budgets: Record<string, number>;
 }) {
     // Show up to last 6 weeks, newest first for header but oldest→newest for Δ calc
     const weeks = platformSnapshots.slice(0, 6).reverse(); // oldest → newest
@@ -217,6 +221,22 @@ function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesC
                             <div className="ml-auto flex items-center gap-5 text-xs">
                                 <span className="text-gray-500">Spend <span className="font-bold text-gray-900">{fmtGBP(data.headline.spend)}</span></span>
                                 <span className="text-gray-500">Ad Sales <span className="font-bold text-gray-900">{fmtGBP(data.headline.sales)}</span></span>
+                                {(() => {
+                                    const totalSales = salesHistory
+                                        .filter(l =>
+                                            l.date >= snapshot.weekStartDate &&
+                                            l.date <= snapshot.weekEndDate &&
+                                            (!l.platform || l.platform === snapshot.platform)
+                                        )
+                                        .reduce((s, l) => s + ((l.price || 0) * (l.velocity || 0)), 0);
+                                    if (totalSales <= 0) return null;
+                                    const adPct = (data.headline.sales / totalSales * 100).toFixed(1);
+                                    return (
+                                        <span className="text-gray-500">Total Sales <span className="font-bold text-gray-900">{fmtGBP(totalSales)}</span>
+                                            <span className="text-[10px] text-gray-400 ml-1">({adPct}% ad-driven)</span>
+                                        </span>
+                                    );
+                                })()}
                                 <span className="text-gray-500">ROAS <span className={`font-bold ${roasColor(data.headline.roas)}`}>{fmt(data.headline.roas)}</span></span>
                                 <span className="text-gray-500">Direct <span className={`font-bold ${roasColor(data.headline.directRoas)}`}>{fmt(data.headline.directRoas)}</span></span>
                             </div>
@@ -269,7 +289,7 @@ function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesC
                         <thead>
                             {/* Week header row */}
                             <tr>
-                                <th className="pin" style={{ minWidth: 180 }}>Ad Group</th>
+                                <th className="pin" style={{ minWidth: 180, background: 'rgba(255,255,255,0.97)' }}>Ad Group</th>
                                 {weeksDesc.map((snap, i) => {
                                     const prevSnap = weeksDesc[i + 1] ?? null;
                                     return (
@@ -282,7 +302,7 @@ function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesC
                             </tr>
                             {/* Metric sub-header */}
                             <tr>
-                                <th className="pin"></th>
+                                <th className="pin" style={{ background: 'rgba(255,255,255,0.97)' }}></th>
                                 {weeksDesc.map((snap, i) => {
                                     const hasPrev = !!weeksDesc[i + 1];
                                     return (
@@ -301,7 +321,7 @@ function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesC
                         <tbody>
                             {/* Campaign totals row */}
                             <tr style={{ background: 'rgba(79,70,229,0.04)' }}>
-                                <td className="pin" style={{ fontWeight: 800, color: '#111827', fontSize: 12 }}>
+                                <td className="pin" style={{ fontWeight: 800, color: '#111827', fontSize: 12, background: 'rgba(255,255,255,0.97)' }}>
                                     {campaign.name} <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 10 }}>(total)</span>
                                 </td>
                                 {weeksDesc.map((snap, i) => {
@@ -328,10 +348,18 @@ function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesC
                             {allGroupNames.map(groupName => {
                                 const firstSnap = weeksDesc.find(s => groupData(s, groupName));
                                 if (!firstSnap) return null;
+                                // Current week group — check if inactive (zero spend or flagged inactive)
+                                const currentGroup = groupData(weeksDesc[0], groupName);
+                                const isInactive = currentGroup
+                                    ? ((currentGroup as any).inactive === true || (currentGroup.spend === 0 && currentGroup.impressions === 0))
+                                    : true;
                                 return (
-                                    <tr key={groupName}>
-                                        <td className="pin">
-                                            <span className="v-num" style={{ paddingLeft: 12 }}>{groupName}</span>
+                                    <tr key={groupName} style={isInactive ? { opacity: 0.4 } : {}}>
+                                        <td className="pin" style={{ background: 'rgba(255,255,255,0.97)' }}>
+                                            <span className="v-num" style={{ paddingLeft: 12 }}>
+                                                {groupName}
+                                                {isInactive && <span className="text-[9px] text-gray-400 ml-1 font-normal italic">(inactive)</span>}
+                                            </span>
                                         </td>
                                         {weeksDesc.map((snap, i) => {
                                             const g = groupData(snap, groupName);
@@ -355,7 +383,12 @@ function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesC
                                                     </td>
                                                     <td className="r cb"><span className="v-num">{fmtGBP(g.spend)}</span></td>
                                                     <td className="r">
-                                                        <span className={`v-num ${utilColor(g.utilisation)}`}>{fmtPct(g.utilisation)}</span>
+                                                        {(() => {
+                                                                const budget = budgets[`${snap.weekStartDate}::${g.name}`] ?? g.dailyBudget;
+                                                                const days = (() => { const s = new Date(snap.weekStartDate); const e = new Date(snap.weekEndDate); return Math.max(1, Math.round((e.getTime()-s.getTime())/86400000)+1); })();
+                                                                const util = budget > 0 ? g.spend / (budget * days) : 0;
+                                                                return <span className={`v-num ${utilColor(util)}`}>{fmtPct(util)}</span>;
+                                                            })()}
                                                     </td>
                                                     <td className="r cb"><span className="v-num">{fmtGBP(g.sales)}</span></td>
                                                     <td className="r cg">
@@ -412,7 +445,7 @@ function NotesField({ value, onChange, placeholder }: {
                 className="w-full text-xs border border-indigo-200 rounded-lg p-2 h-14 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-300 bg-white/80" />
             <div className="flex gap-1.5">
                 <button onClick={() => { onChange(draft); setEditing(false); }}
-                    className="px-3 py-1 text-[10px] font-bold bg-theme text-white rounded-md hover:opacity-90">Save</button>
+                    className="px-3 py-1 text-[10px] font-bold text-white rounded-md hover:opacity-90" style={{ background: 'var(--theme)' }}>Save</button>
                 <button onClick={() => { setDraft(value); setEditing(false); }}
                     className="px-3 py-1 text-[10px] font-bold text-gray-500 bg-gray-100 rounded-md hover:bg-gray-200">Cancel</button>
             </div>
@@ -439,7 +472,8 @@ function RemoveSkuModal({ sku, onConfirm, onClose }: {
                     {REMOVE_REASONS.map(r => (
                         <button key={r} onClick={() => setReason(r)}
                             className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all font-medium
-                                ${reason === r ? 'bg-theme text-white border-theme' : 'border-gray-200 text-gray-600 hover:border-theme/40'}`}>
+                                ${reason === r ? 'text-white border-transparent' : 'border-gray-200 text-gray-600'}`}
+                                style={reason === r ? { background: 'var(--theme)' } : {}}>
                             {r}
                         </button>
                     ))}
@@ -510,7 +544,7 @@ function AddCandidateModal({ candidate, adGroups, platform, weekOf, onConfirm, o
                         });
                         onClose();
                     }} disabled={!selectedGroup}
-                        className="flex-1 py-2 text-xs font-bold text-white bg-theme rounded-lg hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-1.5">
+                        className="flex-1 py-2 text-xs font-bold text-white rounded-lg hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-1.5" style={{ background: 'var(--theme)' }}>
                         <Plus className="w-3.5 h-3.5" /> Log Addition
                     </button>
                 </div>
@@ -523,9 +557,10 @@ function AddCandidateModal({ candidate, adGroups, platform, weekOf, onConfirm, o
 //  AD GROUP HEADER
 // ─────────────────────────────────────────────────────────────
 
-function AdGroupHeader({ group, prevGroup, notes, onNotesChange }: {
+function AdGroupHeader({ group, prevGroup, notes, onNotesChange, budget: savedBudget, onBudgetChange }: {
     group: AdGroupSnapshot; prevGroup: AdGroupSnapshot | null;
     notes: string; onNotesChange: (v: string) => void;
+    budget: number; onBudgetChange: (v: number) => void;
 }) {
     const budget = getBudgetRecommendation(group, prevGroup);
     const wow = prevGroup && prevGroup.sales > 0
@@ -539,7 +574,18 @@ function AdGroupHeader({ group, prevGroup, notes, onNotesChange }: {
                 <div className="flex items-center gap-3 shrink-0">
                     <span className="font-bold text-gray-900">{group.name}</span>
                     <span className="text-xs text-gray-400">
-                        {fmtGBP(group.dailyBudget)}/day · {group.bidStrategy} bid
+                        <span className="inline-flex items-center gap-1">
+                            £<input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={savedBudget || group.dailyBudget}
+                                onChange={e => onBudgetChange(parseFloat(e.target.value) || 0)}
+                                className="w-16 border-0 border-b border-gray-300 bg-transparent text-xs font-medium text-gray-700 focus:outline-none focus:border-theme text-center"
+                                title="Edit daily budget"
+                            />/day
+                        </span>
+                        {' · '}{group.bidStrategy} bid
                         {group.memberSkus.length > 0 && ` · ${group.memberSkus.length} SKUs`}
                     </span>
                     {wow !== null && (
@@ -570,12 +616,52 @@ function AdGroupHeader({ group, prevGroup, notes, onNotesChange }: {
 //  SKU TABLE
 // ─────────────────────────────────────────────────────────────
 
-function SkuTable({ group, snapshot, products, onRemove }: {
-    group: AdGroupSnapshot; snapshot: AdSnapshot; products: Product[];
+function SkuTable({ group, snapshot, prevSnapshot, products, salesHistory, adRosterChanges, onRemove }: {
+    group: AdGroupSnapshot; snapshot: AdSnapshot; prevSnapshot: AdSnapshot | null; products: Product[];
+    salesHistory: import('../../types').PriceLog[];
+    adRosterChanges: import('../../types').AdRosterChange[];
     onRemove: (sku: string, reason: string) => void;
 }) {
     const [sort, setSort] = useState<SortState<SkuSortKey>>({ key: 'spend', dir: 'desc' });
     const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+
+    // Prev week metrics per SKU from prevSnapshot
+    const prevSkuMap = useMemo(() => {
+        const map = new Map<string, { spend: number; sales: number; roas: number; orders: number; poas: number }>();
+        if (!prevSnapshot) return map;
+        const rows = prevSnapshot.dailySkuData.filter(r => r.adGroup === group.name);
+        const skuMap = new Map<string, typeof rows>();
+        rows.forEach(r => {
+            const key = r.mappedSku || r.offerSku;
+            if (!skuMap.has(key)) skuMap.set(key, []);
+            skuMap.get(key)!.push(r);
+        });
+        skuMap.forEach((skuRows, sku) => {
+            const spend = skuRows.reduce((s, r) => s + r.spend, 0);
+            const sales = skuRows.reduce((s, r) => s + r.sales, 0);
+            const orders = skuRows.reduce((s, r) => s + r.orders, 0);
+            const mapped = (skuRows[0]?.mappedSku || sku).toUpperCase();
+            const profit = salesHistory
+                .filter(l => {
+                    const lSku = (l.sku || '').toUpperCase();
+                    const inRange = l.date >= prevSnapshot.weekStartDate && l.date <= prevSnapshot.weekEndDate;
+                    const matchPlatform = !l.platform || l.platform === prevSnapshot.platform;
+                    return (lSku === sku.toUpperCase() || lSku === mapped) && inRange && matchPlatform;
+                })
+                .reduce((s, l) => s + (l.profit || 0), 0);
+            map.set(sku, { spend, sales, roas: spend > 0 ? sales / spend : 0, orders, poas: spend > 0 ? profit / spend : 0 });
+        });
+        return map;
+    }, [prevSnapshot, group, salesHistory]);
+
+    // SKUs removed from this group per roster log
+    const removedSkus = useMemo(() => {
+        const removed = new Set<string>();
+        adRosterChanges
+            .filter(r => r.adGroup === group.name && r.platform === snapshot.platform && r.action === 'REMOVE')
+            .forEach(r => removed.add(r.sku.toUpperCase()));
+        return removed;
+    }, [adRosterChanges, group, snapshot]);
 
     const summaries = useMemo(() => {
         const rows = snapshot.dailySkuData.filter(r => r.adGroup === group.name);
@@ -606,6 +692,17 @@ function SkuTable({ group, snapshot, products, onRemove }: {
             const product = products.find(p => p.sku === sku);
             const roas = spend > 0 ? sales / spend : 0;
             const ctr = impressions > 0 ? clicks / impressions : 0;
+            // POAS: sum profit from salesHistory for this SKU within the snapshot week
+            const mapped = (skuRows[0]?.mappedSku || sku).toUpperCase();
+            const skuProfit = salesHistory
+                .filter(l => {
+                    const lSku = (l.sku || '').toUpperCase();
+                    const inDateRange = l.date >= snapshot.weekStartDate && l.date <= snapshot.weekEndDate;
+                    const matchesPlatform = !l.platform || l.platform === snapshot.platform;
+                    return (lSku === sku.toUpperCase() || lSku === mapped) && inDateRange && matchesPlatform;
+                })
+                .reduce((s, l) => s + (l.profit || 0), 0);
+            const poas = spend > 0 ? skuProfit / spend : 0;
             result.push({
                 sku, offerSku: skuRows[0]?.offerSku ?? sku,
                 adGroup: group.name, campaign: skuRows[0]?.campaign ?? '',
@@ -617,7 +714,7 @@ function SkuTable({ group, snapshot, products, onRemove }: {
                 spendShare: totalSpend > 0 ? spend / totalSpend : 0,
                 directSales, directOrders, directConversions,
                 directRoas: spend > 0 ? directSales / spend : 0,
-                haloSales: sales - directSales, poas: 0,
+                haloSales: sales - directSales, poas,
                 gradeLevel: product?.gradeLevel ?? 0,
                 stockQty: product?.stockLevel ?? 0,
                 runway: (product?.daysRemaining ?? 0) / 7,
@@ -630,15 +727,18 @@ function SkuTable({ group, snapshot, products, onRemove }: {
             });
         }
         return result;
-    }, [snapshot, group, products]);
+    }, [snapshot, group, products, salesHistory]);
 
     const sorted = useMemo(() => {
         if (!sort) return summaries;
         return [...summaries].sort((a, b) => {
+            const aRemoved = removedSkus.has(a.sku.toUpperCase());
+            const bRemoved = removedSkus.has(b.sku.toUpperCase());
+            if (aRemoved !== bRemoved) return aRemoved ? 1 : -1;
             const v = (s: typeof a) => s[sort.key as keyof typeof s] as number ?? 0;
             return sort.dir === 'desc' ? v(b) - v(a) : v(a) - v(b);
         });
-    }, [summaries, sort]);
+    }, [summaries, sort, removedSkus]);
 
     const handleExport = useCallback(() => {
         const headers = ['SKU','Product','Impressions','Clicks','CTR%','Spend','Spend%',
@@ -678,14 +778,11 @@ function SkuTable({ group, snapshot, products, onRemove }: {
                                 <SortableHeader label="CTR" sortKey="ctr" sort={sort} onChange={setSort} align="right" />
                                 <SortableHeader label="Spend" sortKey="spend" sort={sort} onChange={setSort} align="right" tint="blue" />
                                 <SortableHeader label="Spend%" sortKey="spendShare" sort={sort} onChange={setSort} align="right" />
-                                <SortableHeader label="Broad Sales" sortKey="sales" sort={sort} onChange={setSort} align="right" tint="blue" />
-                                <SortableHeader label="Direct Sales" sortKey="directSales" sort={sort} onChange={setSort} align="right" tint="blue" />
+                                <SortableHeader label="Units Sold" sortKey="sales" sort={sort} onChange={setSort} align="right" tint="blue" />
                                 <SortableHeader label="Broad ROAS" sortKey="roas" sort={sort} onChange={setSort} align="right" tint="green" />
                                 <SortableHeader label="Direct ROAS" sortKey="directRoas" sort={sort} onChange={setSort} align="right" tint="green" />
                                 <SortableHeader label="POAS" sortKey="poas" sort={sort} onChange={setSort} align="right" tint="green" />
                                 <SortableHeader label="Orders" sortKey="orders" sort={sort} onChange={setSort} align="right" />
-                                <th className="c">Grade</th>
-                                <th className="r">Stock</th>
                                 <th>Diagnosis</th>
                                 <th>Flags &amp; Action</th>
                             </tr>
@@ -700,7 +797,6 @@ function SkuTable({ group, snapshot, products, onRemove }: {
                                 <th className="r cb"><span className="sello-badge badge-blue text-[10px]">{fmtGBP(group.spend)}</span></th>
                                 <th className="r"><span className="sello-badge badge-gray text-[10px]">100%</span></th>
                                 <th className="r cb"><span className="sello-badge badge-blue text-[10px]">{fmtGBP(group.sales)}</span></th>
-                                <th className="r cb"><span className="sello-badge badge-blue text-[10px]">{fmtGBP(group.directSales)}</span></th>
                                 <th className="r cg">
                                     <span className={`sello-badge text-[10px] ${group.roasOptIn >= 3 ? 'badge-green' : group.roasOptIn >= 1.5 ? 'badge-amber' : 'badge-red'}`}>
                                         {fmt(group.roasOptIn)}
@@ -713,11 +809,12 @@ function SkuTable({ group, snapshot, products, onRemove }: {
                                 </th>
                                 <th className="r cg"><span className="v-dim">—</span></th>
                                 <th className="r"><span className="sello-badge badge-gray text-[10px]">{group.orders}</span></th>
-                                <th className="c"><span className="v-dim">—</span></th>
                                 <th className="r">
-                                    <span className={`sello-badge text-[10px] ${utilColor(group.utilisation).replace('text-', 'badge-').replace('emerald-600','green').replace('amber-600','amber').replace('red-600','red')}`}>
-                                        {fmtPct(group.utilisation)}
-                                    </span>
+                                    {(() => {
+                                    const util = group.dailyBudget > 0 ? group.spend / (group.dailyBudget * 7) : 0;
+                                    const cls = utilColor(util).replace('text-','badge-').replace('emerald-600','green').replace('amber-600','amber').replace('red-600','red');
+                                    return <span className={`sello-badge text-[10px] ${cls}`}>{fmtPct(util)}</span>;
+                                })()}
                                 </th>
                                 <th>
                                     <span className={`sello-badge text-[10px] ${group.spendToSalesRatio > 0.05 ? 'badge-red' : 'badge-green'}`}>
@@ -735,39 +832,86 @@ function SkuTable({ group, snapshot, products, onRemove }: {
                             {sorted.map(sku => {
                                 const diagnosis = diagnoseSkuFunnel(sku, sku.groupAvgCtr, sku.groupAvgConvRate);
                                 const diagMeta = FUNNEL_DIAGNOSIS_LABELS[diagnosis];
-                                const rowClass = sku.flags.includes('ZERO_SALES') ? 'row-neg'
+                                const isRemoved = removedSkus.has(sku.sku.toUpperCase());
+                                const rowClass = isRemoved ? '' : sku.flags.includes('ZERO_SALES') ? 'row-neg'
                                     : sku.flags.includes('MONITORING') ? 'row-warn' : '';
                                 return (
-                                    <tr key={sku.sku} className={rowClass}>
+                                    <tr key={sku.sku} className={rowClass} style={isRemoved ? { opacity: 0.35, background: 'rgba(243,244,246,0.5)' } : {}}>
                                         <td className="pin">
                                             <div className="prod-normal">
-                                                <div className="row1"><span className="sku">{sku.sku}</span></div>
+                                                <div className="row1">
+                                                    <span className="sku">{sku.sku}</span>
+                                                    {sku.gradeLevel > 0 && <GradeBadge grade={sku.gradeLevel} />}
+                                                </div>
                                                 <span className="pname">{sku.productName}</span>
                                             </div>
                                         </td>
                                         <td className="r"><span className="v-num">{sku.impressions.toLocaleString()}</span></td>
                                         <td className="r"><span className="v-num">{sku.clicks}</span></td>
                                         <td className="r"><span className="v-num">{(sku.ctr * 100).toFixed(2)}%</span></td>
-                                        <td className="r cb"><span className="v-num">{fmtGBP(sku.spend)}</span></td>
+<td className="r cb">
+                                            <span className="v-num">{fmtGBP(sku.spend)}</span>
+                                            {prevSkuMap.has(sku.sku) && (() => {
+                                                const prev = prevSkuMap.get(sku.sku)!;
+                                                const pct = prev.spend > 0 ? (sku.spend - prev.spend) / prev.spend * 100 : null;
+                                                return pct !== null ? <div className={`text-[9px] font-bold ${pct > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pct > 0 ? '▲' : '▼'}{Math.abs(pct).toFixed(0)}%</div> : null;
+                                            })()}
+                                        </td>
                                         <td className="r">
                                             <span className={`v-num ${sku.spendShare > 0.3 ? 'v-warn' : ''}`}>{fmtPct(sku.spendShare)}</span>
                                         </td>
-                                        <td className="r cb"><span className="v-num">{fmtGBP(sku.sales)}</span></td>
-                                        <td className="r cb"><span className="v-num">{fmtGBP(sku.directSales)}</span></td>
-                                        <td className="r cg">
+                                        {(() => {
+                                            const totalSkuSales = salesHistory
+                                                .filter(l => {
+                                                    const lSku = (l.sku || '').toUpperCase();
+                                                    const mapped = (sku.offerSku || sku.sku).toUpperCase();
+                                                    return (lSku === sku.sku.toUpperCase() || lSku === mapped)
+                                                        && l.date >= snapshot.weekStartDate
+                                                        && l.date <= snapshot.weekEndDate
+                                                        && (!l.platform || l.platform === snapshot.platform);
+                                                })
+                                                .reduce((s, l) => s + (l.velocity || 0), 0);
+                                            const prevTotalSales = prevSkuMap.has(sku.sku)
+                                                ? salesHistory
+                                                    .filter(l => {
+                                                        const lSku = (l.sku || '').toUpperCase();
+                                                        return lSku === sku.sku.toUpperCase()
+                                                            && prevSnapshot
+                                                            && l.date >= prevSnapshot.weekStartDate
+                                                            && l.date <= prevSnapshot.weekEndDate
+                                                            && (!l.platform || l.platform === snapshot.platform);
+                                                    })
+                                                    .reduce((s, l) => s + (l.velocity || 0), 0)
+                                                : null;
+                                            const pct = prevTotalSales !== null && prevTotalSales > 0
+                                                ? (totalSkuSales - prevTotalSales) / prevTotalSales * 100 : null;
+                                            return (
+                                                <td className="r cb">
+                                                    <span className="v-num">{Math.round(totalSkuSales)}</span>
+                                                    {pct !== null && <div className={`text-[9px] font-bold ${pct > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pct > 0 ? '▲' : '▼'}{Math.abs(pct).toFixed(0)}%</div>}
+                                                </td>
+                                            );
+                                        })()}
+<td className="r cg">
                                             <span className={`v-num ${roasColor(sku.roas)}`}>{fmt(sku.roas)}</span>
+                                            {prevSkuMap.has(sku.sku) && (() => {
+                                                const prev = prevSkuMap.get(sku.sku)!;
+                                                const pct = prev.roas > 0 ? (sku.roas - prev.roas) / prev.roas * 100 : null;
+                                                return pct !== null ? <div className={`text-[9px] font-bold ${pct > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pct > 0 ? '▲' : '▼'}{Math.abs(pct).toFixed(0)}%</div> : null;
+                                            })()}
                                         </td>
                                         <td className="r cg">
                                             <span className={`v-num ${roasColor(sku.directRoas)}`}>{fmt(sku.directRoas)}</span>
                                         </td>
-                                        <td className="r cg">
+<td className="r cg">
                                             <span className={`v-num ${sku.poas >= 1 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(sku.poas)}</span>
+                                            {prevSkuMap.has(sku.sku) && (() => {
+                                                const prev = prevSkuMap.get(sku.sku)!;
+                                                const pct = prev.poas > 0 ? (sku.poas - prev.poas) / prev.poas * 100 : null;
+                                                return pct !== null ? <div className={`text-[9px] font-bold ${pct > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pct > 0 ? '▲' : '▼'}{Math.abs(pct).toFixed(0)}%</div> : null;
+                                            })()}
                                         </td>
                                         <td className="r"><span className="v-num">{sku.orders}</span></td>
-                                        <td className="c">
-                                            {sku.gradeLevel > 0 && <GradeBadge grade={sku.gradeLevel} />}
-                                        </td>
-                                        <td className="r"><span className="v-num">{sku.stockQty}</span></td>
                                         <td>
                                             <span className={`sello-badge ${diagMeta.color} text-[9px]`}>{diagMeta.label}</span>
                                         </td>
@@ -822,7 +966,7 @@ function CandidatesPanel({ candidates, adGroups, platform, weekOf, onAdd }: {
                     <span className="text-xs font-bold text-gray-600">Ad Group Candidates</span>
                     <span className="text-xs text-gray-400">Top {platform} sellers not yet in any ad group</span>
                     <input value={filter} onChange={e => setFilter(e.target.value)}
-                        placeholder="Filter..." className="ml-auto w-48 text-xs border border-gray-200 rounded-lg px-3 py-1 focus:outline-none focus:border-indigo-300" />
+                        placeholder="Filter..." className="ml-auto w-48 text-xs border border-gray-200 rounded-lg px-3 py-1 focus:outline-none focus:border-gray-400" />
                 </div>
                 <div className="sello-table-scroll" style={{ maxHeight: '320px' }}>
                     <table className="sello-table">
@@ -857,7 +1001,7 @@ function CandidatesPanel({ candidates, adGroups, platform, weekOf, onAdd }: {
                                     <td className="r">
                                         <div className="flex items-center justify-end gap-1.5">
                                             <div className="w-10 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-theme rounded-full" style={{ width: `${c.score * 100}%` }} />
+                                                <div className="h-full rounded-full" style={{ background: 'var(--theme)' }} style={{ width: `${c.score * 100}%` }} />
                                             </div>
                                             <span className="v-num text-[10px]">{(c.score * 100).toFixed(0)}</span>
                                         </div>
@@ -955,6 +1099,11 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
     const [mode, setMode] = useState<'new' | 'update'>('new');
     const [targetWeek, setTargetWeek] = useState<string>('');
 
+    // Budget entry per ad group (detected from parsed CSV)
+    const [detectedGroups, setDetectedGroups] = useState<{campaign: string; name: string}[]>([]);
+    const [groupBudgets, setGroupBudgets] = useState<Record<string, number>>({});
+    const [inactiveGroups, setInactiveGroups] = useState<Set<string>>(new Set());
+
     const platformSnapshots = existingSnapshots
         .filter(s => s.platform === platform)
         .sort((a, b) => b.weekStartDate.localeCompare(a.weekStartDate));
@@ -996,6 +1145,27 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
             setFileNames(names);
             setMode('new');
             if (platformSnapshots.length > 0) setTargetWeek(platformSnapshots[0].id);
+            // Detect ad groups and pre-fill budgets from existing budgets state
+            const groups: {campaign: string; name: string}[] = [];
+            const seen = new Set<string>();
+            for (const row of sRows) {
+                const campaign = row['Campaign'] ?? row['campaign'] ?? '';
+                const name = row['Ad group'] ?? row['Ad Group'] ?? row['ad_group'] ?? '';
+                if (campaign && name && !seen.has(name)) {
+                    seen.add(name);
+                    groups.push({ campaign, name });
+                }
+            }
+            setDetectedGroups(groups);
+            // Pre-fill from any existing budget for this group (latest week key)
+            const prefilled: Record<string, number> = {};
+            groups.forEach(g => {
+                // Try to find the most recent budget for this group across any week
+                const existingKey = Object.keys(budgets).filter(k => k.endsWith('::' + g.name)).sort().reverse()[0];
+                if (existingKey) prefilled[g.name] = budgets[existingKey];
+            });
+            setGroupBudgets(prefilled);
+            setInactiveGroups(new Set());
             setStep('configure');
         } catch (e: any) { setError(e.message || 'Parse failed'); }
         setParsing(false);
@@ -1007,15 +1177,30 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
         try {
             const { parseSummaryCsv, parseDetailCsv, buildSnapshot } =
                 await import('../../services/adCampaignService');
-            const campaigns = parseSummaryCsv(summaryRows, budgets, platform);
+            // Build week-specific budget map from groupBudgets
+            const weekBudgetMap: Record<string, number> = { ...budgets };
+            detectedGroups.forEach(g => {
+                if (!inactiveGroups.has(g.name)) {
+                    weekBudgetMap[`${dateStart}::${g.name}`] = groupBudgets[g.name] ?? 0;
+                }
+            });
+            const campaigns = parseSummaryCsv(summaryRows, weekBudgetMap, platform);
             const daily = parseDetailCsv(detailRows, learnedAliases);
             const prev = platformSnapshots[0] ?? null;
             const snapshot = buildSnapshot(platform, campaigns, daily, dateStart, dateEnd, prev, products);
+            // Mark inactive groups in snapshot
+            if (inactiveGroups.size > 0) {
+                snapshot.campaigns.forEach(camp => {
+                    camp.adGroups.forEach(g => {
+                        if (inactiveGroups.has(g.name)) (g as any).inactive = true;
+                    });
+                });
+            }
             // For update mode: preserve the existing snapshot's id so useAppState replaces it
             if (mode === 'update' && targetWeek) {
                 (snapshot as any).id = targetWeek;
             }
-            onImport(snapshot, budgets);
+            onImport(snapshot, weekBudgetMap);
             setStep('done');
         } catch (e: any) { setError(e.message || 'Import failed'); }
     }, [dateStart, dateEnd, summaryRows, detailRows, budgets, platform, learnedAliases,
@@ -1039,7 +1224,7 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
             </div>
             <div
                 className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
-                    ${dragging ? 'border-theme bg-theme/5' : 'border-gray-200 hover:border-theme/40'}`}
+                    ${dragging ? 'border-gray-400 bg-gray-50/30' : 'border-gray-200 hover:border-gray-400'}`}
                 onClick={() => fileRef.current?.click()}
                 onDragOver={e => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
@@ -1047,7 +1232,7 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
                 <Upload className="w-6 h-6 text-gray-300 mx-auto mb-2" />
                 <p className="text-sm font-semibold text-gray-600">Drop CSV files here or click to browse</p>
                 <p className="text-xs text-gray-400 mt-1">Ad group summary CSV · Daily detail CSV (optional)</p>
-                {parsing && <p className="text-xs text-theme/80 mt-2 font-medium">Parsing files…</p>}
+                {parsing && <p className="text-xs mt-2 font-medium" style={{ color: 'var(--theme)' }}>Parsing files…</p>}
                 {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
             </div>
             <input ref={fileRef} type="file" accept=".csv" multiple className="hidden"
@@ -1071,7 +1256,7 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
                     <span key={n} className="sello-badge badge-indigo text-[10px]">{n}</span>
                 ))}
                 <button onClick={() => { setStep('drop'); setError(null); }}
-                    className="text-[10px] text-gray-400 hover:text-theme underline">
+                    className="text-[10px] text-gray-400 underline" style={{ cursor: 'pointer' }}>
                     Change files
                 </button>
             </div>
@@ -1084,10 +1269,10 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
                 </label>
                 <div className="flex items-center gap-3">
                     <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
-                        className="text-xs border border-gray-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:border-indigo-300" />
+                        className="text-xs border border-gray-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:border-gray-400" />
                     <span className="text-gray-400 text-xs">→</span>
                     <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
-                        className="text-xs border border-gray-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:border-indigo-300" />
+                        className="text-xs border border-gray-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:border-gray-400" />
                     {dayCount !== null && (
                         <span className="text-xs text-gray-500">{dayCount} day{dayCount !== 1 ? 's' : ''}</span>
                     )}
@@ -1102,8 +1287,9 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
                     <button onClick={() => setMode('new')}
                         className={`flex-1 py-3 text-xs font-semibold rounded-xl border transition-all text-left px-4
                             ${mode === 'new'
-                                ? 'bg-theme text-white border-theme'
-                                : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'}`}>
+                                ? 'text-white border-transparent'
+                                : 'bg-white text-gray-600 border-gray-200'}`}
+                        style={mode === 'new' ? { background: 'var(--theme)' } : {}}>
                         <div>＋ Create new week</div>
                         <div className="text-[10px] font-normal mt-0.5 opacity-70">Add a new entry for this date range</div>
                     </button>
@@ -1137,6 +1323,52 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
                     </div>
                 )}
             </div>
+
+            {/* Budget entry per ad group */}
+            {detectedGroups.length > 0 && (
+                <div>
+                    <label className="text-xs font-bold text-gray-600 block mb-2">
+                        Ad Group Budgets
+                        <span className="font-normal text-gray-400 ml-1">— set daily budget or mark inactive</span>
+                    </label>
+                    <div className="space-y-2">
+                        {detectedGroups.map(g => {
+                            const isInactive = inactiveGroups.has(g.name);
+                            return (
+                                <div key={g.name} className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${isInactive ? 'bg-gray-50 border-gray-200 opacity-50' : 'bg-white border-gray-200'}`}>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-bold text-gray-800 truncate">{g.name}</div>
+                                        <div className="text-[10px] text-gray-400">{g.campaign}</div>
+                                    </div>
+                                    {!isInactive && (
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-xs text-gray-500">£</span>
+                                            <input
+                                                type="number" min="0" step="0.01"
+                                                value={groupBudgets[g.name] ?? ''}
+                                                onChange={e => setGroupBudgets(prev => ({ ...prev, [g.name]: parseFloat(e.target.value) || 0 }))}
+                                                placeholder="0.00"
+                                                className="w-20 border border-gray-300 rounded px-2 py-1 text-xs text-center focus:outline-none focus:border-theme"
+                                            />
+                                            <span className="text-[10px] text-gray-400">/day</span>
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={() => setInactiveGroups(prev => {
+                                            const next = new Set(prev);
+                                            next.has(g.name) ? next.delete(g.name) : next.add(g.name);
+                                            return next;
+                                        })}
+                                        className={`text-[10px] font-bold px-2 py-1 rounded border transition-all ${isInactive ? 'bg-gray-200 text-gray-500 border-gray-300' : 'bg-white text-gray-500 border-gray-200 hover:border-red-300 hover:text-red-500'}`}
+                                    >
+                                        {isInactive ? '↺ Activate' : 'Inactive'}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {error && <p className="text-xs text-red-500">{error}</p>}
 
@@ -1242,19 +1474,32 @@ const AdCampaignPageContainer: React.FC<AdCampaignPageProps> = ({
     const prevGroup = prevCampaign?.adGroups.find(g => g.name === activeGroup?.name) ?? null;
 
     const totals = useMemo(() => {
-        if (!campaign) return null;
+        if (!campaign || !snapshot) return null;
         const all = campaign.adGroups;
         const spend = all.reduce((s, g) => s + g.spend, 0);
         const sales = all.reduce((s, g) => s + g.sales, 0);
         const directSales = all.reduce((s, g) => s + g.directSales, 0);
-        const utilAvg = all.length > 0 ? all.reduce((s, g) => s + g.utilisation, 0) / all.length : 0;
+        // Recompute utilAvg using live budget values
+        const utilAvg = all.length > 0 ? all.reduce((s, g) => {
+            const budget = adBudgets[`${snapshot.weekStartDate}::${g.name}`] ?? g.dailyBudget;
+            const util = budget > 0 ? g.spend / (budget * 7) : 0;
+            return s + util;
+        }, 0) / all.length : 0;
+        // Total platform sales from salesHistory for the week (not just ad-attributed sales)
+        const totalPlatformSales = salesHistory
+            .filter(l =>
+                l.date >= snapshot.weekStartDate &&
+                l.date <= snapshot.weekEndDate &&
+                (!l.platform || l.platform === snapshot.platform)
+            )
+            .reduce((s, l) => s + ((l.price || 0) * (l.velocity || 0)), 0);
         return {
             spend, sales, directSales, utilAvg,
             broadRoas: spend > 0 ? sales / spend : 0,
             directRoas: spend > 0 ? directSales / spend : 0,
-            spendRatio: sales > 0 ? spend / sales : 0,
+            spendRatio: totalPlatformSales > 0 ? spend / totalPlatformSales : (sales > 0 ? spend / sales : 0),
         };
-    }, [campaign]);
+    }, [campaign, snapshot, adBudgets, salesHistory]);
 
     const existingAdSkus = useMemo(() => {
         const set = new Set<string>();
@@ -1429,6 +1674,9 @@ const AdCampaignPageContainer: React.FC<AdCampaignPageProps> = ({
                                 onNotesChange={v => setNotes(prev => ({ ...prev, [noteKey('__campaign__')]: v }))}
                                 campaignNotes={campaignNotes}
                                 setCampaignNotes={setCampaignNotes}
+                                salesHistory={salesHistory}
+                                snapshot={snapshot}
+                                budgets={adBudgets}
                             />
                         )}
 
@@ -1443,11 +1691,23 @@ const AdCampaignPageContainer: React.FC<AdCampaignPageProps> = ({
                                         prevGroup={pg}
                                         notes={notes[noteKey(group.name)] ?? ''}
                                         onNotesChange={v => setNotes(prev => ({ ...prev, [noteKey(group.name)]: v }))}
+                                        budget={adBudgets[`${snapshot.weekStartDate}::${group.name}`] ?? group.dailyBudget}
+                                        onBudgetChange={v => {
+                                            const key = `${snapshot.weekStartDate}::${group.name}`;
+                                            const updated = { ...adBudgets, [key]: v };
+                                            onImport({ ...snapshot, campaigns: snapshot.campaigns.map(camp => ({
+                                                ...camp,
+                                                adGroups: camp.adGroups.map(g => g.name === group.name ? { ...g, dailyBudget: v } : g)
+                                            })) }, updated);
+                                        }}
                                     />
                                     <SkuTable
                                         group={group}
                                         snapshot={snapshot}
+                                        prevSnapshot={prevSnapshot}
                                         products={products}
+                                        salesHistory={salesHistory}
+                                        adRosterChanges={adRosterChanges}
                                         onRemove={(sku, reason) => onRosterChange({
                                             id: `rc-${Date.now()}`,
                                             date: new Date().toISOString().split('T')[0],
