@@ -904,7 +904,7 @@ export const useAppState = () => {
                     existing.lastUpdated = reportDate;
                     newProducts[existingIndex] = existing;
                 } else {
-                    newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: toNumber(item.dailyAverageSales), leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, category: item.category || 'Uncategorized', brand: item.brand, dailyAverageSales: toNumber(item.dailyAverageSales) });
+                    newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: toNumber(item.dailyAverageSales), leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, landedAt: reportDate, category: item.category || 'Uncategorized', brand: item.brand, dailyAverageSales: toNumber(item.dailyAverageSales) });
                 }
             });
             return recalculateProductMetrics(newProducts, priceHistoryMap, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
@@ -1037,7 +1037,7 @@ export const useAppState = () => {
         if (isAdminMode) setIsDirty(true);
     }, [updateTimestamp, isAdminMode]);
 
-    const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string }[], reportDate: string) => {
+    const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => {
         const changes: PriceChangeRecord[] = [];
         setProducts(prev => (prev || []).map(p => {
             const update = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
@@ -1046,11 +1046,18 @@ export const useAppState = () => {
                 if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
                     changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
                 }
+                const newImageUrl = update.imageUrl || p.imageUrl;
+                const newDescription = update.description || p.description;
                 return {
                     ...p,
                     caPrice: update.caPrice,
                     lastUpdated: reportDate,
-                    imageUrl: update.imageUrl || p.imageUrl
+                    imageUrl: newImageUrl,
+                    description: newDescription,
+                    // Stamp listingReadyAt once when BOTH image and description are present
+                    listingReadyAt: !p.listingReadyAt && newImageUrl && newDescription
+                        ? reportDate
+                        : p.listingReadyAt,
                 };
             }
             return p;
@@ -1059,6 +1066,32 @@ export const useAppState = () => {
         updateTimestamp('CA Prices');
         setIsCAUploadModalOpen(false);
     }, [updateTimestamp]);
+
+    const handleStampLandedAt = useCallback((skus: string[], date: string) => {
+        setProducts(prev => (prev || []).map(p => {
+            if (p.landedAt) return p; // never overwrite an existing stamp
+            if (skus.some(s => s.toUpperCase() === p.sku.toUpperCase())) {
+                return { ...p, landedAt: date };
+            }
+            return p;
+        }));
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const handleDescriptionImport = useCallback((data: { sku: string; description: string }[]) => {
+        setProducts(prev => (prev || []).map(p => {
+            const match = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase());
+            if (!match) return p;
+            const now = new Date().toISOString().split('T')[0];
+            return {
+                ...p,
+                description: match.description,
+                listingReadyAt: !p.listingReadyAt && p.imageUrl && match.description
+                    ? now : p.listingReadyAt,
+            };
+        }));
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
 
     const handleShipmentImport = useCallback((updates: any[]) => {
         setProducts(prev => (prev || []).map(p => {
@@ -1429,7 +1462,22 @@ export const useAppState = () => {
             // Save to local cache with current version
             const versionRes = await checkVersion();
             const version = versionRes.lastPushAt || time;
-            await saveToCache(incoming, allTransactions, refunds, [], version);
+            // Merge cached cohort data into snapshot before saving
+            // (DB may not have it yet if user hasn't pushed since last recalculation)
+            let snapshotToCache = incoming;
+            try {
+                const existingCache = await loadFromCache();
+                if (existingCache?.snapshot?.cohortSnapshot && !incoming.cohortSnapshot) {
+                    snapshotToCache = {
+                        ...incoming,
+                        cohortSnapshot: existingCache.snapshot.cohortSnapshot,
+                        optimalPriceResults: existingCache.snapshot.optimalPriceResults,
+                        benchmarkUpdateNotices: existingCache.snapshot.benchmarkUpdateNotices,
+                    };
+                    console.log('[sync] merged cached cohort data into snapshot');
+                }
+            } catch (e) { /* non-fatal */ }
+            await saveToCache(snapshotToCache, allTransactions, refunds, [], version);
 
             console.log(`[sync] complete — cached version: ${version}`);
             setSyncProgress(0);
@@ -1587,9 +1635,33 @@ export const useAppState = () => {
             prev.filter(n => !newSnapshot.categoryBuckets.has(n.category))
         );
 
+        // Fire-and-forget: persist benchmarks to cache so reload skips re-calculation prompt
+        (async () => {
+            try {
+                const cacheVersion = getCachedVersion() || new Date().toISOString();
+                const existingCache = await loadFromCache();
+                const cachedTx = existingCache?.transactions || [];
+                const cachedRefunds = existingCache?.refunds || [];
+                const updatedSnapshot = {
+                    ...getSharedSnapshot(),
+                    cohortSnapshot: {
+                        ...merged,
+                        categoryBuckets: Object.fromEntries(merged.categoryBuckets),
+                        cohortStats: Object.fromEntries(merged.cohortStats),
+                        skuAssignments: Object.fromEntries(merged.skuAssignments),
+                    },
+                    optimalPriceResults: Object.fromEntries(nextResults),
+                };
+                await saveToCache(updatedSnapshot, cachedTx, cachedRefunds, [], cacheVersion);
+                console.log('[benchmarks] persisted to local cache');
+            } catch (e) {
+                console.warn('[benchmarks] cache persist failed (non-fatal):', e);
+            }
+        })();
+
         return shifts;
     }, [products, priceHistoryMap, priceChangeHistory, pricingRules, promotions,
-        learnedAliases, cohortSnapshot, optimalPriceResults, salesHistory]);
+        learnedAliases, cohortSnapshot, optimalPriceResults, salesHistory, getSharedSnapshot]);
 
     return {
         t,
@@ -1715,6 +1787,8 @@ export const useAppState = () => {
         handleMappingImport,
         handleReturnsImport,
         handleCAImport,
+        handleDescriptionImport,
+        handleStampLandedAt,
         handleShipmentImport,
         // DB Sync
         isAdminMode,

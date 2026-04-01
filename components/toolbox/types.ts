@@ -25,6 +25,7 @@ export interface ToolboxPageProps {
     refundHistory: import('../../types').RefundLog[];
     priceCheckTemplates: PriceCheckTemplate[];
     onSavePriceCheckTemplates: (templates: PriceCheckTemplate[]) => void;
+    onDescriptionImport?: (data: { sku: string; description: string }[]) => void;
 }
 
 export interface UploadedItem {

@@ -10,21 +10,28 @@ const CORS = {
 export default async (req: Request) => {
     if (req.method === 'OPTIONS')
         return new Response(null, { status: 204, headers: CORS });
+    if (req.method !== 'GET')
+        return new Response(
+            JSON.stringify({ success: false, error: 'Method not allowed' }),
+            { status: 405, headers: CORS }
+        );
     try {
         const sql = neon(process.env.NETLIFY_DATABASE_URL!);
 
+        // Pull all three ad tables in parallel
         const [snapshotRows, rosterRows, budgetRows] = await Promise.all([
             sql`SELECT data FROM ad_snapshots ORDER BY week_start DESC`,
             sql`SELECT id, platform, week_of, campaign, ad_group, sku, action, reason, date FROM ad_roster_changes ORDER BY date DESC`,
             sql`SELECT data FROM ad_budgets WHERE id = 1`,
         ]);
 
-        const adSnapshots = snapshotRows.map((r: any) => {
-            try { return typeof r.data === 'string' ? JSON.parse(r.data) : r.data; }
-            catch { return null; }
-        }).filter(Boolean);
+        // ad_snapshots: each row stores the full snapshot object in the data JSONB column
+        const adSnapshots = snapshotRows.map(r =>
+            typeof r.data === 'string' ? JSON.parse(r.data) : r.data
+        );
 
-        const adRosterChanges = rosterRows.map((r: any) => ({
+        // ad_roster_changes: stored as individual columns, reconstruct objects
+        const adRosterChanges = rosterRows.map(r => ({
             id: r.id,
             platform: r.platform,
             weekOf: r.week_of,
@@ -36,11 +43,15 @@ export default async (req: Request) => {
             date: r.date,
         }));
 
-        let adBudgets: Record<string, number> = {};
-        if (budgetRows.length > 0) {
-            try { adBudgets = typeof budgetRows[0].data === 'string' ? JSON.parse(budgetRows[0].data) : budgetRows[0].data; }
-            catch {}
-        }
+        // ad_budgets: single row, JSON blob
+        const adBudgets: Record<string, number> =
+            budgetRows.length > 0
+                ? (typeof budgetRows[0].data === 'string'
+                    ? JSON.parse(budgetRows[0].data)
+                    : budgetRows[0].data) ?? {}
+                : {};
+
+        console.log(`[db-pull-ad] ${adSnapshots.length} snapshots, ${adRosterChanges.length} roster changes`);
 
         return new Response(
             JSON.stringify({ success: true, adSnapshots, adRosterChanges, adBudgets }),

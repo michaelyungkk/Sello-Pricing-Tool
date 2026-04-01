@@ -8,15 +8,15 @@ import { Product } from '../../../types';
 interface CAUploadModalProps {
     products: Product[];
     onClose: () => void;
-    onConfirm: (data: { sku: string; caPrice: number; imageUrl?: string }[], reportDate: string) => void;
+    onConfirm: (data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => void;
 }
 
 const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConfirm }) => {
     const [dragActive, setDragActive] = useState(false);
-    const [parsedItems, setParsedItems] = useState<{ sku: string; caPrice: number; imageUrl?: string; status: 'valid' | 'error' | 'skipped' }[] | null>(null);
+    const [parsedItems, setParsedItems] = useState<{ sku: string; caPrice: number; imageUrl?: string; description?: string; status: 'valid' | 'error' | 'skipped' }[] | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [stats, setStats] = useState({ valid: 0, skipped: 0, matched: 0, changes: 0, images: 0 });
+    const [stats, setStats] = useState({ valid: 0, skipped: 0, matched: 0, changes: 0, images: 0, descriptions: 0 });
     const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]); // Default to today
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -95,6 +95,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
 
         // Image URL Column Detection (Optional)
         const imageIdx = headers.findIndex(h => h.includes('image') || h === 'pic' || h === 'picture' || h === 'url');
+        const descIdx = headers.findIndex(h => h.includes('description') || h === 'desc' || h.includes('product_desc') || h.includes('product description'));
 
         if (skuIdx === -1) {
             setError("Missing required column: 'sku'");
@@ -126,11 +127,13 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
             // Parse price
             const priceVal = priceIdx !== -1 ? parseFloat(String(row[priceIdx])) : undefined;
             const imageUrl = imageIdx !== -1 ? String(row[imageIdx]).trim() : undefined;
+            const description = descIdx !== -1 ? String(row[descIdx]).trim() : undefined;
 
             results.push({
                 sku,
                 caPrice: priceVal !== undefined && !isNaN(priceVal) ? priceVal : 0,
                 imageUrl: imageUrl && imageUrl.startsWith('http') ? imageUrl : undefined,
+                description: description && description.length > 10 ? description : undefined,
                 status: (!sku || priceVal === undefined || isNaN(priceVal)) ? 'error' as const : 'valid' as const
             });
         }
@@ -174,13 +177,15 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
         });
 
         imageCount = validItems.filter(i => i.imageUrl).length;
+        const descCount = validItems.filter(i => i.description).length;
 
         setStats({
             valid: validItems.length,
             skipped: skippedCount,
             matched: matchedCount,
             changes: changeCount,
-            images: imageCount
+            images: imageCount,
+            descriptions: descCount
         });
 
     }, [parsedItems, products]);
@@ -270,6 +275,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                                     <li><code className="bg-theme-10 text-theme px-1 rounded">sku</code> (Required)</li>
                                     <li><code className="bg-theme-10 text-theme px-1 rounded">price</code> (Required - CA Price)</li>
                                     <li><code className="bg-gray-200 px-1 rounded">image</code> (Optional - Product Image URL)</li>
+                                    <li><code className="bg-gray-200 px-1 rounded">description</code> (Optional - Product Description for Showcase)</li>
                                 </ul>
                                 <p className="mt-2 text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
                                     <strong>Note:</strong> Parent SKUs matching pattern *-UK-ALL will be automatically skipped.
@@ -305,6 +311,12 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                                         <ImageIcon className="w-3 h-3" /> Images
                                     </span>
                                     <div className="text-xl font-bold text-teal-900 mt-1">{stats.images}</div>
+                                </div>
+                                <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl text-center">
+                                    <span className="text-[10px] text-teal-700 font-medium uppercase flex items-center justify-center gap-1">
+                                        Descriptions
+                                    </span>
+                                    <div className="text-xl font-bold text-teal-900 mt-1">{stats.descriptions || 0}</div>
                                 </div>
                             </div>
 

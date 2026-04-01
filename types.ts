@@ -104,6 +104,13 @@ export interface Product {
     shipments?: ShipmentDetail[];
     imageUrl?: string;
     inventoryStatus?: string; // 'New Product'
+
+    // Listing content — populated via CA Upload or dedicated description upload
+    description?: string;        // Full product content (title + desc + features + specs)
+
+    // Listing speed tracking
+    landedAt?: string;           // ISO date — set ONCE when product first appears via inventory upload
+    listingReadyAt?: string;     // ISO date — set ONCE when both imageUrl AND description are populated
     agedStockQty?: number;
     cartonDimensions?: CartonDimensions;
     gradeLevel?: number;

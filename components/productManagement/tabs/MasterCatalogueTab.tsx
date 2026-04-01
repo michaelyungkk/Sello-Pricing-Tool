@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback } from 'react';
-import { RefreshCw, X, CheckCircle } from 'lucide-react';
+import { RefreshCw, X, CheckCircle, FileText } from 'lucide-react';
 import ProductList from '../parts/ProductList';
 import {
     Product,
@@ -14,6 +14,8 @@ import {
 import { getCanonicalSku } from '../../../services/skuNormalization';
 import { formatSmartMoney } from '../../../utils/format';
 import { CohortShiftWarning } from '../../../services/cohortAnalysis';
+import { ShowcaseSelectionModal } from '../parts/ShowcaseSelectionModal';
+import { generateShowcasePdf } from '../../../services/showcasePdfGenerator';
 
 // ─────────────────────────────────────────────
 // Props
@@ -36,6 +38,7 @@ interface MasterCatalogueTabProps {
     benchmarkUpdateNotices?: BenchmarkUpdateNotice[];
     onRecalculateBenchmarks?: () => CohortShiftWarning[];
     cohortSnapshot?: CohortSnapshot | null;
+    onStampLandedAt?: (skus: string[], date: string) => void;
 }
 
 // ─────────────────────────────────────────────
@@ -145,11 +148,13 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
     benchmarkUpdateNotices,
     onRecalculateBenchmarks,
     cohortSnapshot,
+    onStampLandedAt,
 }) => {
     const [shiftReview, setShiftReview] = useState<{
         shifts: CohortShiftWarning[];
         rebuiltCategories: string[];
     } | null>(null);
+    const [showShowcaseModal, setShowShowcaseModal] = useState(false);
 
     // ── Setup benchmark handler (first-time button)
     const handleSetupBenchmarks = useCallback(() => {
@@ -197,9 +202,16 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                 </div>
             )}
 
-            {/* ── Toolbar: recalculate button */}
+            {/* ── Toolbar: recalculate button + showcase button */}
             {cohortSnapshot && onRecalculateBenchmarks && (
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                    <button
+                        onClick={() => setShowShowcaseModal(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm"
+                    >
+                        <FileText className="w-3.5 h-3.5" />
+                        Generate Weekly Report
+                    </button>
                     <div className="relative group">
                         <button
                             onClick={handleRecalculate}
@@ -246,6 +258,21 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                 priceHistoryMap={priceHistoryMap}
                 optimalPriceResults={optimalPriceResults}
             />
+
+            {/* ── Showcase selection modal */}
+            {showShowcaseModal && (
+                <ShowcaseSelectionModal
+                    products={products}
+                    cohortSnapshot={cohortSnapshot ?? null}
+                    themeColor={themeColor}
+                    onClose={() => setShowShowcaseModal(false)}
+                    onStampLandedAt={onStampLandedAt}
+                    onGenerate={(selectedSkus) => {
+                        setShowShowcaseModal(false);
+                        generateShowcasePdf(selectedSkus, products, cohortSnapshot ?? null, themeColor);
+                    }}
+                />
+            )}
 
             {/* ── Shift review modal */}
             {shiftReview && (

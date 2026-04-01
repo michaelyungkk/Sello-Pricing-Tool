@@ -211,6 +211,8 @@ const App: React.FC = () => {
         handleMappingImport,
         handleReturnsImport,
         handleCAImport,
+        handleDescriptionImport,
+        handleStampLandedAt,
         handleShipmentImport,
         // DB Sync
         isAdminMode,
@@ -831,6 +833,7 @@ const App: React.FC = () => {
                                 optimalPriceResults={optimalPriceResults}
                                 benchmarkUpdateNotices={benchmarkUpdateNotices}
                                 onRecalculateBenchmarks={handleRecalculateBenchmarks}
+                                onStampLandedAt={handleStampLandedAt}
                             />
                         </div>)}
                         {mountedPages.has('platforms') && (
@@ -925,6 +928,7 @@ const App: React.FC = () => {
                                 refundHistory={refundHistory || []}
                                 priceCheckTemplates={priceCheckTemplates || []}
                                 onSavePriceCheckTemplates={handleSavePriceCheckTemplates}
+                                onDescriptionImport={handleDescriptionImport}
                             />
                         </div>)}
                         {mountedPages.has('definitions') && (
