@@ -261,7 +261,7 @@ async function drawCard(
 
     // Reserve space: pills row (6) + price panel (if any, 18) + speed (6) + bottom pad (2)
     const bi = getBucketInfo(p.sku, p.category || '', snap);
-    const reservedH = 6 + (bi ? 14 : 0) + 5 + 2;
+    const reservedH = 6 + (bi ? 17 : 0) + 5 + 2;
     const bulletBottom = y + h - reservedH;
 
     doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(GRAY_600);
@@ -294,7 +294,7 @@ async function drawCard(
 
     // ── Price position panel (inline, below pills) ──
     if (bi) {
-        const panelH = 13;
+        const panelH = 16;
         rrect(doc, txtX, cy, txtW, panelH, 2, TEAL_50);
         let py = cy + 3;
 
@@ -319,7 +319,7 @@ async function drawCard(
 
         // Median stats (compact, single line)
         if (bi.medianVelocity !== undefined) {
-            const statsY = py + 11;
+            const statsY = py + 13;
             doc.setFontSize(5.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(GRAY_600);
             doc.text(`Bucket median: `, txtX + 2, statsY);
             doc.setFont('helvetica', 'bold'); doc.setTextColor(GRAY_900);
