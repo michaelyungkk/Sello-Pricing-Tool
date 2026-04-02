@@ -72,6 +72,12 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
     const [activeSection, setActiveSection] = useState<'nomination' | 'analytics'>('nomination');
     
     // Lifecycle windows & effectiveness
+    const productMap = useMemo(() => {
+        const m = new Map<string, Product>();
+        (products || []).forEach(p => m.set(p.sku.toUpperCase(), p));
+        return m;
+    }, [products]);
+
     const nowKey = useMemo(() => asDateKey(new Date())!, []);
     const windows = useMemo(() => computePromoWindows(promo, nowKey), [promo, nowKey]);
     
@@ -104,7 +110,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             } else {
                 const item = (promo?.items || []).find((i: any) => i.sku.toUpperCase() === skuUp);
                 if (!item) return;
-                const product = products.find(p => p.sku.toUpperCase() === skuUp);
+                const product = productMap.get(skuUp);
                 next.set(skuUp, computePromoEffectiveness(promo, item.sku, txMap, priceChangeHistory || [], product));
             }
         });
@@ -232,7 +238,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                 let pastDiscountCount = 0;
 
                 (pastP.items || []).forEach(item => {
-                    const product = products.find(prod => prod.sku === item.sku);
+                    const product = productMap.get(item.sku.toUpperCase());
                     // Heavy computation, but necessary for data-driven insights
                     const metrics = computePromoEffectiveness(pastP, item.sku, txMap, priceChangeHistory || [], product);
                     

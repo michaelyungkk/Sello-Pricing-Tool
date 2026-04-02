@@ -31,6 +31,12 @@ interface SortRule {
 }
 
 const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platforms }: any) => {
+    const productMap = useMemo(() => {
+        const m = new Map<string, Product>();
+        (products || []).forEach((p: Product) => m.set(p.sku.toUpperCase(), p));
+        return m;
+    }, [products]);
+
     const [isOpen, setIsOpen] = useState(false);
     const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -320,7 +326,7 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
             // Resolve SKU alias for target platform
             let skuCell = row.sku;
             if (targetPlatform !== 'All') {
-                const product = products.find(p => p.sku === row.sku);
+                const product = productMap.get(row.sku.toUpperCase());
                 const ch = product?.channels?.find(c => normalize(c.platform) === normalize(targetPlatform))
                     || product?.channels?.find(c => normalize(c.platform).includes(normalize(targetPlatform)));
                 const aliases = ch?.skuAlias ? ch.skuAlias.split(',').map((s: string) => s.trim()).filter(Boolean) : [];

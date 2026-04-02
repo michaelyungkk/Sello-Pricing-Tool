@@ -110,11 +110,18 @@ export const normalizeRestoredState = (db: any): any => {
     brandMap: toObject(d.brandMap),
     categoryMap: toObject(d.categoryMap),
 
+    // Optimal pricing — pass through as-is (Maps were serialised to plain objects by getSharedSnapshot)
+    cohortSnapshot: d.cohortSnapshot ?? null,
+    optimalPriceResults: d.optimalPriceResults ?? null,
+    benchmarkUpdateNotices: toArray(d.benchmarkUpdateNotices),
+
     // Standardize user context
     userProfile: toObject(d.userProfile),
     velocityLookback: toString(d.velocityLookback, '30'),
     uploadTimestamps: toObject(d.uploadTimestamps),
     skuFamilies: toArray(d.skuFamilies),
     adGroups: toArray(d.adGroups),
+    priceCheckTemplates: toArray(d.priceCheckTemplates),
+    freightRates: toArray(d.freightRates),
   };
 };

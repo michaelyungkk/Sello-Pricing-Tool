@@ -537,7 +537,7 @@ const SortPriorityDropdown: React.FC<SortPriorityDropdownProps> = ({
     );
 };
 
-export const CustomReportPage: React.FC<CustomReportPageProps> = ({
+const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
     products,
     priceHistory,
     refundHistory,
@@ -2749,3 +2749,6 @@ export const CustomReportPage: React.FC<CustomReportPageProps> = ({
 };
 
 
+
+export const CustomReportPage = React.memo(CustomReportPageInner);
+export default CustomReportPage;

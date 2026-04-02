@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Tag, RefreshCw, GitCompare, ShieldCheck, FileText } from 'lucide-react';
+import { Tag, RefreshCw, GitCompare, ShieldCheck, List } from 'lucide-react';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { ToolboxPageProps } from './types';
 import { useToolBox } from './hooks/useToolBox';
@@ -8,9 +8,9 @@ import { PromoCheckerTool } from './components/PromoCheckerTool';
 import { InventorySyncTool } from './components/InventorySyncTool';
 import { ERPCrossCheckTool } from './components/ERPCrossCheckTool';
 import { PriceCheckTool } from './components/PriceCheckTool';
-import { DescriptionUploadTool } from './components/DescriptionUploadTool';
+import { SkuScreenTool } from './components/SkuScreenTool';
 
-const ToolboxPage: React.FC<ToolboxPageProps> = ({
+const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
     promotions,
     pricingRules,
     inventoryTemplates,
@@ -24,7 +24,6 @@ const ToolboxPage: React.FC<ToolboxPageProps> = ({
     refundHistory,
     priceCheckTemplates,
     onSavePriceCheckTemplates,
-    onDescriptionImport,
 }) => {
     const { activeTab, setActiveTab } = useToolBox();
 
@@ -36,7 +35,7 @@ const ToolboxPage: React.FC<ToolboxPageProps> = ({
                     { key: 'SYNC', label: 'Inventory Sync', icon: RefreshCw },
                     { key: 'ERP', label: 'ERP Cross-Check', icon: GitCompare },
                     { key: 'PRICE', label: 'Price Check', icon: ShieldCheck },
-                    { key: 'DESC', label: 'Description Upload', icon: FileText },
+                    { key: 'SKU', label: 'SKU Screen', icon: List },
                 ]}
                 activeTab={activeTab}
                 onChange={(key) => setActiveTab(key as any)}
@@ -85,15 +84,18 @@ const ToolboxPage: React.FC<ToolboxPageProps> = ({
                 />
             )}
 
-            {activeTab === 'DESC' && (
-                <DescriptionUploadTool
+            {activeTab === 'SKU' && (
+                <SkuScreenTool
                     products={products || []}
-                    onImport={onDescriptionImport || (() => {})}
+                    promotions={promotions || []}
+                    learnedAliases={learnedAliases || {}}
                     themeColor={themeColor}
                 />
             )}
+
         </div>
     );
 };
 
+const ToolboxPage = React.memo(ToolboxPageInner);
 export default ToolboxPage;

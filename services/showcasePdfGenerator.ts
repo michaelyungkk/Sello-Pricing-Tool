@@ -188,7 +188,8 @@ async function drawCard(
     x: number, y: number, w: number, h: number,
     snap: CohortSnapshot | null,
     imgCache: Map<string, string | null>,
-    themeColor: string
+    themeColor: string,
+    bulletCache: Map<string, string[]>
 ) {
     // Card shell
     rrect(doc, x, y, w, h, 3, WHITE, GRAY_200);
@@ -255,9 +256,7 @@ async function drawCard(
     cy += 3.5; // ← padding below rule
 
     // Rows 4-8: bullets (leave room for pills + price panel + speed)
-    const bullets = p.description
-        ? extractProductBullets(p.description).features.slice(0, 5)
-        : [];
+    const bullets = bulletCache.get(p.sku) || [];
 
     // Reserve space: pills row (6) + price panel (if any, 18) + speed (6) + bottom pad (2)
     const bi = getBucketInfo(p.sku, p.category || '', snap);
@@ -361,7 +360,8 @@ async function drawProductPages(
     byCategory: Map<string, Product[]>,
     snap: CohortSnapshot | null,
     imgCache: Map<string, string | null>,
-    themeColor: string
+    themeColor: string,
+    bulletCache: Map<string, string[]>
 ) {
     const HEADER_H = 12;
     const FOOTER_H = 5;
@@ -395,7 +395,7 @@ async function drawProductPages(
                 const row = Math.floor(i / COLS);
                 const cx = MARGIN + col * (cardW + GAP);
                 const cy = HEADER_H + 2 + row * (cardH + GAP);
-                await drawCard(doc, chunk[i], cx, cy, cardW, cardH, snap, imgCache, themeColor);
+                await drawCard(doc, chunk[i], cx, cy, cardW, cardH, snap, imgCache, themeColor, bulletCache);
             }
         }
     }
@@ -518,8 +518,16 @@ export async function generateShowcasePdf(
         byCategory.get(cat)!.push(p);
     });
 
+    // Pre-compute bullets for all products (avoids regex parsing per card in draw loop)
+    const bulletCache = new Map<string, string[]>();
+    selected.forEach(p => {
+        if (p.description) {
+            bulletCache.set(p.sku, extractProductBullets(p.description).features.slice(0, 5));
+        }
+    });
+
     // Product pages
-    await drawProductPages(doc, byCategory, cohortSnapshot, imgCache, themeColor);
+    await drawProductPages(doc, byCategory, cohortSnapshot, imgCache, themeColor, bulletCache);
 
     // Summary
     drawSummary(doc, selected, cohortSnapshot);

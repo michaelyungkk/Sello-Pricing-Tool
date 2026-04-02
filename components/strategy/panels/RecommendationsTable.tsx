@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { GradeBadge } from '../../common/GradeBadge';
 import { FilterBar } from '../../common/FilterBar';
 import { SortableHeader } from '../../common/SortableHeader';
@@ -74,6 +74,12 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
     products = [],
     optimalPriceResults,
 }) => {
+
+    const productMap = useMemo(() => {
+        const m = new Map<string, Product>();
+        (products || []).forEach((p: Product) => m.set(p.sku.toUpperCase(), p));
+        return m;
+    }, [products]);
 
     const getRunwayBin = (days: number, stockLevel: number, leadTime: number) => {
         if (stockLevel <= 0) return { label: 'Out of Stock', color: 'bg-red-50 text-red-600 border-red-200' };
@@ -173,7 +179,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
 
                                             // Anomaly: sibling is currently cheaper but algorithm says it should be pricier
                                             const anomaly = siblings.some(s => {
-                                                const sibProd = products.find(p => p.sku === s);
+                                                const sibProd = productMap.get(s.toUpperCase());
                                                 const sibResult = optimalPriceResults?.get(s);
                                                 if (!sibProd || !sibResult) return false;
                                                 const sibCurrent = sibProd.caPrice || 0;
@@ -212,7 +218,7 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                                                         {/* Sibling rows */}
                                                         <div className="space-y-1">
                                                             {siblings.length > 0 ? siblings.map(s => {
-                                                                const siblingProd = products.find(p => p.sku === s);
+                                                                const siblingProd = productMap.get(s.toUpperCase());
                                                                 const sibResult = optimalPriceResults?.get(s);
                                                                 const sibCurrentPrice = siblingProd ? (siblingProd.caPrice || (siblingProd.currentPrice * VAT_MULTIPLIER)) : 0;
                                                                 return (

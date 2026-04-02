@@ -264,6 +264,13 @@ const App: React.FC = () => {
     }
 
     const frozenPromoToolboxRef = React.useRef(promotions || []);
+
+    // Freeze salesHistory for pages that don't need live updates
+    const frozenSalesForAdRef = React.useRef(salesHistory || []);
+    if (currentView === 'ad-campaigns') frozenSalesForAdRef.current = salesHistory || [];
+
+    const frozenSalesForToolsRef = React.useRef(salesHistory || []);
+    if (currentView === 'tools') frozenSalesForToolsRef.current = salesHistory || [];
     if (currentView === 'tools' || !mountedPages.has('tools')) {
         frozenPromoToolboxRef.current = promotions || [];
     }
@@ -903,7 +910,7 @@ const App: React.FC = () => {
                         <div style={{ display: currentView === 'ad-campaigns' ? 'block' : 'none' }}>
                             <AdCampaignPageContainer
                                 products={products || []}
-                                salesHistory={salesHistory || []}
+                                salesHistory={frozenSalesForAdRef.current}
                                 learnedAliases={learnedAliases || {}}
                                 adSnapshots={adSnapshots || []}
                                 adRosterChanges={adRosterChanges || []}
@@ -924,7 +931,7 @@ const App: React.FC = () => {
                                 products={products || []}
                                 themeColor={userProfile.themeColor}
                                 headerStyle={headerStyle}
-                                salesHistory={salesHistory || []}
+                                salesHistory={frozenSalesForToolsRef.current}
                                 refundHistory={refundHistory || []}
                                 priceCheckTemplates={priceCheckTemplates || []}
                                 onSavePriceCheckTemplates={handleSavePriceCheckTemplates}

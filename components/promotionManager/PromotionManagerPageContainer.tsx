@@ -22,7 +22,7 @@ interface PromotionManagerPageContainerProps {
 
 type Tab = 'dashboard' | 'all_skus';
 
-export const PromotionManagerPageContainer: React.FC<PromotionManagerPageContainerProps> = ({
+const PromotionManagerPageContainerInner: React.FC<PromotionManagerPageContainerProps> = ({
     products = [],
     pricingRules = {},
     _logisticsRules = [], // Unused in this refactor but kept for API compat
@@ -74,3 +74,5 @@ export const PromotionManagerPageContainer: React.FC<PromotionManagerPageContain
         </div>
     );
 };
+
+export const PromotionManagerPageContainer = React.memo(PromotionManagerPageContainerInner);

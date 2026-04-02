@@ -1039,8 +1039,68 @@ export const useAppState = () => {
 
     const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => {
         const changes: PriceChangeRecord[] = [];
+
+        // Build alias map from product channels + learnedAliases for CA matching
+        const caAliasMap = new Map<string, string>(); // alias UPPER → master SKU
+        (products || []).forEach(p => {
+            caAliasMap.set(p.sku.toUpperCase(), p.sku);
+            (p.channels || []).forEach(ch => {
+                (ch.skuAlias || '').split(',').forEach(a => {
+                    const alias = a.trim().toUpperCase();
+                    if (alias) caAliasMap.set(alias, p.sku);
+                });
+            });
+        });
+        Object.entries(learnedAliases || {}).forEach(([alias, master]) => {
+            caAliasMap.set(alias.toUpperCase(), master);
+        });
+
+        // Normalise a CA SKU: replace _UK→-UK, strip _N variant suffix
+        const normaliseCA = (sku: string): string =>
+            sku.toUpperCase()
+               .replace(/_UK$/i, '-UK')   // DT2003-OA_UK → DT2003-OA-UK
+               .replace(/_\d+$/, '');     // AP0029-BK_1 → AP0029-BK
+
+        // Build normalised lookup map from data for O(1) matching
+        const caByNorm = new Map<string, typeof data[0]>();
+        data.forEach(d => {
+            const norm = normaliseCA(d.sku);
+            if (!caByNorm.has(norm)) caByNorm.set(norm, d); // first occurrence wins
+        });
+
+        // Pre-build alias→CA row map using product channel aliases + learnedAliases
+        // Keys: normalised alias UPPER → CA data row
+        // This lets us do O(1) alias lookups inside setProducts without IIFE complexity
+        const aliasToCa = new Map<string, typeof data[0]>();
+        (products || []).forEach(p => {
+            (p.channels || []).forEach(ch => {
+                (ch.skuAlias || '').split(',').forEach(a => {
+                    const alias = a.trim().toUpperCase();
+                    if (!alias) return;
+                    const norm = normaliseCA(alias);
+                    const hit = caByNorm.get(norm) ?? caByNorm.get(norm.replace(/[-_]UK$/i, ''));
+                    if (hit && !aliasToCa.has(p.sku.toUpperCase())) {
+                        aliasToCa.set(p.sku.toUpperCase(), hit);
+                    }
+                });
+            });
+        });
+        Object.entries(learnedAliases || {}).forEach(([alias, master]) => {
+            const norm = normaliseCA(alias.toUpperCase());
+            const hit = caByNorm.get(norm) ?? caByNorm.get(norm.replace(/[-_]UK$/i, ''));
+            if (hit) aliasToCa.set(master.toUpperCase(), hit);
+        });
+
         setProducts(prev => (prev || []).map(p => {
-            const update = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
+            const masterUpper = p.sku.toUpperCase();
+            const masterStripped = masterUpper.replace(/[-_]UK$/i, '');
+
+            // 1. Exact match (CA SKU normalised = master SKU)
+            // 2. Strip -UK from master
+            // 3. Pre-built alias map lookup
+            const update = caByNorm.get(masterUpper)
+                ?? caByNorm.get(masterStripped)
+                ?? aliasToCa.get(masterUpper);
             if (update) {
                 const oldPrice = p.caPrice || (p.currentPrice * VAT_MULTIPLIER);
                 if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
@@ -1065,12 +1125,13 @@ export const useAppState = () => {
         if (changes.length > 0) setPriceChangeHistory(prev => [...changes, ...(prev || [])]);
         updateTimestamp('CA Prices');
         setIsCAUploadModalOpen(false);
-    }, [updateTimestamp]);
+    }, [updateTimestamp, products, learnedAliases]);
 
     const handleStampLandedAt = useCallback((skus: string[], date: string) => {
+        const skuSet = new Set(skus.map(s => s.toUpperCase()));
         setProducts(prev => (prev || []).map(p => {
             if (p.landedAt) return p; // never overwrite an existing stamp
-            if (skus.some(s => s.toUpperCase() === p.sku.toUpperCase())) {
+            if (skuSet.has(p.sku.toUpperCase())) {
                 return { ...p, landedAt: date };
             }
             return p;

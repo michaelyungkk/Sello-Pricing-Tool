@@ -17,8 +17,9 @@ interface PromotionPageProps {
     priceChangeHistory?: PriceChangeRecord[];
 }
 
-const PromotionPage: React.FC<PromotionPageProps> = (props) => {
+const PromotionPageInner: React.FC<PromotionPageProps> = (props) => {
     return <PromotionManagerPageContainer {...props} />;
 };
 
+const PromotionPage = React.memo(PromotionPageInner);
 export default PromotionPage;
