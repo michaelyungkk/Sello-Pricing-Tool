@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 
-export type ToolTab = 'PROMO' | 'SYNC' | 'ERP' | 'PRICE' | 'SKU';
+export type ToolTab = 'PROMO' | 'SYNC' | 'ERP' | 'PRICE' | 'SKU' | 'DEAL';
 
 export const useToolBox = () => {
     const [activeTab, setActiveTab] = useState<ToolTab>('PROMO');

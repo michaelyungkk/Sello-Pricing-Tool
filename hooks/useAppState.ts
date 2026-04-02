@@ -366,6 +366,7 @@ export const useAppState = () => {
     const [isReturnsModalOpen, setIsReturnsModalOpen] = useState(false);
     const [isCAUploadModalOpen, setIsCAUploadModalOpen] = useState(false);
     const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
+    const [isFreightModalOpen, setIsFreightModalOpen] = useState(false);
     const [selectedAnalysisProduct, setSelectedAnalysisProduct] = useState<Product | null>(null);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
@@ -801,8 +802,13 @@ export const useAppState = () => {
         updateTimestamp('Sales'); setIsSalesImportModalOpen(false);
         if (isAdminMode) setIsDirty(true);
 
-        // Auto-recalculate optimal prices for SKUs that received new transactions
+        // Auto-recalculate optimal prices for SKUs that received new transactions.
+        // Deferred with setTimeout to avoid blocking the main thread after import.
         if (historyPayload && historyPayload.length > 0 && cohortSnapshot) {
+            const snapshotAtImport = cohortSnapshot;
+            const salesAtImport = salesHistory;
+            const productsAtImport = products;
+            setTimeout(() => {
             const todayKey = new Date().toISOString().split('T')[0];
             const resolver = buildCanonicalResolver(learnedAliases);
             const affectedSkus = new Set(historyPayload.map(tx => resolver(tx.sku)));
@@ -810,18 +816,18 @@ export const useAppState = () => {
             setOptimalPriceResults(prev => {
                 const next = new Map(prev);
                 affectedSkus.forEach(canonicalSku => {
-                    const product = products.find(p => resolver(p.sku) === canonicalSku);
+                    const product = productsAtImport.find(p => resolver(p.sku) === canonicalSku);
                     if (!product) return;
-                    const bucketKey = cohortSnapshot.skuAssignments.get(canonicalSku);
-                    const cohort = bucketKey ? cohortSnapshot.cohortStats.get(bucketKey) : undefined;
+                    const bucketKey = snapshotAtImport.skuAssignments.get(canonicalSku);
+                    const cohort = bucketKey ? snapshotAtImport.cohortStats.get(bucketKey) : undefined;
                     if (!cohort) return;
                     const result = calculateOptimalPrice({
                         sku: product,
-                        priceHistory: salesHistory,
+                        priceHistory: salesAtImport,
                         priceChangeLog: priceChangeHistory,
                         promotions,
                         pricingRules,
-                        cohortSnapshot,
+                        cohortSnapshot: snapshotAtImport,
                         learnedAliases,
                         today: todayKey,
                     });
@@ -829,9 +835,13 @@ export const useAppState = () => {
                 });
                 return next;
             });
+            }, 100); // defer off main thread so UI stays responsive after import
 
-            // Detect if any categories need benchmark update
-            const notices = detectBenchmarkUpdateNeeded(products, cohortSnapshot, Array.from(affectedSkus));
+            // Detect if any categories need benchmark update (run immediately, lightweight)
+            const todayKey2 = new Date().toISOString().split('T')[0];
+            const resolver2 = buildCanonicalResolver(learnedAliases);
+            const affectedSkus2 = new Set(historyPayload.map(tx => resolver2(tx.sku)));
+            const notices = detectBenchmarkUpdateNeeded(products, cohortSnapshot, Array.from(affectedSkus2));
             if (notices.length > 0) {
                 setBenchmarkUpdateNotices(prev => {
                     const merged = [...prev];
@@ -1802,6 +1812,8 @@ export const useAppState = () => {
         setIsCAUploadModalOpen,
         isShipmentModalOpen,
         setIsShipmentModalOpen,
+        isFreightModalOpen,
+        setIsFreightModalOpen,
         selectedAnalysisProduct,
         setSelectedAnalysisProduct,
         analysisResult,

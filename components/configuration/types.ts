@@ -14,6 +14,7 @@ export interface ConfigurationPageProps {
     };
     freightRates?: FreightRate[];
     onFreightRatesUpload?: (rates: FreightRate[]) => void;
+    onOpenFreightUpload?: () => void;
     themeColor: string;
     headerStyle: React.CSSProperties;
     searchConfig?: SearchConfig;

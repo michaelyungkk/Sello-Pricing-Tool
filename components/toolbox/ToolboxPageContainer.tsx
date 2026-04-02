@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Tag, RefreshCw, GitCompare, ShieldCheck, List } from 'lucide-react';
+import { Tag, RefreshCw, GitCompare, ShieldCheck, List, Calculator } from 'lucide-react';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { ToolboxPageProps } from './types';
 import { useToolBox } from './hooks/useToolBox';
@@ -9,6 +9,8 @@ import { InventorySyncTool } from './components/InventorySyncTool';
 import { ERPCrossCheckTool } from './components/ERPCrossCheckTool';
 import { PriceCheckTool } from './components/PriceCheckTool';
 import { SkuScreenTool } from './components/SkuScreenTool';
+import { DealSimulatorTool } from './components/DealSimulatorTool';
+import { Sliders, Search, Activity } from 'lucide-react';
 
 const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
     promotions,
@@ -24,6 +26,7 @@ const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
     refundHistory,
     priceCheckTemplates,
     onSavePriceCheckTemplates,
+    freightRates,
 }) => {
     const { activeTab, setActiveTab } = useToolBox();
 
@@ -36,6 +39,7 @@ const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
                     { key: 'ERP', label: 'ERP Cross-Check', icon: GitCompare },
                     { key: 'PRICE', label: 'Price Check', icon: ShieldCheck },
                     { key: 'SKU', label: 'SKU Screen', icon: List },
+                    { key: 'DEAL', label: 'Deal Simulator', icon: Calculator },
                 ]}
                 activeTab={activeTab}
                 onChange={(key) => setActiveTab(key as any)}
@@ -84,6 +88,15 @@ const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
                 />
             )}
 
+            {activeTab === 'DEAL' && (
+                <DealSimulatorTool
+                    products={products || []}
+                    freightRates={freightRates || []}
+                    themeColor={themeColor}
+                />
+            )}
+
+            
             {activeTab === 'SKU' && (
                 <SkuScreenTool
                     products={products || []}

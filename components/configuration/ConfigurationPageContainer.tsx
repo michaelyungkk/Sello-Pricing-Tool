@@ -14,8 +14,7 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
         activeTab, setActiveTab, rules, logistics, searchConfig, setSearchConfig,
         newPlatformName, setNewPlatformName, isSaved, discoveredPlatforms, platformKeys,
         handleFieldChange, toggleExclusion, toggleAdsSupported, handleAddPlatform, handleDeletePlatform,
-        handleLogisticsChange, handleFreightFileUpload, freightRates,
-        freightUploadStatus, freightUploadCount, handleSave
+        freightRates, freightUploadCount, handleSave
     } = useConfigurationState(props);
 
     return (
@@ -25,7 +24,7 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
             <TabSwitcher
                 tabs={[
                     { key: 'platforms', label: 'Platform Rules', icon: Globe },
-                    { key: 'logistics', label: 'Logistics Rates', icon: Truck },
+                    { key: 'logistics', label: 'Freight', icon: Truck },
                     { key: 'thresholds', label: 'Alerts & Diagnostics', icon: AlertTriangle },
                     { key: 'search', label: 'Search Settings', icon: Search },
                     { key: 'normalization', label: 'Data Normalization', icon: Database },
@@ -54,14 +53,11 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
 
                 {activeTab === 'logistics' && (
                     <SystemBehaviorSection
-                        logistics={logistics}
-                        handleLogisticsChange={handleLogisticsChange}
-                        handleFreightFileUpload={handleFreightFileUpload}
                         freightRates={freightRates}
-                        freightUploadStatus={freightUploadStatus}
                         freightUploadCount={freightUploadCount}
                         themeColor={props.themeColor}
                         headerStyle={props.headerStyle}
+                        onOpenFreightUpload={props.onOpenFreightUpload}
                     />
                 )}
 

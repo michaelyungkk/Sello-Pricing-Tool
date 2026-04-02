@@ -13,7 +13,7 @@ import PlatformManagementPage from './components/platformManagement/PlatformMana
 import {
     LayoutDashboard, FlaskConical, BadgePoundSterling, Tag, Briefcase, Settings, BookOpen, Search, X,
     Download, Upload, Database, CheckCircle, FileBarChart, Bell, History,
-    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Store,
+    ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Store, Truck,
     ArrowUp, ShoppingBasket, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2, BarChart2, Target
 } from 'lucide-react';
 
@@ -34,6 +34,7 @@ import MappingUploadModal from './components/shared/modals/MappingUploadModal';
 import ReturnsUploadModal from './components/shared/modals/ReturnsUploadModal';
 import CAUploadModal from './components/shared/modals/CAUploadModal';
 import ShipmentUploadModal from './components/shared/modals/ShipmentUploadModal';
+import FreightUploadModal from './components/shared/modals/FreightUploadModal';
 import PriceElasticityModal from './components/skuDeepDive/PriceElasticityModal';
 import AnalysisModal from './components/skuDeepDive/AnalysisModal';
 
@@ -167,6 +168,8 @@ const App: React.FC = () => {
         setIsCAUploadModalOpen,
         isShipmentModalOpen,
         setIsShipmentModalOpen,
+        isFreightModalOpen,
+        setIsFreightModalOpen,
         selectedAnalysisProduct,
         setSelectedAnalysisProduct,
         analysisResult,
@@ -321,6 +324,7 @@ const App: React.FC = () => {
         { label: t('quick_upload_ca_report'), icon: Upload, action: () => setIsCAUploadModalOpen(true), color: 'text-purple-600' },
         { label: t('quick_upload_sku_mapping'), icon: LinkIcon, action: () => setIsMappingModalOpen(true), color: 'text-amber-600' },
         { label: t('quick_upload_shipment'), icon: Ship, action: () => setIsShipmentModalOpen(true), color: 'text-teal-600' },
+        { label: 'Freight Costs', icon: Truck, action: () => setIsFreightModalOpen(true), color: 'text-emerald-600' },
     ];
 
     const headerTextColor = userProfile.textColor || '#111827';
@@ -923,6 +927,7 @@ const App: React.FC = () => {
                         <div style={{ display: currentView === 'tools' ? 'block' : 'none' }}>
                             <ToolboxPage
                                 promotions={frozenPromoToolboxRef.current}
+                                freightRates={freightRates || []}
                                 pricingRules={pricingRules}
                                 inventoryTemplates={inventoryTemplates || []}
                                 onSaveTemplates={setInventoryTemplates}
@@ -967,6 +972,7 @@ const App: React.FC = () => {
                                 products={products}
                                 freightRates={freightRates || []}
                                 onFreightRatesUpload={handleFreightRatesUpload}
+                                onOpenFreightUpload={() => setIsFreightModalOpen(true)}
                                 themeColor={userProfile.themeColor}
                                 searchConfig={searchConfig}
                                 velocityLookback={velocityLookback}
@@ -1041,7 +1047,14 @@ const App: React.FC = () => {
                     )
                 }
                 {
-                    isShipmentModalOpen && (
+                    isFreightModalOpen && (
+                        <FreightUploadModal
+                            products={products || []}
+                            onClose={() => setIsFreightModalOpen(false)}
+                            onConfirm={handleFreightRatesUpload}
+                        />
+                    )}
+                    {isShipmentModalOpen && (
                         <ShipmentUploadModal
                             products={products}
                             onClose={() => setIsShipmentModalOpen(false)}

@@ -21,7 +21,6 @@ export const useConfigurationState = ({
     const [logistics, setLogistics] = useState<LogisticsRule[]>(JSON.parse(JSON.stringify(logisticsRules || [])));
     const [searchConfig, setSearchConfig] = useState<SearchConfig>(initialSearchConfig ? JSON.parse(JSON.stringify(initialSearchConfig)) : { volumeBands: { topPercentile: 20, bottomPercentile: 20 }, minAbsoluteFloor: 10 });
     const [velocityLookback, setVelocityLookback] = useState<VelocityLookback>(initialVelocityLookback);
-    const [freightUploadStatus, setFreightUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [freightUploadCount, setFreightUploadCount] = useState(0);
 
     const [newPlatformName, setNewPlatformName] = useState('');
@@ -58,12 +57,6 @@ export const useConfigurationState = ({
         }
     }, [isSaved]);
 
-    useEffect(() => {
-        if (freightUploadStatus === 'success' || freightUploadStatus === 'error') {
-            const timer = setTimeout(() => setFreightUploadStatus('idle'), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [freightUploadStatus]);
 
     const handleFieldChange = (platform: Platform, field: keyof PlatformConfig, value: any) => {
         setRules(prev => {
@@ -115,68 +108,6 @@ export const useConfigurationState = ({
         setRules(newRules);
     };
 
-    const handleLogisticsChange = (id: string, field: keyof LogisticsRule, value: string) => {
-        const numValue = parseFloat(value);
-        setLogistics(prev => prev.map(rule =>
-            rule.id === id ? { ...rule, [field]: isNaN(numValue) ? 0 : numValue } : rule
-        ));
-    };
-
-    const handleFreightFileUpload = (file: File) => {
-        if (!onFreightRatesUpload) return;
-        import('xlsx').then(XLSX => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                    const wb = XLSX.read(data, { type: 'array' });
-                    const ws = wb.Sheets[wb.SheetNames[0]];
-                    const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-
-                    if (rows.length < 2) {
-                        setFreightUploadStatus('error');
-                        return;
-                    }
-
-                    // Find SKU and rate columns (case-insensitive)
-                    const headers = (rows[0] as string[]).map(h => String(h || '').toLowerCase().trim());
-                    const skuCol = headers.findIndex(h => h.includes('sku'));
-                    const rateCol = headers.findIndex(h =>
-                        h.includes('rate') || h.includes('freight') || h.includes('postage') || h.includes('cost')
-                    );
-
-                    if (skuCol === -1 || rateCol === -1) {
-                        setFreightUploadStatus('error');
-                        alert(`Could not find SKU and rate columns. Found headers: ${rows[0].join(', ')}`);
-                        return;
-                    }
-
-                    const rates: FreightRate[] = [];
-                    for (let i = 1; i < rows.length; i++) {
-                        const row = rows[i];
-                        const sku = String(row[skuCol] || '').trim();
-                        const rate = parseFloat(String(row[rateCol] || '0'));
-                        if (sku && !isNaN(rate) && rate >= 0) {
-                            rates.push({ sku, rate });
-                        }
-                    }
-
-                    if (rates.length === 0) {
-                        setFreightUploadStatus('error');
-                        return;
-                    }
-
-                    onFreightRatesUpload(rates);
-                    setFreightUploadCount(rates.length);
-                    setFreightUploadStatus('success');
-                } catch (err) {
-                    setFreightUploadStatus('error');
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        });
-    };
-
     const handleSave = () => {
         onSave(rules, velocityLookback, searchConfig);
         if (onSaveLogistics) onSaveLogistics(logistics);
@@ -202,10 +133,7 @@ export const useConfigurationState = ({
         toggleAdsSupported,
         handleAddPlatform,
         handleDeletePlatform,
-        handleLogisticsChange,
-        handleFreightFileUpload,
         freightRates,
-        freightUploadStatus,
         freightUploadCount,
         handleSave
     };
