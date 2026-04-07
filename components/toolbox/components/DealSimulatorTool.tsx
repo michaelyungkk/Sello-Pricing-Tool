@@ -19,12 +19,18 @@ interface SimRow {
     overheadPct: number;
     overheadMultiplier: number;
     caBaselinePct: number;
+    wildcardCost: number;           // extra cost to add
+    wildcardType: 'fixed' | 'pct'; // fixed £ or % of COGS
+    proposedMarginPct: number;      // margin % field (0-100 scale)
+    lastEdited: 'price' | 'margin'; // which field was last typed — drives the other
 }
 
 const makeRow = (overrides?: Partial<SimRow>): SimRow => ({
     id: Math.random().toString(36).slice(2),
     sku: '', cogs: 0, freight: 0, caPrice: 0, proposedPrice: 0,
     overheadPct: 8, overheadMultiplier: 1.2, caBaselinePct: 0.7,
+    wildcardCost: 0, wildcardType: 'fixed',
+    proposedMarginPct: 0, lastEdited: 'price',
     ...overrides,
 });
 
@@ -32,15 +38,27 @@ function calcRow(r: SimRow) {
     const caBaseline       = r.caPrice * r.caBaselinePct;
     const caBaselineMargin = caBaseline > 0 ? (caBaseline - r.cogs) / caBaseline : 0;
     const targetMargin     = caBaselineMargin < 0.4 ? 0.30 : caBaselineMargin < 0.5 ? 0.35 : 0.40;
-    const baseCost         = (r.cogs + r.freight) * r.overheadMultiplier;
+    const wildcardAbs     = r.wildcardType === 'pct' ? r.cogs * (r.wildcardCost / 100) : r.wildcardCost;
+    const baseCost         = (r.cogs + r.freight + wildcardAbs) * r.overheadMultiplier;
     const overheadFrac     = r.overheadPct / 100;
     const targetPrice      = targetMargin < 1 && baseCost > 0 ? baseCost / (1 - targetMargin) : 0;
     const targetPriceMargin = targetPrice > 0
         ? (targetPrice * (1 - overheadFrac) - baseCost) / targetPrice : NaN;
-    const actualMargin     = r.proposedPrice > 0
-        ? (r.proposedPrice * (1 - overheadFrac) - baseCost) / r.proposedPrice : NaN;
+    // Whichever field was last typed drives the other
+    const effectiveProposedPrice = r.lastEdited === 'price'
+        ? r.proposedPrice
+        : (r.proposedMarginPct > 0
+            ? baseCost / (1 - r.proposedMarginPct / 100 - overheadFrac)
+            : 0);
+    const derivedMarginPct = r.lastEdited === 'margin'
+        ? r.proposedMarginPct
+        : (effectiveProposedPrice > 0
+            ? (effectiveProposedPrice * (1 - overheadFrac) - baseCost) / effectiveProposedPrice * 100
+            : 0);
+    const actualMargin = effectiveProposedPrice > 0
+        ? (effectiveProposedPrice * (1 - overheadFrac) - baseCost) / effectiveProposedPrice : NaN;
     const floorPrice       = baseCost > 0 ? baseCost / 0.70 : 0;
-    return { caBaseline, caBaselineMargin, targetMargin, baseCost, targetPrice, targetPriceMargin, actualMargin, floorPrice };
+    return { caBaseline, caBaselineMargin, targetMargin, baseCost, targetPrice, targetPriceMargin, actualMargin, floorPrice, effectiveProposedPrice, derivedMarginPct };
 }
 
 const fp = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -115,7 +133,7 @@ const SkuDropdown = ({ value, products, freightMap, onChange, onSelect }: {
                 onFocus={openDropdown}
                 onBlur={() => setTimeout(() => setOpen(false), 200)}
                 placeholder="SKU or name…"
-                className="w-full h-9 px-3 text-xs font-mono font-bold text-gray-800 bg-transparent outline-none border-r border-gray-200 placeholder-gray-300 hover:bg-blue-50/30 focus:bg-blue-50/40"
+                className="w-full h-9 px-3 text-xs font-mono font-bold text-gray-800 bg-transparent outline-none placeholder-gray-300 hover:bg-blue-50/30 focus:bg-blue-50/40"
             />
             {portal}
         </>
@@ -129,6 +147,8 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
     const [gOverhead, setGOverhead] = useState(8);
     const [gVat, setGVat]           = useState(20);
     const [gBase, setGBase]         = useState(0.7);
+    const [gWildcard, setGWildcard]     = useState(0);
+    const [gWildcardType, setGWildcardType] = useState<'fixed' | 'pct'>('fixed');
     const pasteRef = useRef<HTMLTextAreaElement>(null);
 
     const gMult = gVat > 0 ? 1 + gVat / 100 : 1.0;
@@ -150,7 +170,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
     }, []);
 
     const addRow = useCallback(() => {
-        setRows(prev => [...prev, makeRow({ overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase })]);
+        setRows(prev => [...prev, makeRow({ overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType })]);
     }, [gOverhead, gMult, gBase]);
 
     const removeRow = useCallback((id: string) => {
@@ -158,7 +178,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
     }, []);
 
     const applyGlobal = useCallback(() => {
-        setRows(prev => prev.map(r => ({ ...r, overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase })));
+        setRows(prev => prev.map(r => ({ ...r, overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType })));
     }, [gOverhead, gMult, gBase]);
 
     const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -176,9 +196,9 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                 return isNaN(v) ? 0 : v;
             };
             if (cols.length === 1) {
-                return makeRow({ sku, cogs: p?.costPrice || 0, caPrice: p?.caPrice || 0, freight: erpFreight, overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase });
+                return makeRow({ sku, cogs: p?.costPrice || 0, caPrice: p?.caPrice || 0, freight: erpFreight, overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
             }
-            return makeRow({ sku, cogs: cols[1] ? n(1) : (p?.costPrice || 0), freight: cols[2] ? n(2) : erpFreight, caPrice: cols[3] ? n(3) : (p?.caPrice || 0), proposedPrice: n(4), overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase });
+            return makeRow({ sku, cogs: cols[1] ? n(1) : (p?.costPrice || 0), freight: cols[2] ? n(2) : erpFreight, caPrice: cols[3] ? n(3) : (p?.caPrice || 0), proposedPrice: n(4), overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
         });
         setRows(prev => {
             const hasEmpty = prev.length === 1 && !prev[0].sku && !prev[0].cogs;
@@ -189,16 +209,16 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
     const rows_calc = useMemo(() => rows.map(r => ({ ...r, ...calcRow({ ...r, overheadMultiplier: gMult }) })), [rows, gMult]);
 
     const summary = useMemo(() => {
-        const v = rows_calc.filter(r => r.proposedPrice > 0 && !isNaN(r.actualMargin));
-        if (!v.length) return null;
+        const v = rows_calc.filter(r => r.effectiveProposedPrice > 0 && !isNaN(r.actualMargin));
         return {
             count: v.length,
-            avgMargin: v.reduce((s, r) => s + r.actualMargin, 0) / v.length,
+            avgMargin: v.length ? v.reduce((s, r) => s + r.actualMargin, 0) / v.length : NaN,
             atTarget: v.filter(r => r.actualMargin >= r.targetMargin).length,
+            hasData: v.length > 0,
         };
     }, [rows_calc]);
 
-    const belowFloor = rows_calc.filter(r => r.proposedPrice > 0 && r.floorPrice > 0 && r.proposedPrice < r.floorPrice).length;
+    const belowFloor = rows_calc.filter(r => r.effectiveProposedPrice > 0 && r.floorPrice > 0 && r.effectiveProposedPrice < r.floorPrice).length;
 
     return (
         <div className="space-y-4">
@@ -249,6 +269,28 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                     </div>
                     <span className="text-[10px] text-gray-400 font-mono">(x{gMult.toFixed(2)})</span>
                 </label>
+                <label className="flex items-center gap-2">
+                    <span className="text-gray-500">Extra Cost</span>
+                    <div className="flex items-center border border-gray-200 rounded-lg bg-white overflow-hidden">
+                        <input type="number" value={gWildcard || ''} step={gWildcardType === 'pct' ? 0.5 : 0.01} min={0}
+                            onChange={e => setGWildcard(parseFloat(e.target.value) || 0)}
+                            placeholder="0"
+                            className="w-14 px-2 py-1 text-xs font-mono outline-none" />
+                        <button
+                            onClick={() => setGWildcardType(t => t === 'fixed' ? 'pct' : 'fixed')}
+                            className="px-1.5 text-[10px] font-bold border-l border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors min-w-[28px] text-center"
+                            style={{ color: gWildcard > 0 ? themeColor : '#9ca3af' }}
+                            title="Toggle between fixed £ and % of COGS"
+                        >
+                            {gWildcardType === 'fixed' ? '£' : '%'}
+                        </button>
+                    </div>
+                    {gWildcard > 0 && (
+                        <span className="text-[10px] text-gray-400">
+                            {gWildcardType === 'pct' ? `% of COGS` : `per unit`}
+                        </span>
+                    )}
+                </label>
                 <button onClick={applyGlobal} className="sello-btn flex items-center gap-1 ml-auto">
                     <RefreshCw className="w-3 h-3" /> Apply to all
                 </button>
@@ -268,19 +310,27 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
 
             {/* Table */}
             <div className="sello-table-wrap">
+                <style>{`
+                    .deal-sim-table td, .deal-sim-table th {
+                        border-right: 1px solid rgba(229,231,235,0.7);
+                    }
+                    .deal-sim-table td:last-child, .deal-sim-table th:last-child {
+                        border-right: none;
+                    }
+                `}</style>
                 <div className="sello-table-scroll">
-                    <table className="sello-table" style={{ tableLayout: 'fixed', minWidth: '900px' }}>
+                    <table className="sello-table deal-sim-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: 860 }}>
                         <colgroup>
-                            <col style={{ width: 36 }} />
-                            <col style={{ width: 180 }} />
-                            <col style={{ width: 130 }} />
-                            <col style={{ width: 120 }} />
-                            <col style={{ width: 120 }} />
-                            <col style={{ width: 120 }} />
-                            <col style={{ width: 110 }} />
-                            <col style={{ width: 140 }} />
-                            <col style={{ width: 110 }} />
-                            <col style={{ width: 36 }} />
+                            <col style={{ width: 32 }} />   {/* # */}
+                            <col style={{ width: '20%', minWidth: 160 }} />  {/* SKU — flexible */}
+                            <col style={{ width: 110 }} />  {/* COGS */}
+                            <col style={{ width: 110 }} />  {/* Freight */}
+                            <col style={{ width: 110 }} />  {/* CA Price */}
+                            <col style={{ width: 120 }} />  {/* Target Price */}
+                            <col style={{ width: 120 }} />  {/* Target Margin */}
+                            <col style={{ width: 130 }} />  {/* Proposed Price */}
+                            <col style={{ width: 130 }} />  {/* Proposed Margin */}
+                            <col style={{ width: 32 }} />   {/* × */}
                         </colgroup>
                         <thead>
                             <tr>
@@ -292,14 +342,14 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                 <th className="r" style={{ color: themeColor }}>Target Price</th>
                                 <th className="r cg">Target Margin</th>
                                 <th className="r cb">Proposed Price</th>
-                                <th className="r cg">Proposed Margin</th>
+                                <th className="c cg">Proposed Margin</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             {rows_calc.map((row, idx) => {
-                                const hasPrice   = row.proposedPrice > 0;
-                                const belowFloorRow = hasPrice && row.floorPrice > 0 && row.proposedPrice < row.floorPrice;
+                                const hasPrice   = row.effectiveProposedPrice > 0;
+                                const belowFloorRow = hasPrice && row.floorPrice > 0 && row.effectiveProposedPrice < row.floorPrice;
                                 const rowCls = !hasPrice ? '' :
                                     !isNaN(row.actualMargin) && row.actualMargin >= row.targetMargin ? 'tr-sel' :
                                     !isNaN(row.actualMargin) && row.actualMargin >= 0.25 ? 'tr-warn' : 'tr-neg';
@@ -309,7 +359,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                         <td className="c">
                                             <span className="v-dim text-[10px]">{idx + 1}</span>
                                         </td>
-                                        <td className="p-0">
+                                        <td className="p-0" style={{ maxWidth: 0, overflow: 'hidden' }}>
                                             <SkuDropdown
                                                 value={row.sku}
                                                 products={products}
@@ -324,8 +374,8 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                             />
                                         </td>
                                         {(['cogs','freight'] as (keyof SimRow)[]).map(field => (
-                                            <td key={field} className="p-0">
-                                                <div className="flex items-center h-9 px-2 border-r border-gray-200 bg-white hover:bg-blue-50/30 focus-within:bg-blue-50/40">
+                                            <td key={field} className="p-0" style={{ maxWidth: 0, overflow: 'hidden' }}>
+                                                <div className="flex items-center h-9 px-2 bg-white overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
                                                     <span className="text-gray-400 text-[10px] mr-0.5 select-none">£</span>
                                                     <input type="number" value={(row[field] as number) || ''} step={0.01} min={0}
                                                         onChange={e => update(row.id, { [field]: parseFloat(e.target.value) || 0 })}
@@ -334,8 +384,8 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                                 </div>
                                             </td>
                                         ))}
-                                        <td className="p-0 cb">
-                                            <div className="flex items-center h-9 px-2 border-r border-gray-200 hover:bg-blue-50/30 focus-within:bg-blue-50/40">
+                                        <td className="p-0 cb" style={{ maxWidth: 0, overflow: 'hidden' }}>
+                                            <div className="flex items-center h-9 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
                                                 <span className="text-gray-400 text-[10px] mr-0.5 select-none">£</span>
                                                 <input type="number" value={row.caPrice || ''} step={0.01} min={0}
                                                     onChange={e => update(row.id, { caPrice: parseFloat(e.target.value) || 0 })}
@@ -344,29 +394,58 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                             </div>
                                         </td>
 <td className="r p-0">
-                                            <div className="flex items-center justify-end h-9 px-3 border-r border-gray-200 bg-gray-50">
+                                            <div className="flex items-center justify-end h-9 px-3 bg-gray-50">
                                                 <span className="v-num text-xs" style={{ color: row.targetPrice > 0 ? themeColor : '#9ca3af' }}>
                                                     {row.targetPrice > 0 ? `£${row.targetPrice.toFixed(2)}` : '—'}
                                                 </span>
                                             </div>
                                         </td>
                                         <td className="c p-0 cg">
-                                            <div className="flex items-center justify-center h-9 px-2 border-r border-gray-200 bg-gray-50">
+                                            <div className="flex items-center justify-center h-9 px-2 bg-gray-50">
                                                 {row.targetPrice > 0 ? <MarginBadge v={row.targetPriceMargin} /> : <span className="v-dim">—</span>}
                                             </div>
                                         </td>
-                                                                                <td className="p-0 cb">
-                                            <div className={`flex items-center h-9 px-2 border-r border-gray-200 hover:bg-blue-50/30 focus-within:bg-blue-50/40${belowFloorRow ? ' bg-red-50/50' : ''}`}>
+                                        {/* Proposed Price — type here to derive margin */}
+                                        <td className="p-0 cb" style={{ maxWidth: 0, overflow: 'hidden' }}>
+                                            <div className={`flex items-center h-9 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40${belowFloorRow ? ' bg-red-50/50' : ''}`}>
                                                 <span className="text-gray-400 text-[10px] mr-0.5 select-none">£</span>
-                                                <input type="number" value={row.proposedPrice || ''} step={0.01} min={0}
-                                                    onChange={e => update(row.id, { proposedPrice: parseFloat(e.target.value) || 0 })}
+                                                <input
+                                                    type="number" step={0.01} min={0}
+                                                    value={row.lastEdited === 'price'
+                                                        ? (row.proposedPrice || '')
+                                                        : (row.effectiveProposedPrice > 0 ? parseFloat(row.effectiveProposedPrice.toFixed(2)) : '')}
+                                                    onChange={e => {
+                                                        const v = parseFloat(e.target.value) || 0;
+                                                        update(row.id, {
+                                                            proposedPrice: v,
+                                                            lastEdited: 'price',
+                                                            // keep margin in sync so switching back is smooth
+                                                            proposedMarginPct: 0,
+                                                        });
+                                                    }}
                                                     className="flex-1 text-xs font-mono text-right font-bold text-gray-800 bg-transparent outline-none min-w-0"
                                                     placeholder="0.00" />
                                             </div>
                                         </td>
-                                        <td className="c p-0 cg">
-                                            <div className="flex items-center justify-center h-9 px-2 border-r border-gray-200">
-                                                {hasPrice ? <MarginBadge v={row.actualMargin} target={row.targetMargin} /> : <span className="v-dim">—</span>}
+                                        {/* Proposed Margin — type here to derive price */}
+                                        <td className="p-0 cg" style={{ maxWidth: 0, overflow: 'hidden' }}>
+                                            <div className="flex items-center h-9 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
+                                                <input
+                                                    type="number" step={0.5} min={0} max={99}
+                                                    value={row.lastEdited === 'margin'
+                                                        ? (row.proposedMarginPct || '')
+                                                        : (row.derivedMarginPct > 0 ? parseFloat(row.derivedMarginPct.toFixed(1)) : '')}
+                                                    onChange={e => {
+                                                        const v = parseFloat(e.target.value) || 0;
+                                                        update(row.id, {
+                                                            proposedMarginPct: v,
+                                                            lastEdited: 'margin',
+                                                            proposedPrice: 0,
+                                                        });
+                                                    }}
+                                                    className="flex-1 text-xs font-mono text-right font-bold text-gray-800 bg-transparent outline-none min-w-0"
+                                                    placeholder="0.0" />
+                                                <span className="text-gray-400 text-[10px] ml-0.5 select-none">%</span>
                                             </div>
                                         </td>
                                         <td className="c p-0">
@@ -379,29 +458,31 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                 );
                             })}
                         </tbody>
-                        {summary && (
-                            <tfoot>
+                        <tfoot>
                                 <tr className="border-t-2 border-gray-200" style={{ background: `${themeColor}06` }}>
                                     <td className="c p-0" colSpan={3}>
                                         <div className="flex items-center h-9 px-3">
                                             <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: themeColor }}>
-                                                {summary.count} SKUs
+                                                {summary.hasData ? `${summary.count} SKUs` : `${rows.length} SKU${rows.length !== 1 ? 's' : ''}`}
                                             </span>
                                         </div>
                                     </td>
-                                    <td colSpan={6} className="p-0">
+                                    <td colSpan={5} className="p-0">
                                         <div className="flex items-center h-9 px-3 text-[10px] text-gray-500">
-                                            <span>At/above target: <strong className="text-gray-700">{summary.atTarget}/{summary.count}</strong></span>
+                                            {summary.hasData
+                                                ? <span>At/above target: <strong className="text-gray-700">{summary.atTarget}/{summary.count}</strong></span>
+                                                : <span className="text-gray-300 italic">Enter proposed prices to see summary</span>
+                                            }
                                         </div>
                                     </td>
-                                    <td className="c p-0" colSpan={3}>
+                                    <td className="c p-0">
                                         <div className="flex items-center justify-center h-9 px-2">
-                                            <MarginBadge v={summary.avgMargin} />
+                                            {summary.hasData ? <MarginBadge v={summary.avgMargin} /> : <span className="v-dim">—</span>}
                                         </div>
                                     </td>
+                                    <td className="p-0" />
                                 </tr>
                             </tfoot>
-                        )}
                     </table>
                 </div>
             </div>
@@ -415,7 +496,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
             {/* Formula hint */}
             <div className="flex items-center flex-wrap gap-x-4 gap-y-1 px-4 py-2 rounded-xl text-[10px] text-gray-400 border border-gray-100 bg-gray-50/40">
                 <span className="font-bold text-gray-500">Formula</span>
-                <span>Base = (COGS + Freight) x {gMult.toFixed(2)}{gVat === 0 ? ' (ex-VAT)' : ` (${gVat}% VAT)`}</span>
+                <span>Base = (COGS + Freight{gWildcard > 0 ? (gWildcardType === 'fixed' ? ` + £${gWildcard.toFixed(2)} extra` : ` + ${gWildcard}% of COGS`) : ''}) x {gMult.toFixed(2)}{gVat === 0 ? ' (ex-VAT)' : ` (${gVat}% VAT)`}</span>
                 <span>Margin = (Price x {((1 - gOverhead / 100) * 100).toFixed(0)}% - Base) / Price</span>
                 <span>Target: &lt;40% baseline = 30% / &lt;50% = 35% / &gt;=50% = 40%</span>
                 {belowFloor > 0 && (
