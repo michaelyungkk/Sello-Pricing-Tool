@@ -584,29 +584,29 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                 </div>
                                 <button onClick={() => { }} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"><Download className="w-4 h-4" /></button>
                             </div>
-                            <div className="flex-1 overflow-auto">
-                                <table className="tbl w-full text-left text-sm whitespace-nowrap border-separate border-spacing-0">
+                            <div className="sello-table-scroll">
+                                <table className="sello-table">
                                     <thead className="sticky top-0">
                                         {selectedAlert === 'margin' ? (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} themeColor={themeColor} align="right" className="text-purple-600" />
-                                                <SortableHeader label="Actual Margin" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Recent Qty" sortKey="qtySold" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Cause</th>
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">Recommend</th>
+                                                <th className="c">Detail</th>
+                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} tint="ca" align="right" />
+                                                <SortableHeader label="Actual Margin" sortKey="margin" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Recent Qty" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} align="right" />
+                                                <th>Cause</th>
+                                                <th className="r">Recommend</th>
                                             </tr>
                                         ) : selectedAlert === 'velocity' ? (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <SortableHeader label="Drop #" sortKey="volumeDrop" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Drop %" sortKey="volumeDrop" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Period Qty" sortKey="qtySold" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right group/header relative">
+                                                <th className="c">Detail</th>
+                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <SortableHeader label="Drop #" sortKey="volumeDrop" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Drop %" sortKey="volumeDrop" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Period Qty" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
+                                                <th className="r">
                                                     <div className="flex items-center justify-end gap-1 cursor-help">
                                                         Baseline Qty
                                                         <Info className="w-3 h-3 text-gray-400" />
@@ -620,19 +620,19 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                         </div>
                                                     </div>
                                                 </th>
-                                                <SortableHeader label="Price" sortKey="price" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Hist. Price</th>
-                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Price Adj." sortKey="priceChanges" sort={sort} onChange={setSort} themeColor={themeColor} align="center" />
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">CTA / Justification</th>
+                                                <SortableHeader label="Price" sortKey="price" sort={sort} onChange={setSort} align="right" />
+                                                <th className="r">Hist. Price</th>
+                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Price Adj." sortKey="priceChanges" sort={sort} onChange={setSort} align="center" />
+                                                <th className="r">CTA / Justification</th>
                                             </tr>
                                         ) : selectedAlert === 'stock' ? (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <SortableHeader label="Runway (Days)" sortKey="runway" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Lead Time" sortKey="leadTime" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right group/header relative">
+                                                <th className="c">Detail</th>
+                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <SortableHeader label="Runway (Days)" sortKey="runway" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Lead Time" sortKey="leadTime" sort={sort} onChange={setSort} align="right" />
+                                                <th className="r">
                                                     <div className="flex items-center justify-end gap-1 cursor-help">
                                                         Global Velocity
                                                         <Info className="w-3 h-3 text-gray-400" />
@@ -646,28 +646,28 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                         </div>
                                                     </div>
                                                 </th>
-                                                <SortableHeader label="Stock (Min 2)" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">Action / Continuity Strategy</th>
+                                                <SortableHeader label="Stock (Min 2)" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
+                                                <th className="r">Action / Continuity Strategy</th>
                                             </tr>
                                         ) : selectedAlert === 'dead' ? (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Detail</th>
-                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <SortableHeader label="Inventory Units" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Inventory Value" sortKey="inventoryValue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Days Since Sale" sortKey="daysSinceLastSale" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Median Demand</th>
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right pr-6">Action</th>
+                                                <th className="c">Detail</th>
+                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <SortableHeader label="Inventory Units" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Inventory Value" sortKey="inventoryValue" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Days Since Sale" sortKey="daysSinceLastSale" sort={sort} onChange={setSort} align="right" />
+                                                <th className="r">Median Demand</th>
+                                                <th className="r">Action</th>
                                             </tr>
                                         ) : (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Action</th>
-                                                <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} themeColor={themeColor} />
-                                                <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Signals</th>
-                                                <SortableHeader label="Price (Inc VAT)" sortKey="price" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Sales" sortKey="revenue" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Net Margin %" sortKey="margin" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
-                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} themeColor={themeColor} align="right" />
+                                                <th className="c">Action</th>
+                                                <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <th>Signals</th>
+                                                <SortableHeader label="Price (Inc VAT)" sortKey="price" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Sales" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Net Margin %" sortKey="margin" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
                                             </tr>
                                         )}
                                     </thead>
@@ -692,12 +692,12 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
                                                 return (
                                                     <tr key={p.id} className="group text-sm">
-                                                        <td className="p-4 text-center">
+                                                        <td className="c">
                                                             <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors">
                                                                 <Search className="w-4 h-4" />
                                                             </button>
                                                         </td>
-                                                        <td className="p-4">
+                                                        <td>
                                                             <div className="font-bold text-gray-900 flex items-center">
                                                                 {p.sku}
                                                                 <GradeBadge gradeLevel={p.gradeLevel} />
@@ -709,26 +709,26 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                             </div>
                                                             <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
                                                         </td>
-                                                        <td className="p-4 text-right">
+                                                        <td className="r">
                                                             <span className="font-bold text-gray-900">
                                                                 {formatNumber(p.volumeDropAbs, 0)}
                                                             </span>
                                                         </td>
-                                                        <td className="p-4 text-right">
+                                                        <td className="r">
                                                             <MetricValue value={p.volumeDropPct} type="percent" />
                                                         </td>
-                                                        <td className="p-4 text-right text-gray-700 font-semibold">{formatNumber(p.periodUnits)}</td>
-                                                        <td className="p-4 text-right text-gray-400 font-medium">{formatNumber(p.historicalMedianUnits, 0)}</td>
-                                                        <td className="p-4 text-right">
+                                                        <td className="r text-gray-700 font-semibold">{formatNumber(p.periodUnits)}</td>
+                                                        <td className="r text-gray-400 font-medium">{formatNumber(p.historicalMedianUnits, 0)}</td>
+                                                        <td className="r">
                                                             <span className={isPriceHigh ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}>
                                                                 <MetricValue value={p.displayPrice} type="currency" neutral />
                                                             </span>
                                                         </td>
-                                                        <td className="p-4 text-right text-gray-400 font-medium">{formatSmartMoney(p.historicalMedianPrice)}</td>
-                                                        <td className={`p-4 text-right ${p.stockLevel < thresholds.minAbsoluteFloor ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}`}>{formatNumber(p.stockLevel)}</td>
+                                                        <td className="r text-gray-400 font-medium">{formatSmartMoney(p.historicalMedianPrice)}</td>
+                                                        <td className={`r ${p.stockLevel < thresholds.minAbsoluteFloor ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}`}>{formatNumber(p.stockLevel)}</td>
 
                                                         {/* Price Changes Column - Tooltip restricted to hover on this badge only */}
-                                                        <td className="p-4 text-center">
+                                                        <td className="c">
                                                             <div className="group/tooltip relative inline-block">
                                                                 <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border font-bold text-xs transition-colors cursor-help ${p.priceChangeCount > 0 ? 'bg-theme-10 text-theme border-theme-20' : 'bg-gray-50 text-gray-300 border-gray-100'}`}>
                                                                     <History className="w-3 h-3" />
@@ -758,7 +758,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                             </div>
                                                         </td>
 
-                                                        <td className="p-4 text-right pr-6">
+                                                        <td className="r">
                                                             <div className="flex flex-col items-end">
                                                                 <span className="text-[11px] font-black uppercase text-theme tracking-wider bg-theme-10 px-2 py-0.5 rounded border border-indigo-100">{ctaText}</span>
                                                                 <span className="text-[11px] text-gray-600 mt-1 font-medium leading-relaxed max-w-[280px] break-words whitespace-normal text-right">{justification}</span>
@@ -772,12 +772,12 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 const isArrivalDriven = p.daysToArrival < 999;
                                                 return (
                                                     <tr key={p.id} className="group text-sm">
-                                                        <td className="p-4 text-center">
+                                                        <td className="c">
                                                             <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors">
                                                                 <Search className="w-4 h-4" />
                                                             </button>
                                                         </td>
-                                                        <td className="p-4">
+                                                        <td>
                                                             <div className="font-bold text-gray-900 flex items-center">
                                                                 {p.sku}
                                                                 <GradeBadge gradeLevel={p.gradeLevel} />
@@ -789,24 +789,24 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                             </div>
                                                             <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
                                                         </td>
-                                                        <td className="p-4 text-right">
+                                                        <td className="r">
                                                             <span className={`font-semibold text-sm px-2 py-1 rounded ${p.periodRunway < p.effectiveAlertLeadTime ? 'bg-red-100 text-red-500 border border-red-200' : 'bg-amber-100 text-amber-500 border border-amber-200'}`}>
                                                                 {p.periodRunway.toFixed(0)} Days
                                                             </span>
                                                         </td>
-                                                        <td className="p-4 text-right">
+                                                        <td className="r">
                                                             <div className="flex flex-col items-end">
                                                                 <span className="text-gray-700 font-semibold">{p.effectiveAlertLeadTime} Days</span>
                                                                 <span className="text-[10px] text-gray-400 uppercase font-bold">{isArrivalDriven ? 'Arrival ETA' : 'No Shipment'}</span>
                                                             </div>
                                                         </td>
-                                                        <td className="p-4 text-right text-gray-700 font-semibold">
+                                                        <td className="r text-gray-700 font-semibold">
                                                             {formatNumber(p.periodDailyVelocity, 1)} /day
                                                         </td>
-                                                        <td className={`p-4 text-right ${p.stockLevel < (thresholds.minAbsoluteFloor || 2) ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}`}>
+                                                        <td className={`r ${p.stockLevel < (thresholds.minAbsoluteFloor || 2) ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}`}>
                                                             {formatNumber(p.stockLevel)}
                                                         </td>
-                                                        <td className="p-4 text-right pr-6">
+                                                        <td className="r">
                                                             <div className="flex flex-col items-end">
                                                                 <span className="text-[11px] font-black uppercase text-purple-700 tracking-wider bg-purple-50 px-2 py-0.5 rounded border border-purple-100 shadow-sm">{p.stockoutAction}</span>
                                                                 <span className="text-[11px] text-gray-500 mt-1 font-medium text-right">Runway covers {p.effectiveAlertLeadTime === 999 ? 'N/A' : ((p.periodRunway / p.effectiveAlertLeadTime) * 100).toFixed(0) + '% of buffer'}</span>
@@ -823,31 +823,31 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
                                                 return (
                                                     <tr key={p.id} className="group text-sm">
-                                                        <td className="p-4 text-center">
+                                                        <td className="c">
                                                             <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors">
                                                                 <Search className="w-4 h-4" />
                                                             </button>
                                                         </td>
-                                                        <td className="p-4">
+                                                        <td>
                                                             <div className="font-bold text-gray-900 flex items-center">
                                                                 {p.sku}
                                                                 <GradeBadge gradeLevel={p.gradeLevel} />
                                                             </div>
                                                             <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
                                                         </td>
-                                                        <td className="p-4 text-right text-gray-700 font-semibold">
+                                                        <td className="r text-gray-700 font-semibold">
                                                             {formatNumber(p.stockLevel)}
                                                         </td>
-                                                        <td className="p-4 text-right">
+                                                        <td className="r">
                                                             <MetricValue value={p.inventoryValue} type="currency" neutral />
                                                         </td>
-                                                        <td className={`p-4 text-right font-semibold ${p.daysSinceLastSale > 60 ? 'text-red-500' : 'text-gray-700'}`}>
+                                                        <td className={`r font-semibold ${p.daysSinceLastSale > 60 ? 'text-red-500' : 'text-gray-700'}`}>
                                                             {p.daysSinceLastSale === 999 ? 'No Sales' : `${p.daysSinceLastSale} days`}
                                                         </td>
-                                                        <td className="p-4 text-right text-gray-400 font-medium">
+                                                        <td className="r text-gray-400 font-medium">
                                                             {p.historicalMedianDemand.toFixed(1)} /day
                                                         </td>
-                                                        <td className="p-4 text-right pr-6">
+                                                        <td className="r">
                                                             <span className="text-[11px] font-black uppercase text-amber-700 tracking-wider bg-amber-50 px-2 py-0.5 rounded border border-amber-100 shadow-sm">{cta}</span>
                                                         </td>
                                                     </tr>
@@ -858,34 +858,34 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 <tr key={p.id} className="group text-sm">
                                                     {selectedAlert === 'margin' ? (
                                                         <>
-                                                            <td className="p-4 text-center">
+                                                            <td className="c">
                                                                 <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors">
                                                                     <Search className="w-4 h-4" />
                                                                 </button>
                                                             </td>
-                                                            <td className="p-4">
+                                                            <td>
                                                                 <div className="font-bold text-gray-900 flex items-center">
                                                                     {p.sku}
                                                                     <GradeBadge gradeLevel={p.gradeLevel} />
                                                                 </div>
                                                                 <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
                                                             </td>
-                                                            <td className="p-4 text-right font-mono font-bold text-purple-600">
+                                                            <td className="r font-mono font-bold text-purple-600">
                                                                 {p.caPrice ? formatSmartMoney(p.caPrice) : '—'}
                                                             </td>
-                                                            <td className="p-4 text-right">
+                                                            <td className="r">
                                                                 <MetricValue value={p.periodMargin} type="percent" />
                                                             </td>
-                                                            <td className="p-4 text-right text-gray-700 font-semibold">
+                                                            <td className="r text-gray-700 font-semibold">
                                                                 {formatNumber(p.periodUnits)}
                                                             </td>
-                                                            <td className="p-4 text-right">
+                                                            <td className="r">
                                                                 <MetricValue value={p.periodRevenue} type="currency" neutral />
                                                             </td>
-                                                            <td className="p-4 text-right">
+                                                            <td className="r">
                                                                 <MetricValue value={p.periodProfit} type="currency" />
                                                             </td>
-                                                            <td className="p-4">
+                                                            <td>
                                                                 <div className="flex items-center gap-2 group relative inline-block">
                                                                     <span className={`sello-badge ${
                                                                         p.primaryDrag === 'Ad Spend Heavy' ? 'badge-purple' :
@@ -909,7 +909,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="p-4 text-right pr-6">
+                                                            <td className="r">
                                                                 <div className="flex flex-col items-end">
                                                                     <span className={`sello-badge ${
                                                                         p.suggestedAction?.toLowerCase().includes('urgent') ? 'badge-red' :
@@ -925,13 +925,13 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <td className="p-4 text-center"><button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors"><Search className="w-4 h-4" /></button></td>
-                                                            <td className="p-4"><div className="font-medium text-gray-900 group-hover:text-theme transition-colors flex items-center">{p.sku}<GradeBadge gradeLevel={p.gradeLevel} /></div><div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div></td>
-                                                            <td className="p-4"><div className="flex flex-wrap gap-1 max-w-[140px]">{p.signals.slice(0, 2).map((id: string) => { const meta = getDiagnosisMeta(id as CanonicalDiagnosisId); return <span key={id} onClick={() => onDeepDive(p.sku)} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${meta.priority === 'High' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`} title={meta.description}>{meta.shortLabel}</span> })}</div></td>
-                                                            <td className="p-4 text-right text-gray-700">{formatSmartMoney((p.displayPrice * VAT_MULTIPLIER))}</td>
-                                                            <td className="p-4 text-right text-gray-600">{formatSmartMoney(p.periodRevenue)}</td>
-                                                            <td className="p-4 text-right"><span className={`font-medium ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span></td>
-                                                            <td className="p-4 text-right font-medium text-gray-800">{p.stockLevel}</td>
+                                                            <td className="c"><button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors"><Search className="w-4 h-4" /></button></td>
+                                                            <td><div className="font-medium text-gray-900 group-hover:text-theme transition-colors flex items-center">{p.sku}<GradeBadge gradeLevel={p.gradeLevel} /></div><div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div></td>
+                                                            <td><div className="flex flex-wrap gap-1 max-w-[140px]">{p.signals.slice(0, 2).map((id: string) => { const meta = getDiagnosisMeta(id as CanonicalDiagnosisId); return <span key={id} onClick={() => onDeepDive(p.sku)} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${meta.priority === 'High' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`} title={meta.description}>{meta.shortLabel}</span> })}</div></td>
+                                                            <td className="r text-gray-700">{formatSmartMoney((p.displayPrice * VAT_MULTIPLIER))}</td>
+                                                            <td className="r text-gray-600">{formatSmartMoney(p.periodRevenue)}</td>
+                                                            <td className="r"><span className={`font-medium ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span></td>
+                                                            <td className="r font-medium text-gray-800">{p.stockLevel}</td>
                                                         </>
                                                     )}
                                                 </tr>
@@ -968,7 +968,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                         </div>
                     </div>
                 )}
-                {activeTab === 'map' && (<div className="h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope.length === 1 ? platformScope[0] : 'All'} themeColor={themeColor} refundHistory={refundHistory} deductRefunds={deductRefunds} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
+                {activeTab === 'map' && (<div className="h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope.length === 1 ? platformScope[0] : 'All'} refundHistory={refundHistory} deductRefunds={deductRefunds} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
                 {activeTab === 'categories' && (
                     <div className="space-y-4 pb-24 h-auto">
 
@@ -993,7 +993,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                             products={products}
                             priceHistoryMap={priceHistoryMap}
                             dateRange={dateRange}
-                            themeColor={themeColor}
+                           
                             refundHistory={refundHistory}
                             deductRefunds={deductRefunds}
                             platformScope={platformScope}
