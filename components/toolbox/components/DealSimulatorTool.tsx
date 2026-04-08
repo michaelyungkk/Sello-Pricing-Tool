@@ -133,7 +133,7 @@ const SkuDropdown = ({ value, products, freightMap, onChange, onSelect }: {
                 onFocus={openDropdown}
                 onBlur={() => setTimeout(() => setOpen(false), 200)}
                 placeholder="SKU or name…"
-                className="w-full h-6 px-3 text-xs font-mono font-bold text-gray-800 bg-transparent outline-none placeholder-gray-300 hover:bg-blue-50/30 focus:bg-blue-50/40"
+                className="w-full h-9 px-3 text-xs font-mono font-bold text-gray-800 bg-transparent outline-none placeholder-gray-300 hover:bg-blue-50/30 focus:bg-blue-50/40"
             />
             {portal}
         </>
@@ -189,16 +189,25 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
         const newRows: SimRow[] = lines.map(line => {
             const cols = line.split('\t').map(c => c.trim());
             const sku  = cols[0] || '';
-            const p    = productMap.get(sku.toUpperCase());
-            const erpFreight = freightMap.get(sku.toUpperCase()) ?? 0;
+            const skuUp = sku.toUpperCase();
+            // 1. exact match, 2. channel alias / learnedAlias, 3. substring (handles truncated paste like DEC01014-70x100 → DEC01014-70x100-UK)
+            const p = productMap.get(skuUp)
+                ?? products.find(pr =>
+                    (pr.channels || []).some(ch =>
+                        (ch.skuAlias || '').split(',').some(a => a.trim().toUpperCase() === skuUp)
+                    )
+                )
+                ?? products.find(pr => pr.sku.toUpperCase().startsWith(skuUp) || skuUp.startsWith(pr.sku.toUpperCase()));
+            const resolvedSku = p ? p.sku : sku;
+            const erpFreight = freightMap.get(skuUp) ?? freightMap.get(p?.sku.toUpperCase() ?? '') ?? 0;
             const n = (idx: number) => {
                 const v = parseFloat((cols[idx] || '').replace(/[£,]/g, ''));
                 return isNaN(v) ? 0 : v;
             };
             if (cols.length === 1) {
-                return makeRow({ sku, cogs: p?.costPrice || 0, caPrice: p?.caPrice || 0, freight: erpFreight, overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
+                return makeRow({ sku: resolvedSku, cogs: p?.costPrice || 0, caPrice: p?.caPrice || 0, freight: erpFreight, overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
             }
-            return makeRow({ sku, cogs: cols[1] ? n(1) : (p?.costPrice || 0), freight: cols[2] ? n(2) : erpFreight, caPrice: cols[3] ? n(3) : (p?.caPrice || 0), proposedPrice: n(4), overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
+            return makeRow({ sku: resolvedSku, cogs: cols[1] ? n(1) : (p?.costPrice || 0), freight: cols[2] ? n(2) : erpFreight, caPrice: cols[3] ? n(3) : (p?.caPrice || 0), proposedPrice: n(4), overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
         });
         setRows(prev => {
             const hasEmpty = prev.length === 1 && !prev[0].sku && !prev[0].cogs;
@@ -375,7 +384,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                         </td>
                                         {(['cogs','freight'] as (keyof SimRow)[]).map(field => (
                                             <td key={field} className="p-0" style={{ maxWidth: 0, overflow: 'hidden' }}>
-                                                <div className="flex items-center h-6 px-2 bg-white overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
+                                                <div className="flex items-center h-9 px-2 bg-white overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
                                                     <span className="text-gray-400 text-[10px] mr-0.5 select-none">£</span>
                                                     <input type="number" value={(row[field] as number) || ''} step={0.01} min={0}
                                                         onChange={e => update(row.id, { [field]: parseFloat(e.target.value) || 0 })}
@@ -385,7 +394,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                             </td>
                                         ))}
                                         <td className="p-0 cb" style={{ maxWidth: 0, overflow: 'hidden' }}>
-                                            <div className="flex items-center h-6 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
+                                            <div className="flex items-center h-9 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
                                                 <span className="text-gray-400 text-[10px] mr-0.5 select-none">£</span>
                                                 <input type="number" value={row.caPrice || ''} step={0.01} min={0}
                                                     onChange={e => update(row.id, { caPrice: parseFloat(e.target.value) || 0 })}
@@ -394,20 +403,20 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                             </div>
                                         </td>
 <td className="r p-0">
-                                            <div className="flex items-center justify-end h-6 px-3 bg-gray-50">
+                                            <div className="flex items-center justify-end h-9 px-3 bg-gray-50">
                                                 <span className="v-num text-xs" style={{ color: row.targetPrice > 0 ? themeColor : '#9ca3af' }}>
                                                     {row.targetPrice > 0 ? `£${row.targetPrice.toFixed(2)}` : '—'}
                                                 </span>
                                             </div>
                                         </td>
                                         <td className="c p-0 cg">
-                                            <div className="flex items-center justify-center h-6 px-2 bg-gray-50">
+                                            <div className="flex items-center justify-center h-9 px-2 bg-gray-50">
                                                 {row.targetPrice > 0 ? <MarginBadge v={row.targetPriceMargin} /> : <span className="v-dim">—</span>}
                                             </div>
                                         </td>
                                         {/* Proposed Price — type here to derive margin */}
                                         <td className="p-0 cb" style={{ maxWidth: 0, overflow: 'hidden' }}>
-                                            <div className={`flex items-center h-6 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40${belowFloorRow ? ' bg-red-50/50' : ''}`}>
+                                            <div className={`flex items-center h-9 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40${belowFloorRow ? ' bg-red-50/50' : ''}`}>
                                                 <span className="text-gray-400 text-[10px] mr-0.5 select-none">£</span>
                                                 <input
                                                     type="number" step={0.01} min={0}
@@ -429,7 +438,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                         </td>
                                         {/* Proposed Margin — type here to derive price */}
                                         <td className="p-0 cg" style={{ maxWidth: 0, overflow: 'hidden' }}>
-                                            <div className="flex items-center h-6 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
+                                            <div className="flex items-center h-9 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
                                                 <input
                                                     type="number" step={0.5} min={0} max={99}
                                                     value={row.lastEdited === 'margin'
@@ -450,7 +459,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                         </td>
                                         <td className="c p-0">
                                             <button onClick={() => removeRow(row.id)}
-                                                className="w-full h-6 flex items-center justify-center text-gray-200 hover:text-red-400 transition-colors">
+                                                className="w-full h-9 flex items-center justify-center text-gray-200 hover:text-red-400 transition-colors">
                                                 <X className="w-3.5 h-3.5" />
                                             </button>
                                         </td>
@@ -461,14 +470,14 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                         <tfoot>
                                 <tr className="border-t-2 border-gray-200" style={{ background: `${themeColor}06` }}>
                                     <td className="c p-0" colSpan={3}>
-                                        <div className="flex items-center h-6 px-3">
+                                        <div className="flex items-center h-9 px-3">
                                             <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: themeColor }}>
                                                 {summary.hasData ? `${summary.count} SKUs` : `${rows.length} SKU${rows.length !== 1 ? 's' : ''}`}
                                             </span>
                                         </div>
                                     </td>
                                     <td colSpan={5} className="p-0">
-                                        <div className="flex items-center h-6 px-3 text-[10px] text-gray-500">
+                                        <div className="flex items-center h-9 px-3 text-[10px] text-gray-500">
                                             {summary.hasData
                                                 ? <span>At/above target: <strong className="text-gray-700">{summary.atTarget}/{summary.count}</strong></span>
                                                 : <span className="text-gray-300 italic">Enter proposed prices to see summary</span>
@@ -476,7 +485,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                         </div>
                                     </td>
                                     <td className="c p-0">
-                                        <div className="flex items-center justify-center h-6 px-2">
+                                        <div className="flex items-center justify-center h-9 px-2">
                                             {summary.hasData ? <MarginBadge v={summary.avgMargin} /> : <span className="v-dim">—</span>}
                                         </div>
                                     </td>

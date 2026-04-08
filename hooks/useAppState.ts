@@ -64,7 +64,7 @@ import { redistributeAdSpend } from '../services/adSpreadService';
 import {
     verifyPassword, pushSnapshot, pullSnapshot,
     pushTransactions, pullTransactions, getLatestTransactionDate,
-    pullTransactionPage, checkVersion,
+    pullTransactionPage, pullTransactionPageSince, checkVersion,
     pushRefundsAndShipments, pullRefundsAndShipments,
     pushAdData, pullAdData
 } from '../services/dbService';
@@ -366,7 +366,6 @@ export const useAppState = () => {
     const [isReturnsModalOpen, setIsReturnsModalOpen] = useState(false);
     const [isCAUploadModalOpen, setIsCAUploadModalOpen] = useState(false);
     const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
-    const [isFreightModalOpen, setIsFreightModalOpen] = useState(false);
     const [selectedAnalysisProduct, setSelectedAnalysisProduct] = useState<Product | null>(null);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
@@ -802,13 +801,8 @@ export const useAppState = () => {
         updateTimestamp('Sales'); setIsSalesImportModalOpen(false);
         if (isAdminMode) setIsDirty(true);
 
-        // Auto-recalculate optimal prices for SKUs that received new transactions.
-        // Deferred with setTimeout to avoid blocking the main thread after import.
+        // Auto-recalculate optimal prices for SKUs that received new transactions
         if (historyPayload && historyPayload.length > 0 && cohortSnapshot) {
-            const snapshotAtImport = cohortSnapshot;
-            const salesAtImport = salesHistory;
-            const productsAtImport = products;
-            setTimeout(() => {
             const todayKey = new Date().toISOString().split('T')[0];
             const resolver = buildCanonicalResolver(learnedAliases);
             const affectedSkus = new Set(historyPayload.map(tx => resolver(tx.sku)));
@@ -816,18 +810,18 @@ export const useAppState = () => {
             setOptimalPriceResults(prev => {
                 const next = new Map(prev);
                 affectedSkus.forEach(canonicalSku => {
-                    const product = productsAtImport.find(p => resolver(p.sku) === canonicalSku);
+                    const product = products.find(p => resolver(p.sku) === canonicalSku);
                     if (!product) return;
-                    const bucketKey = snapshotAtImport.skuAssignments.get(canonicalSku);
-                    const cohort = bucketKey ? snapshotAtImport.cohortStats.get(bucketKey) : undefined;
+                    const bucketKey = cohortSnapshot.skuAssignments.get(canonicalSku);
+                    const cohort = bucketKey ? cohortSnapshot.cohortStats.get(bucketKey) : undefined;
                     if (!cohort) return;
                     const result = calculateOptimalPrice({
                         sku: product,
-                        priceHistory: salesAtImport,
+                        priceHistory: salesHistory,
                         priceChangeLog: priceChangeHistory,
                         promotions,
                         pricingRules,
-                        cohortSnapshot: snapshotAtImport,
+                        cohortSnapshot,
                         learnedAliases,
                         today: todayKey,
                     });
@@ -835,13 +829,9 @@ export const useAppState = () => {
                 });
                 return next;
             });
-            }, 100); // defer off main thread so UI stays responsive after import
 
-            // Detect if any categories need benchmark update (run immediately, lightweight)
-            const todayKey2 = new Date().toISOString().split('T')[0];
-            const resolver2 = buildCanonicalResolver(learnedAliases);
-            const affectedSkus2 = new Set(historyPayload.map(tx => resolver2(tx.sku)));
-            const notices = detectBenchmarkUpdateNeeded(products, cohortSnapshot, Array.from(affectedSkus2));
+            // Detect if any categories need benchmark update
+            const notices = detectBenchmarkUpdateNeeded(products, cohortSnapshot, Array.from(affectedSkus));
             if (notices.length > 0) {
                 setBenchmarkUpdateNotices(prev => {
                     const merged = [...prev];
@@ -911,11 +901,10 @@ export const useAppState = () => {
                     if (item.name) existing.name = item.name;
                     if (item.brand) existing.brand = item.brand;
                     if (item.category) existing.category = item.category;
-                    if (item.cartonDimensions) existing.cartonDimensions = item.cartonDimensions;
                     existing.lastUpdated = reportDate;
                     newProducts[existingIndex] = existing;
                 } else {
-                    newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: toNumber(item.dailyAverageSales), leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, landedAt: reportDate, category: item.category || 'Uncategorized', brand: item.brand, dailyAverageSales: toNumber(item.dailyAverageSales), ...(item.cartonDimensions ? { cartonDimensions: item.cartonDimensions } : {}) });
+                    newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: toNumber(item.dailyAverageSales), leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, category: item.category || 'Uncategorized', brand: item.brand, dailyAverageSales: toNumber(item.dailyAverageSales) });
                 }
             });
             return recalculateProductMetrics(newProducts, priceHistoryMap, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
@@ -1048,87 +1037,20 @@ export const useAppState = () => {
         if (isAdminMode) setIsDirty(true);
     }, [updateTimestamp, isAdminMode]);
 
-    const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => {
+    const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string }[], reportDate: string) => {
         const changes: PriceChangeRecord[] = [];
-
-        // Build alias map from product channels + learnedAliases for CA matching
-        const caAliasMap = new Map<string, string>(); // alias UPPER → master SKU
-        (products || []).forEach(p => {
-            caAliasMap.set(p.sku.toUpperCase(), p.sku);
-            (p.channels || []).forEach(ch => {
-                (ch.skuAlias || '').split(',').forEach(a => {
-                    const alias = a.trim().toUpperCase();
-                    if (alias) caAliasMap.set(alias, p.sku);
-                });
-            });
-        });
-        Object.entries(learnedAliases || {}).forEach(([alias, master]) => {
-            caAliasMap.set(alias.toUpperCase(), master);
-        });
-
-        // Normalise a CA SKU: replace _UK→-UK, strip _N variant suffix
-        const normaliseCA = (sku: string): string =>
-            sku.toUpperCase()
-               .replace(/_UK$/i, '-UK')   // DT2003-OA_UK → DT2003-OA-UK
-               .replace(/_\d+$/, '');     // AP0029-BK_1 → AP0029-BK
-
-        // Build normalised lookup map from data for O(1) matching
-        const caByNorm = new Map<string, typeof data[0]>();
-        data.forEach(d => {
-            const norm = normaliseCA(d.sku);
-            if (!caByNorm.has(norm)) caByNorm.set(norm, d); // first occurrence wins
-        });
-
-        // Pre-build alias→CA row map using product channel aliases + learnedAliases
-        // Keys: normalised alias UPPER → CA data row
-        // This lets us do O(1) alias lookups inside setProducts without IIFE complexity
-        const aliasToCa = new Map<string, typeof data[0]>();
-        (products || []).forEach(p => {
-            (p.channels || []).forEach(ch => {
-                (ch.skuAlias || '').split(',').forEach(a => {
-                    const alias = a.trim().toUpperCase();
-                    if (!alias) return;
-                    const norm = normaliseCA(alias);
-                    const hit = caByNorm.get(norm) ?? caByNorm.get(norm.replace(/[-_]UK$/i, ''));
-                    if (hit && !aliasToCa.has(p.sku.toUpperCase())) {
-                        aliasToCa.set(p.sku.toUpperCase(), hit);
-                    }
-                });
-            });
-        });
-        Object.entries(learnedAliases || {}).forEach(([alias, master]) => {
-            const norm = normaliseCA(alias.toUpperCase());
-            const hit = caByNorm.get(norm) ?? caByNorm.get(norm.replace(/[-_]UK$/i, ''));
-            if (hit) aliasToCa.set(master.toUpperCase(), hit);
-        });
-
         setProducts(prev => (prev || []).map(p => {
-            const masterUpper = p.sku.toUpperCase();
-            const masterStripped = masterUpper.replace(/[-_]UK$/i, '');
-
-            // 1. Exact match (CA SKU normalised = master SKU)
-            // 2. Strip -UK from master
-            // 3. Pre-built alias map lookup
-            const update = caByNorm.get(masterUpper)
-                ?? caByNorm.get(masterStripped)
-                ?? aliasToCa.get(masterUpper);
+            const update = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
             if (update) {
                 const oldPrice = p.caPrice || (p.currentPrice * VAT_MULTIPLIER);
                 if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
                     changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
                 }
-                const newImageUrl = update.imageUrl || p.imageUrl;
-                const newDescription = update.description || p.description;
                 return {
                     ...p,
                     caPrice: update.caPrice,
                     lastUpdated: reportDate,
-                    imageUrl: newImageUrl,
-                    description: newDescription,
-                    // Stamp listingReadyAt once when BOTH image and description are present
-                    listingReadyAt: !p.listingReadyAt && newImageUrl && newDescription
-                        ? reportDate
-                        : p.listingReadyAt,
+                    imageUrl: update.imageUrl || p.imageUrl
                 };
             }
             return p;
@@ -1136,34 +1058,7 @@ export const useAppState = () => {
         if (changes.length > 0) setPriceChangeHistory(prev => [...changes, ...(prev || [])]);
         updateTimestamp('CA Prices');
         setIsCAUploadModalOpen(false);
-    }, [updateTimestamp, products, learnedAliases]);
-
-    const handleStampLandedAt = useCallback((skus: string[], date: string) => {
-        const skuSet = new Set(skus.map(s => s.toUpperCase()));
-        setProducts(prev => (prev || []).map(p => {
-            if (p.landedAt) return p; // never overwrite an existing stamp
-            if (skuSet.has(p.sku.toUpperCase())) {
-                return { ...p, landedAt: date };
-            }
-            return p;
-        }));
-        if (isAdminMode) setIsDirty(true);
-    }, [isAdminMode]);
-
-    const handleDescriptionImport = useCallback((data: { sku: string; description: string }[]) => {
-        setProducts(prev => (prev || []).map(p => {
-            const match = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase());
-            if (!match) return p;
-            const now = new Date().toISOString().split('T')[0];
-            return {
-                ...p,
-                description: match.description,
-                listingReadyAt: !p.listingReadyAt && p.imageUrl && match.description
-                    ? now : p.listingReadyAt,
-            };
-        }));
-        if (isAdminMode) setIsDirty(true);
-    }, [isAdminMode]);
+    }, [updateTimestamp]);
 
     const handleShipmentImport = useCallback((updates: any[]) => {
         setProducts(prev => (prev || []).map(p => {
@@ -1463,40 +1358,82 @@ export const useAppState = () => {
                 return;
             }
 
-            // Paginated pull
-            setSyncStep('Loading transactions...');
+            // Incremental pull — only fetch rows newer than what's already in local cache
+            setSyncStep('Checking for new transactions...');
             const PAGE_SIZE = 2000;
-            let page = 0;
             let allTransactions: PriceLog[] = [];
-            let totalRows = 0;
 
-            const firstPage = await pullTransactionPage(0, PAGE_SIZE);
-            if (!firstPage.success) {
-                setSyncStatus('error');
-                setSyncStep('');
-                return;
-            }
-            totalRows = firstPage.totalRows || 0;
-            allTransactions = firstPage.transactions || [];
-            const totalPages = Math.ceil(totalRows / PAGE_SIZE);
-            setSyncTotal(totalPages);
-            setSyncProgress(1);
-            setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
+            // Find the newest date already cached locally
+            const cachedTransactions = salesHistory || [];
+            const localDates = cachedTransactions.map((t: PriceLog) => t.date).filter(Boolean).sort();
+            const localNewestDate = localDates.length > 0 ? localDates[localDates.length - 1] : null;
 
-            page = 1;
-            let hasMore = !!firstPage.hasMore;
-            while (hasMore && page < totalPages) {
-                const pageRes = await pullTransactionPage(page, PAGE_SIZE);
-                if (!pageRes.success) {
+            if (localNewestDate && cachedTransactions.length > 0) {
+                // Incremental: only pull rows after the local newest date
+                setSyncStep(`Checking for new data after ${localNewestDate}...`);
+                const firstPage = await pullTransactionPageSince(localNewestDate, 0, PAGE_SIZE);
+                if (!firstPage.success) {
                     setSyncStatus('error');
                     setSyncStep('');
                     return;
                 }
-                allTransactions = [...allTransactions, ...(pageRes.transactions || [])];
-                hasMore = !!pageRes.hasMore;
-                setSyncProgress(page + 1);
+                const newRows = firstPage.transactions || [];
+                const totalNew = firstPage.totalRows || 0;
+
+                if (totalNew === 0) {
+                    // Nothing new — reuse local cache
+                    setSyncStep('No new transactions — using cached data');
+                    allTransactions = cachedTransactions;
+                } else {
+                    // Pull remaining pages of new rows
+                    allTransactions = [...newRows];
+                    const totalPages = Math.ceil(totalNew / PAGE_SIZE);
+                    setSyncTotal(totalPages);
+                    setSyncProgress(1);
+                    setSyncStep(`Loading ${totalNew.toLocaleString()} new transactions...`);
+
+                    let page = 1;
+                    let hasMore = !!firstPage.hasMore;
+                    while (hasMore && page < totalPages) {
+                        const pageRes = await pullTransactionPageSince(localNewestDate, page, PAGE_SIZE);
+                        if (!pageRes.success) { setSyncStatus('error'); setSyncStep(''); return; }
+                        allTransactions = [...allTransactions, ...(pageRes.transactions || [])];
+                        hasMore = !!pageRes.hasMore;
+                        setSyncProgress(page + 1);
+                        setSyncStep(`Loading new transactions... ${allTransactions.length.toLocaleString()} / ${totalNew.toLocaleString()}`);
+                        page++;
+                    }
+
+                    // Merge new rows onto the front of existing cache (DB returns newest first)
+                    // Deduplicate by id to avoid duplicates on the boundary date
+                    const existingIds = new Set(cachedTransactions.map((t: PriceLog) => t.id).filter(Boolean));
+                    const deduped = allTransactions.filter((t: PriceLog) => !t.id || !existingIds.has(t.id));
+                    allTransactions = [...deduped, ...cachedTransactions];
+                    setSyncStep(`Merged ${deduped.length.toLocaleString()} new rows with ${cachedTransactions.length.toLocaleString()} cached`);
+                }
+            } else {
+                // No local cache — full pull
+                setSyncStep('Loading transactions (first sync)...');
+                const firstPage = await pullTransactionPage(0, PAGE_SIZE);
+                if (!firstPage.success) { setSyncStatus('error'); setSyncStep(''); return; }
+                const totalRows = firstPage.totalRows || 0;
+                allTransactions = firstPage.transactions || [];
+                const totalPages = Math.ceil(totalRows / PAGE_SIZE);
+                setSyncTotal(totalPages);
+                setSyncProgress(1);
                 setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
-                page++;
+
+                let page = 1;
+                let hasMore = !!firstPage.hasMore;
+                while (hasMore && page < totalPages) {
+                    const pageRes = await pullTransactionPage(page, PAGE_SIZE);
+                    if (!pageRes.success) { setSyncStatus('error'); setSyncStep(''); return; }
+                    allTransactions = [...allTransactions, ...(pageRes.transactions || [])];
+                    hasMore = !!pageRes.hasMore;
+                    setSyncProgress(page + 1);
+                    setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
+                    page++;
+                }
             }
 
             setSyncStep('Applying data...');
@@ -1534,22 +1471,7 @@ export const useAppState = () => {
             // Save to local cache with current version
             const versionRes = await checkVersion();
             const version = versionRes.lastPushAt || time;
-            // Merge cached cohort data into snapshot before saving
-            // (DB may not have it yet if user hasn't pushed since last recalculation)
-            let snapshotToCache = incoming;
-            try {
-                const existingCache = await loadFromCache();
-                if (existingCache?.snapshot?.cohortSnapshot && !incoming.cohortSnapshot) {
-                    snapshotToCache = {
-                        ...incoming,
-                        cohortSnapshot: existingCache.snapshot.cohortSnapshot,
-                        optimalPriceResults: existingCache.snapshot.optimalPriceResults,
-                        benchmarkUpdateNotices: existingCache.snapshot.benchmarkUpdateNotices,
-                    };
-                    console.log('[sync] merged cached cohort data into snapshot');
-                }
-            } catch (e) { /* non-fatal */ }
-            await saveToCache(snapshotToCache, allTransactions, refunds, [], version);
+            await saveToCache(incoming, allTransactions, refunds, [], version);
 
             console.log(`[sync] complete — cached version: ${version}`);
             setSyncProgress(0);
@@ -1707,33 +1629,9 @@ export const useAppState = () => {
             prev.filter(n => !newSnapshot.categoryBuckets.has(n.category))
         );
 
-        // Fire-and-forget: persist benchmarks to cache so reload skips re-calculation prompt
-        (async () => {
-            try {
-                const cacheVersion = getCachedVersion() || new Date().toISOString();
-                const existingCache = await loadFromCache();
-                const cachedTx = existingCache?.transactions || [];
-                const cachedRefunds = existingCache?.refunds || [];
-                const updatedSnapshot = {
-                    ...getSharedSnapshot(),
-                    cohortSnapshot: {
-                        ...merged,
-                        categoryBuckets: Object.fromEntries(merged.categoryBuckets),
-                        cohortStats: Object.fromEntries(merged.cohortStats),
-                        skuAssignments: Object.fromEntries(merged.skuAssignments),
-                    },
-                    optimalPriceResults: Object.fromEntries(nextResults),
-                };
-                await saveToCache(updatedSnapshot, cachedTx, cachedRefunds, [], cacheVersion);
-                console.log('[benchmarks] persisted to local cache');
-            } catch (e) {
-                console.warn('[benchmarks] cache persist failed (non-fatal):', e);
-            }
-        })();
-
         return shifts;
     }, [products, priceHistoryMap, priceChangeHistory, pricingRules, promotions,
-        learnedAliases, cohortSnapshot, optimalPriceResults, salesHistory, getSharedSnapshot]);
+        learnedAliases, cohortSnapshot, optimalPriceResults, salesHistory]);
 
     return {
         t,
@@ -1813,8 +1711,6 @@ export const useAppState = () => {
         setIsCAUploadModalOpen,
         isShipmentModalOpen,
         setIsShipmentModalOpen,
-        isFreightModalOpen,
-        setIsFreightModalOpen,
         selectedAnalysisProduct,
         setSelectedAnalysisProduct,
         analysisResult,
@@ -1861,8 +1757,6 @@ export const useAppState = () => {
         handleMappingImport,
         handleReturnsImport,
         handleCAImport,
-        handleDescriptionImport,
-        handleStampLandedAt,
         handleShipmentImport,
         // DB Sync
         isAdminMode,

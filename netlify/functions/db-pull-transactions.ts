@@ -19,6 +19,7 @@ export default async (req: Request) => {
         const url = new URL(req.url);
         const page = parseInt(url.searchParams.get('page') || '0');
         const pageSize = parseInt(url.searchParams.get('pageSize') || '2000');
+        const since = url.searchParams.get('since') || null; // ISO date string for incremental sync
         const offset = page * pageSize;
 
         const sql = neon(process.env.NETLIFY_DATABASE_URL!);
@@ -26,21 +27,32 @@ export default async (req: Request) => {
         // Get total count on first page only
         let totalRows = 0;
         if (page === 0) {
-            const countRes = await sql`
-                SELECT COUNT(*) as total FROM transaction_history
-            `;
+            const countRes = since
+                ? await sql`SELECT COUNT(*) as total FROM transaction_history WHERE date > ${since}`
+                : await sql`SELECT COUNT(*) as total FROM transaction_history`;
             totalRows = Number(countRes[0]?.total || 0);
         }
 
-        const rows = await sql`
-            SELECT id, sku, date, price, velocity, margin, profit,
-                   ads_spend, raw_ads_spend, platform, order_id,
-                   postcode, logistic_partner, logistic_service,
-                   real_postage, real_extra_freight
-            FROM transaction_history
-            ORDER BY date DESC, id DESC
-            LIMIT ${pageSize} OFFSET ${offset}
-        `;
+        const rows = since
+            ? await sql`
+                SELECT id, sku, date, price, velocity, margin, profit,
+                       ads_spend, raw_ads_spend, platform, order_id,
+                       postcode, logistic_partner, logistic_service,
+                       real_postage, real_extra_freight
+                FROM transaction_history
+                WHERE date > ${since}
+                ORDER BY date DESC, id DESC
+                LIMIT ${pageSize} OFFSET ${offset}
+              `
+            : await sql`
+                SELECT id, sku, date, price, velocity, margin, profit,
+                       ads_spend, raw_ads_spend, platform, order_id,
+                       postcode, logistic_partner, logistic_service,
+                       real_postage, real_extra_freight
+                FROM transaction_history
+                ORDER BY date DESC, id DESC
+                LIMIT ${pageSize} OFFSET ${offset}
+              `;
 
         const transactions = rows.map(r => ({
             id: r.id,

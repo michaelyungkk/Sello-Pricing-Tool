@@ -10,7 +10,6 @@ import { ERPCrossCheckTool } from './components/ERPCrossCheckTool';
 import { PriceCheckTool } from './components/PriceCheckTool';
 import { SkuScreenTool } from './components/SkuScreenTool';
 import { DealSimulatorTool } from './components/DealSimulatorTool';
-import { Sliders, Search, Activity } from 'lucide-react';
 
 const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
     promotions,
@@ -92,11 +91,11 @@ const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
                 <DealSimulatorTool
                     products={products || []}
                     freightRates={freightRates || []}
+                    learnedAliases={learnedAliases || {}}
                     themeColor={themeColor}
                 />
             )}
 
-            
             {activeTab === 'SKU' && (
                 <SkuScreenTool
                     products={products || []}

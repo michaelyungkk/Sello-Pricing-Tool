@@ -928,10 +928,10 @@ const App: React.FC = () => {
                             <ToolboxPage
                                 promotions={frozenPromoToolboxRef.current}
                                 freightRates={freightRates || []}
+                                learnedAliases={learnedAliases || {}}
                                 pricingRules={pricingRules}
                                 inventoryTemplates={inventoryTemplates || []}
                                 onSaveTemplates={setInventoryTemplates}
-                                learnedAliases={learnedAliases}
                                 onSaveLearnedAliases={(aliases) => setLearnedAliases(prev => ({ ...prev, ...aliases }))}
                                 products={products || []}
                                 themeColor={userProfile.themeColor}
@@ -971,6 +971,7 @@ const App: React.FC = () => {
                                 onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }}
                                 products={products}
                                 freightRates={freightRates || []}
+                                learnedAliases={learnedAliases || {}}
                                 onFreightRatesUpload={handleFreightRatesUpload}
                                 onOpenFreightUpload={() => setIsFreightModalOpen(true)}
                                 themeColor={userProfile.themeColor}
