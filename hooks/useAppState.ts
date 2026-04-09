@@ -901,10 +901,37 @@ export const useAppState = () => {
                     if (item.name) existing.name = item.name;
                     if (item.brand) existing.brand = item.brand;
                     if (item.category) existing.category = item.category;
+                    if (item.gradeLevel !== undefined && item.gradeLevel !== null) existing.gradeLevel = item.gradeLevel;
+                    if (item.subcategory) existing.subcategory = item.subcategory;
+                    if (item.agedStock !== undefined) existing.agedStockQty = item.agedStock;
+                    if (item.inventoryStatus) existing.inventoryStatus = item.inventoryStatus;
+                    if (item.cartonDimensions) existing.cartonDimensions = item.cartonDimensions;
                     existing.lastUpdated = reportDate;
                     newProducts[existingIndex] = existing;
                 } else {
-                    newProducts.push({ id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, sku: item.sku, name: item.name || item.sku, stockLevel: item.stock || 0, costPrice: item.cost || 0, currentPrice: 0, averageDailySales: toNumber(item.dailyAverageSales), leadTimeDays: 30, status: 'Healthy', recommendation: 'New Product', daysRemaining: 999, channels: [], lastUpdated: reportDate, category: item.category || 'Uncategorized', brand: item.brand, dailyAverageSales: toNumber(item.dailyAverageSales) });
+                    newProducts.push({
+                        id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        sku: item.sku,
+                        name: item.name || item.sku,
+                        stockLevel: item.stock || 0,
+                        costPrice: item.cost || 0,
+                        currentPrice: 0,
+                        averageDailySales: toNumber(item.dailyAverageSales),
+                        leadTimeDays: 30,
+                        status: 'Healthy',
+                        recommendation: 'New Product',
+                        daysRemaining: 999,
+                        channels: [],
+                        lastUpdated: reportDate,
+                        category: item.category || 'Uncategorized',
+                        subcategory: item.subcategory,
+                        brand: item.brand,
+                        dailyAverageSales: toNumber(item.dailyAverageSales),
+                        gradeLevel: item.gradeLevel ?? undefined,
+                        agedStockQty: item.agedStock ?? undefined,
+                        inventoryStatus: item.inventoryStatus ?? undefined,
+                        cartonDimensions: item.cartonDimensions ?? undefined,
+                    });
                 }
             });
             return recalculateProductMetrics(newProducts, priceHistoryMap, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);

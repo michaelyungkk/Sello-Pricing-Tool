@@ -5,6 +5,7 @@ import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, Ref
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import type { CohortShiftWarning } from '../../services/cohortAnalysis';
 
+
 interface ProductManagementPageProps {
     products: Product[];
     pricingRules: PricingRules;

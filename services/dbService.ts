@@ -189,6 +189,27 @@ export async function pullTransactionPage(
     }
 }
 
+export async function pullTransactionPageSince(
+    since: string,
+    page: number,
+    pageSize: number = 2000
+): Promise<{
+    success: boolean;
+    transactions?: PriceLog[];
+    totalRows?: number;
+    hasMore?: boolean;
+    error?: string
+}> {
+    try {
+        const res = await fetch(
+            `${BASE}/db-pull-transactions?page=${page}&pageSize=${pageSize}&since=${encodeURIComponent(since)}`
+        );
+        return await res.json();
+    } catch {
+        return { success: false, error: 'Network error' };
+    }
+}
+
 export async function checkVersion():
     Promise<{ success: boolean; lastPushAt: string | null; error?: string }> {
     try {

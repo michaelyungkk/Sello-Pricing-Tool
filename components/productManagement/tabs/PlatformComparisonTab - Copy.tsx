@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { SelectFilter } from '../../common/SelectFilter';
@@ -30,6 +31,12 @@ interface SortRule {
 }
 
 const SortConfigDropdown = ({ sortRules, setSortRules, availableColumns, platforms }: any) => {
+    const productMap = useMemo(() => {
+        const m = new Map<string, Product>();
+        (products || []).forEach((p: Product) => m.set(p.sku.toUpperCase(), p));
+        return m;
+    }, [products]);
+
     const [isOpen, setIsOpen] = useState(false);
     const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -166,12 +173,6 @@ export const PlatformComparisonTab: React.FC<PlatformComparisonTabProps> = ({
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
 
     const platformOptions = useMemo(() => Object.keys(pricingRules).sort(), [pricingRules]);
-
-    const productMap = useMemo(() => {
-        const m = new Map<string, Product>();
-        (products || []).forEach((p: Product) => m.set(p.sku.toUpperCase(), p));
-        return m;
-    }, [products]);
 
     useEffect(() => {
         if (selectedPlatforms.length === 0 && platformOptions.length > 0) {
