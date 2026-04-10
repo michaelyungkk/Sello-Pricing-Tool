@@ -8,10 +8,17 @@ const BASE = '/.netlify/functions';
 const MAX_HISTORY_RECORDS = 500;
 const MAX_PAYLOAD_BYTES   = 5 * 1024 * 1024; // 5MB hard ceiling
 
+function sizeOf(obj: any): number {
+    return new TextEncoder().encode(JSON.stringify(obj)).length;
+}
+
 function trimSnapshot(snapshot: Record<string, any>): Record<string, any> {
     const trimmed = { ...snapshot };
 
-    // Trim unbounded audit history arrays to most recent N records
+    // Promotions now live in their own DB table — strip from snapshot entirely
+    delete trimmed.promotions;
+
+    // Step 1: Trim unbounded audit history arrays to most recent N records
     if (Array.isArray(trimmed.priceChangeHistory)) {
         trimmed.priceChangeHistory = trimmed.priceChangeHistory.slice(0, MAX_HISTORY_RECORDS);
     }
@@ -22,18 +29,29 @@ function trimSnapshot(snapshot: Record<string, any>): Record<string, any> {
         trimmed.inventoryChangeHistory = trimmed.inventoryChangeHistory.slice(0, MAX_HISTORY_RECORDS);
     }
 
-    // Verify final payload is under limit
-    const json = JSON.stringify(trimmed);
-    const bytes = new TextEncoder().encode(json).length;
-    if (bytes > MAX_PAYLOAD_BYTES) {
-        console.warn(`[pushSnapshot] payload ${(bytes / 1024 / 1024).toFixed(2)}MB still large after trim — stripping histories entirely`);
-        trimmed.priceChangeHistory    = [];
-        trimmed.costChangeHistory     = [];
+    // Step 2: If still over limit, strip derived/recalculable data (rebuilt on pull)
+    if (sizeOf(trimmed) > MAX_PAYLOAD_BYTES) {
+        console.warn(`[pushSnapshot] still large after history trim — stripping derived fields`);
+        trimmed.optimalPriceResults    = {};
+        trimmed.benchmarkUpdateNotices = [];
+        trimmed.cohortSnapshot         = null;
+    }
+
+    // Step 3: If still over limit, strip histories entirely
+    if (sizeOf(trimmed) > MAX_PAYLOAD_BYTES) {
+        console.warn(`[pushSnapshot] still large — stripping histories entirely`);
+        trimmed.priceChangeHistory     = [];
+        trimmed.costChangeHistory      = [];
         trimmed.inventoryChangeHistory = [];
     }
 
-    const finalBytes = new TextEncoder().encode(JSON.stringify(trimmed)).length;
+    const finalBytes = sizeOf(trimmed);
     console.log(`[pushSnapshot] payload size: ${(finalBytes / 1024 / 1024).toFixed(2)}MB`);
+
+    if (finalBytes > MAX_PAYLOAD_BYTES) {
+        console.error(`[pushSnapshot] payload still ${(finalBytes / 1024 / 1024).toFixed(2)}MB after all trims`);
+    }
+
     return trimmed;
 }
 
@@ -248,4 +266,26 @@ export async function pullAdData():
         const res = await fetch(`${BASE}/db-pull-ad`);
         return await res.json();
     } catch { return { success: false, error: 'Network error' }; }
+}
+
+export async function pushPromotions(
+    password: string,
+    promotions: any[]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const res = await fetch(`${BASE}/db-push-promotions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password, promotions })
+        });
+        return await res.json();
+    } catch { return { success: false, error: 'Network error' }; }
+}
+
+export async function pullPromotions():
+    Promise<{ success: boolean; promotions?: any[]; error?: string }> {
+    try {
+        const res = await fetch(`${BASE}/db-pull-promotions`);
+        return await res.json();
+    } catch { return { success: false, promotions: [], error: 'Network error' }; }
 }

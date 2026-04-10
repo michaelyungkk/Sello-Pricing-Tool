@@ -66,7 +66,8 @@ import {
     pushTransactions, pullTransactions, getLatestTransactionDate,
     pullTransactionPage, pullTransactionPageSince, checkVersion,
     pushRefundsAndShipments, pullRefundsAndShipments,
-    pushAdData, pullAdData
+    pushAdData, pullAdData,
+    pushPromotions, pullPromotions
 } from '../services/dbService';
 import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
 
@@ -582,7 +583,6 @@ export const useAppState = () => {
         priceChangeHistory,
         costChangeHistory,
         inventoryChangeHistory,
-        promotions,
         learnedAliases,
         pricingRules,
         logisticsRules,
@@ -605,7 +605,7 @@ export const useAppState = () => {
         optimalPriceResults: Object.fromEntries(optimalPriceResults),
         benchmarkUpdateNotices,
     }), [products, priceChangeHistory, costChangeHistory,
-        inventoryChangeHistory, promotions, learnedAliases,
+        inventoryChangeHistory, learnedAliases,
         pricingRules, logisticsRules, strategyRules, searchConfig,
         thresholds, brandMap, categoryMap, skuFamilies, adGroups,
         inventoryTemplates, priceCheckTemplates, freightRates,
@@ -1253,6 +1253,17 @@ export const useAppState = () => {
             }
             console.log(`[push] refunds pushed`);
 
+            // Push promotions to separate table
+            const promoPushRes = await pushPromotions(
+                storedAdminPassword,
+                promotions || []
+            );
+            if (!promoPushRes.success) {
+                console.warn('[push] promotions push failed (non-fatal):', promoPushRes.error);
+            } else {
+                console.log(`[push] promotions pushed — ${promotions?.length || 0} campaigns`);
+            }
+
             // Push ad campaign data to separate table
             const adPushRes = await pushAdData(
                 storedAdminPassword,
@@ -1283,7 +1294,7 @@ export const useAppState = () => {
             setPushTotal(0);
         }
     }, [isAdminMode, storedAdminPassword, getSharedSnapshot,
-        salesHistory, refundHistory, adSnapshots, adRosterChanges, adBudgets]);
+        salesHistory, refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets]);
 
     const applyLoadedState = useCallback((
         snapshot: any,
@@ -1304,7 +1315,6 @@ export const useAppState = () => {
         setInventoryChangeHistory(
             Array.isArray(m.inventoryChangeHistory) ? m.inventoryChangeHistory : []
         );
-        setPromotions(Array.isArray(m.promotions) ? m.promotions : []);
         setLearnedAliases(m.learnedAliases || {});
         setPricingRules(m.pricingRules || DEFAULT_PRICING_RULES);
         setLogisticsRules(
@@ -1489,6 +1499,15 @@ export const useAppState = () => {
                 console.warn('[sync] ad data pull failed (non-fatal):', adRes.error);
             }
 
+            // Pull promotions from separate table
+            const promoRes = await pullPromotions();
+            if (promoRes.success && Array.isArray(promoRes.promotions)) {
+                setPromotions(promoRes.promotions);
+                console.log(`[sync] promotions loaded — ${promoRes.promotions.length} campaigns`);
+            } else {
+                console.warn('[sync] promotions pull failed (non-fatal):', promoRes.error);
+            }
+
             applyLoadedState(incoming, allTransactions, refunds);
 
             const time = masterRes.lastUpdatedAt || new Date().toISOString();
@@ -1660,6 +1679,61 @@ export const useAppState = () => {
     }, [products, priceHistoryMap, priceChangeHistory, pricingRules, promotions,
         learnedAliases, cohortSnapshot, optimalPriceResults, salesHistory]);
 
+    // ── Dirty-tracking wrappers ──────────────────────────────────────────────
+    // These replace the raw setters exported to consumers so that any in-app
+    // edit (new promotion, saved template, rule change, etc.) automatically
+    // marks the app dirty and prompts a DB push — same as file uploads do.
+    const updatePromotions = useCallback((v: React.SetStateAction<PromotionEvent[]>) => {
+        setPromotions(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const updateInventoryTemplates = useCallback((v: React.SetStateAction<InventoryTemplate[]>) => {
+        setInventoryTemplates(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const updatePricingRules = useCallback((v: React.SetStateAction<PricingRules>) => {
+        setPricingRules(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const updateLogisticsRules = useCallback((v: React.SetStateAction<LogisticsRule[]>) => {
+        setLogisticsRules(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const updateStrategyRules = useCallback((v: React.SetStateAction<StrategyConfig>) => {
+        setStrategyRules(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const updateSearchConfig = useCallback((v: React.SetStateAction<SearchConfig>) => {
+        setSearchConfig(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const updateSkuFamilies = useCallback((v: React.SetStateAction<SkuFamily[]>) => {
+        setSkuFamilies(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const updateAdGroups = useCallback((v: React.SetStateAction<AdGroup[]>) => {
+        setAdGroups(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const updateLearnedAliases = useCallback((v: React.SetStateAction<Record<string, string>>) => {
+        setLearnedAliases(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+    const updateFreightRates = useCallback((v: React.SetStateAction<FreightRate[]>) => {
+        setFreightRates(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
+
     return {
         t,
         products,
@@ -1669,7 +1743,7 @@ export const useAppState = () => {
         refundHistory,
         setRefundHistory,
         freightRates,
-        setFreightRates,
+        setFreightRates: updateFreightRates,
         handleFreightRatesUpload,
         priceChangeHistory,
         setPriceChangeHistory,
@@ -1678,25 +1752,25 @@ export const useAppState = () => {
         inventoryChangeHistory,
         setInventoryChangeHistory,
         promotions,
-        setPromotions,
+        setPromotions: updatePromotions,
         learnedAliases,
-        setLearnedAliases,
+        setLearnedAliases: updateLearnedAliases,
         inventoryTemplates,
-        setInventoryTemplates,
+        setInventoryTemplates: updateInventoryTemplates,
         priceCheckTemplates,
         handleSavePriceCheckTemplates,
         pricingRules,
-        setPricingRules,
+        setPricingRules: updatePricingRules,
         logisticsRules,
-        setLogisticsRules,
+        setLogisticsRules: updateLogisticsRules,
         strategyRules,
-        setStrategyRules,
+        setStrategyRules: updateStrategyRules,
         searchConfig,
-        setSearchConfig,
+        setSearchConfig: updateSearchConfig,
         skuFamilies,
-        setSkuFamilies,
+        setSkuFamilies: updateSkuFamilies,
         adGroups,
-        setAdGroups,
+        setAdGroups: updateAdGroups,
         onSyncFromFamilies,
         onAddAdGroup,
         onEditAdGroup,
