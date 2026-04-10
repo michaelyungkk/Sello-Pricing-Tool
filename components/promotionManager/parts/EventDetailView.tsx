@@ -37,20 +37,26 @@ const DiscountRow: React.FC<{
     item: any;
     isSkuScope: boolean;
     onUpdateItem: (sku: string, updates: any) => void;
-    children: (discountValue: string, handlers: {
+    children: (discountValue: string, discountType: string, handlers: {
         onTypeChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
         onValueChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
         onValueBlur: () => void;
     }) => React.ReactNode;
 }> = ({ item, isSkuScope, onUpdateItem, children }) => {
     const [localValue, setLocalValue] = React.useState(String(item.discountValue || ''));
+    const [localType, setLocalType] = React.useState(item.discountType || 'FIXED_PRICE');
 
     // Sync if parent value changes (e.g. batch upload)
     React.useEffect(() => {
         setLocalValue(String(item.discountValue || ''));
     }, [item.discountValue]);
 
+    React.useEffect(() => {
+        setLocalType(item.discountType || 'FIXED_PRICE');
+    }, [item.discountType]);
+
     const onTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setLocalType(e.target.value); // update local immediately so select feels responsive
         onUpdateItem(item.sku, { discountType: e.target.value });
     };
     const onValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,7 +69,7 @@ const DiscountRow: React.FC<{
         }
     };
 
-    return <>{children(localValue, { onTypeChange, onValueChange, onValueBlur })}</>;
+    return <>{children(localValue, localType, { onTypeChange, onValueChange, onValueBlur })}</>;
 };
 
 export const EventDetailView = ({ promo, allPromotions = [], products, priceHistoryMap, priceChangeHistory, onBack, onAddProducts, onDeleteItem, onUpdateMeta, onUpdateItem, themeColor }: EventDetailViewProps) => {
@@ -72,12 +78,6 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
     const [activeSection, setActiveSection] = useState<'nomination' | 'analytics'>('nomination');
     
     // Lifecycle windows & effectiveness
-    const productMap = useMemo(() => {
-        const m = new Map<string, Product>();
-        (products || []).forEach(p => m.set(p.sku.toUpperCase(), p));
-        return m;
-    }, [products]);
-
     const nowKey = useMemo(() => asDateKey(new Date())!, []);
     const windows = useMemo(() => computePromoWindows(promo, nowKey), [promo, nowKey]);
     
@@ -110,7 +110,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
             } else {
                 const item = (promo?.items || []).find((i: any) => i.sku.toUpperCase() === skuUp);
                 if (!item) return;
-                const product = productMap.get(skuUp);
+                const product = products.find(p => p.sku.toUpperCase() === skuUp);
                 next.set(skuUp, computePromoEffectiveness(promo, item.sku, txMap, priceChangeHistory || [], product));
             }
         });
@@ -238,7 +238,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                 let pastDiscountCount = 0;
 
                 (pastP.items || []).forEach(item => {
-                    const product = productMap.get(item.sku.toUpperCase());
+                    const product = products.find(prod => prod.sku === item.sku);
                     // Heavy computation, but necessary for data-driven insights
                     const metrics = computePromoEffectiveness(pastP, item.sku, txMap, priceChangeHistory || [], product);
                     
@@ -591,11 +591,11 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                         </td>
                                         <td className="r text-gray-500 font-medium">{formatSmartMoney(item.baselinePrice)}</td>
                                         <DiscountRow item={item} isSkuScope={isSkuScope} onUpdateItem={onUpdateItem}>
-                                            {(localValue, { onTypeChange, onValueChange, onValueBlur }) => (<>
+                                            {(localValue, localType, { onTypeChange, onValueChange, onValueBlur }) => (<>
                                         <td>
                                             {isSkuScope ? (
                                                 <select
-                                                    value={item.discountType || 'FIXED_PRICE'}
+                                                    value={localType}
                                                     onChange={onTypeChange}
                                                     className="text-xs font-bold border-gray-200 rounded-lg p-1.5 bg-white group-hover:border-theme-20 transition-colors focus:ring-2 focus:ring-theme"
                                                 >

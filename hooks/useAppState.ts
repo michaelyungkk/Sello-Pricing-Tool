@@ -239,6 +239,7 @@ export const useAppState = () => {
     const [salesHistory, setSalesHistory] = useState<PriceLog[]>([]);
     const [refundHistory, setRefundHistory] = useState<RefundLog[]>([]);
     const [freightRates, setFreightRates] = useState<FreightRate[]>([]);
+    const [isFreightModalOpen, setIsFreightModalOpen] = useState<boolean>(false);
     const [priceChangeHistory, setPriceChangeHistory] = useState<PriceChangeRecord[]>([]);
     const [costChangeHistory, setCostChangeHistory] = useState<CostChangeRecord[]>([]);
     const [inventoryChangeHistory, setInventoryChangeHistory] = useState<InventoryChangeRecord[]>([]);
@@ -1745,6 +1746,8 @@ export const useAppState = () => {
         freightRates,
         setFreightRates: updateFreightRates,
         handleFreightRatesUpload,
+        isFreightModalOpen,
+        setIsFreightModalOpen,
         priceChangeHistory,
         setPriceChangeHistory,
         costChangeHistory,

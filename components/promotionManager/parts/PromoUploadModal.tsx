@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Upload, X, Loader2, Settings2, AlertCircle, Check, ChevronRight, ArrowRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../../../types';
@@ -22,6 +23,73 @@ interface ParsedRow {
 }
 
 type Step = 'upload' | 'map-columns' | 'map-skus' | 'confirm';
+
+// Controlled SKU autocomplete — replaces native datalist to avoid auto-close on selection
+const SkuAutocomplete: React.FC<{
+    value: string;
+    products: { sku: string; name?: string }[];
+    onChange: (val: string) => void;
+    placeholder?: string;
+}> = ({ value, products, onChange, placeholder }) => {
+    const [open, setOpen] = useState(false);
+    const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const matches = useMemo(() => {
+        if (!value || value.length < 1) return [];
+        const q = value.toUpperCase();
+        return products
+            .filter(p => p.sku.toUpperCase().includes(q))
+            .slice(0, 8);
+    }, [value, products]);
+
+    const openDropdown = () => {
+        if (inputRef.current) {
+            const rect = inputRef.current.getBoundingClientRect();
+            setPos({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+        }
+        setOpen(true);
+    };
+
+    const selectOption = (sku: string) => {
+        onChange(sku);
+        setOpen(false);
+    };
+
+    return (
+        <>
+            <input
+                ref={inputRef}
+                type="text"
+                value={value}
+                onChange={e => { onChange(e.target.value.toUpperCase()); openDropdown(); }}
+                onFocus={openDropdown}
+                onBlur={() => setTimeout(() => setOpen(false), 150)}
+                placeholder={placeholder || 'Type master SKU…'}
+                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:border-gray-400"
+            />
+            {open && matches.length > 0 && createPortal(
+                <div
+                    style={{ position: 'fixed', top: pos.top, left: pos.left, width: Math.max(pos.width, 220), zIndex: 9999 }}
+                    className="bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden"
+                    onMouseDown={e => e.preventDefault()}
+                >
+                    {matches.map(p => (
+                        <button
+                            key={p.sku}
+                            onClick={() => selectOption(p.sku)}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0"
+                        >
+                            <div className="text-xs font-bold font-mono text-gray-800">{p.sku}</div>
+                            {p.name && <div className="text-[10px] text-gray-400 truncate mt-0.5">{p.name}</div>}
+                        </button>
+                    ))}
+                </div>,
+                document.body
+            )}
+        </>
+    );
+};
 
 export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, themeColor, onClose, onConfirm }) => {
     const [step, setStep] = useState<Step>('upload');
@@ -301,13 +369,11 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                                         <td><span className="sku">{r.rawSku}</span></td>
                                         <td className="r"><span className="v-num">{r.rawValue}</span></td>
                                         <td>
-                                            <input
-                                                type="text"
-                                                list="master-sku-list"
+                                            <SkuAutocomplete
                                                 value={override}
-                                                onChange={e => setSkuOverrides(prev => ({ ...prev, [r.rawSku]: e.target.value.toUpperCase() }))}
+                                                products={products}
+                                                onChange={val => setSkuOverrides(prev => ({ ...prev, [r.rawSku]: val }))}
                                                 placeholder="Type master SKU…"
-                                                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-gray-400"
                                             />
                                         </td>
                                         <td className="c">
@@ -323,9 +389,7 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                             })}
                         </tbody>
                     </table>
-                    <datalist id="master-sku-list">
-                        {products.map(p => <option key={p.sku} value={p.sku} />)}
-                    </datalist>
+
                 </div>
 
                 <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
