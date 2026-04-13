@@ -7,6 +7,7 @@ const BASE = '/.netlify/functions';
 // Products + config alone are ~1-2MB; histories can grow to 10MB+ unchecked.
 const MAX_HISTORY_RECORDS = 500;
 const MAX_PAYLOAD_BYTES   = 5 * 1024 * 1024; // 5MB hard ceiling
+const SNAPSHOT_CHUNK_BYTES = 350 * 1024; // keep each request comfortably below 6MB function limit
 
 function sizeOf(obj: any): number {
     return new TextEncoder().encode(JSON.stringify(obj)).length;
@@ -28,16 +29,7 @@ function trimSnapshot(snapshot: Record<string, any>): Record<string, any> {
     if (Array.isArray(trimmed.inventoryChangeHistory)) {
         trimmed.inventoryChangeHistory = trimmed.inventoryChangeHistory.slice(0, MAX_HISTORY_RECORDS);
     }
-
-    // Step 2: If still over limit, strip derived/recalculable data (rebuilt on pull)
-    if (sizeOf(trimmed) > MAX_PAYLOAD_BYTES) {
-        console.warn(`[pushSnapshot] still large after history trim — stripping derived fields`);
-        trimmed.optimalPriceResults    = {};
-        trimmed.benchmarkUpdateNotices = [];
-        trimmed.cohortSnapshot         = null;
-    }
-
-    // Step 3: If still over limit, strip histories entirely
+    // Step 2: If still over limit, strip histories entirely
     if (sizeOf(trimmed) > MAX_PAYLOAD_BYTES) {
         console.warn(`[pushSnapshot] still large — stripping histories entirely`);
         trimmed.priceChangeHistory     = [];
@@ -47,10 +39,6 @@ function trimSnapshot(snapshot: Record<string, any>): Record<string, any> {
 
     const finalBytes = sizeOf(trimmed);
     console.log(`[pushSnapshot] payload size: ${(finalBytes / 1024 / 1024).toFixed(2)}MB`);
-
-    if (finalBytes > MAX_PAYLOAD_BYTES) {
-        console.error(`[pushSnapshot] payload still ${(finalBytes / 1024 / 1024).toFixed(2)}MB after all trims`);
-    }
 
     return trimmed;
 }
@@ -71,19 +59,61 @@ export async function pushSnapshot(password: string, snapshot: object):
     Promise<{ success: boolean; pushedAt?: string; error?: string }> {
     try {
         const safe = trimSnapshot(snapshot as Record<string, any>);
-        const res = await fetch(`${BASE}/db-push`, {
+        const snapshotJson = JSON.stringify(safe);
+        const bytes = new TextEncoder().encode(snapshotJson).length;
+        const totalChunks = Math.max(1, Math.ceil(bytes / SNAPSHOT_CHUNK_BYTES));
+        const uploadId = `snapshot-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        console.log(
+            `[pushSnapshot] chunked upload start: ${(
+                bytes / 1024 / 1024
+            ).toFixed(2)}MB total, ${totalChunks} chunks @ ~${Math.round(SNAPSHOT_CHUNK_BYTES / 1024)}KB`
+        );
+
+        const beginRes = await fetch(`${BASE}/db-push`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password, snapshot: safe })
+            body: JSON.stringify({ password, action: 'begin', uploadId, totalChunks })
         });
-        return await res.json();
+        const beginData = await beginRes.json();
+        if (!beginData.success) return beginData;
+
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * SNAPSHOT_CHUNK_BYTES;
+            const end = start + SNAPSHOT_CHUNK_BYTES;
+            const chunkData = snapshotJson.slice(start, end);
+            const chunkBytes = new TextEncoder().encode(chunkData).length;
+            console.log(
+                `[pushSnapshot] uploading chunk ${i + 1}/${totalChunks} (${(chunkBytes / 1024).toFixed(1)}KB)`
+            );
+            const chunkRes = await fetch(`${BASE}/db-push`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password, action: 'chunk', uploadId, chunkIndex: i, chunkData })
+            });
+            const chunkResult = await chunkRes.json();
+            if (!chunkResult.success) return chunkResult;
+        }
+
+        console.log('[pushSnapshot] finalizing chunked upload');
+        const finalizeRes = await fetch(`${BASE}/db-push`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password, action: 'finalize', uploadId })
+        });
+        return await finalizeRes.json();
     } catch { return { success: false, error: 'Network error' }; }
 }
 
 export async function pullSnapshot():
-    Promise<{ success: boolean; snapshot?: any; lastUpdatedAt?: string; error?: string }> {
+    Promise<{ success: boolean; snapshot?: any; unchanged?: boolean; lastUpdatedAt?: string; error?: string }> {
+    return pullSnapshotIfUpdated();
+}
+
+export async function pullSnapshotIfUpdated(ifUpdatedSince?: string):
+    Promise<{ success: boolean; snapshot?: any; unchanged?: boolean; lastUpdatedAt?: string; error?: string }> {
     try {
-        const res = await fetch(`${BASE}/db-pull`);
+        const qs = ifUpdatedSince ? `?ifUpdatedSince=${encodeURIComponent(ifUpdatedSince)}` : '';
+        const res = await fetch(`${BASE}/db-pull${qs}`);
         return await res.json();
     } catch { return { success: false, error: 'Network error' }; }
 }
@@ -289,3 +319,4 @@ export async function pullPromotions():
         return await res.json();
     } catch { return { success: false, promotions: [], error: 'Network error' }; }
 }
+

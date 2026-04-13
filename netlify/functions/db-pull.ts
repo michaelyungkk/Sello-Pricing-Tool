@@ -16,6 +16,8 @@ export default async (req: Request) => {
             { status: 405, headers: CORS }
         );
     try {
+        const url = new URL(req.url);
+        const ifUpdatedSince = url.searchParams.get('ifUpdatedSince');
         const sql = neon(process.env.NETLIFY_DATABASE_URL!);
         const rows = await sql`
             SELECT data, updated_at FROM app_snapshot WHERE id = 1
@@ -26,11 +28,21 @@ export default async (req: Request) => {
                 { status: 404, headers: CORS }
             );
         const { data, updated_at } = rows[0];
+        if (ifUpdatedSince && updated_at) {
+            const clientTs = new Date(ifUpdatedSince);
+            const serverTs = new Date(updated_at);
+            if (!Number.isNaN(clientTs.getTime()) && !Number.isNaN(serverTs.getTime()) && serverTs <= clientTs) {
+                return new Response(
+                    JSON.stringify({ success: true, unchanged: true, lastUpdatedAt: updated_at }),
+                    { status: 200, headers: CORS }
+                );
+            }
+        }
         let parsed = {};
         try { parsed = typeof data === 'string' ? JSON.parse(data) : data; }
         catch { parsed = {}; }
         return new Response(
-            JSON.stringify({ success: true, snapshot: parsed, lastUpdatedAt: updated_at }),
+            JSON.stringify({ success: true, snapshot: parsed, unchanged: false, lastUpdatedAt: updated_at }),
             { status: 200, headers: CORS }
         );
     } catch (error: any) {

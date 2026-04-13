@@ -63,6 +63,7 @@ import { resolveAttribute } from '../services/mappingService';
 import { redistributeAdSpend } from '../services/adSpreadService';
 import {
     verifyPassword, pushSnapshot, pullSnapshot,
+    pullSnapshotIfUpdated,
     pushTransactions, pullTransactions, getLatestTransactionDate,
     pullTransactionPage, pullTransactionPageSince, checkVersion,
     pushRefundsAndShipments, pullRefundsAndShipments,
@@ -1373,27 +1374,39 @@ export const useAppState = () => {
         setSyncProgress(0);
         setSyncTotal(0);
         try {
-            const masterRes = await pullSnapshot();
-            if (!masterRes.success || !masterRes.snapshot) {
+            const lastKnownSnapshotUpdatedAt = localStorage.getItem('sello_snapshot_updated_at') || undefined;
+            const masterRes = await pullSnapshotIfUpdated(lastKnownSnapshotUpdatedAt);
+            if (!masterRes.success) {
                 setSyncStatus('error');
                 setSyncStep('');
                 return;
             }
-            setSyncStep('Loading settings...');
 
-            const incoming = masterRes.snapshot;
-            const incomingFamilies: SkuFamily[] =
-                Array.isArray(incoming.skuFamilies)
-                    ? incoming.skuFamilies : [];
-            const localFamilies = skuFamilies || [];
-            const conflicts = localFamilies.filter((lf: SkuFamily) =>
-                !incomingFamilies.some((ifam: SkuFamily) => ifam.id === lf.id)
-            );
-            if (conflicts.length > 0) {
-                setPendingFamilyConflicts(conflicts);
-                setSyncStatus('idle');
+            const hasSnapshotUpdate = !masterRes.unchanged;
+            const incoming = hasSnapshotUpdate ? masterRes.snapshot : null;
+            if (hasSnapshotUpdate && !incoming) {
+                setSyncStatus('error');
                 setSyncStep('');
                 return;
+            }
+
+            if (hasSnapshotUpdate) {
+                setSyncStep('Loading settings...');
+                const incomingFamilies: SkuFamily[] =
+                    Array.isArray(incoming.skuFamilies)
+                        ? incoming.skuFamilies : [];
+                const localFamilies = skuFamilies || [];
+                const conflicts = localFamilies.filter((lf: SkuFamily) =>
+                    !incomingFamilies.some((ifam: SkuFamily) => ifam.id === lf.id)
+                );
+                if (conflicts.length > 0) {
+                    setPendingFamilyConflicts(conflicts);
+                    setSyncStatus('idle');
+                    setSyncStep('');
+                    return;
+                }
+            } else {
+                setSyncStep('Snapshot unchanged — checking transactions...');
             }
 
             // Incremental pull — only fetch rows newer than what's already in local cache
@@ -1509,16 +1522,34 @@ export const useAppState = () => {
                 console.warn('[sync] promotions pull failed (non-fatal):', promoRes.error);
             }
 
-            applyLoadedState(incoming, allTransactions, refunds);
+            if (hasSnapshotUpdate && incoming) {
+                applyLoadedState(incoming, allTransactions, refunds);
+            } else {
+                setRefundHistory(Array.isArray(refunds) ? refunds : []);
+                const redistributed = redistributeAdSpend(allTransactions, adGroups);
+                setSalesHistory(redistributed);
+                const finalProducts = recalculateProductMetrics(
+                    products,
+                    redistributed,
+                    velocityLookback,
+                    thresholds,
+                    pricingRules,
+                    brandMap,
+                    categoryMap
+                );
+                setProducts(finalProducts);
+            }
 
             const time = masterRes.lastUpdatedAt || new Date().toISOString();
+            localStorage.setItem('sello_snapshot_updated_at', time);
             setLastSyncedAt(time);
             localStorage.setItem('sello_last_synced_at', time);
 
             // Save to local cache with current version
             const versionRes = await checkVersion();
             const version = versionRes.lastPushAt || time;
-            await saveToCache(incoming, allTransactions, refunds, [], version);
+            const snapshotForCache = hasSnapshotUpdate && incoming ? incoming : getSharedSnapshot();
+            await saveToCache(snapshotForCache, allTransactions, refunds, [], version);
 
             console.log(`[sync] complete — cached version: ${version}`);
             setSyncProgress(0);
@@ -1532,7 +1563,7 @@ export const useAppState = () => {
             setSyncProgress(0);
             setSyncTotal(0);
         }
-    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState]);
+    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, pricingRules, brandMap, categoryMap, getSharedSnapshot]);
 
     const resolveConflicts = useCallback(async (keepLocal: boolean) => {
         const res = await pullSnapshot();

@@ -34,6 +34,17 @@ const makeRow = (overrides?: Partial<SimRow>): SimRow => ({
     ...overrides,
 });
 
+const parsePastedNumber = (value: string): number | null => {
+    if (!value) return null;
+    const cleaned = value
+        .replace(/[£$€¥₹₩₽₪₫฿₱]/g, '')
+        .replace(/[,\s\u00A0\u202F]/g, '')
+        .trim();
+    if (!cleaned) return null;
+    const n = parseFloat(cleaned);
+    return Number.isFinite(n) ? n : null;
+};
+
 function calcRow(r: SimRow) {
     const caBaseline       = r.caPrice * r.caBaselinePct;
     const caBaselineMargin = caBaseline > 0 ? (caBaseline - r.cogs) / caBaseline : 0;
@@ -45,16 +56,14 @@ function calcRow(r: SimRow) {
     const targetPriceMargin = targetPrice > 0
         ? (targetPrice * (1 - overheadFrac) - baseCost) / targetPrice : NaN;
     // Whichever field was last typed drives the other
-    const effectiveProposedPrice = r.lastEdited === 'price'
-        ? r.proposedPrice
-        : (r.proposedMarginPct > 0
-            ? baseCost / (1 - r.proposedMarginPct / 100 - overheadFrac)
-            : 0);
-    const derivedMarginPct = r.lastEdited === 'margin'
-        ? r.proposedMarginPct
-        : (effectiveProposedPrice > 0
-            ? (effectiveProposedPrice * (1 - overheadFrac) - baseCost) / effectiveProposedPrice * 100
-            : 0);
+    // Price should always be the driver unless user explicitly entered a positive margin.
+    const hasExplicitMargin = r.lastEdited === 'margin' && r.proposedMarginPct > 0;
+    const effectiveProposedPrice = hasExplicitMargin
+        ? (baseCost / (1 - r.proposedMarginPct / 100 - overheadFrac))
+        : r.proposedPrice;
+    const derivedMarginPct = effectiveProposedPrice > 0
+        ? (effectiveProposedPrice * (1 - overheadFrac) - baseCost) / effectiveProposedPrice * 100
+        : (hasExplicitMargin ? r.proposedMarginPct : 0);
     const actualMargin = effectiveProposedPrice > 0
         ? (effectiveProposedPrice * (1 - overheadFrac) - baseCost) / effectiveProposedPrice : NaN;
     const floorPrice       = baseCost > 0 ? baseCost / 0.70 : 0;
@@ -169,6 +178,32 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
         setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
     }, []);
 
+    const handleProposedPricePaste = useCallback((startIndex: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text');
+        const lines = text.trim().split(/\r?\n/).filter(Boolean);
+        if (!lines.length) return;
+
+        const values = lines.map(line => {
+            const cols = line.split('\t').map(c => c.trim()).filter(Boolean);
+            if (!cols.length) return null;
+            return parsePastedNumber(cols[0]);
+        });
+
+        setRows(prev => prev.map((r, idx) => {
+            const offset = idx - startIndex;
+            if (offset < 0 || offset >= values.length) return r;
+            const v = values[offset];
+            if (v === null) return r;
+            return {
+                ...r,
+                proposedPrice: v,
+                proposedMarginPct: 0,
+                lastEdited: 'price'
+            };
+        }));
+    }, []);
+
     const addRow = useCallback(() => {
         setRows(prev => [...prev, makeRow({ overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType })]);
     }, [gOverhead, gMult, gBase]);
@@ -186,6 +221,29 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
         const text = e.clipboardData.getData('text');
         const lines = text.trim().split(/\r?\n/).filter(Boolean);
         if (!lines.length) return;
+        const parsedNumberRows = lines.map(line => {
+            const cols = line.split('\t').map(c => c.trim()).filter(Boolean);
+            if (cols.length !== 1) return null;
+            return parsePastedNumber(cols[0]);
+        });
+
+        // If paste contains one numeric value per line, apply directly to Proposed Price column.
+        const isProposedPriceList = parsedNumberRows.every(v => v !== null);
+        if (isProposedPriceList) {
+            const values = parsedNumberRows as number[];
+            setRows(prev => prev.map((r, idx) => {
+                const v = values[idx];
+                if (v === undefined) return r;
+                return {
+                    ...r,
+                    proposedPrice: v,
+                    proposedMarginPct: 0,
+                    lastEdited: 'price'
+                };
+            }));
+            return;
+        }
+
         const newRows: SimRow[] = lines.map(line => {
             const cols = line.split('\t').map(c => c.trim());
             const sku  = cols[0] || '';
@@ -359,6 +417,13 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                             {rows_calc.map((row, idx) => {
                                 const hasPrice   = row.effectiveProposedPrice > 0;
                                 const belowFloorRow = hasPrice && row.floorPrice > 0 && row.effectiveProposedPrice < row.floorPrice;
+                                const displayProposedPrice = hasPrice && Number.isFinite(row.effectiveProposedPrice)
+                                    ? Number(row.effectiveProposedPrice.toFixed(2))
+                                    : '';
+                                const hasExplicitMargin = row.lastEdited === 'margin' && row.proposedMarginPct > 0;
+                                const displayDerivedMargin = hasPrice && Number.isFinite(row.derivedMarginPct)
+                                    ? Number(row.derivedMarginPct.toFixed(1))
+                                    : '';
                                 const rowCls = !hasPrice ? '' :
                                     !isNaN(row.actualMargin) && row.actualMargin >= row.targetMargin ? 'tr-sel' :
                                     !isNaN(row.actualMargin) && row.actualMargin >= 0.25 ? 'tr-warn' : 'tr-neg';
@@ -420,9 +485,8 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                                 <span className="text-gray-400 text-[10px] mr-0.5 select-none">£</span>
                                                 <input
                                                     type="number" step={0.01} min={0}
-                                                    value={row.lastEdited === 'price'
-                                                        ? (row.proposedPrice || '')
-                                                        : (row.effectiveProposedPrice > 0 ? parseFloat(row.effectiveProposedPrice.toFixed(2)) : '')}
+                                                    value={displayProposedPrice}
+                                                    onPaste={e => handleProposedPricePaste(idx, e)}
                                                     onChange={e => {
                                                         const v = parseFloat(e.target.value) || 0;
                                                         update(row.id, {
@@ -441,9 +505,9 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                             <div className="flex items-center h-9 px-2 overflow-hidden hover:bg-blue-50/30 focus-within:bg-blue-50/40">
                                                 <input
                                                     type="number" step={0.5} min={0} max={99}
-                                                    value={row.lastEdited === 'margin'
-                                                        ? (row.proposedMarginPct || '')
-                                                        : (row.derivedMarginPct > 0 ? parseFloat(row.derivedMarginPct.toFixed(1)) : '')}
+                                                    value={hasExplicitMargin
+                                                        ? row.proposedMarginPct
+                                                        : displayDerivedMargin}
                                                     onChange={e => {
                                                         const v = parseFloat(e.target.value) || 0;
                                                         update(row.id, {
@@ -515,3 +579,4 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
         </div>
     );
 };
+

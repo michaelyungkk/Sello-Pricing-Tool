@@ -55,6 +55,31 @@ export default async (req: Request) => {
         `;
 
         await sql`
+            CREATE TABLE IF NOT EXISTS app_snapshot_uploads (
+                upload_id TEXT PRIMARY KEY,
+                total_chunks INTEGER NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        `;
+
+        await sql`
+            CREATE TABLE IF NOT EXISTS app_snapshot_chunks (
+                upload_id TEXT NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                chunk_data TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                PRIMARY KEY (upload_id, chunk_index),
+                FOREIGN KEY (upload_id) REFERENCES app_snapshot_uploads(upload_id) ON DELETE CASCADE
+            )
+        `;
+
+        await sql`
+            CREATE INDEX IF NOT EXISTS idx_snapshot_chunks_upload
+            ON app_snapshot_chunks(upload_id)
+        `;
+
+        await sql`
             CREATE TABLE IF NOT EXISTS refund_history (
                 id TEXT PRIMARY KEY,
                 sku TEXT NOT NULL,
