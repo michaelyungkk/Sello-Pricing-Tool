@@ -2,11 +2,8 @@ import { PriceLog } from '../types';
 
 const BASE = '/.netlify/functions';
 
-// Netlify function body limit is 6MB. We stay well under by trimming
-// history arrays (audit logs) to the most recent entries before pushing.
-// Products + config alone are ~1-2MB; histories can grow to 10MB+ unchecked.
-const MAX_HISTORY_RECORDS = 500;
-const MAX_PAYLOAD_BYTES   = 5 * 1024 * 1024; // 5MB hard ceiling
+// Chunked snapshot upload handles large payloads.
+// Do not trim history logs: they are critical app data.
 const SNAPSHOT_CHUNK_BYTES = 350 * 1024; // keep each request comfortably below 6MB function limit
 
 function sizeOf(obj: any): number {
@@ -18,25 +15,6 @@ function trimSnapshot(snapshot: Record<string, any>): Record<string, any> {
 
     // Promotions now live in their own DB table — strip from snapshot entirely
     delete trimmed.promotions;
-
-    // Step 1: Trim unbounded audit history arrays to most recent N records
-    if (Array.isArray(trimmed.priceChangeHistory)) {
-        trimmed.priceChangeHistory = trimmed.priceChangeHistory.slice(0, MAX_HISTORY_RECORDS);
-    }
-    if (Array.isArray(trimmed.costChangeHistory)) {
-        trimmed.costChangeHistory = trimmed.costChangeHistory.slice(0, MAX_HISTORY_RECORDS);
-    }
-    if (Array.isArray(trimmed.inventoryChangeHistory)) {
-        trimmed.inventoryChangeHistory = trimmed.inventoryChangeHistory.slice(0, MAX_HISTORY_RECORDS);
-    }
-    // Step 2: If still over limit, strip histories entirely
-    if (sizeOf(trimmed) > MAX_PAYLOAD_BYTES) {
-        console.warn(`[pushSnapshot] still large — stripping histories entirely`);
-        trimmed.priceChangeHistory     = [];
-        trimmed.costChangeHistory      = [];
-        trimmed.inventoryChangeHistory = [];
-    }
-
     const finalBytes = sizeOf(trimmed);
     console.log(`[pushSnapshot] payload size: ${(finalBytes / 1024 / 1024).toFixed(2)}MB`);
 
@@ -319,4 +297,5 @@ export async function pullPromotions():
         return await res.json();
     } catch { return { success: false, promotions: [], error: 'Network error' }; }
 }
+
 

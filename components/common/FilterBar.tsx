@@ -20,6 +20,17 @@ export interface FilterBarProps {
     onChange: (selected: string[]) => void;
   }>;
 
+  rangeFilters?: Array<{
+    key: string;
+    label: string;
+    minValue: string;
+    maxValue: string;
+    onMinChange: (val: string) => void;
+    onMaxChange: (val: string) => void;
+    minPlaceholder?: string;
+    maxPlaceholder?: string;
+  }>;
+
   pillGroup?: {
     options: Array<{ key: string; label: string }>;
     active: string;
@@ -41,6 +52,8 @@ export interface FilterBarProps {
   onAuditToggle?: () => void;
 
   rightSlot?: React.ReactNode;
+  subRowLeft?: React.ReactNode;
+  subRowRight?: React.ReactNode;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -50,12 +63,15 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   searchTags,
   onSearchTagsChange,
   multiSelects = [],
+  rangeFilters = [],
   pillGroup,
   toggles = [],
   showAudit,
   auditActive,
   onAuditToggle,
   rightSlot,
+  subRowLeft,
+  subRowRight,
 }) => {
   const [openDropdownKey, setOpenDropdownKey] = useState<string | null>(null);
   const [dropdownSearch, setDropdownSearch] = useState<Record<string, string>>({});
@@ -116,15 +132,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     let count = 0;
     if (isTagMode ? (searchTags!.length > 0 || tagInput) : searchValue) count++;
     multiSelects.forEach(m => { if (m.selected.length > 0) count++; });
+    rangeFilters.forEach(r => { if ((r.minValue || '').trim() || (r.maxValue || '').trim()) count++; });
     if (pillGroup && pillGroup.options.length > 0 && pillGroup.active !== pillGroup.options[0].key) count++;
     toggles.forEach(t => { if (t.active) count++; });
     return count;
-  }, [searchValue, searchTags, tagInput, isTagMode, multiSelects, pillGroup, toggles]);
+  }, [searchValue, searchTags, tagInput, isTagMode, multiSelects, rangeFilters, pillGroup, toggles]);
 
   const handleClearAll = () => {
     if (onSearchChange) onSearchChange('');
     if (isTagMode) { onSearchTagsChange!([]); setTagInput(''); }
     multiSelects.forEach(m => m.onChange([]));
+    rangeFilters.forEach(r => { r.onMinChange(''); r.onMaxChange(''); });
     if (pillGroup && pillGroup.options.length > 0) pillGroup.onChange(pillGroup.options[0].key);
     toggles.forEach(t => t.onChange(false));
   };
@@ -136,6 +154,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   };
 
   return (
+    <div style={{ width: '100%' }}>
     <div className="sello-filter-bar">
       {/* Search — tag mode */}
       {isTagMode && (
@@ -383,6 +402,76 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         })}
       </div>
 
+      {/* Range Filters */}
+      {rangeFilters.map(r => (
+        <div
+          key={r.key}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            border: '1px solid rgba(209,213,219,0.7)',
+            borderRadius: 8,
+            background: 'white',
+            overflow: 'hidden',
+            height: 30,
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              background: 'rgba(249,250,251,0.9)',
+              borderRight: '1px solid rgba(229,231,235,0.7)',
+              padding: '0 10px',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: 9.5,
+              fontWeight: 700,
+              color: '#9ca3af',
+              textTransform: 'uppercase',
+              letterSpacing: '0.07em',
+            }}
+          >
+            {r.label}
+          </div>
+          <input
+            type="number"
+            min="0"
+            value={r.minValue}
+            placeholder={r.minPlaceholder || 'Min'}
+            onChange={e => r.onMinChange(e.target.value)}
+            style={{
+              width: 46,
+              border: 'none',
+              outline: 'none',
+              textAlign: 'center',
+              fontSize: 10,
+              color: '#374151',
+              background: 'transparent',
+              padding: '0 4px',
+            }}
+          />
+          <span style={{ color: '#9ca3af', fontSize: 10, padding: '0 2px' }}>-</span>
+          <input
+            type="number"
+            min="0"
+            value={r.maxValue}
+            placeholder={r.maxPlaceholder || 'Max'}
+            onChange={e => r.onMaxChange(e.target.value)}
+            style={{
+              width: 46,
+              border: 'none',
+              outline: 'none',
+              textAlign: 'center',
+              fontSize: 10,
+              color: '#374151',
+              background: 'transparent',
+              padding: '0 4px',
+            }}
+          />
+        </div>
+      ))}
+
       {/* Filter count & clear */}
       {activeFilterCount > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -432,6 +521,27 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           </button>
         )}
       </div>
+    </div>
+    {(subRowLeft || subRowRight) && (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginTop: 8,
+          paddingTop: 8,
+          borderTop: '1px solid rgba(229,231,235,0.8)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          {subRowLeft}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', minWidth: 0 }}>
+          {subRowRight}
+        </div>
+      </div>
+    )}
     </div>
   );
 };

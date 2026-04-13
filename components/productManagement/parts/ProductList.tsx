@@ -5,9 +5,9 @@ import { createPortal } from 'react-dom';
 import { Product, PricingRules, SkuFamily, PriceLog, OptimalPriceResult } from '../../../types';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { getCanonicalSku } from '../../../services/skuNormalization';
-import { TagSearchInput } from '../../common/TagSearchInput';
+import { FilterBar } from '../../common/FilterBar';
 import { GradeBadge } from '../../common/GradeBadge';
-import { Search, Filter, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, SlidersHorizontal, Star, EyeOff, Eye, X, Layers, Tag, Info, GitMerge, User, Globe, CheckSquare, Square, CornerDownLeft, List, Ship, LineChart, Zap } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, Star, X, Layers, Tag, Info, GitMerge, User, Globe, CornerDownLeft, List, Ship, LineChart, Zap, Eye } from 'lucide-react';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
 
@@ -632,8 +632,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
     const [searchQuery, setSearchQuery] = useState('');
     const [searchTags, setSearchTags] = useState<string[]>([]);
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('All');
-    const [managerFilter, setManagerFilter] = useState('All');
+    const [statusFilters, setStatusFilters] = useState<string[]>([]);
+    const [managerFilters, setManagerFilters] = useState<string[]>([]);
     const [platformFilters, setPlatformFilters] = useState<string[]>([]);
 
     useEffect(() => {
@@ -641,14 +641,13 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    const [brandFilter, setBrandFilter] = useState('All');
-    const [mainCatFilter, setMainCatFilter] = useState('All');
-    const [subCatFilter, setSubCatFilter] = useState('All');
+    const [brandFilters, setBrandFilters] = useState<string[]>([]);
+    const [mainCatFilters, setMainCatFilters] = useState<string[]>([]);
+    const [subCatFilters, setSubCatFilters] = useState<string[]>([]);
 
     const [showInactive, setShowInactive] = useState(false);
     const [showOOS, setShowOOS] = useState(true);
 
-    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [velocityFilter, setVelocityFilter] = useState<{ min: string, max: string }>({ min: '', max: '' });
 
 
@@ -701,12 +700,12 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
     const uniqueSubCats = useMemo(() => {
         let relevantProducts = products || [];
-        if (mainCatFilter !== 'All') {
-            relevantProducts = (products || []).filter(p => p.category === mainCatFilter);
+        if (mainCatFilters.length > 0) {
+            relevantProducts = (products || []).filter(p => p.category && mainCatFilters.includes(p.category));
         }
         const subs = new Set(relevantProducts.map(p => p.subcategory).filter(Boolean) as string[]);
         return Array.from(subs).sort();
-    }, [products, mainCatFilter]);
+    }, [products, mainCatFilters]);
 
     const filteredProducts = useMemo(() => {
         const searchQueryLower = (debouncedSearch || '').toLowerCase();
@@ -730,9 +729,9 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
             if (!showInactive && (p.stockLevel || 0) <= 0 && (p.averageDailySales || 0) === 0) return false;
             if (!showOOS && (p.stockLevel || 0) <= 0) return false;
-            if (brandFilter !== 'All' && p.brand !== brandFilter) return false;
-            if (mainCatFilter !== 'All' && p.category !== mainCatFilter) return false;
-            if (subCatFilter !== 'All' && p.subcategory !== subCatFilter) return false;
+            if (brandFilters.length > 0 && (!p.brand || !brandFilters.includes(p.brand))) return false;
+            if (mainCatFilters.length > 0 && (!p.category || !mainCatFilters.includes(p.category))) return false;
+            if (subCatFilters.length > 0 && (!p.subcategory || !subCatFilters.includes(p.subcategory))) return false;
             return true;
         });
 
@@ -742,11 +741,11 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
             const matchingChannels = (p.channels || []).filter(c => {
                 const matchPlatform = !isPlatformFiltered || currentPlatformFilters.includes(c.platform);
                 const effectiveManager = getEffectiveManager(c.platform, c.manager);
-                const matchManager = managerFilter === 'All' || effectiveManager === managerFilter;
+                const matchManager = managerFilters.length === 0 || managerFilters.includes(effectiveManager);
                 return matchPlatform && matchManager;
             });
 
-            const isFiltering = isPlatformFiltered || managerFilter !== 'All';
+            const isFiltering = isPlatformFiltered || managerFilters.length > 0;
             let displayVelocity = p.averageDailySales || 0;
             let displayPrice = p.currentPrice || 0;
 
@@ -815,8 +814,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
         }
 
         // Apply Status Filter (Context Aware)
-        if (statusFilter !== 'All') {
-            aggregatedData = aggregatedData.filter(p => p.status === statusFilter);
+        if (statusFilters.length > 0) {
+            aggregatedData = aggregatedData.filter(p => statusFilters.includes(p.status));
         }
 
         const getValue = (row: any, key: string) => {
@@ -829,15 +828,15 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
         return sortRows(aggregatedData, sortConfig, getValue);
 
-    }, [products, debouncedSearch, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, sortConfig, showInactive, showOOS, velocityFilter, getEffectiveManager]);
+    }, [products, debouncedSearch, searchTags, statusFilters, managerFilters, platformFilters, brandFilters, mainCatFilters, subCatFilters, sortConfig, showInactive, showOOS, velocityFilter, getEffectiveManager]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, searchTags, statusFilter, managerFilter, platformFilters, brandFilter, mainCatFilter, subCatFilter, showInactive, showOOS, velocityFilter]);
+    }, [searchQuery, searchTags, statusFilters, managerFilters, platformFilters, brandFilters, mainCatFilters, subCatFilters, showInactive, showOOS, velocityFilter]);
 
     useEffect(() => {
-        setSubCatFilter('All');
-    }, [mainCatFilter]);
+        setSubCatFilters([]);
+    }, [mainCatFilters]);
 
     const totalPages = Math.ceil((filteredProducts || []).length / itemsPerPage);
     const paginatedProducts = (filteredProducts || []).slice(
@@ -860,7 +859,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
         setHoveredProduct(null);
     };
 
-    const isContextFiltered = (platformFilters && platformFilters.length > 0) || managerFilter !== 'All';
+    const isContextFiltered = (platformFilters && platformFilters.length > 0) || managerFilters.length > 0;
 
     const handleExport = (platform: string = 'All') => {
         const cleanChar = (val: any) => {
@@ -1022,149 +1021,97 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                     )}
                 </div>
             </div>
-
             <div className="bg-custom-glass rounded-xl border border-custom-glass shadow-lg flex flex-col backdrop-blur-custom relative z-20">
-                <div className="p-4 space-y-4">
-                    <div className="flex flex-col lg:flex-row gap-4">
-                        <div className="flex-1 min-w-[250px]">
-                            <TagSearchInput
-                                tags={searchTags}
-                                onTagsChange={(tags) => { setSearchTags(tags); setCurrentPage(1); }}
-                                onInputChange={(val) => { setSearchQuery(val); setCurrentPage(1); }}
-                                placeholder="Search SKUs or Name..."
-                                themeColor={themeColor}
-                            />
-                        </div>
-
-                        <div className="flex flex-wrap gap-3 items-center">
-                            <FilterDropdown
-                                label="Brand"
-                                icon={Tag}
-                                value={brandFilter}
-                                onChange={(e: any) => { setBrandFilter(e.target.value); setCurrentPage(1); }}
-                                options={uniqueBrands}
-                                themeColor={themeColor}
-                            />
-                            <FilterDropdown
-                                label="Category"
-                                icon={Layers}
-                                value={mainCatFilter}
-                                onChange={(e: any) => { setMainCatFilter(e.target.value); setCurrentPage(1); }}
-                                options={uniqueMainCats}
-                                themeColor={themeColor}
-                            />
-                            <FilterDropdown
-                                label="Subcat"
-                                icon={GitMerge}
-                                value={subCatFilter}
-                                onChange={(e: any) => { setSubCatFilter(e.target.value); setCurrentPage(1); }}
-                                options={uniqueSubCats}
-                                themeColor={themeColor}
-                            />
-                            <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-opacity-50" style={{ '--tw-ring-color': themeColor } as React.CSSProperties}>
-                                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-r border-gray-200 min-w-fit">
-                                    <Filter className="w-3.5 h-3.5 text-gray-400" />
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</span>
-                                </div>
-                                <div className="relative min-w-[140px]">
-                                    <select
-                                        value={statusFilter}
-                                        onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                                        className="w-full px-3 py-2 bg-transparent text-sm text-gray-900 border-none focus:ring-0 cursor-pointer appearance-none pr-8"
-                                    >
-                                        <option value="All">All Statuses</option>
-                                        <option value="Critical">Critical</option>
-                                        <option value="Overstock">Overstock</option>
-                                        <option value="Healthy">Healthy</option>
-                                        <option value="Warning">Warning</option>
-                                    </select>
-                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                                </div>
+                <div className="p-4">
+                    <FilterBar
+                        searchTags={searchTags}
+                        onSearchTagsChange={(tags) => { setSearchTags(tags); setCurrentPage(1); }}
+                        onSearchChange={(val) => { setSearchQuery(val); setCurrentPage(1); }}
+                        searchPlaceholder="Search or paste SKUs..."
+                        multiSelects={[
+                            {
+                                key: 'brand',
+                                label: 'Brand',
+                                icon: Tag,
+                                options: uniqueBrands,
+                                selected: brandFilters,
+                                onChange: (selected) => { setBrandFilters(selected); setCurrentPage(1); }
+                            },
+                            {
+                                key: 'category',
+                                label: 'Category',
+                                icon: Layers,
+                                options: uniqueMainCats,
+                                selected: mainCatFilters,
+                                onChange: (selected) => { setMainCatFilters(selected); setCurrentPage(1); }
+                            },
+                            {
+                                key: 'subcat',
+                                label: 'Subcat',
+                                icon: GitMerge,
+                                options: uniqueSubCats,
+                                selected: subCatFilters,
+                                onChange: (selected) => { setSubCatFilters(selected); setCurrentPage(1); }
+                            },
+                            {
+                                key: 'status',
+                                label: 'Status',
+                                options: ['Critical', 'Overstock', 'Healthy', 'Warning'],
+                                selected: statusFilters,
+                                onChange: (selected) => { setStatusFilters(selected); setCurrentPage(1); }
+                            },
+                            {
+                                key: 'platform',
+                                label: 'Platform',
+                                icon: Globe,
+                                options: uniquePlatforms,
+                                selected: platformFilters,
+                                onChange: (selected) => { setPlatformFilters(selected); setCurrentPage(1); }
+                            },
+                            {
+                                key: 'manager',
+                                label: 'Manager',
+                                icon: User,
+                                options: uniqueManagers,
+                                selected: managerFilters,
+                                onChange: (selected) => { setManagerFilters(selected); setCurrentPage(1); }
+                            }
+                        ]}
+                        toggles={[
+                            {
+                                key: 'oos',
+                                label: 'Show Out Of Stock',
+                                active: showOOS,
+                                onChange: (active) => setShowOOS(active)
+                            },
+                            {
+                                key: 'inactive',
+                                label: 'Show Inactive',
+                                active: showInactive,
+                                onChange: (active) => setShowInactive(active)
+                            }
+                        ]}
+                        rangeFilters={[
+                            {
+                                key: 'velocity',
+                                label: 'Velocity',
+                                minValue: velocityFilter.min,
+                                maxValue: velocityFilter.max,
+                                onMinChange: (val) => setVelocityFilter(prev => ({ ...prev, min: val })),
+                                onMaxChange: (val) => setVelocityFilter(prev => ({ ...prev, max: val })),
+                                minPlaceholder: 'Min',
+                                maxPlaceholder: 'Max',
+                            }
+                        ]}
+                        rightSlot={
+                            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                                Showing <span className="text-theme">{filteredProducts.length.toLocaleString()}</span> of{' '}
+                                <span className="text-gray-700">{products.length.toLocaleString()}</span> SKUs
                             </div>
-
-                            <button
-                                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                                className={`px-3 py-1.5 border rounded-lg flex items-center gap-2 text-xs font-bold transition-colors ml-auto lg:ml-0`}
-                                style={{
-                                    backgroundColor: showAdvancedFilters ? `${themeColor}10` : 'rgba(255,255,255,0.5)',
-                                    borderColor: showAdvancedFilters ? themeColor : '#d1d5db',
-                                    color: showAdvancedFilters ? themeColor : '#4b5563'
-                                }}
-                            >
-                                <SlidersHorizontal className="w-4 h-4" />
-                                <span className="hidden sm:inline">Filters</span>
-                            </button>
-                        </div>
-                    </div>
+                        }
+                    />
                 </div>
-
-                {showAdvancedFilters && (
-                    <div className="px-4 pb-4 border-t border-gray-100/50 bg-gray-50/50 rounded-b-xl animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-sm">
-                        <div className="flex flex-col lg:flex-row gap-4 pt-4 items-start lg:items-center">
-                            <div className="flex flex-wrap gap-3 flex-1">
-                                <MultiSelectDropdown
-                                    label="Platform"
-                                    icon={Globe}
-                                    selected={platformFilters}
-                                    onChange={(selected: string[]) => { setPlatformFilters(selected); setCurrentPage(1); }}
-                                    options={uniquePlatforms}
-                                    themeColor={themeColor}
-                                />
-                                <FilterDropdown
-                                    label="Manager"
-                                    icon={User}
-                                    value={managerFilter}
-                                    onChange={(e: any) => { setManagerFilter(e.target.value); setCurrentPage(1); }}
-                                    options={uniqueManagers}
-                                    themeColor={themeColor}
-                                />
-
-                                <div className="flex items-center border border-gray-300 rounded-lg bg-white overflow-hidden h-[38px]">
-                                    <div className="px-3 py-2 bg-gray-50 border-r border-gray-200 text-[10px] font-bold text-gray-500 uppercase">Velocity</div>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        placeholder="Min"
-                                        value={velocityFilter.min}
-                                        onChange={(e) => setVelocityFilter(prev => ({ ...prev, min: e.target.value }))}
-                                        className="w-16 px-2 py-1 text-sm border-none focus:ring-0 text-center"
-                                    />
-                                    <span className="text-gray-400 px-1">-</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        placeholder="Max"
-                                        value={velocityFilter.max}
-                                        onChange={(e) => setVelocityFilter(prev => ({ ...prev, max: e.target.value }))}
-                                        className="w-16 px-2 py-1 text-sm border-none focus:ring-0 text-center"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex flex-wrap gap-3">
-                                <button
-                                    onClick={() => setShowOOS(!showOOS)}
-                                    className={`flex items-center justify-between gap-3 px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors hover:bg-gray-50 ${showOOS ? 'border-theme-20 bg-theme-10 text-theme' : 'border-gray-200 text-gray-600 bg-white'}`}
-                                    style={showOOS ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
-                                >
-                                    <span className="text-[10px] uppercase">Show Out of Stock</span>
-                                    {showOOS ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                                </button>
-
-                                <button
-                                    onClick={() => setShowInactive(!showInactive)}
-                                    className={`flex items-center justify-between gap-3 px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors hover:bg-gray-50 ${showInactive ? 'border-theme-20 bg-theme-10 text-theme' : 'border-gray-200 text-gray-600 bg-white'}`}
-                                    style={showInactive ? { borderColor: themeColor, backgroundColor: `${themeColor}10`, color: themeColor } : {}}
-                                >
-                                    <span className="text-[10px] uppercase">Show Inactive</span>
-                                    {showInactive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
-
             {isContextFiltered && (
                 <div
                     className="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm animate-in fade-in slide-in-from-top-2 backdrop-blur-sm"
@@ -1174,8 +1121,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                     <span>
                         Showing data aggregated for
                         {platformFilters && platformFilters.length > 0 && <strong> {platformFilters.length} Platform(s) </strong>}
-                        {platformFilters && platformFilters.length > 0 && managerFilter !== 'All' && <span>and</span>}
-                        {managerFilter !== 'All' && <strong> {managerFilter} </strong>}
+                        {platformFilters && platformFilters.length > 0 && managerFilters.length > 0 && <span>and</span>}
+                        {managerFilters.length > 0 && <strong> {managerFilters.length} Manager(s) </strong>}
                         only. Prices are recalculated weighted averages for this selection.
                     </span>
                 </div>
@@ -1320,3 +1267,4 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 };
 
 export default ProductList;
+

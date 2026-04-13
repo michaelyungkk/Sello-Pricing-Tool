@@ -28,6 +28,16 @@ const writeSnapshot = async (sql: any, snapshotJson: string, now: string) => {
     `;
 };
 
+const logHistoryHealth = (snapshotObj: any) => {
+    const pc = Array.isArray(snapshotObj?.priceChangeHistory) ? snapshotObj.priceChangeHistory.length : 0;
+    const cc = Array.isArray(snapshotObj?.costChangeHistory) ? snapshotObj.costChangeHistory.length : 0;
+    const ic = Array.isArray(snapshotObj?.inventoryChangeHistory) ? snapshotObj.inventoryChangeHistory.length : 0;
+    console.log(`[db-push] history counts - price:${pc}, cost:${cc}, inventory:${ic}`);
+    if (pc === 0 || cc === 0 || ic === 0) {
+        console.warn(`[db-push] warning: one or more history arrays are empty in pushed snapshot`);
+    }
+};
+
 export default async (req: Request) => {
     if (req.method === 'OPTIONS')
         return new Response(null, { status: 204, headers: CORS });
@@ -188,7 +198,8 @@ export default async (req: Request) => {
             }
 
             // Validate assembled JSON before writing live snapshot
-            JSON.parse(snapshotJson);
+            const parsedSnapshot = JSON.parse(snapshotJson);
+            logHistoryHealth(parsedSnapshot);
 
             console.log(`[db-push] finalizing upload ${uploadId}: ${(new TextEncoder().encode(snapshotJson).length / 1024).toFixed(0)}KB`);
             await writeSnapshot(sql, snapshotJson, now);
@@ -212,6 +223,7 @@ export default async (req: Request) => {
         }
 
         const snapshotJson = JSON.stringify(snapshot);
+        logHistoryHealth(snapshot);
         console.log(`[db-push] writing snapshot (legacy): ${(new TextEncoder().encode(snapshotJson).length / 1024).toFixed(0)}KB`);
         await writeSnapshot(sql, snapshotJson, now);
         console.log(`[db-push] success at ${now}`);

@@ -1305,18 +1305,35 @@ export const useAppState = () => {
     ) => {
         const safe = normalizeRestoredState(snapshot);
         const m = migrateRestoredDatabase(safe);
+        const mergeHistoryById = <T extends { id?: string; date?: string }>(incoming: any, prev: T[]): T[] => {
+            const prevSafe = Array.isArray(prev) ? prev : [];
+            const incomingSafe = Array.isArray(incoming) ? incoming as T[] : [];
+            if (incomingSafe.length === 0) return prevSafe;
+
+            const seen = new Set<string>();
+            const out: T[] = [];
+            const pushUnique = (item: T) => {
+                const key = item?.id || JSON.stringify(item);
+                if (seen.has(key)) return;
+                seen.add(key);
+                out.push(item);
+            };
+
+            incomingSafe.forEach(pushUnique);
+            prevSafe.forEach(pushUnique);
+
+            return out.sort((a, b) => {
+                const ad = a?.date ? new Date(a.date).getTime() : 0;
+                const bd = b?.date ? new Date(b.date).getTime() : 0;
+                return bd - ad;
+            });
+        };
 
         setRefundHistory(Array.isArray(refunds) ? refunds : []);
         setFreightRates(Array.isArray(m.freightRates) ? m.freightRates : []);
-        setPriceChangeHistory(
-            Array.isArray(m.priceChangeHistory) ? m.priceChangeHistory : []
-        );
-        setCostChangeHistory(
-            Array.isArray(m.costChangeHistory) ? m.costChangeHistory : []
-        );
-        setInventoryChangeHistory(
-            Array.isArray(m.inventoryChangeHistory) ? m.inventoryChangeHistory : []
-        );
+        setPriceChangeHistory(prev => mergeHistoryById<PriceChangeRecord>(m.priceChangeHistory, prev));
+        setCostChangeHistory(prev => mergeHistoryById<CostChangeRecord>(m.costChangeHistory, prev));
+        setInventoryChangeHistory(prev => mergeHistoryById<InventoryChangeRecord>(m.inventoryChangeHistory, prev));
         setLearnedAliases(m.learnedAliases || {});
         setPricingRules(m.pricingRules || DEFAULT_PRICING_RULES);
         setLogisticsRules(
