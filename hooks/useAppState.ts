@@ -1303,9 +1303,9 @@ export const useAppState = () => {
             setTimeout(() => setShowSaveToast(false), 3000);
             setSyncStatus('idle');
 
-            // Invalidate local cache after push so team members get fresh data
-            await clearCache();
-            console.log('[push] cache cleared — team members will sync on next load');
+            // Keep local cache after push; clients rely on version checks + incremental pulls.
+            // Clearing cache here forces expensive full transaction re-downloads.
+            console.log('[push] cache preserved — next sync can stay incremental');
         } catch (e) {
             console.error('[push] error:', e);
             setSyncStatus('error');
