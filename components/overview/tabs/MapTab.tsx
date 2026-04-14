@@ -3,10 +3,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { formatSmartMoney } from '../../../utils/format';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
-import { Product, PriceLog, SearchChip } from '../../../types';
+import { Product, PriceLog, RefundLog, SearchChip } from '../../../types';
 import { UK_POSTCODE_AREA_NAME } from '../../../ukPostcodeAreaNames';
 import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, ArrowUpDown, ChevronUp, ChevronDown, Search, Truck, RotateCcw, CornerDownRight } from 'lucide-react';
 import { aggregateUkMapData, AreaData } from '../../../services/mapAgg';
+import { asDateKey, isDateKeyBetween } from '../../../services/dateUtils';
 
 // Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
 const UK_TOPO_JSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
@@ -141,46 +142,77 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         priceHistoryMap,
         { startDate: dateRange.start, endDate: dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier }
     );
-    if (!deductRefunds || refundHistory.length === 0) return base;
+    if (refundHistory.length === 0) return base;
 
-    // Build orderId → postcode map from priceHistoryMap
-    // RefundLog has no postcode — match via orderId back to the original sale
-    const orderPostcodeMap = new Map<string, string>();
-    priceHistoryMap.forEach(logs => {
+    const validSkus = new Set(
+        products
+            .filter(p => {
+                if (selectedCategory !== 'All' && p.category !== selectedCategory) return false;
+                if (selectedSubcategory !== 'All' && p.subcategory !== selectedSubcategory) return false;
+                return true;
+            })
+            .map(p => p.sku)
+    );
+
+    const orderContextMap = new Map<string, { postcode?: string; platform?: string; carrier?: string; sku?: string }>();
+    priceHistoryMap.forEach((logs, sku) => {
         logs.forEach(log => {
-            if (log.orderId && log.postcode) {
-                orderPostcodeMap.set(log.orderId, log.postcode);
+            if (log.orderId) {
+                orderContextMap.set(log.orderId, {
+                    postcode: log.postcode,
+                    platform: log.platform,
+                    carrier: log.logisticPartner,
+                    sku
+                });
             }
         });
     });
 
-    // Build refund loss per postcode area
-    const startKey = dateRange.start.toISOString().split('T')[0];
-    const endKey   = dateRange.end.toISOString().split('T')[0];
-    const refundByArea: Record<string, number> = {};
-    refundHistory.forEach(r => {
-        if (!r.date) return;
-        const dKey = r.date.split('T')[0];
-        if (dKey < startKey || dKey > endKey) return;
-        if (selectedPlatform !== 'All' && r.platform !== selectedPlatform) return;
+    const startKey = asDateKey(dateRange.start);
+    const endKey = asDateKey(dateRange.end);
+    if (!startKey || !endKey) return base;
 
-        // Look up postcode from original sale via orderId
+    const refundQtyByArea: Record<string, number> = {};
+    const refundLossByArea: Record<string, number> = {};
+    refundHistory.forEach((r: RefundLog) => {
+        const refundKey = asDateKey(r.date);
+        if (!refundKey || !isDateKeyBetween(refundKey, startKey, endKey)) return;
+
         const baseOrderId = r.resendBaseOrderId || r.orderId;
-        const postcode = baseOrderId ? orderPostcodeMap.get(baseOrderId) : undefined;
+        const orderCtx = baseOrderId ? orderContextMap.get(baseOrderId) : undefined;
+
+        const sku = r.sku || orderCtx?.sku;
+        if (!sku || !validSkus.has(sku)) return;
+
+        const platform = r.platform || orderCtx?.platform;
+        if (selectedPlatform !== 'All' && platform !== selectedPlatform) return;
+
+        const carrier = r.logisticPartner || orderCtx?.carrier || 'Unknown';
+        if (selectedCarrier !== 'All' && carrier !== selectedCarrier) return;
+
+        const postcode = r.postcode || orderCtx?.postcode;
         if (!postcode) return;
 
         const areaMatch = postcode.match(/^([A-Z]{1,2})/i);
         if (!areaMatch) return;
         const area = areaMatch[1].toUpperCase();
-        refundByArea[area] = (refundByArea[area] || 0) + (Number(r.amount) + Number(r.freightAmount || 0));
+
+        refundQtyByArea[area] = (refundQtyByArea[area] || 0) + Number(r.quantity || 0);
+        refundLossByArea[area] = (refundLossByArea[area] || 0) + (Number(r.amount) + Number(r.freightAmount || 0));
     });
 
     return base.map(d => {
-        const refundLoss = refundByArea[d.area] || 0;
-        if (refundLoss === 0) return d;
+        const refundQty = refundQtyByArea[d.code] || 0;
+        const refundLoss = refundLossByArea[d.code] || 0;
+        const nextReturnRate = d.volume > 0 ? (refundQty / d.volume) * 100 : 0;
+
+        if (!deductRefunds || refundLoss === 0) {
+            return { ...d, returnRate: nextReturnRate };
+        }
+
         const newProfit = d.profit - refundLoss;
         const newMargin = d.revenue > 0 ? (newProfit / d.revenue) * 100 : 0;
-        return { ...d, profit: newProfit, margin: newMargin };
+        return { ...d, returnRate: nextReturnRate, profit: newProfit, margin: newMargin };
     });
   }, [products, priceHistoryMap, dateRange.start, dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier, deductRefunds, refundHistory]);
 

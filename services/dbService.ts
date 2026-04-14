@@ -278,13 +278,14 @@ export async function pullAdData():
 
 export async function pushPromotions(
     password: string,
-    promotions: any[]
+    promotions: any[],
+    forceClear: boolean = false
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const res = await fetch(`${BASE}/db-push-promotions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password, promotions })
+            body: JSON.stringify({ password, promotions, forceClear })
         });
         return await res.json();
     } catch { return { success: false, error: 'Network error' }; }

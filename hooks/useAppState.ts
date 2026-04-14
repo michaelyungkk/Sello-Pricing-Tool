@@ -637,6 +637,7 @@ export const useAppState = () => {
     const handleBackup = useCallback(() => {
         const data = {
             ...getSharedSnapshot(),
+            promotions,
             priceHistory: salesHistory,
             refundHistory,
             velocityLookback,
@@ -657,6 +658,7 @@ export const useAppState = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     }, [getSharedSnapshot, salesHistory, refundHistory,
+        promotions,
         velocityLookback, userProfile,
         uploadTimestamps]);
 
@@ -1187,6 +1189,11 @@ export const useAppState = () => {
             // the DB's latest date that were never pushed (late imports, backdated entries).
             const allTransactions = salesHistory || [];
             const localTotal = allTransactions.length;
+            const localPromotionCount = promotions?.length || 0;
+            const localRefundCount = refundHistory?.length || 0;
+            const localPriceChangeCount = priceChangeHistory?.length || 0;
+            const localCostChangeCount = costChangeHistory?.length || 0;
+            const localInventoryChangeCount = inventoryChangeHistory?.length || 0;
             // Always use date-based incremental filter — ON CONFLICT DO UPDATE deduplicates boundary rows.
             // We no longer fall back to full push when localTotal > totalInDb;
             // that triggered 70k+ row pushes every sync because local always grows faster than DB count.
@@ -1199,6 +1206,10 @@ export const useAppState = () => {
 
             console.log(`[push] DB has ${totalInDb} rows up to ${latestDateInDb || 'none'}`);
             console.log(`[push] local total: ${localTotal}, sending: ${newTransactions.length} (incremental from ${latestDateInDb || 'start'})`);
+            console.log(
+                `[push] local snapshot counts - promotions:${localPromotionCount}, refunds:${localRefundCount}, ` +
+                `priceChanges:${localPriceChangeCount}, costChanges:${localCostChangeCount}, inventoryChanges:${localInventoryChangeCount}`
+            );
 
             // Step 3: Calculate total chunks for progress
             const CHUNK_SIZE = 50;
@@ -1256,15 +1267,21 @@ export const useAppState = () => {
             console.log(`[push] refunds pushed`);
 
             // Push promotions to separate table
+            if ((promotions?.length || 0) === 0) {
+                console.error('[push] blocked: local promotions list is empty. Refusing to push empty promotions payload.');
+                setSyncStatus('error');
+                return;
+            }
             const promoPushRes = await pushPromotions(
                 storedAdminPassword,
                 promotions || []
             );
             if (!promoPushRes.success) {
-                console.warn('[push] promotions push failed (non-fatal):', promoPushRes.error);
-            } else {
-                console.log(`[push] promotions pushed — ${promotions?.length || 0} campaigns`);
+                console.error('[push] promotions push failed:', promoPushRes.error);
+                setSyncStatus('error');
+                return;
             }
+            console.log(`[push] promotions pushed — ${promotions?.length || 0} campaigns`);
 
             // Push ad campaign data to separate table
             const adPushRes = await pushAdData(
@@ -1296,7 +1313,8 @@ export const useAppState = () => {
             setPushTotal(0);
         }
     }, [isAdminMode, storedAdminPassword, getSharedSnapshot,
-        salesHistory, refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets]);
+        salesHistory, refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets,
+        priceChangeHistory, costChangeHistory, inventoryChangeHistory]);
 
     const applyLoadedState = useCallback((
         snapshot: any,
@@ -1400,7 +1418,7 @@ export const useAppState = () => {
             }
 
             const hasSnapshotUpdate = !masterRes.unchanged;
-            const incoming = hasSnapshotUpdate ? masterRes.snapshot : null;
+            let incoming = hasSnapshotUpdate ? masterRes.snapshot : null;
             if (hasSnapshotUpdate && !incoming) {
                 setSyncStatus('error');
                 setSyncStep('');
@@ -1424,6 +1442,20 @@ export const useAppState = () => {
                 }
             } else {
                 setSyncStep('Snapshot unchanged — checking transactions...');
+                // Even when metadata says unchanged, pull full snapshot to ensure
+                // history slices (price/cost/inventory changes) stay in sync locally.
+                const fullSnapshotRes = await pullSnapshot();
+                if (fullSnapshotRes.success && fullSnapshotRes.snapshot) {
+                    incoming = fullSnapshotRes.snapshot;
+                    console.log(
+                        `[sync] refreshed snapshot (unchanged path) - history counts: ` +
+                        `price=${Array.isArray(incoming.priceChangeHistory) ? incoming.priceChangeHistory.length : 0}, ` +
+                        `cost=${Array.isArray(incoming.costChangeHistory) ? incoming.costChangeHistory.length : 0}, ` +
+                        `inventory=${Array.isArray(incoming.inventoryChangeHistory) ? incoming.inventoryChangeHistory.length : 0}`
+                    );
+                } else {
+                    console.warn('[sync] full snapshot refresh failed on unchanged path:', fullSnapshotRes.error);
+                }
             }
 
             // Incremental pull — only fetch rows newer than what's already in local cache
@@ -1508,24 +1540,48 @@ export const useAppState = () => {
 
             // Pull refunds only
             const refundRes = await pullRefundsAndShipments();
-            const refunds = refundRes.success ? (refundRes.refunds || []) : [];
+            const keepLocalIfRemoteEmpty = <T,>(label: string, remote: any, local: T[]): T[] => {
+                const remoteSafe = Array.isArray(remote) ? remote as T[] : [];
+                const localSafe = Array.isArray(local) ? local : [];
+                if (remoteSafe.length === 0 && localSafe.length > 0) {
+                    console.warn(`[sync] ${label} pull returned empty; preserving local ${localSafe.length}`);
+                    return localSafe;
+                }
+                return remoteSafe;
+            };
+            const refunds = refundRes.success
+                ? keepLocalIfRemoteEmpty('refunds', refundRes.refunds || [], refundHistory || [])
+                : (refundHistory || []);
+            if (!refundRes.success) {
+                console.warn('[sync] refunds pull failed (non-fatal):', refundRes.error);
+            }
 
             // Pull ad campaign data from separate table
             const adRes = await pullAdData();
             if (adRes.success) {
-                if (Array.isArray(adRes.adSnapshots) && adRes.adSnapshots.length > 0) {
-                    setAdSnapshots(adRes.adSnapshots);
-                    try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(adRes.adSnapshots)); } catch {}
+                const nextSnapshots = keepLocalIfRemoteEmpty('ad snapshots', adRes.adSnapshots || [], adSnapshots || []);
+                if (Array.isArray(nextSnapshots)) {
+                    setAdSnapshots(nextSnapshots);
+                    try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(nextSnapshots)); } catch {}
                 }
-                if (Array.isArray(adRes.adRosterChanges)) {
-                    setAdRosterChanges(adRes.adRosterChanges);
-                    try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(adRes.adRosterChanges)); } catch {}
+                const nextRoster = keepLocalIfRemoteEmpty('ad roster changes', adRes.adRosterChanges || [], adRosterChanges || []);
+                if (Array.isArray(nextRoster)) {
+                    setAdRosterChanges(nextRoster);
+                    try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(nextRoster)); } catch {}
                 }
                 if (adRes.adBudgets && typeof adRes.adBudgets === 'object') {
-                    setAdBudgets(adRes.adBudgets);
-                    try { localStorage.setItem('sello_ad_budgets', JSON.stringify(adRes.adBudgets)); } catch {}
+                    const remoteBudgetKeys = Object.keys(adRes.adBudgets).length;
+                    const localBudgetKeys = Object.keys(adBudgets || {}).length;
+                    const nextBudgets = remoteBudgetKeys === 0 && localBudgetKeys > 0
+                        ? adBudgets
+                        : adRes.adBudgets;
+                    if (remoteBudgetKeys === 0 && localBudgetKeys > 0) {
+                        console.warn(`[sync] ad budgets pull returned empty; preserving local ${localBudgetKeys}`);
+                    }
+                    setAdBudgets(nextBudgets);
+                    try { localStorage.setItem('sello_ad_budgets', JSON.stringify(nextBudgets)); } catch {}
                 }
-                console.log(`[sync] ad data loaded — ${adRes.adSnapshots?.length || 0} snapshots`);
+                console.log(`[sync] ad data loaded — ${(Array.isArray(adRes.adSnapshots) ? adRes.adSnapshots.length : 0)} snapshots`);
             } else {
                 console.warn('[sync] ad data pull failed (non-fatal):', adRes.error);
             }
@@ -1533,13 +1589,14 @@ export const useAppState = () => {
             // Pull promotions from separate table
             const promoRes = await pullPromotions();
             if (promoRes.success && Array.isArray(promoRes.promotions)) {
-                setPromotions(promoRes.promotions);
-                console.log(`[sync] promotions loaded — ${promoRes.promotions.length} campaigns`);
+                const nextPromotions = keepLocalIfRemoteEmpty('promotions', promoRes.promotions, promotions || []);
+                setPromotions(nextPromotions);
+                console.log(`[sync] promotions loaded — ${nextPromotions.length} campaigns`);
             } else {
                 console.warn('[sync] promotions pull failed (non-fatal):', promoRes.error);
             }
 
-            if (hasSnapshotUpdate && incoming) {
+            if (incoming) {
                 applyLoadedState(incoming, allTransactions, refunds);
             } else {
                 setRefundHistory(Array.isArray(refunds) ? refunds : []);
@@ -1580,7 +1637,8 @@ export const useAppState = () => {
             setSyncProgress(0);
             setSyncTotal(0);
         }
-    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, pricingRules, brandMap, categoryMap, getSharedSnapshot]);
+    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, pricingRules, brandMap, categoryMap, getSharedSnapshot, pullSnapshot,
+        refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets]);
 
     const resolveConflicts = useCallback(async (keepLocal: boolean) => {
         const res = await pullSnapshot();

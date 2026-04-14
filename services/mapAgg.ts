@@ -78,7 +78,7 @@ export const aggregateUkMapData = (
         prevRevenue: number;
         prevVolume: number;
         prevProfit: number;
-        weightedReturnRate: number,
+        returnedUnits: number,
         totalPostage: number,
         totalAdSpend: number,
         platforms: Record<string, { revenue: number, volume: number, profit: number }>,
@@ -127,7 +127,7 @@ export const aggregateUkMapData = (
             const areaCode = areaMatch[1].toUpperCase();
             
             if (!areaStats[areaCode]) {
-                areaStats[areaCode] = { revenue: 0, volume: 0, orders: 0, profit: 0, prevRevenue: 0, prevVolume: 0, prevProfit: 0, weightedReturnRate: 0, totalPostage: 0, totalAdSpend: 0, platforms: {}, skus: {} };
+                areaStats[areaCode] = { revenue: 0, volume: 0, orders: 0, profit: 0, prevRevenue: 0, prevVolume: 0, prevProfit: 0, returnedUnits: 0, totalPostage: 0, totalAdSpend: 0, platforms: {}, skus: {} };
             }
 
             const rev = calcRevenue(log);
@@ -158,7 +158,10 @@ export const aggregateUkMapData = (
                 area.volume += units;
                 area.orders += 1; // Assuming one log is one transaction/order
                 area.profit += profit;
-                area.weightedReturnRate += (product.returnRate || 0) * units;
+                const rowStatus = String((log as any).status || (log as any).orderStatus || '').toLowerCase();
+                if (rowStatus.includes('return') || rowStatus.includes('refund')) {
+                    area.returnedUnits += units > 0 ? units : 1;
+                }
                 area.totalPostage += (product.postage || 0) * units;
                 area.totalAdSpend += adSpend;
                 
@@ -241,7 +244,7 @@ export const aggregateUkMapData = (
             orders: stats.orders,
             profit: profitInclTax,
             margin: calcMarginPct(revenueInclTax, profitInclTax),
-            returnRate: stats.volume > 0 ? stats.weightedReturnRate / stats.volume : 0,
+            returnRate: stats.volume > 0 ? (stats.returnedUnits / stats.volume) * 100 : 0,
             avgShippingCost: stats.volume > 0 ? totalPostageInclTax / stats.volume : 0,
             totalShippingCost: totalPostageInclTax,
             adSpend: adSpendInclTax,
