@@ -56,9 +56,10 @@ import {
     detectBenchmarkShifts,
     detectBenchmarkUpdateNeeded,
 } from '../services/cohortAnalysis';
+import type { CohortShiftWarning } from '../services/cohortAnalysis';
 import type { CohortSnapshot, OptimalPriceResult, BenchmarkUpdateNotice, PricePoint } from '../types';
 import { resolveEffectiveVelocity, toNumber } from '../services/metrics';
-import { asDateKey } from '../services/dateUtils';
+import { asDateKey, getTodayKeyMelbourne } from '../services/dateUtils';
 import { resolveAttribute } from '../services/mappingService';
 import { redistributeAdSpend } from '../services/adSpreadService';
 import {
@@ -232,6 +233,56 @@ const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 };
 
+const derivePromotionStatus = (startDate?: string, endDate?: string): 'UPCOMING' | 'ACTIVE' | 'ENDED' => {
+    const today = getTodayKeyMelbourne();
+    const start = asDateKey(startDate || null);
+    const end = asDateKey(endDate || null);
+    if (!start || !end) return 'UPCOMING';
+    if (start > today) return 'UPCOMING';
+    if (end < today) return 'ENDED';
+    return 'ACTIVE';
+};
+
+const normalizePromotionStatuses = (list: PromotionEvent[] = []): PromotionEvent[] => {
+    return (Array.isArray(list) ? list : []).map((promo) => ({
+        ...promo,
+        status: derivePromotionStatus(promo.startDate, promo.endDate)
+    }));
+};
+
+type BenchmarkRecalcMode = 'incremental' | 'full';
+type BenchmarkRecalcStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'error';
+type BenchmarkRecalcStage = 'IDLE' | 'PREPARING' | 'REBUILDING_COHORTS' | 'CALCULATING_OPTIMAL_PRICES' | 'FINALIZING';
+
+interface BenchmarkRecalcState {
+    status: BenchmarkRecalcStatus;
+    stage: BenchmarkRecalcStage;
+    mode: BenchmarkRecalcMode;
+    processed: number;
+    total: number;
+    elapsedMs: number;
+    startedAt: string | null;
+    completedAt: string | null;
+    summary: string;
+}
+
+interface RecalculateBenchmarkOptions {
+    mode?: BenchmarkRecalcMode;
+    categories?: string[];
+}
+
+const BENCHMARK_IDLE_STATE: BenchmarkRecalcState = {
+    status: 'idle',
+    stage: 'IDLE',
+    mode: 'incremental',
+    processed: 0,
+    total: 0,
+    elapsedMs: 0,
+    startedAt: null,
+    completedAt: null,
+    summary: '',
+};
+
 export const useAppState = () => {
     const { t } = useTranslation();
 
@@ -279,6 +330,8 @@ export const useAppState = () => {
     const [cohortSnapshot, setCohortSnapshot] = useState<CohortSnapshot | null>(null);
     const [optimalPriceResults, setOptimalPriceResults] = useState<Map<string, OptimalPriceResult>>(new Map());
     const [benchmarkUpdateNotices, setBenchmarkUpdateNotices] = useState<BenchmarkUpdateNotice[]>([]);
+    const [benchmarkRecalcState, setBenchmarkRecalcState] = useState<BenchmarkRecalcState>(BENCHMARK_IDLE_STATE);
+    const benchmarkRunRef = useRef<{ id: number; cancelled: boolean; running: boolean }>({ id: 0, cancelled: false, running: false });
 
     // --- DB SYNC STATE ---
     const [isAdminMode, setIsAdminMode] = useState<boolean>(
@@ -635,9 +688,10 @@ export const useAppState = () => {
     }, []);
 
     const handleBackup = useCallback(() => {
+        const normalizedPromotions = normalizePromotionStatuses(promotions || []);
         const data = {
             ...getSharedSnapshot(),
-            promotions,
+            promotions: normalizedPromotions,
             priceHistory: salesHistory,
             refundHistory,
             velocityLookback,
@@ -688,7 +742,7 @@ export const useAppState = () => {
                     priceChangeHistory: Array.isArray(migrated.priceChangeHistory) ? migrated.priceChangeHistory : [],
                     costChangeHistory: Array.isArray(migrated.costChangeHistory) ? migrated.costChangeHistory : [],
                     inventoryChangeHistory: Array.isArray(migrated.inventoryChangeHistory) ? migrated.inventoryChangeHistory : [],
-                    promotions: Array.isArray(migrated.promotions) ? migrated.promotions : [],
+                    promotions: normalizePromotionStatuses(Array.isArray(migrated.promotions) ? migrated.promotions : []),
                     learnedAliases: migrated.learnedAliases && typeof migrated.learnedAliases === 'object' ? migrated.learnedAliases : {},
                     pricingRules: migrated.pricingRules || DEFAULT_PRICING_RULES,
                     logisticsRules: Array.isArray(migrated.logisticsRules) ? migrated.logisticsRules : DEFAULT_LOGISTICS_RULES,
@@ -713,7 +767,7 @@ export const useAppState = () => {
                 setPriceChangeHistory(restored.priceChangeHistory);
                 setCostChangeHistory(restored.costChangeHistory);
                 setInventoryChangeHistory(restored.inventoryChangeHistory);
-                setPromotions(restored.promotions);
+                setPromotions(normalizePromotionStatuses(restored.promotions));
                 setLearnedAliases(restored.learnedAliases);
                 setPricingRules(restored.pricingRules);
                 setLogisticsRules(restored.logisticsRules);
@@ -1272,9 +1326,10 @@ export const useAppState = () => {
                 setSyncStatus('error');
                 return;
             }
+            const normalizedPromotionsForPush = normalizePromotionStatuses(promotions || []);
             const promoPushRes = await pushPromotions(
                 storedAdminPassword,
-                promotions || []
+                normalizedPromotionsForPush
             );
             if (!promoPushRes.success) {
                 console.error('[push] promotions push failed:', promoPushRes.error);
@@ -1589,7 +1644,8 @@ export const useAppState = () => {
             // Pull promotions from separate table
             const promoRes = await pullPromotions();
             if (promoRes.success && Array.isArray(promoRes.promotions)) {
-                const nextPromotions = keepLocalIfRemoteEmpty('promotions', promoRes.promotions, promotions || []);
+                const nextPromotionsRaw = keepLocalIfRemoteEmpty('promotions', promoRes.promotions, promotions || []);
+                const nextPromotions = normalizePromotionStatuses(nextPromotionsRaw);
                 setPromotions(nextPromotions);
                 console.log(`[sync] promotions loaded — ${nextPromotions.length} campaigns`);
             } else {
@@ -1698,100 +1754,311 @@ export const useAppState = () => {
     }, []);
 
     // --- OPTIMAL PRICING: RECALCULATE BENCHMARKS ---
-    const handleRecalculateBenchmarks = useCallback((categoriesToRebuild?: string[]) => {
+    const handleCancelBenchmarkRecalculation = useCallback(() => {
+        benchmarkRunRef.current.cancelled = true;
+    }, []);
+
+    const handleRecalculateBenchmarks = useCallback(async (options?: RecalculateBenchmarkOptions): Promise<CohortShiftWarning[]> => {
+        if (benchmarkRunRef.current.running) return [];
+
+        const mode: BenchmarkRecalcMode = options?.mode ?? 'incremental';
+        const noticeCategories = (benchmarkUpdateNotices || []).map(n => n.category);
+        const categoryScopeRaw = mode === 'full'
+            ? (options?.categories || [])
+            : ((options?.categories && options.categories.length > 0) ? options.categories : noticeCategories);
+        const categoryScope = Array.from(new Set((categoryScopeRaw || []).filter(Boolean)));
+        const hasScopedCategories = mode === 'full' ? true : categoryScope.length > 0;
+
+        if (!hasScopedCategories) {
+            setBenchmarkRecalcState({
+                status: 'completed',
+                stage: 'FINALIZING',
+                mode,
+                processed: 0,
+                total: 0,
+                elapsedMs: 0,
+                startedAt: new Date().toISOString(),
+                completedAt: new Date().toISOString(),
+                summary: 'No categories require recalculation.',
+            });
+            return [];
+        }
+
+        const runId = benchmarkRunRef.current.id + 1;
+        benchmarkRunRef.current.id = runId;
+        benchmarkRunRef.current.cancelled = false;
+        benchmarkRunRef.current.running = true;
+        const startedAt = Date.now();
         const todayKey = new Date().toISOString().split('T')[0];
         const resolver = buildCanonicalResolver(learnedAliases);
+        const shouldStop = () => benchmarkRunRef.current.cancelled || benchmarkRunRef.current.id !== runId;
+        const tick = () => Date.now() - startedAt;
+        const yieldToUi = async () => new Promise<void>(resolve => setTimeout(resolve, 0));
+        let lastProcessed = 0;
+        let lastTotal = 0;
 
-        // Build price points for all SKUs (needed for cohort stats)
-        const allPricePoints = new Map<string, PricePoint[]>();
-        products.forEach(product => {
-            const canonicalSku = resolver(product.sku);
-            const eras = buildPriceEras(
-                canonicalSku, priceChangeHistory,
-                salesHistory,
-                product.caPrice ?? product.currentPrice, todayKey, resolver
-            );
-            // Collect transactions for this canonical SKU from all alias variants
-            const txs = salesHistory.filter(tx => resolver(tx.sku) === canonicalSku);
-            const tagged = txs
-                .filter(tx => isEligibleTransaction(tx, pricingRules))
-                .map(tx => ({
-                    ...tx,
-                    canonicalSku,
-                    rawSku: tx.sku,
-                    source: tagTransactionSource(tx, promotions, canonicalSku, resolver),
-                    effectivePrice: tx.price,
-                    eraId: assignTransactionToEra(tx, eras)?.eraId ?? '',
-                }));
-            const costs =
-                (product.costPrice ?? product.costDetail?.cogs ?? 0) +
-                (product.postage ?? product.costDetail?.postage ?? 0) +
-                (product.sellingFee ?? product.costDetail?.sellingFee ?? 0) +
-                (product.adsFee ?? product.costDetail?.adsFee ?? 0);
-            allPricePoints.set(
-                canonicalSku,
-                buildPricePoints(canonicalSku, tagged, eras, promotions, costs, resolver)
-            );
-        });
-
-        // Build new snapshot
-        const newSnapshot = computeAllCohortStats(products, allPricePoints, 4, resolver);
-
-        // Detect bucket shifts vs existing snapshot
-        const shifts = cohortSnapshot ? detectBenchmarkShifts(cohortSnapshot, newSnapshot) : [];
-
-        // Merge with existing snapshot — replace rebuilt categories, keep others
-        const merged: CohortSnapshot = cohortSnapshot ? {
-            ...cohortSnapshot,
-            computedAt: newSnapshot.computedAt,
-            version: (cohortSnapshot.version ?? 0) + 1,
-            categoryBuckets: new Map([...cohortSnapshot.categoryBuckets, ...newSnapshot.categoryBuckets]),
-            cohortStats: new Map([...cohortSnapshot.cohortStats, ...newSnapshot.cohortStats]),
-            skuAssignments: new Map([...cohortSnapshot.skuAssignments, ...newSnapshot.skuAssignments]),
-        } : newSnapshot;
-
-        setCohortSnapshot(merged);
-
-        // Recalculate optimal prices for all SKUs in rebuilt categories
-        const affectedSkus = new Set<string>();
-        newSnapshot.skuAssignments.forEach((_, sku) => affectedSkus.add(sku));
-
-        const nextResults = new Map(optimalPriceResults);
-        affectedSkus.forEach(canonicalSku => {
-            const product = products.find(p => resolver(p.sku) === canonicalSku);
-            if (!product) return;
-            const bucketKey = merged.skuAssignments.get(canonicalSku);
-            const cohort = bucketKey ? merged.cohortStats.get(bucketKey) : undefined;
-            if (!cohort) return;
-            const result = calculateOptimalPrice({
-                sku: product,
-                priceHistory: salesHistory,
-                priceChangeLog: priceChangeHistory,
-                promotions,
-                pricingRules,
-                cohortSnapshot: merged,
-                learnedAliases,
-                today: todayKey,
+        try {
+            setBenchmarkRecalcState({
+                status: 'running',
+                stage: 'PREPARING',
+                mode,
+                processed: 0,
+                total: 0,
+                elapsedMs: 0,
+                startedAt: new Date(startedAt).toISOString(),
+                completedAt: null,
+                summary: '',
             });
-            nextResults.set(canonicalSku, result);
-        });
-        setOptimalPriceResults(nextResults);
 
-        // Clear notices for rebuilt categories
-        setBenchmarkUpdateNotices(prev =>
-            prev.filter(n => !newSnapshot.categoryBuckets.has(n.category))
-        );
+            const canonicalProductMap = new Map<string, Product>();
+            products.forEach(product => {
+                const canonicalSku = resolver(product.sku);
+                if (!canonicalProductMap.has(canonicalSku)) canonicalProductMap.set(canonicalSku, product);
+            });
 
-        return shifts;
-    }, [products, priceHistoryMap, priceChangeHistory, pricingRules, promotions,
-        learnedAliases, cohortSnapshot, optimalPriceResults, salesHistory]);
+            const scopedCategorySet = new Set(categoryScope);
+            const scopedCanonicalSkus = Array.from(canonicalProductMap.entries())
+                .filter(([, product]) => mode === 'full' || scopedCategorySet.has(product.category ?? 'Uncategorised'))
+                .map(([canonicalSku]) => canonicalSku);
+
+            if (scopedCanonicalSkus.length === 0) {
+                setBenchmarkRecalcState({
+                    status: 'completed',
+                    stage: 'FINALIZING',
+                    mode,
+                    processed: 0,
+                    total: 0,
+                    elapsedMs: tick(),
+                    startedAt: new Date(startedAt).toISOString(),
+                    completedAt: new Date().toISOString(),
+                    summary: 'No SKUs found in selected scope.',
+                });
+                return [];
+            }
+
+            const txByCanonical = new Map<string, PriceLog[]>();
+            salesHistory.forEach(tx => {
+                const canonicalSku = resolver(tx.sku);
+                if (!txByCanonical.has(canonicalSku)) txByCanonical.set(canonicalSku, []);
+                txByCanonical.get(canonicalSku)!.push(tx);
+            });
+
+            const priceChangesByCanonical = new Map<string, PriceChangeRecord[]>();
+            priceChangeHistory.forEach(change => {
+                const canonicalSku = resolver(change.sku);
+                if (!priceChangesByCanonical.has(canonicalSku)) priceChangesByCanonical.set(canonicalSku, []);
+                priceChangesByCanonical.get(canonicalSku)!.push(change);
+            });
+
+            const allPricePoints = new Map<string, PricePoint[]>();
+            const pointsBatchSize = 40;
+            setBenchmarkRecalcState(prev => ({
+                ...prev,
+                stage: 'REBUILDING_COHORTS',
+                total: scopedCanonicalSkus.length,
+                processed: 0,
+                elapsedMs: tick(),
+            }));
+            lastProcessed = 0;
+            lastTotal = scopedCanonicalSkus.length;
+
+            for (let i = 0; i < scopedCanonicalSkus.length; i++) {
+                if (shouldStop()) throw new Error('BENCHMARK_CANCELLED');
+
+                const canonicalSku = scopedCanonicalSkus[i];
+                const product = canonicalProductMap.get(canonicalSku);
+                if (!product) continue;
+
+                const txs = txByCanonical.get(canonicalSku) || [];
+                const skuPriceChanges = priceChangesByCanonical.get(canonicalSku) || [];
+                const eras = buildPriceEras(
+                    canonicalSku,
+                    skuPriceChanges,
+                    txs,
+                    product.caPrice ?? product.currentPrice,
+                    todayKey,
+                    resolver
+                );
+                const tagged = txs
+                    .filter(tx => isEligibleTransaction(tx, pricingRules))
+                    .map(tx => ({
+                        ...tx,
+                        canonicalSku,
+                        rawSku: tx.sku,
+                        source: tagTransactionSource(tx, promotions, canonicalSku, resolver),
+                        effectivePrice: tx.price,
+                        eraId: assignTransactionToEra(tx, eras)?.eraId ?? '',
+                    }));
+                const costs =
+                    (product.costPrice ?? product.costDetail?.cogs ?? 0) +
+                    (product.postage ?? product.costDetail?.postage ?? 0) +
+                    (product.sellingFee ?? product.costDetail?.sellingFee ?? 0) +
+                    (product.adsFee ?? product.costDetail?.adsFee ?? 0);
+                allPricePoints.set(
+                    canonicalSku,
+                    buildPricePoints(canonicalSku, tagged, eras, promotions, costs, resolver)
+                );
+
+                if ((i + 1) % pointsBatchSize === 0 || i === scopedCanonicalSkus.length - 1) {
+                    lastProcessed = i + 1;
+                    lastTotal = scopedCanonicalSkus.length;
+                    setBenchmarkRecalcState(prev => ({
+                        ...prev,
+                        processed: i + 1,
+                        total: scopedCanonicalSkus.length,
+                        elapsedMs: tick(),
+                    }));
+                    await yieldToUi();
+                }
+            }
+
+            if (shouldStop()) throw new Error('BENCHMARK_CANCELLED');
+
+            const scopedProducts = Array.from(canonicalProductMap.entries())
+                .filter(([, product]) => mode === 'full' || scopedCategorySet.has(product.category ?? 'Uncategorised'))
+                .map(([, product]) => product);
+            const rebuiltSnapshot = computeAllCohortStats(scopedProducts, allPricePoints, 4, resolver);
+            const shifts = cohortSnapshot ? detectBenchmarkShifts(cohortSnapshot, rebuiltSnapshot) : [];
+
+            let merged: CohortSnapshot;
+            if (!cohortSnapshot || mode === 'full') {
+                merged = rebuiltSnapshot;
+            } else {
+                const scopedCategories = new Set(Array.from(rebuiltSnapshot.categoryBuckets.keys()));
+                const mergedCategoryBuckets = new Map(cohortSnapshot.categoryBuckets);
+                scopedCategories.forEach(category => mergedCategoryBuckets.delete(category));
+                rebuiltSnapshot.categoryBuckets.forEach((value, key) => mergedCategoryBuckets.set(key, value));
+
+                const mergedCohortStats = new Map(cohortSnapshot.cohortStats);
+                Array.from(mergedCohortStats.keys()).forEach(bucketKey => {
+                    const category = bucketKey.split('::')[0] || '';
+                    if (scopedCategories.has(category)) mergedCohortStats.delete(bucketKey);
+                });
+                rebuiltSnapshot.cohortStats.forEach((value, key) => mergedCohortStats.set(key, value));
+
+                const mergedAssignments = new Map(cohortSnapshot.skuAssignments);
+                Array.from(mergedAssignments.entries()).forEach(([sku, bucketKey]) => {
+                    const assignedCategory = bucketKey.split('::')[0] || '';
+                    if (scopedCategories.has(assignedCategory)) mergedAssignments.delete(sku);
+                });
+                rebuiltSnapshot.skuAssignments.forEach((value, key) => mergedAssignments.set(key, value));
+
+                merged = {
+                    ...cohortSnapshot,
+                    computedAt: rebuiltSnapshot.computedAt,
+                    version: (cohortSnapshot.version ?? 0) + 1,
+                    categoryBuckets: mergedCategoryBuckets,
+                    cohortStats: mergedCohortStats,
+                    skuAssignments: mergedAssignments,
+                };
+            }
+
+            setCohortSnapshot(merged);
+
+            const affectedSkus = Array.from(rebuiltSnapshot.skuAssignments.keys());
+            setBenchmarkRecalcState(prev => ({
+                ...prev,
+                stage: 'CALCULATING_OPTIMAL_PRICES',
+                processed: 0,
+                total: affectedSkus.length,
+                elapsedMs: tick(),
+            }));
+            lastProcessed = 0;
+            lastTotal = affectedSkus.length;
+
+            const nextResults = new Map(optimalPriceResults);
+            const calcBatchSize = 30;
+            for (let i = 0; i < affectedSkus.length; i++) {
+                if (shouldStop()) throw new Error('BENCHMARK_CANCELLED');
+                const canonicalSku = affectedSkus[i];
+                const product = canonicalProductMap.get(canonicalSku);
+                if (!product) continue;
+                const bucketKey = merged.skuAssignments.get(canonicalSku);
+                const cohort = bucketKey ? merged.cohortStats.get(bucketKey) : undefined;
+                if (!cohort) continue;
+                const result = calculateOptimalPrice({
+                    sku: product,
+                    priceHistory: salesHistory,
+                    priceChangeLog: priceChangeHistory,
+                    promotions,
+                    pricingRules,
+                    cohortSnapshot: merged,
+                    learnedAliases,
+                    today: todayKey,
+                });
+                nextResults.set(canonicalSku, result);
+
+                if ((i + 1) % calcBatchSize === 0 || i === affectedSkus.length - 1) {
+                    lastProcessed = i + 1;
+                    lastTotal = affectedSkus.length;
+                    setOptimalPriceResults(new Map(nextResults));
+                    setBenchmarkRecalcState(prev => ({
+                        ...prev,
+                        processed: i + 1,
+                        total: affectedSkus.length,
+                        elapsedMs: tick(),
+                    }));
+                    await yieldToUi();
+                }
+            }
+
+            if (shouldStop()) throw new Error('BENCHMARK_CANCELLED');
+
+            setBenchmarkUpdateNotices(prev => prev.filter(n => !rebuiltSnapshot.categoryBuckets.has(n.category)));
+            setBenchmarkRecalcState({
+                status: 'completed',
+                stage: 'FINALIZING',
+                mode,
+                processed: affectedSkus.length,
+                total: affectedSkus.length,
+                elapsedMs: tick(),
+                startedAt: new Date(startedAt).toISOString(),
+                completedAt: new Date().toISOString(),
+                summary: `Updated ${affectedSkus.length.toLocaleString()} SKU benchmarks.`,
+            });
+            return shifts;
+        } catch (error) {
+            if ((error as Error).message === 'BENCHMARK_CANCELLED') {
+                setBenchmarkRecalcState({
+                    status: 'cancelled',
+                    stage: 'FINALIZING',
+                    mode,
+                    processed: lastProcessed,
+                    total: lastTotal,
+                    elapsedMs: tick(),
+                    startedAt: new Date(startedAt).toISOString(),
+                    completedAt: new Date().toISOString(),
+                    summary: 'Benchmark recalculation was cancelled.',
+                });
+                return [];
+            }
+            console.error('[benchmark] recalculation failed', error);
+            setBenchmarkRecalcState({
+                status: 'error',
+                stage: 'FINALIZING',
+                mode,
+                processed: 0,
+                total: 0,
+                elapsedMs: tick(),
+                startedAt: new Date(startedAt).toISOString(),
+                completedAt: new Date().toISOString(),
+                summary: 'Benchmark recalculation failed.',
+            });
+            return [];
+        } finally {
+            benchmarkRunRef.current.running = false;
+        }
+    }, [benchmarkUpdateNotices, learnedAliases, products, salesHistory, priceChangeHistory, pricingRules, promotions, cohortSnapshot, optimalPriceResults]);
 
     // ── Dirty-tracking wrappers ──────────────────────────────────────────────
     // These replace the raw setters exported to consumers so that any in-app
     // edit (new promotion, saved template, rule change, etc.) automatically
     // marks the app dirty and prompts a DB push — same as file uploads do.
     const updatePromotions = useCallback((v: React.SetStateAction<PromotionEvent[]>) => {
-        setPromotions(v);
+        setPromotions(prev => {
+            const nextRaw = typeof v === 'function' ? (v as (prev: PromotionEvent[]) => PromotionEvent[])(prev) : v;
+            return normalizePromotionStatuses(nextRaw || []);
+        });
         if (isAdminMode) setIsDirty(true);
     }, [isAdminMode]);
 
@@ -1998,6 +2265,8 @@ export const useAppState = () => {
         setCohortSnapshot,
         optimalPriceResults,
         benchmarkUpdateNotices,
+        benchmarkRecalcState,
         handleRecalculateBenchmarks,
+        handleCancelBenchmarkRecalculation,
     };
 };

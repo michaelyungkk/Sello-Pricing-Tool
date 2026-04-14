@@ -1,11 +1,11 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Info, AlertTriangle, Package, RotateCcw, Megaphone, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
-import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules, OptimalPriceResult } from '../../types';
+import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules, OptimalPriceResult, PromotionEvent } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { calcProfit, calcRevenue, calcAdSpend, marginPct, calcTACoSPct, calcUnits } from '../../services/metrics';
 import { buildWindow } from '../../services/dateWindow';
-import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, getReturnDateKey } from '../../services/dateUtils';
+import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, getReturnDateKey, addDaysToDateKey } from '../../services/dateUtils';
 import { VAT_MULTIPLIER } from '../../constants';
 import { buildRefundOverview } from '../../services/refundAgg';
 import { parseReturnsReason } from '../../services/returnsReasonCodes';
@@ -13,6 +13,7 @@ import { sortRows, SortState } from '../../utils/tableSort';
 import { aggregateRefundKeywords } from '../../services/refundTextAgg';
 import { calculateQuantiles } from './charts/BoxPlot';
 import { getCanonicalSku } from '../../services/skuNormalization';
+import { formatNumber } from '../../utils/format';
 
 // Section Components
 import { SkuOverviewSection } from './sections/SkuOverviewSection';
@@ -21,6 +22,7 @@ import { DistributionAnalysisSection } from './sections/DistributionAnalysisSect
 import { PricingHistorySection } from './sections/PricingHistorySection';
 import { TransactionLedgerSection } from './sections/TransactionLedgerSection';
 import { ReturnsAnalysisSection } from './sections/ReturnsAnalysisSection';
+import { StatusBadge } from '../promotionManager/parts/StatusBadge';
 
 interface SkuDeepDivePageProps {
     data: {
@@ -37,6 +39,7 @@ interface SkuDeepDivePageProps {
     focus?: string;
     thresholds: ThresholdConfig;
     pricingRules?: PricingRules;
+    promotions?: PromotionEvent[];
     skuFamilies: any[];
     products: Product[];
     adGroups: any[];
@@ -53,7 +56,7 @@ const getActiveSectionFromUrl = () => {
 
 const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     data, themeColor, onBack, priceChangeHistory = [], initialTimeWindow, focus, thresholds, pricingRules,
-    skuFamilies, products, adGroups, priceHistoryMap, optimalPriceResults
+    promotions = [], skuFamilies, products, adGroups, priceHistoryMap, optimalPriceResults
 }) => {
     const { product, allTimeSales, allTimeQty, transactions = [], refunds = [] } = data;
 
@@ -96,12 +99,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     const signalsRef = useRef<HTMLDivElement>(null);
     const analysisRef = useRef<HTMLDivElement>(null);
     const pricingRef = useRef<HTMLDivElement>(null);
+    const promotionRef = useRef<HTMLDivElement>(null);
     const ledgerRef = useRef<HTMLDivElement>(null);
 
-    const scrollToSection = (section: 'analysis' | 'pricing' | 'ledger' | 'refunds') => {
+    const scrollToSection = (section: 'analysis' | 'pricing' | 'promotion' | 'ledger' | 'refunds') => {
         const refMap = {
             analysis: analysisRef,
             pricing: pricingRef,
+            promotion: promotionRef,
             ledger: ledgerRef,
             refunds: refundsRef
         };
@@ -671,6 +676,113 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         return { salesRows, totalUnits, adOnlySpend, refundCount, refundValue };
     }, [filteredTransactions]);
 
+    const promotionHistoryRows = useMemo(() => {
+        const targetCanonicalSku = getCanonicalSku(product.sku);
+        const txLogs = Array.isArray(transactions) ? transactions : [];
+
+        const parseFiniteNumber = (value: unknown): number | null => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+
+        const matchedRows: Array<{
+            key: string;
+            campaignName: string;
+            platform: string;
+            status: PromotionEvent['status'];
+            startDate: string;
+            endDate: string;
+            baselinePrice: number | null;
+            promoPrice: number | null;
+            upliftQty: number | null;
+            upliftProfit: number | null;
+            sortDate: string;
+        }> = [];
+
+        const deriveStatus = (start: string | null, end: string | null): PromotionEvent['status'] => {
+            if (!start || !end) return 'UPCOMING';
+            if (start > todayKey) return 'UPCOMING';
+            if (end < todayKey) return 'ENDED';
+            return 'ACTIVE';
+        };
+
+        (promotions || []).forEach((promo) => {
+            const promoItems = Array.isArray(promo.items) ? promo.items : [];
+            const promoStart = asDateKey(promo.startDate);
+            const promoEnd = asDateKey(promo.endDate);
+            const platform = promo.platform || 'All';
+            const derivedStatus = deriveStatus(promoStart, promoEnd);
+
+            const skuScopedItems = promoItems.filter((item) => getCanonicalSku(item.sku || '') === targetCanonicalSku);
+            const matchedPromoItems: Array<{ sku?: string; upliftUnits?: number; marginPctDuring?: number }> =
+                skuScopedItems.length > 0
+                    ? skuScopedItems
+                    : (promo.promotionScope === 'SHOP' ? [{ sku: product.sku }] : []);
+
+                matchedPromoItems.forEach((item, idx) => {
+                const storedBaselinePrice = parseFiniteNumber((item as any).basePrice);
+                const storedPromoPrice = parseFiniteNumber((item as any).promoPrice);
+                const storedUpliftQty = parseFiniteNumber(item.upliftUnits);
+                const storedUpliftProfit = parseFiniteNumber((item as any).upliftProfit);
+
+                let fallbackUpliftQty: number | null = null;
+                let fallbackUpliftProfit: number | null = null;
+
+                if ((storedUpliftQty === null || storedUpliftProfit === null) && promoStart && promoEnd && derivedStatus !== 'UPCOMING') {
+                    const startDateObj = new Date(promoStart);
+                    const effectiveEndKey = derivedStatus === 'ACTIVE'
+                        ? (todayKey < promoEnd ? todayKey : promoEnd)
+                        : promoEnd;
+                    const effectiveEndDateObj = new Date(effectiveEndKey);
+                    const eventDays = Math.max(1, Math.ceil((effectiveEndDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                    const baselineEnd = addDaysToDateKey(promoStart, -1);
+                    const baselineStart = addDaysToDateKey(baselineEnd, -(eventDays - 1));
+
+                    const samePlatform = (tx: PriceLog) => platform === 'All' || tx.platform === platform;
+                    const sameSku = (tx: PriceLog) => getCanonicalSku(tx.sku || '') === targetCanonicalSku;
+                    const salesOnly = (tx: PriceLog) => calcUnits(tx) > 0;
+
+                    const eventLogs = txLogs.filter((tx) => {
+                        const key = asDateKey(tx.date);
+                        return !!key && sameSku(tx) && samePlatform(tx) && salesOnly(tx) && isDateKeyBetween(key, promoStart, effectiveEndKey);
+                    });
+
+                    const baselineLogs = txLogs.filter((tx) => {
+                        const key = asDateKey(tx.date);
+                        return !!key && sameSku(tx) && samePlatform(tx) && salesOnly(tx) && isDateKeyBetween(key, baselineStart, baselineEnd);
+                    });
+
+                    const eventUnits = eventLogs.reduce((sum, tx) => sum + calcUnits(tx), 0);
+                    const baselineUnits = baselineLogs.reduce((sum, tx) => sum + calcUnits(tx), 0);
+                    const baselineDailyUnits = baselineUnits / eventDays;
+                    fallbackUpliftQty = eventUnits - (baselineDailyUnits * eventDays);
+
+                    const eventProfit = eventLogs.reduce((sum, tx) => sum + calcProfit(tx), 0);
+                    const baselineProfit = baselineLogs.reduce((sum, tx) => sum + calcProfit(tx), 0);
+                    fallbackUpliftProfit = eventProfit - baselineProfit;
+                }
+
+                matchedRows.push({
+                    key: `${promo.id}-${item.sku || product.sku}-${idx}`,
+                    campaignName: promo.name || 'Untitled Campaign',
+                    platform,
+                    status: derivedStatus,
+                    startDate: promoStart || '-',
+                    endDate: promoEnd || '-',
+                    baselinePrice: storedBaselinePrice,
+                    promoPrice: storedPromoPrice,
+                    upliftQty: storedUpliftQty ?? fallbackUpliftQty,
+                    upliftProfit: storedUpliftProfit ?? fallbackUpliftProfit,
+                    sortDate: promoEnd || promoStart || '0000-00-00'
+                });
+            });
+        });
+
+        return matchedRows.sort((a, b) => b.sortDate.localeCompare(a.sortDate));
+    }, [promotions, product.sku, transactions, todayKey]);
+
+    const hasPromotionHistory = promotionHistoryRows.length > 0;
+
     // Each section band breaks out of the parent p-4 md:p-8 padding with -mx-4 md:-mx-8
     // and re-applies inner padding so content lines up with the rest of the app.
     // This gives true full-width colour bands that expand naturally with content.
@@ -768,7 +880,74 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
-            {/* ── 5. Transaction Ledger — light indigo tint ── */}
+            {/* 5. Promotion History */}
+            <div
+                ref={promotionRef}
+                className={`${band} border-y border-emerald-100/70`}
+                style={{ backgroundColor: '#ecfdf5' }}
+            >
+                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
+                    <div className="flex items-center justify-between mb-4 border-b border-emerald-100 pb-3">
+                        <div className="flex items-center gap-2">
+                            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
+                                <Megaphone className="w-4 h-4" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900">Promotion History</h3>
+                        </div>
+                        <span className="text-xs text-gray-500 font-medium">
+                            {hasPromotionHistory ? `${promotionHistoryRows.length} campaign item(s)` : 'No campaign records'}
+                        </span>
+                    </div>
+
+                    {hasPromotionHistory ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-emerald-100">
+                                        <th className="py-2 pr-4">Campaign Name</th>
+                                        <th className="py-2 pr-4">Platform</th>
+                                        <th className="py-2 pr-4">Status</th>
+                                        <th className="py-2 pr-4">Baseline Price</th>
+                                        <th className="py-2 pr-4">Promo Price</th>
+                                        <th className="py-2 pr-4">Uplift Qty</th>
+                                        <th className="py-2 pr-4">Uplift Profit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {promotionHistoryRows.map((row) => (
+                                        <tr key={row.key} className="border-b border-emerald-50/70 last:border-b-0">
+                                            <td className="py-2.5 pr-4">
+                                                <div className="font-medium text-gray-900">{row.campaignName}</div>
+                                                <div className="text-[11px] text-gray-500">{row.startDate} to {row.endDate}</div>
+                                            </td>
+                                            <td className="py-2.5 pr-4 text-gray-700">{row.platform}</td>
+                                            <td className="py-2.5 pr-4"><StatusBadge status={row.status} /></td>
+                                            <td className="py-2.5 pr-4 font-medium text-gray-800">
+                                                {row.baselinePrice === null ? '-' : `£${formatNumber(row.baselinePrice, 2)}`}
+                                            </td>
+                                            <td className="py-2.5 pr-4 font-medium text-gray-800">
+                                                {row.promoPrice === null ? '-' : `£${formatNumber(row.promoPrice, 2)}`}
+                                            </td>
+                                            <td className="py-2.5 pr-4 font-semibold text-gray-900">
+                                                {row.upliftQty === null ? '-' : `${row.upliftQty > 0 ? '+' : ''}${formatNumber(row.upliftQty, 0)}`}
+                                            </td>
+                                            <td className={`py-2.5 pr-4 font-semibold ${row.upliftProfit !== null && row.upliftProfit < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                                                {row.upliftProfit === null
+                                                    ? '-'
+                                                    : `${row.upliftProfit > 0 ? '+' : row.upliftProfit < 0 ? '-' : ''}£${formatNumber(Math.abs(row.upliftProfit), 2)}`}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-500 py-6">No promotion history found for this SKU yet.</div>
+                    )}
+                </div>
+            </div>
+
+            {/* 6. Transaction Ledger */}
             {sortedTransactions.length > 0 && (
                 <div ref={ledgerRef} className={`${band} bg-theme-10/40 border-y border-indigo-100/60`}>
                     <TransactionLedgerSection
@@ -802,7 +981,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
-            {/* ── 6. Returns Analysis — light rose tint ── */}
+            {/* 7. Returns Analysis */}
             <div ref={refundsRef} className={`${band} bg-rose-50/40 border-y border-rose-100/60`}>
                 <ReturnsAnalysisSection
                     refundAnalysis={refundAnalysis}

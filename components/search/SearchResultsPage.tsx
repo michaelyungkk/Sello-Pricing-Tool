@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { SearchResultsPageContainer } from './searchResults/SearchResultsPageContainer';
-import { Product, PricingRules, SearchConfig, PriceChangeRecord, OptimalPriceResult } from '../../types';
+import { Product, PricingRules, SearchConfig, PriceChangeRecord, OptimalPriceResult, PromotionEvent } from '../../types';
 import { SearchIntent } from '../../services/geminiService';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 
@@ -18,6 +18,7 @@ interface SearchResultsPageProps {
   thresholds: ThresholdConfig;
   skuFamilies: any[];
   adGroups: any[];
+  promotions: PromotionEvent[];
   priceHistoryMap: Map<string, any[]>;
   optimalPriceResults?: Map<string, OptimalPriceResult>;
 }

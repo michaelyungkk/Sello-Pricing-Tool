@@ -17,6 +17,22 @@ import { CohortShiftWarning } from '../../../services/cohortAnalysis';
 import { ShowcaseSelectionModal } from '../parts/ShowcaseSelectionModal';
 import { generateShowcasePdf } from '../../../services/showcasePdfGenerator';
 
+type BenchmarkRecalcMode = 'incremental' | 'full';
+type BenchmarkRecalcStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'error';
+type BenchmarkRecalcStage = 'IDLE' | 'PREPARING' | 'REBUILDING_COHORTS' | 'CALCULATING_OPTIMAL_PRICES' | 'FINALIZING';
+
+interface BenchmarkRecalcState {
+    status: BenchmarkRecalcStatus;
+    stage: BenchmarkRecalcStage;
+    mode: BenchmarkRecalcMode;
+    processed: number;
+    total: number;
+    elapsedMs: number;
+    startedAt: string | null;
+    completedAt: string | null;
+    summary: string;
+}
+
 // ─────────────────────────────────────────────
 // Props
 // ─────────────────────────────────────────────
@@ -36,7 +52,8 @@ interface MasterCatalogueTabProps {
     // Optimal pricing
     optimalPriceResults?: Map<string, OptimalPriceResult>;
     benchmarkUpdateNotices?: BenchmarkUpdateNotice[];
-    onRecalculateBenchmarks?: () => CohortShiftWarning[];
+    onRecalculateBenchmarks?: (options?: { mode?: BenchmarkRecalcMode; categories?: string[] }) => Promise<CohortShiftWarning[]>;
+    benchmarkRecalcState?: BenchmarkRecalcState;
     cohortSnapshot?: CohortSnapshot | null;
     onStampLandedAt?: (skus: string[], date: string) => void;
 }
@@ -147,6 +164,7 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
     optimalPriceResults,
     benchmarkUpdateNotices,
     onRecalculateBenchmarks,
+    benchmarkRecalcState,
     cohortSnapshot,
     onStampLandedAt,
 }) => {
@@ -157,20 +175,27 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
     const [showShowcaseModal, setShowShowcaseModal] = useState(false);
 
     // ── Setup benchmark handler (first-time button)
-    const handleSetupBenchmarks = useCallback(() => {
+    const isBenchmarkRunning = benchmarkRecalcState?.status === 'running';
+    const handleSetupBenchmarks = useCallback(async () => {
         if (!onRecalculateBenchmarks) return;
-        const shifts = onRecalculateBenchmarks();
-        // Get rebuilt category list from the new snapshot (all categories on first run)
+        const shifts = await onRecalculateBenchmarks({ mode: 'full' });
         const cats = Array.from(new Set(shifts.map(s => s.category)));
         setShiftReview({ shifts, rebuiltCategories: cats.length > 0 ? cats : ['All categories'] });
     }, [onRecalculateBenchmarks]);
 
     // ── Recalculate button handler
-    const handleRecalculate = useCallback(() => {
+    const handleRecalculate = useCallback(async () => {
         if (!onRecalculateBenchmarks) return;
-        const shifts = onRecalculateBenchmarks();
+        const categories = benchmarkUpdateNotices?.map(n => n.category) ?? [];
+        const shifts = await onRecalculateBenchmarks({ mode: 'incremental', categories });
+        setShiftReview({ shifts, rebuiltCategories: categories.length > 0 ? categories : ['Incremental scope'] });
+    }, [onRecalculateBenchmarks, benchmarkUpdateNotices]);
+
+    const handleFullRebuild = useCallback(async () => {
+        if (!onRecalculateBenchmarks) return;
+        const shifts = await onRecalculateBenchmarks({ mode: 'full' });
         const cats = benchmarkUpdateNotices?.map(n => n.category) ?? [];
-        setShiftReview({ shifts, rebuiltCategories: cats });
+        setShiftReview({ shifts, rebuiltCategories: cats.length > 0 ? cats : ['All categories'] });
     }, [onRecalculateBenchmarks, benchmarkUpdateNotices]);
 
     const handleAcceptShifts = useCallback(() => {
@@ -194,7 +219,8 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                     {onRecalculateBenchmarks && (
                         <button
                             onClick={handleSetupBenchmarks}
-                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg hover:bg-theme transition-colors shadow-sm whitespace-nowrap ml-4"
+                            disabled={isBenchmarkRunning}
+                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg hover:bg-theme transition-colors shadow-sm whitespace-nowrap ml-4 disabled:opacity-50 disabled:cursor-wait"
                         >
                             Calculate Price Benchmarks &amp; Optimal Prices
                         </button>
@@ -215,9 +241,10 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                     <div className="relative group">
                         <button
                             onClick={handleRecalculate}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm"
+                            disabled={isBenchmarkRunning}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-wait"
                         >
-                            <RefreshCw className="w-3.5 h-3.5" />
+                            <RefreshCw className={`w-3.5 h-3.5 ${isBenchmarkRunning ? 'animate-spin' : ''}`} />
                             Recalculate Price Benchmarks
                             {noticeCount > 0 && (
                                 <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
@@ -241,6 +268,13 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                             </div>
                         )}
                     </div>
+                    <button
+                        onClick={handleFullRebuild}
+                        disabled={isBenchmarkRunning}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-wait"
+                    >
+                        Full Rebuild
+                    </button>
                 </div>
             )}
 

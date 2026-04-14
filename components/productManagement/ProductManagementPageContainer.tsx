@@ -19,6 +19,22 @@ import { buildWindow } from '../../services/dateWindow';
 import { getTodayKeyMelbourne } from '../../services/dateUtils';
 import { ContextBar } from '../common/ContextBar';
 
+type BenchmarkRecalcMode = 'incremental' | 'full';
+type BenchmarkRecalcStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'error';
+type BenchmarkRecalcStage = 'IDLE' | 'PREPARING' | 'REBUILDING_COHORTS' | 'CALCULATING_OPTIMAL_PRICES' | 'FINALIZING';
+
+interface BenchmarkRecalcState {
+    status: BenchmarkRecalcStatus;
+    stage: BenchmarkRecalcStage;
+    mode: BenchmarkRecalcMode;
+    processed: number;
+    total: number;
+    elapsedMs: number;
+    startedAt: string | null;
+    completedAt: string | null;
+    summary: string;
+}
+
 interface ProductManagementPageContainerProps {
     products: Product[];
     pricingRules: PricingRules;
@@ -42,7 +58,9 @@ interface ProductManagementPageContainerProps {
     cohortSnapshot?: CohortSnapshot | null;
     optimalPriceResults?: Map<string, OptimalPriceResult>;
     benchmarkUpdateNotices?: BenchmarkUpdateNotice[];
-    onRecalculateBenchmarks?: () => CohortShiftWarning[];
+    onRecalculateBenchmarks?: (options?: { mode?: BenchmarkRecalcMode; categories?: string[] }) => Promise<CohortShiftWarning[]>;
+    benchmarkRecalcState?: BenchmarkRecalcState;
+    onCancelBenchmarkRecalculation?: () => void;
 }
 
 type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison' | 'family-groups';
@@ -70,6 +88,8 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     optimalPriceResults,
     benchmarkUpdateNotices,
     onRecalculateBenchmarks,
+    benchmarkRecalcState,
+    onCancelBenchmarkRecalculation,
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
@@ -152,8 +172,72 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
         return `${format(start, !sameYear)} – ${format(end, true)}`;
     }, [dateWindow]);
 
+    const benchmarkProgressPct = useMemo(() => {
+        const total = benchmarkRecalcState?.total || 0;
+        const processed = benchmarkRecalcState?.processed || 0;
+        if (total <= 0) return 0;
+        return Math.max(0, Math.min(100, Math.round((processed / total) * 100)));
+    }, [benchmarkRecalcState?.processed, benchmarkRecalcState?.total]);
+
+    const benchmarkStageLabel = useMemo(() => {
+        switch (benchmarkRecalcState?.stage) {
+            case 'PREPARING': return 'Preparing';
+            case 'REBUILDING_COHORTS': return 'Rebuilding cohorts';
+            case 'CALCULATING_OPTIMAL_PRICES': return 'Calculating optimal prices';
+            case 'FINALIZING': return 'Finalizing';
+            default: return 'Idle';
+        }
+    }, [benchmarkRecalcState?.stage]);
+
+    const benchmarkElapsedLabel = useMemo(() => {
+        const ms = benchmarkRecalcState?.elapsedMs || 0;
+        const secs = Math.floor(ms / 1000);
+        const minutes = Math.floor(secs / 60);
+        const rem = secs % 60;
+        return `${minutes}:${String(rem).padStart(2, '0')}`;
+    }, [benchmarkRecalcState?.elapsedMs]);
+
     return (
         <div className="max-w-full mx-auto space-y-6 pb-10 h-full flex flex-col">
+            {benchmarkRecalcState && benchmarkRecalcState.status !== 'idle' && (
+                <div className="sticky top-0 z-30 bg-custom-glass backdrop-blur-custom border border-custom-glass rounded-xl p-3 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
+                            <span className="px-2 py-0.5 rounded-full bg-theme-10 text-theme uppercase tracking-wide">
+                                {benchmarkRecalcState.mode === 'full' ? 'Full Rebuild' : 'Incremental'}
+                            </span>
+                            <span>{benchmarkStageLabel}</span>
+                            <span className="text-gray-400">{benchmarkRecalcState.processed.toLocaleString()} / {benchmarkRecalcState.total.toLocaleString()}</span>
+                            <span className="text-gray-400">{benchmarkElapsedLabel}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {benchmarkRecalcState.status === 'running' && onCancelBenchmarkRecalculation && (
+                                <button
+                                    onClick={onCancelBenchmarkRecalculation}
+                                    className="px-3 py-1 text-xs font-bold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                            {benchmarkRecalcState.completedAt && benchmarkRecalcState.status !== 'running' && (
+                                <span className="text-[11px] font-medium text-gray-500">
+                                    Last updated {new Date(benchmarkRecalcState.completedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="mt-2 h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-theme transition-all duration-200"
+                            style={{ width: `${benchmarkProgressPct}%` }}
+                        />
+                    </div>
+                    {!!benchmarkRecalcState.summary && (
+                        <div className="mt-2 text-[11px] text-gray-600">{benchmarkRecalcState.summary}</div>
+                    )}
+                </div>
+            )}
+
             {/* Top Bar matching Marketplace View */}
             <div className="flex flex-wrap gap-4 items-center justify-between">
                 <TabSwitcher
@@ -245,6 +329,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                         optimalPriceResults={optimalPriceResults}
                         benchmarkUpdateNotices={benchmarkUpdateNotices}
                         onRecalculateBenchmarks={onRecalculateBenchmarks}
+                        benchmarkRecalcState={benchmarkRecalcState}
                     />
                 )}
 

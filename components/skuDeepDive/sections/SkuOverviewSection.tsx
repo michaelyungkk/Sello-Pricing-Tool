@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Package, Activity, Warehouse, Ship, Box, BarChart2, History, FileText, RotateCcw } from 'lucide-react';
+import { Package, Activity, Warehouse, Ship, Box, BarChart2, History, FileText, RotateCcw, Tag } from 'lucide-react';
 import { Product } from '../../../types';
 import { GradeBadge } from '../../common/GradeBadge';
 import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
@@ -13,7 +13,7 @@ interface SkuOverviewSectionProps {
     allTimeReturnStats: any;
     thresholds: any;
     hasTransactions: boolean;
-    onScrollToSection: (section: 'analysis' | 'pricing' | 'ledger' | 'refunds') => void;
+    onScrollToSection: (section: 'analysis' | 'pricing' | 'promotion' | 'ledger' | 'refunds') => void;
 }
 
 export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
@@ -44,6 +44,9 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                         </button>
                         <button onClick={() => onScrollToSection('pricing')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-theme-20 hover:text-theme hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
                             <History className="w-3.5 h-3.5" /> Pricing
+                        </button>
+                        <button onClick={() => onScrollToSection('promotion')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-theme-20 hover:text-theme hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
+                            <Tag className="w-3.5 h-3.5" /> Promotion
                         </button>
                         <button onClick={() => onScrollToSection('ledger')} className="px-3 py-1.5 bg-custom-glass border border-custom-glass rounded-lg text-xs font-medium text-gray-600 hover:border-theme-20 hover:text-theme hover:shadow-sm transition-all flex items-center gap-1.5 backdrop-blur-custom">
                             <FileText className="w-3.5 h-3.5" /> Ledger

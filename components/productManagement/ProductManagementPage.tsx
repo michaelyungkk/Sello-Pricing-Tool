@@ -5,6 +5,21 @@ import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, Ref
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import type { CohortShiftWarning } from '../../services/cohortAnalysis';
 
+type BenchmarkRecalcMode = 'incremental' | 'full';
+type BenchmarkRecalcStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'error';
+type BenchmarkRecalcStage = 'IDLE' | 'PREPARING' | 'REBUILDING_COHORTS' | 'CALCULATING_OPTIMAL_PRICES' | 'FINALIZING';
+
+interface BenchmarkRecalcState {
+    status: BenchmarkRecalcStatus;
+    stage: BenchmarkRecalcStage;
+    mode: BenchmarkRecalcMode;
+    processed: number;
+    total: number;
+    elapsedMs: number;
+    startedAt: string | null;
+    completedAt: string | null;
+    summary: string;
+}
 
 interface ProductManagementPageProps {
     products: Product[];
@@ -34,7 +49,9 @@ interface ProductManagementPageProps {
     cohortSnapshot?: CohortSnapshot | null;
     optimalPriceResults?: Map<string, OptimalPriceResult>;
     benchmarkUpdateNotices?: BenchmarkUpdateNotice[];
-    onRecalculateBenchmarks?: () => CohortShiftWarning[];
+    onRecalculateBenchmarks?: (options?: { mode?: BenchmarkRecalcMode; categories?: string[] }) => Promise<CohortShiftWarning[]>;
+    benchmarkRecalcState?: BenchmarkRecalcState;
+    onCancelBenchmarkRecalculation?: () => void;
 }
 
 const ProductManagementPage: React.FC<ProductManagementPageProps> = (props) => {

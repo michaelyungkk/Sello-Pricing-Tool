@@ -236,7 +236,9 @@ const App: React.FC = () => {
         cohortSnapshot,
         optimalPriceResults,
         benchmarkUpdateNotices,
+        benchmarkRecalcState,
         handleRecalculateBenchmarks,
+        handleCancelBenchmarkRecalculation,
         // Ad Campaign
         adSnapshots,
         adRosterChanges,
@@ -674,6 +676,7 @@ const App: React.FC = () => {
                                     headerStyle={headerStyle}
                                     skuFamilies={skuFamilies}
                                     adGroups={adGroups}
+                                    promotions={promotions || []}
                                     priceHistoryMap={priceHistoryMap}
                                     optimalPriceResults={optimalPriceResults}
                                 />
@@ -844,6 +847,8 @@ const App: React.FC = () => {
                                 optimalPriceResults={optimalPriceResults}
                                 benchmarkUpdateNotices={benchmarkUpdateNotices}
                                 onRecalculateBenchmarks={handleRecalculateBenchmarks}
+                                benchmarkRecalcState={benchmarkRecalcState}
+                                onCancelBenchmarkRecalculation={handleCancelBenchmarkRecalculation}
                                 onStampLandedAt={handleStampLandedAt}
                             />
                         </div>)}
