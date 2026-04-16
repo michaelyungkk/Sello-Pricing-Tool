@@ -17,6 +17,7 @@ interface SimRow {
     caPrice: number;
     proposedPrice: number;
     overheadPct: number;
+    commissionPct: number;
     overheadMultiplier: number;
     caBaselinePct: number;
     wildcardCost: number;           // extra cost to add
@@ -28,7 +29,7 @@ interface SimRow {
 const makeRow = (overrides?: Partial<SimRow>): SimRow => ({
     id: Math.random().toString(36).slice(2),
     sku: '', cogs: 0, freight: 0, caPrice: 0, proposedPrice: 0,
-    overheadPct: 8, overheadMultiplier: 1.2, caBaselinePct: 0.7,
+    overheadPct: 8, commissionPct: 0, overheadMultiplier: 1.2, caBaselinePct: 0.7,
     wildcardCost: 0, wildcardType: 'fixed',
     proposedMarginPct: 0, lastEdited: 'price',
     ...overrides,
@@ -52,21 +53,25 @@ function calcRow(r: SimRow) {
     const wildcardAbs     = r.wildcardType === 'pct' ? r.cogs * (r.wildcardCost / 100) : r.wildcardCost;
     const baseCost         = (r.cogs + r.freight + wildcardAbs) * r.overheadMultiplier;
     const overheadFrac     = r.overheadPct / 100;
-    const targetPrice      = targetMargin < 1 && baseCost > 0 ? baseCost / (1 - targetMargin) : 0;
+    const commissionFrac   = r.commissionPct / 100;
+    const targetDenom      = 1 - targetMargin - overheadFrac - commissionFrac;
+    const targetPrice      = targetDenom > 0 && baseCost > 0 ? baseCost / targetDenom : 0;
     const targetPriceMargin = targetPrice > 0
-        ? (targetPrice * (1 - overheadFrac) - baseCost) / targetPrice : NaN;
+        ? (targetPrice * (1 - overheadFrac - commissionFrac) - baseCost) / targetPrice : NaN;
     // Whichever field was last typed drives the other
     // Price should always be the driver unless user explicitly entered a positive margin.
     const hasExplicitMargin = r.lastEdited === 'margin' && r.proposedMarginPct > 0;
+    const proposedDenom = 1 - r.proposedMarginPct / 100 - overheadFrac - commissionFrac;
     const effectiveProposedPrice = hasExplicitMargin
-        ? (baseCost / (1 - r.proposedMarginPct / 100 - overheadFrac))
+        ? (proposedDenom > 0 ? (baseCost / proposedDenom) : 0)
         : r.proposedPrice;
     const derivedMarginPct = effectiveProposedPrice > 0
-        ? (effectiveProposedPrice * (1 - overheadFrac) - baseCost) / effectiveProposedPrice * 100
+        ? (effectiveProposedPrice * (1 - overheadFrac - commissionFrac) - baseCost) / effectiveProposedPrice * 100
         : (hasExplicitMargin ? r.proposedMarginPct : 0);
     const actualMargin = effectiveProposedPrice > 0
-        ? (effectiveProposedPrice * (1 - overheadFrac) - baseCost) / effectiveProposedPrice : NaN;
-    const floorPrice       = baseCost > 0 ? baseCost / 0.70 : 0;
+        ? (effectiveProposedPrice * (1 - overheadFrac - commissionFrac) - baseCost) / effectiveProposedPrice : NaN;
+    const floorDenom = 1 - 0.30 - overheadFrac - commissionFrac;
+    const floorPrice       = baseCost > 0 && floorDenom > 0 ? baseCost / floorDenom : 0;
     return { caBaseline, caBaselineMargin, targetMargin, baseCost, targetPrice, targetPriceMargin, actualMargin, floorPrice, effectiveProposedPrice, derivedMarginPct };
 }
 
@@ -154,6 +159,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
 }) => {
     const [rows, setRows]           = useState<SimRow[]>([makeRow()]);
     const [gOverhead, setGOverhead] = useState(8);
+    const [gCommission, setGCommission] = useState(0);
     const [gVat, setGVat]           = useState(20);
     const [gBase, setGBase]         = useState(0.7);
     const [gWildcard, setGWildcard]     = useState(0);
@@ -205,16 +211,16 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
     }, []);
 
     const addRow = useCallback(() => {
-        setRows(prev => [...prev, makeRow({ overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType })]);
-    }, [gOverhead, gMult, gBase]);
+        setRows(prev => [...prev, makeRow({ overheadPct: gOverhead, commissionPct: gCommission, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType })]);
+    }, [gOverhead, gCommission, gMult, gBase, gWildcard, gWildcardType]);
 
     const removeRow = useCallback((id: string) => {
         setRows(prev => prev.length > 1 ? prev.filter(r => r.id !== id) : prev);
     }, []);
 
     const applyGlobal = useCallback(() => {
-        setRows(prev => prev.map(r => ({ ...r, overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType })));
-    }, [gOverhead, gMult, gBase]);
+        setRows(prev => prev.map(r => ({ ...r, overheadPct: gOverhead, commissionPct: gCommission, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType })));
+    }, [gOverhead, gCommission, gMult, gBase, gWildcard, gWildcardType]);
 
     const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
         e.preventDefault();
@@ -263,15 +269,15 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                 return isNaN(v) ? 0 : v;
             };
             if (cols.length === 1) {
-                return makeRow({ sku: resolvedSku, cogs: p?.costPrice || 0, caPrice: p?.caPrice || 0, freight: erpFreight, overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
+                return makeRow({ sku: resolvedSku, cogs: p?.costPrice || 0, caPrice: p?.caPrice || 0, freight: erpFreight, overheadPct: gOverhead, commissionPct: gCommission, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
             }
-            return makeRow({ sku: resolvedSku, cogs: cols[1] ? n(1) : (p?.costPrice || 0), freight: cols[2] ? n(2) : erpFreight, caPrice: cols[3] ? n(3) : (p?.caPrice || 0), proposedPrice: n(4), overheadPct: gOverhead, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
+            return makeRow({ sku: resolvedSku, cogs: cols[1] ? n(1) : (p?.costPrice || 0), freight: cols[2] ? n(2) : erpFreight, caPrice: cols[3] ? n(3) : (p?.caPrice || 0), proposedPrice: n(4), overheadPct: gOverhead, commissionPct: gCommission, overheadMultiplier: gMult, caBaselinePct: gBase, wildcardCost: gWildcard, wildcardType: gWildcardType });
         });
         setRows(prev => {
             const hasEmpty = prev.length === 1 && !prev[0].sku && !prev[0].cogs;
             return hasEmpty ? newRows : [...prev, ...newRows];
         });
-    }, [productMap, freightMap, gOverhead, gMult, gBase]);
+    }, [productMap, freightMap, gOverhead, gCommission, gMult, gBase, gWildcard, gWildcardType]);
 
     const rows_calc = useMemo(() => rows.map(r => ({ ...r, ...calcRow({ ...r, overheadMultiplier: gMult }) })), [rows, gMult]);
 
@@ -326,6 +332,16 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                         <span className="px-1.5 text-[10px] text-gray-400 border-l border-gray-100 bg-gray-50">%</span>
                     </div>
                 </label>
+                <label className="flex items-center gap-2">
+                    <span className="text-gray-500">Commission</span>
+                    <div className="flex items-center border border-gray-200 rounded-lg bg-white overflow-hidden">
+                        <input type="number" value={gCommission} step={0.5} min={0} max={50}
+                            onChange={e => setGCommission(parseFloat(e.target.value) || 0)}
+                            className="w-12 px-2 py-1 text-xs font-mono outline-none" />
+                        <span className="px-1.5 text-[10px] text-gray-400 border-l border-gray-100 bg-gray-50">%</span>
+                    </div>
+                </label>
+                <span className="text-[10px] text-gray-400">Overhead + Commission are both deducted from selling price.</span>
                 <label className="flex items-center gap-2">
                     <span className="text-gray-500">VAT</span>
                     <div className="flex items-center border border-gray-200 rounded-lg bg-white overflow-hidden">
@@ -570,7 +586,8 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
             <div className="flex items-center flex-wrap gap-x-4 gap-y-1 px-4 py-2 rounded-xl text-[10px] text-gray-400 border border-gray-100 bg-gray-50/40">
                 <span className="font-bold text-gray-500">Formula</span>
                 <span>Base = (COGS + Freight{gWildcard > 0 ? (gWildcardType === 'fixed' ? ` + £${gWildcard.toFixed(2)} extra` : ` + ${gWildcard}% of COGS`) : ''}) x {gMult.toFixed(2)}{gVat === 0 ? ' (ex-VAT)' : ` (${gVat}% VAT)`}</span>
-                <span>Margin = (Price x {((1 - gOverhead / 100) * 100).toFixed(0)}% - Base) / Price</span>
+                <span>Margin = (Price x {((1 - gOverhead / 100 - gCommission / 100) * 100).toFixed(0)}% - Base) / Price</span>
+                <span>Variable deductions: Overhead {gOverhead.toFixed(1)}% + Commission {gCommission.toFixed(1)}%</span>
                 <span>Target: &lt;40% baseline = 30% / &lt;50% = 35% / &gt;=50% = 40%</span>
                 {belowFloor > 0 && (
                     <span className="ml-auto text-red-500 font-bold">{belowFloor} SKU{belowFloor > 1 ? 's' : ''} below floor</span>

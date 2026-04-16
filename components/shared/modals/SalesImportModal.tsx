@@ -3,7 +3,6 @@ import React, { useState, useRef, useMemo } from 'react';
 import { formatSmartMoney } from '../../../utils/format';
 import { Product, PricingRules, HistoryPayload } from '../../../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search, Hash } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { asDateKeyNaive } from '../../../services/dateUtils';
 import { getCanonicalSku } from '../../../services/skuNormalization';
 
@@ -22,7 +21,7 @@ interface SalesImportModalProps {
         shipmentLogs?: any[],
         discoveredPlatforms?: string[],
         newlyLearnedAliases?: Record<string, string>
-    ) => void;
+    ) => void | Promise<void>;
 }
 
 interface ColumnMapping {
@@ -59,6 +58,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
     const [rawHeaders, setRawHeaders] = useState<string[]>([]);
     const [rawRows, setRawRows] = useState<any[][]>([]);
+    const [importProgress, setImportProgress] = useState(0);
+    const [importProgressText, setImportProgressText] = useState('');
+    const [isConfirmingImport, setIsConfirmingImport] = useState(false);
 
     const [mapping, setMapping] = useState<ColumnMapping>({ sku: '', qty: '', revenue: '' });
     const [periodDays, setPeriodDays] = useState<number>(30); // Default to 30 days calculation if no dates
@@ -69,6 +71,51 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
     const [resolvedAliases, setResolvedAliases] = useState<Record<string, string>>({});
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const revenueDisplay = useMemo(() => {
+        const value = Number(previewData?.stats?.totalRevenue || 0);
+        return `£${value.toLocaleString()}`;
+    }, [previewData?.stats?.totalRevenue]);
+    const revenueFontClass = useMemo(() => {
+        const len = revenueDisplay.length;
+        if (len >= 14) return 'text-sm';
+        if (len >= 12) return 'text-base';
+        if (len >= 10) return 'text-lg';
+        return 'text-2xl';
+    }, [revenueDisplay]);
+
+    const handleConfirmImport = async () => {
+        if (!previewData || isConfirmingImport) return;
+
+        setIsConfirmingImport(true);
+        setImportProgress(5);
+        setImportProgressText('Applying import to app data...');
+
+        let progressInterval: ReturnType<typeof setInterval> | null = null;
+        try {
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            progressInterval = setInterval(() => {
+                setImportProgress(prev => (prev >= 90 ? prev : prev + 5));
+            }, 180);
+
+            await Promise.resolve(onConfirm(
+                previewData.updates,
+                { current: previewData.stats.dateLabel, last: "Previous" },
+                previewData.history,
+                previewData.shipmentLogs,
+                previewData.stats.discoveredPlatforms,
+                resolvedAliases
+            ));
+
+            setImportProgress(100);
+            setImportProgressText('Import complete');
+        } catch (err) {
+            console.error(err);
+            setError('Failed to apply import. Please try again.');
+        } finally {
+            if (progressInterval) clearInterval(progressInterval);
+            setIsConfirmingImport(false);
+        }
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) processFile(e.target.files[0]);
@@ -76,149 +123,74 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
     const processFile = (file: File) => {
         setIsProcessing(true);
+        setImportProgress(0);
+        setImportProgressText('Reading file...');
         setError(null);
 
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
                 const data = e.target?.result;
-                let rows: any[][] = [];
-                if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                    rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                } else {
-                    const text = data as string;
-                    rows = text.split('\n').map(l => l.split(','));
-                }
-
-                if (rows.length < 2) throw new Error("File empty or missing headers");
-
-                // Clean headers
-                const headers = rows[0].map(h => String(h).trim());
-                setRawHeaders(headers);
-                setRawRows(rows.slice(1));
-
-                // --- AUTO DETECT MAPPING ---
-                const normalize = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const findMapped = (candidates: string[], fuzzy = false) => {
-                    const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalize(h) }));
-
-                    for (const rawCand of candidates) {
-                        const cand = normalize(rawCand);
-                        const isPercentCand = rawCand.includes('%') || rawCand.toLowerCase().includes('percent');
-
-                        // Pass 1: Strict match with symbol requirement
-                        const strictMatch = normalizedHeaders.find(h => {
-                            const hasPercentSymbol = h.original.includes('%') || h.original.toLowerCase().includes('percent');
-                            if (isPercentCand && !hasPercentSymbol) return false;
-                            // If it's NOT a percent candidate, but the header IS a percent header, avoid it
-                            if (!isPercentCand && hasPercentSymbol) return false;
-                            return h.normalized === cand;
-                        });
-                        if (strictMatch) return strictMatch.original;
+                const worker = new Worker(
+                    new URL('../../../workers/salesImportWorker.ts', import.meta.url),
+                    { type: 'module' }
+                );
+                worker.onmessage = (message) => {
+                    const payload = message.data;
+                    if (payload?.type === 'progress') {
+                        setImportProgress(payload.progress || 0);
+                        setImportProgressText(payload.message || 'Processing...');
+                        return;
                     }
 
-                    for (const rawCand of candidates) {
-                        const cand = normalize(rawCand);
-                        const isPercentCand = rawCand.includes('%') || rawCand.toLowerCase().includes('percent');
-
-                        // Pass 2: Fuzzy match with symbol requirement
-                        if (fuzzy) {
-                            const fuzzyMatch = normalizedHeaders.find(h => {
-                                const hasPercentSymbol = h.original.includes('%') || h.original.toLowerCase().includes('percent');
-                                if (isPercentCand && !hasPercentSymbol) return false;
-                                if (!isPercentCand && hasPercentSymbol) return false;
-                                return h.normalized.includes(cand);
-                            });
-                            if (fuzzyMatch) return fuzzyMatch.original;
-                        }
-                    }
-
-                    // Pass 3: Last resort Fallback
-                    for (const rawCand of candidates) {
-                        const cand = normalize(rawCand);
-                        const match = headers.find(h => normalize(h) === cand);
-                        if (match) return match;
-                    }
-
-                    return '';
-                };
-
-                const detectedMapping: ColumnMapping = {
-                    sku: findMapped(['skucode', 'sku', 'sellersku', 'itemnumber']),
-                    qty: findMapped(['skuquantity', 'qty', 'quantity', 'units', 'sold']),
-                    revenue: findMapped(['salesamt', 'revenue', 'totalprice', 'price', 'grosssales']),
-                    date: findMapped(['ordertime', 'date', 'orderdate', 'created']),
-                    platform: findMapped(['platformnamelevel1', 'platform', 'source', 'channel', 'marketplace']),
-                    platformLevel2: findMapped(['platformnamelevel2', 'fulfillment', 'subsource']),
-
-                    // ERP Specific
-                    category: findMapped(['category', 'maincategory']),
-                    cogs: findMapped(['cogs', 'cost', 'unitcost']),
-                    sellingFee: findMapped(['sellingfee', 'commission', 'referralfee']),
-                    adsFee: findMapped(['adsfee', 'adspend', 'ppc', 'sponsored']),
-                    postage: findMapped(['postage', 'shipping', 'freight', 'delivery']),
-                    logisticsService: findMapped(['logisticsname', 'logistics_name', 'service', 'courier', 'shippingmethod']),
-                    extraFreight: findMapped(['extrafreight', 'shippingincome', 'shippingcharge']),
-                    otherFee: findMapped(['otherfee']),
-                    subscriptionFee: findMapped(['subscriptionfee']),
-                    wmsFee: findMapped(['wmsfee', 'fulfillment', 'pickpack']),
-                    profitExclRn: findMapped(['profit_excl_rn', 'netprofit', 'profitamount'], false),
-                    profitExclRnPercent: findMapped(['profit_excl_rn%', 'netpm', 'profit%', 'margin%'], true),
-                    outerOrderId: findMapped(['outer_order_id', 'order_id', 'orderid', 'order_no', 'ordernumber', 'transaction_id'], false),
-                    orderType: findMapped(['ordertype', 'order_type', 'type'], false),
-                    receivePostcode: findMapped(['receive_postcode', 'postcode', 'zip', 'postalcode', 'ship_to_zip'], false),
-                    logisticPartner: findMapped(['label_provider', 'shipping_partner', 'logistic_partner', 'carrier_partner'], false)
-                };
-
-                setMapping(detectedMapping);
-
-                // ** AUTO-SKIP LOGIC **
-                if (detectedMapping.sku && detectedMapping.qty && detectedMapping.revenue) {
-                    const worker = new Worker(
-                        new URL('../../../workers/salesImportWorker.ts', import.meta.url),
-                        { type: 'module' }
-                    );
-
-                    setIsProcessing(true);
-
-                    worker.onmessage = (e) => {
+                    if (payload?.type === 'parsed') {
                         worker.terminate();
-                        if (e.data.success) {
-                            setPreviewData(e.data);
-                            if (Object.keys(e.data.unknownSkus || {}).length > 0) {
-                                setUnknownSkus(e.data.unknownSkus);
-                                setStep('resolution');
-                            } else {
-                                setStep('preview');
-                            }
+                        setRawHeaders(payload.headers || []);
+                        setRawRows(payload.rows || []);
+                        setMapping(payload.detectedMapping || { sku: '', qty: '', revenue: '' });
+                        setStep('mapping');
+                        setIsProcessing(false);
+                        setImportProgress(100);
+                        setImportProgressText('Mapping required');
+                        return;
+                    }
+
+                    worker.terminate();
+                    if (payload?.success) {
+                        setRawHeaders(payload.headers || []);
+                        setRawRows(payload.rows || []);
+                        if (payload.detectedMapping) setMapping(payload.detectedMapping);
+                        setPreviewData(payload);
+                        if (Object.keys(payload.unknownSkus || {}).length > 0) {
+                            setUnknownSkus(payload.unknownSkus);
+                            setStep('resolution');
                         } else {
-                            setError(e.data.error || 'Processing failed');
+                            setStep('preview');
                         }
-                        setIsProcessing(false);
-                    };
+                        setImportProgress(100);
+                        setImportProgressText('Import analysis complete');
+                    } else {
+                        setError(payload?.error || 'Processing failed');
+                    }
+                    setIsProcessing(false);
+                };
 
-                    worker.onerror = (err) => {
-                        worker.terminate();
-                        setError('Processing error: ' + err.message);
-                        setIsProcessing(false);
-                    };
+                worker.onerror = (err) => {
+                    worker.terminate();
+                    setError('Processing error: ' + err.message);
+                    setIsProcessing(false);
+                };
 
-                    worker.postMessage({
-                        headers,
-                        rows: rows.slice(1),
-                        mapping: detectedMapping,
-                        products,
-                        pricingRules,
-                        learnedAliases,
-                        extraAliases: {}
-                    });
-                    return; // keep isProcessing=true while worker runs
-                } else {
-                    setStep('mapping');
-                }
-
+                worker.postMessage({
+                    fileName: file.name,
+                    fileBuffer: data instanceof ArrayBuffer ? data : undefined,
+                    fileText: typeof data === 'string' ? data : undefined,
+                    products,
+                    pricingRules,
+                    learnedAliases,
+                    extraAliases: {}
+                });
+                return;
             } catch (err) {
                 console.error(err);
                 setError("Failed to parse file.");
@@ -226,7 +198,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             setIsProcessing(false);
         };
 
-        if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file);
+        if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) reader.readAsArrayBuffer(file);
         else reader.readAsText(file);
     };
 
@@ -244,19 +216,30 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         );
 
         setIsProcessing(true);
+        setImportProgress(0);
+        setImportProgressText('Analyzing mapped data...');
 
         worker.onmessage = (e) => {
+            const payload = e.data;
+            if (payload?.type === 'progress') {
+                setImportProgress(payload.progress || 0);
+                setImportProgressText(payload.message || 'Processing...');
+                return;
+            }
+
             worker.terminate();
-            if (e.data.success) {
-                setPreviewData(e.data);
-                if (Object.keys(e.data.unknownSkus || {}).length > 0) {
-                    setUnknownSkus(e.data.unknownSkus);
+            if (payload.success) {
+                setPreviewData(payload);
+                if (Object.keys(payload.unknownSkus || {}).length > 0) {
+                    setUnknownSkus(payload.unknownSkus);
                     setStep('resolution');
                 } else {
                     setStep('preview');
                 }
+                setImportProgress(100);
+                setImportProgressText('Analysis complete');
             } else {
-                setError(e.data.error || 'Processing failed');
+                setError(payload.error || 'Processing failed');
             }
             setIsProcessing(false);
         };
@@ -296,15 +279,26 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         );
 
         setIsProcessing(true);
+        setImportProgress(0);
+        setImportProgressText('Reprocessing with SKU resolutions...');
 
         worker.onmessage = (e) => {
+            const payload = e.data;
+            if (payload?.type === 'progress') {
+                setImportProgress(payload.progress || 0);
+                setImportProgressText(payload.message || 'Processing...');
+                return;
+            }
+
             worker.terminate();
-            if (e.data.success) {
-                setPreviewData(e.data);
-                setResolvedAliases(e.data.resolvedAliases);
+            if (payload.success) {
+                setPreviewData(payload);
+                setResolvedAliases(payload.resolvedAliases);
                 setStep('preview');
+                setImportProgress(100);
+                setImportProgressText('Resolution complete');
             } else {
-                setError(e.data.error || 'Processing failed');
+                setError(payload.error || 'Processing failed');
             }
             setIsProcessing(false);
         };
@@ -380,6 +374,21 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         </div>
                     )}
 
+                    {(isProcessing || isConfirmingImport) && (
+                        <div className="mb-4 rounded-lg border border-theme-20 bg-theme-5 p-3">
+                            <div className="flex items-center justify-between text-xs text-theme mb-2">
+                                <span>{importProgressText || 'Processing import...'}</span>
+                                <span>{Math.round(importProgress)}%</span>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                                <div
+                                    className="h-full bg-theme transition-all duration-200"
+                                    style={{ width: `${Math.max(0, Math.min(100, importProgress))}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     {step === 'upload' && (
                         <div className="space-y-6">
                             <div
@@ -390,7 +399,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                 {isProcessing ? (
                                     <div className="flex flex-col items-center animate-in fade-in zoom-in">
                                         <Loader2 className="w-10 h-10 text-theme animate-spin mb-3" />
-                                        <p className="font-medium text-theme">Auto-detecting Columns...</p>
+                                        <p className="font-medium text-theme">{importProgressText || 'Auto-detecting Columns...'}</p>
                                     </div>
                                 ) : (
                                     <>
@@ -535,20 +544,38 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         <div className="space-y-6">
                             <div className="grid grid-cols-4 gap-4 text-center">
                                 <div className="p-4 bg-green-50 rounded-xl border border-green-100">
-                                    <div className="text-2xl font-bold text-green-700">{previewData.stats.matchedSkus}</div>
-                                    <div className="text-xs text-green-600 uppercase font-medium">Products Matched</div>
+                                    <div className="h-full flex flex-col items-center justify-between">
+                                        <div className="min-h-[2.25rem] w-full flex items-center justify-center">
+                                            <div className="text-2xl font-bold text-green-700">{previewData.stats.matchedSkus}</div>
+                                        </div>
+                                        <div className="text-xs text-green-600 uppercase font-medium">Products Matched</div>
+                                    </div>
                                 </div>
-                                <div className="p-4 bg-theme-10 rounded-xl border border-indigo-100">
-                                    <div className="text-2xl font-bold text-theme">£{previewData.stats.totalRevenue.toLocaleString()}</div>
-                                    <div className="text-xs text-theme uppercase font-medium">Total Revenue</div>
+                                <div className="min-w-0 max-w-full overflow-hidden p-4 bg-theme-10 rounded-xl border border-indigo-100">
+                                    <div className="h-full flex flex-col items-center justify-between">
+                                        <div className="min-h-[2.25rem] w-full flex items-center justify-center">
+                                            <div className={`block w-full text-center leading-tight font-bold text-theme whitespace-nowrap tabular-nums ${revenueFontClass}`}>
+                                                {revenueDisplay}
+                                            </div>
+                                        </div>
+                                        <div className="text-xs text-theme uppercase font-medium">Total Revenue</div>
+                                    </div>
                                 </div>
                                 <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                                    <div className="text-2xl font-bold text-blue-700">{previewData.stats.period} Days</div>
-                                    <div className="text-xs text-blue-600 uppercase font-medium">{previewData.stats.dateLabel}</div>
+                                    <div className="h-full flex flex-col items-center justify-between">
+                                        <div className="min-h-[2.25rem] w-full flex items-center justify-center">
+                                            <div className="text-2xl font-bold text-blue-700">{previewData.stats.period} Days</div>
+                                        </div>
+                                        <div className="text-xs text-blue-600 uppercase font-medium">{previewData.stats.dateLabel}</div>
+                                    </div>
                                 </div>
                                 <div className={`p-4 rounded-xl border ${previewData.stats.orderIdsCount > 0 ? 'bg-teal-50 border-teal-100' : 'bg-gray-50 border-gray-100'}`}>
-                                    <div className={`text-2xl font-bold ${previewData.stats.orderIdsCount > 0 ? 'text-teal-700' : 'text-gray-400'}`}>{previewData.stats.orderIdsCount}</div>
-                                    <div className={`text-xs uppercase font-medium ${previewData.stats.orderIdsCount > 0 ? 'text-teal-600' : 'text-gray-400'}`}>Transactions with IDs</div>
+                                    <div className="h-full flex flex-col items-center justify-between">
+                                        <div className="min-h-[2.25rem] w-full flex items-center justify-center">
+                                            <div className={`text-2xl font-bold ${previewData.stats.orderIdsCount > 0 ? 'text-teal-700' : 'text-gray-400'}`}>{previewData.stats.orderIdsCount}</div>
+                                        </div>
+                                        <div className={`text-xs uppercase font-medium ${previewData.stats.orderIdsCount > 0 ? 'text-teal-600' : 'text-gray-400'}`}>Transactions with IDs</div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -617,7 +644,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         )}
                     </div>
                     <div className="flex gap-3">
-                        <button onClick={onClose} className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200 rounded-lg">Cancel</button>
+                        <button onClick={onClose} disabled={isConfirmingImport} className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-200 rounded-lg disabled:opacity-50">Cancel</button>
                         {step === 'mapping' && (
                             <button
                                 onClick={handleManualAnalyze}
@@ -630,11 +657,12 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         )}
                         {step === 'preview' && previewData && (
                             <button
-                                onClick={() => onConfirm(previewData.updates, { current: previewData.stats.dateLabel, last: "Previous" }, previewData.history, previewData.shipmentLogs, previewData.stats.discoveredPlatforms, resolvedAliases)}
-                                className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all"
+                                onClick={handleConfirmImport}
+                                disabled={isConfirmingImport}
+                                className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 shadow-lg hover:shadow-xl transition-all"
                             >
-                                <Check className="w-4 h-4" />
-                                Confirm Import
+                                {isConfirmingImport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                {isConfirmingImport ? 'Applying Import...' : 'Confirm Import'}
                             </button>
                         )}
                     </div>

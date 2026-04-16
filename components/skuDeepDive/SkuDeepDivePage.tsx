@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Info, AlertTriangle, Package, RotateCcw, Megaphone, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
-import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules, OptimalPriceResult, PromotionEvent } from '../../types';
+import { ArrowLeft, Info, AlertTriangle, Package, RotateCcw, Megaphone, DollarSign, TrendingDown, TrendingUp, ExternalLink } from 'lucide-react';
+import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules, OptimalPriceResult, PromotionEvent, NavigationIntent } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { calcProfit, calcRevenue, calcAdSpend, marginPct, calcTACoSPct, calcUnits } from '../../services/metrics';
 import { buildWindow } from '../../services/dateWindow';
@@ -45,6 +45,7 @@ interface SkuDeepDivePageProps {
     adGroups: any[];
     priceHistoryMap: Map<string, any[]>;
     optimalPriceResults?: Map<string, OptimalPriceResult>;
+    navigateToEntity?: (intent: Omit<NavigationIntent, 'createdAt'>) => void;
 }
 
 // Helper to read URL params
@@ -56,7 +57,7 @@ const getActiveSectionFromUrl = () => {
 
 const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     data, themeColor, onBack, priceChangeHistory = [], initialTimeWindow, focus, thresholds, pricingRules,
-    promotions = [], skuFamilies, products, adGroups, priceHistoryMap, optimalPriceResults
+    promotions = [], skuFamilies, products, adGroups, priceHistoryMap, optimalPriceResults, navigateToEntity
 }) => {
     const { product, allTimeSales, allTimeQty, transactions = [], refunds = [] } = data;
 
@@ -398,7 +399,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         const stockValue = product.stockLevel * (product.costPrice || 0);
         const globalVelocity = product.dailyAverageSales || product.averageDailySales || 0;
         if (stockValue > thresholds.deadStockMinValueGBP && globalVelocity === 0) {
-            signals.push({ id: 'DORMANT_NO_SALES', label: 'Dead Stock', severity: 'High', color: 'text-gray-700 bg-gray-50 border-gray-200', icon: Package, desc: `High value dormant stock (£${stockValue.toFixed(0)}) with 0 velocity detected.` });
+            signals.push({ id: 'DORMANT_NO_SALES', label: 'Dead Stock', severity: 'High', color: 'text-gray-700 bg-gray-50 border-gray-200', icon: Package, desc: `High value dormant stock (\u00A3${stockValue.toFixed(0)}) with 0 velocity detected.` });
         }
         return signals;
     }, [product, periodSalesQty, thresholds]);
@@ -688,12 +689,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         const matchedRows: Array<{
             key: string;
             campaignName: string;
+            promotionId: string;
             platform: string;
             status: PromotionEvent['status'];
             startDate: string;
             endDate: string;
             baselinePrice: number | null;
             promoPrice: number | null;
+            discountRate: number | null;
             upliftQty: number | null;
             upliftProfit: number | null;
             sortDate: string;
@@ -722,6 +725,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 matchedPromoItems.forEach((item, idx) => {
                 const storedBaselinePrice = parseFiniteNumber((item as any).basePrice);
                 const storedPromoPrice = parseFiniteNumber((item as any).promoPrice);
+                const discountRate = (storedBaselinePrice !== null && storedPromoPrice !== null && storedBaselinePrice > 0)
+                    ? ((storedBaselinePrice - storedPromoPrice) / storedBaselinePrice) * 100
+                    : null;
                 const storedUpliftQty = parseFiniteNumber(item.upliftUnits);
                 const storedUpliftProfit = parseFiniteNumber((item as any).upliftProfit);
 
@@ -765,12 +771,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 matchedRows.push({
                     key: `${promo.id}-${item.sku || product.sku}-${idx}`,
                     campaignName: promo.name || 'Untitled Campaign',
+                    promotionId: promo.id,
                     platform,
                     status: derivedStatus,
                     startDate: promoStart || '-',
                     endDate: promoEnd || '-',
                     baselinePrice: storedBaselinePrice,
                     promoPrice: storedPromoPrice,
+                    discountRate,
                     upliftQty: storedUpliftQty ?? fallbackUpliftQty,
                     upliftProfit: storedUpliftProfit ?? fallbackUpliftProfit,
                     sortDate: promoEnd || promoStart || '0000-00-00'
@@ -791,7 +799,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     return (
         <div className="pb-20">
 
-            {/* ── Page header ── */}
+            {/* â”€â”€ Page header â”€â”€ */}
             <div className="flex items-center justify-between px-0 py-4">
                 <div className="flex items-center gap-2">
                     {onBack && (
@@ -811,7 +819,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             </div>
 
-            {/* ── 1. Overview — white ── */}
+            {/* â”€â”€ 1. Overview â€” white â”€â”€ */}
             <div ref={overviewRef} className={`${band}`}>
                 <SkuOverviewSection
                     product={product}
@@ -825,7 +833,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 />
             </div>
 
-            {/* ── 2. Diagnostic Signals — amber tint ── */}
+            {/* â”€â”€ 2. Diagnostic Signals â€” amber tint â”€â”€ */}
             {diagnostics.length > 0 && (
                 <div ref={signalsRef} className={`${band}`}>
                     <DiagnosticSignalsSection
@@ -836,7 +844,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
-            {/* ── 3. Distribution Analysis — light slate ── */}
+            {/* â”€â”€ 3. Distribution Analysis â€” light slate â”€â”€ */}
             {sortedTransactions.length > 0 && (
                 <div ref={analysisRef} className={`${band} bg-slate-50 border-y border-slate-100`}>
                     <DistributionAnalysisSection
@@ -852,7 +860,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
-            {/* ── 4. Pricing History — white ── */}
+            {/* â”€â”€ 4. Pricing History â€” white â”€â”€ */}
             {sortedTransactions.length > 0 && (
                 <div ref={pricingRef} className={`${band} bg-lime-50 border-y border-gray-100`}>
                     <PricingHistorySection
@@ -886,7 +894,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 className={`${band} border-y border-emerald-100/70`}
                 style={{ backgroundColor: '#ecfdf5' }}
             >
-                <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
+                <div className="bg-custom-glass rounded-xl shadow-sm border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
                     <div className="flex items-center justify-between mb-4 border-b border-emerald-100 pb-3">
                         <div className="flex items-center gap-2">
                             <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
@@ -901,40 +909,59 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
 
                     {hasPromotionHistory ? (
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-emerald-100">
-                                        <th className="py-2 pr-4">Campaign Name</th>
-                                        <th className="py-2 pr-4">Platform</th>
-                                        <th className="py-2 pr-4">Status</th>
-                                        <th className="py-2 pr-4">Baseline Price</th>
-                                        <th className="py-2 pr-4">Promo Price</th>
-                                        <th className="py-2 pr-4">Uplift Qty</th>
-                                        <th className="py-2 pr-4">Uplift Profit</th>
+                            <table className="sello-table">
+                                <thead className="sticky top-0">
+                                    <tr>
+                                        <th>Campaign Name</th>
+                                        <th>Platform</th>
+                                        <th>Status</th>
+                                        <th className="r">Baseline Price</th>
+                                        <th className="r col-red">Promo Price</th>
+                                        <th className="r col-red">Discount Rate</th>
+                                        <th className="r">Uplift Qty</th>
+                                        <th className="r">Uplift Profit</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {promotionHistoryRows.map((row) => (
-                                        <tr key={row.key} className="border-b border-emerald-50/70 last:border-b-0">
-                                            <td className="py-2.5 pr-4">
-                                                <div className="font-medium text-gray-900">{row.campaignName}</div>
+                                        <tr key={row.key}>
+                                            <td>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="font-medium text-gray-900">{row.campaignName}</div>
+                                                    <button
+                                                        type="button"
+                                                        className="inline-flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-theme hover:bg-theme-10 transition-colors"
+                                                        title="Open campaign"
+                                                        onClick={() => navigateToEntity?.({
+                                                            targetView: 'promotions',
+                                                            entityType: 'promotion_campaign',
+                                                            entityId: row.promotionId,
+                                                            sourceView: 'search'
+                                                        })}
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
                                                 <div className="text-[11px] text-gray-500">{row.startDate} to {row.endDate}</div>
                                             </td>
-                                            <td className="py-2.5 pr-4 text-gray-700">{row.platform}</td>
-                                            <td className="py-2.5 pr-4"><StatusBadge status={row.status} /></td>
-                                            <td className="py-2.5 pr-4 font-medium text-gray-800">
-                                                {row.baselinePrice === null ? '-' : `£${formatNumber(row.baselinePrice, 2)}`}
+                                            <td className="text-gray-700">{row.platform}</td>
+                                            <td><StatusBadge status={row.status} /></td>
+                                            <td className="r font-medium text-gray-800">
+                                                {row.baselinePrice === null ? '-' : `\u00A3${formatNumber(row.baselinePrice, 2)}`}
                                             </td>
-                                            <td className="py-2.5 pr-4 font-medium text-gray-800">
-                                                {row.promoPrice === null ? '-' : `£${formatNumber(row.promoPrice, 2)}`}
+                                            <td className="r col-red font-medium text-gray-800">
+                                                {row.promoPrice === null ? '-' : `\u00A3${formatNumber(row.promoPrice, 2)}`}
                                             </td>
-                                            <td className="py-2.5 pr-4 font-semibold text-gray-900">
+                                            <td className="r col-red font-medium text-gray-800">
+                                                {row.discountRate === null ? '-' : `${row.discountRate > 0 ? '-' : ''}${formatNumber(Math.abs(row.discountRate), 1)}%`}
+                                            </td>
+                                            <td className="r font-semibold text-gray-900">
                                                 {row.upliftQty === null ? '-' : `${row.upliftQty > 0 ? '+' : ''}${formatNumber(row.upliftQty, 0)}`}
                                             </td>
-                                            <td className={`py-2.5 pr-4 font-semibold ${row.upliftProfit !== null && row.upliftProfit < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                                            <td className={`r font-semibold ${row.upliftProfit !== null && row.upliftProfit < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
                                                 {row.upliftProfit === null
                                                     ? '-'
-                                                    : `${row.upliftProfit > 0 ? '+' : row.upliftProfit < 0 ? '-' : ''}£${formatNumber(Math.abs(row.upliftProfit), 2)}`}
+                                                    : `${row.upliftProfit > 0 ? '+' : row.upliftProfit < 0 ? '-' : ''}\u00A3${formatNumber(Math.abs(row.upliftProfit), 2)}`}
                                             </td>
                                         </tr>
                                     ))}

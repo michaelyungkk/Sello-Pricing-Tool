@@ -50,6 +50,49 @@ export interface SearchIntent {
   primaryMetric?: string;
 }
 
+const mapPlanFieldToIntentField = (rawField: string): string => {
+    const field = String(rawField || '').toUpperCase();
+    if (field === 'NET_MARGIN_PCT') return 'margin';
+    if (field === 'CMA_PCT') return 'margin';
+    if (field === 'MARGIN') return 'margin';
+    if (field === 'TACOS_PCT') return 'tacos';
+    if (field === 'ADS_SPEND') return 'adsSpend';
+    if (field === 'SALES_QTY' || field === 'UNITS') return 'velocity';
+    if (field === 'DAILY_VELOCITY') return 'averageDailySales';
+    if (field === 'REVENUE') return 'revenue';
+    if (field === 'NET_PROFIT' || field === 'PROFIT') return 'profit';
+    if (field === 'STOCK_COVER_DAYS') return 'daysRemaining';
+    if (field === 'STOCK_LEVEL') return 'stockLevel';
+    if (field === 'VELOCITY_CHANGE') return 'velocityChange';
+    if (field === 'MARGIN_CHANGE_PCT') return 'MARGIN_CHANGE_PCT';
+    if (field === 'RETURN_RATE_PCT' || field === 'RETURN_RATE') return 'periodReturnRate';
+    if (field === 'ORGANIC_SHARE_PCT') return 'organicShare';
+    if (field === 'AGED_STOCK_PCT') return 'agedStockPct';
+    if (field === 'PLATFORM') return 'platform';
+    if (field === 'POSTCODE') return 'postcode';
+    if (field === 'SKU' || field === 'PRODUCT_NAME' || field === 'NAME') return 'name';
+    return rawField;
+};
+
+const mapPlanSortToIntentSort = (rawField: string): string => {
+    const field = String(rawField || '').toLowerCase();
+    if (field === 'revenue') return 'revenue';
+    if (field === 'net_margin_pct' || field === 'margin') return 'margin';
+    if (field === 'cma_pct') return 'margin';
+    if (field === 'tacos_pct') return 'tacos';
+    if (field === 'stock_cover_days') return 'daysRemaining';
+    if (field === 'daily_velocity') return 'averageDailySales';
+    if (field === 'sales_qty' || field === 'units') return 'velocity';
+    if (field === 'net_profit' || field === 'profit') return 'profit';
+    if (field === 'velocity_change') return 'velocityChange';
+    if (field === 'margin_change_pct') return 'MARGIN_CHANGE_PCT';
+    if (field === 'return_rate_pct' || field === 'return_rate') return 'periodReturnRate';
+    if (field === 'organic_share_pct') return 'organicShare';
+    if (field === 'aged_stock_pct') return 'agedStockPct';
+    if (field === 'platform') return 'platform';
+    return field;
+};
+
 /**
  * Adapter: QueryPlan -> SearchIntent
  * Converts the new high-level Query Plan into the legacy SearchIntent format
@@ -75,23 +118,7 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
         if (f.op === 'LTE') op = '<=';
         if (f.op === 'CONTAINS') op = 'CONTAINS';
         
-        // Map Field Names if needed (Plan ID -> Data Field)
-        let field = f.field;
-        if (field === 'NET_MARGIN_PCT') field = 'margin';
-        if (field === 'CMA_PCT') field = 'margin'; 
-        if (field === 'TACOS_PCT') field = 'tacos';
-        if (field === 'ADS_SPEND') field = 'adsSpend';
-        if (field === 'SALES_QTY') field = 'velocity';
-        if (field === 'REVENUE') field = 'revenue';
-        if (field === 'NET_PROFIT') field = 'profit';
-        if (field === 'STOCK_COVER_DAYS') field = 'daysRemaining';
-        if (field === 'STOCK_LEVEL') field = 'stockLevel';
-        // Add velocity change mapping
-        if (field === 'VELOCITY_CHANGE') field = 'velocityChange';
-        if (field === 'MARGIN_CHANGE_PCT') field = 'MARGIN_CHANGE_PCT'; // Keep special key
-        if (field === 'RETURN_RATE_PCT') field = 'periodReturnRate'; // Map filter to dynamic period rate
-        if (field === 'ORGANIC_SHARE_PCT') field = 'organicShare'; // Map filter to organic share
-        if (field === 'AGED_STOCK_PCT') field = 'agedStockPct'; // Map filter to aged stock
+        const field = mapPlanFieldToIntentField(f.field);
         
         return {
             field,
@@ -125,18 +152,7 @@ function adaptPlanToIntent(plan: QueryPlan): SearchIntent {
     }
 
     // 4. Map Sort
-    let sortField = plan.sort.field.toLowerCase();
-    if (sortField === 'revenue') sortField = 'revenue';
-    if (sortField === 'net_margin_pct') sortField = 'margin';
-    if (sortField === 'cma_pct') sortField = 'margin';
-    if (sortField === 'tacos_pct') sortField = 'tacos';
-    if (sortField === 'stock_cover_days') sortField = 'daysRemaining';
-    if (sortField === 'daily_velocity') sortField = 'averageDailySales';
-    if (sortField === 'velocity_change') sortField = 'velocityChange';
-    if (sortField === 'margin_change_pct') sortField = 'MARGIN_CHANGE_PCT'; // Correct mapping for execution engine
-    if (sortField === 'return_rate_pct') sortField = 'periodReturnRate';
-    if (sortField === 'organic_share_pct') sortField = 'organicShare';
-    if (sortField === 'aged_stock_pct') sortField = 'agedStockPct';
+    const sortField = mapPlanSortToIntentSort(plan.sort.field);
     
     return {
         targetData,
@@ -192,7 +208,7 @@ export const parseSearchQuery = async (query: string): Promise<SearchIntent> => 
  * Legacy Parser (Backup)
  * Kept for stability if specific edge cases fail in the new parser.
  */
-const legacyParseSearchQuery = (query: string): SearchIntent => {
+export const legacyParseSearchQuery = (query: string): SearchIntent => {
   const lower = query.toLowerCase().trim();
   const intent: SearchIntent = {
     targetData: 'inventory', // Default context
@@ -320,4 +336,14 @@ const legacyParseSearchQuery = (query: string): SearchIntent => {
   }
 
   return intent;
+};
+
+export const createTextFallbackIntent = (query: string): SearchIntent => {
+  const cleanQuery = query.trim();
+  return {
+    targetData: 'inventory',
+    filters: cleanQuery.length > 0 ? [{ field: 'name', operator: 'CONTAINS', value: cleanQuery }] : [],
+    limit: 100,
+    explanation: 'Fallback text search'
+  };
 };

@@ -1,8 +1,8 @@
 
 import React from 'react';
 import { SearchResultsPageContainer } from './searchResults/SearchResultsPageContainer';
-import { Product, PricingRules, SearchConfig, PriceChangeRecord, OptimalPriceResult, PromotionEvent } from '../../types';
-import { SearchIntent } from '../../services/geminiService';
+import { Product, PricingRules, SearchConfig, PriceChangeRecord, OptimalPriceResult, PromotionEvent, NavigationIntent } from '../../types';
+import { SearchIntent } from '../../services/searchIntentService';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 
 interface SearchResultsPageProps {
@@ -21,6 +21,7 @@ interface SearchResultsPageProps {
   promotions: PromotionEvent[];
   priceHistoryMap: Map<string, any[]>;
   optimalPriceResults?: Map<string, OptimalPriceResult>;
+  navigateToEntity?: (intent: Omit<NavigationIntent, 'createdAt'>) => void;
 }
 
 const SearchResultsPage: React.FC<SearchResultsPageProps> = (props) => {

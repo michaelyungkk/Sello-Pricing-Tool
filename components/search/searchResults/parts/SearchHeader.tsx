@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Filter, Calendar, ShoppingBag, Megaphone, Activity, Clock, DollarSign, Package, TrendingDown, TrendingUp, Layers, RotateCcw } from 'lucide-react';
-import { SearchIntent } from '../../../../services/geminiService';
+import { SearchIntent } from '../../../../services/searchIntentService';
 import { FilterChip } from './FilterChip';
 
 interface SearchHeaderProps {

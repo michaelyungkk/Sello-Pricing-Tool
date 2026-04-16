@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { PromotionManagerPageContainer } from './PromotionManagerPageContainer';
-import { Product, PricingRules, PromotionEvent, PriceLog, LogisticsRule, PriceChangeRecord } from '../../types';
+import { Product, PricingRules, PromotionEvent, PriceLog, LogisticsRule, PriceChangeRecord, NavigationIntent } from '../../types';
 
 interface PromotionPageProps {
     products: Product[];
@@ -15,6 +15,8 @@ interface PromotionPageProps {
     themeColor: string;
     headerStyle: React.CSSProperties;
     priceChangeHistory?: PriceChangeRecord[];
+    navigationIntent?: NavigationIntent | null;
+    onConsumeNavigationIntent?: (result?: { success: boolean; message?: string }) => void;
 }
 
 const PromotionPageInner: React.FC<PromotionPageProps> = (props) => {

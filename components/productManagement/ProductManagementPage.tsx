@@ -52,6 +52,7 @@ interface ProductManagementPageProps {
     onRecalculateBenchmarks?: (options?: { mode?: BenchmarkRecalcMode; categories?: string[] }) => Promise<CohortShiftWarning[]>;
     benchmarkRecalcState?: BenchmarkRecalcState;
     onCancelBenchmarkRecalculation?: () => void;
+    onDismissBenchmarkRecalcState?: () => void;
 }
 
 const ProductManagementPage: React.FC<ProductManagementPageProps> = (props) => {

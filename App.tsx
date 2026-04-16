@@ -181,10 +181,14 @@ const App: React.FC = () => {
         setActiveSearchId,
         currentView,
         setCurrentView,
+        navigationIntent,
+        navigateToEntity,
+        clearNavigationIntent,
         isOnline,
         isFreshnessExpanded,
         setIsFreshnessExpanded,
         mapJumpState,
+        setMapJumpState,
         priceHistoryMap,
         existingOrders,
         dynamicDateLabels,
@@ -239,6 +243,7 @@ const App: React.FC = () => {
         benchmarkRecalcState,
         handleRecalculateBenchmarks,
         handleCancelBenchmarkRecalculation,
+        handleDismissBenchmarkRecalcState,
         // Ad Campaign
         adSnapshots,
         adRosterChanges,
@@ -282,6 +287,7 @@ const App: React.FC = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
         try { return localStorage.getItem('sello_sidebar_collapsed') === 'true'; } catch { return false; }
     });
+    const [navigationNotice, setNavigationNotice] = useState<string | null>(null);
     const toggleSidebar = () => setSidebarCollapsed(prev => {
         const next = !prev;
         try { localStorage.setItem('sello_sidebar_collapsed', String(next)); } catch {}
@@ -294,6 +300,53 @@ const App: React.FC = () => {
         setElasticityResult(result ?? null);
         handleViewElasticity(product);
     };
+    const handleConsumeNavigationIntent = (result?: { success: boolean; message?: string }) => {
+        clearNavigationIntent();
+        if (result?.message) {
+            setNavigationNotice(result.message);
+        }
+    };
+
+    useEffect(() => {
+        if (!navigationIntent) return;
+        if (navigationIntent.targetView === 'promotions') {
+            setCurrentView('promotions');
+            return;
+        }
+        if (navigationIntent.targetView === 'overview' && navigationIntent.entityType === 'sales_map_carrier') {
+            const carrier = navigationIntent.entityId.trim();
+            if (!carrier) {
+                setNavigationNotice('Carrier not found');
+                clearNavigationIntent();
+                return;
+            }
+            setMapJumpState({ carrier, metric: 'RETURN_RATE' });
+            setCurrentView('overview');
+            clearNavigationIntent();
+            return;
+        }
+        if (navigationIntent.targetView === 'search' && navigationIntent.entityType === 'sku') {
+            const targetSku = navigationIntent.entityId.trim().toLowerCase();
+            const exists = (products || []).some(p => {
+                if (!p || !p.sku) return false;
+                if (p.sku.toLowerCase() === targetSku) return true;
+                return (p.channels || []).some(c => c.skuAlias && c.skuAlias.split(',').some(a => a.trim().toLowerCase() === targetSku));
+            });
+            if (!exists) {
+                setNavigationNotice('SKU not found');
+                clearNavigationIntent();
+                return;
+            }
+            handleDeepDiveRequest(navigationIntent.entityId);
+            clearNavigationIntent();
+        }
+    }, [navigationIntent, setCurrentView, products, handleDeepDiveRequest, clearNavigationIntent, setMapJumpState]);
+
+    useEffect(() => {
+        if (!navigationNotice) return;
+        const timer = window.setTimeout(() => setNavigationNotice(null), 2600);
+        return () => window.clearTimeout(timer);
+    }, [navigationNotice]);
 
     useEffect(() => {
         let i = 0;
@@ -679,6 +732,7 @@ const App: React.FC = () => {
                                     promotions={promotions || []}
                                     priceHistoryMap={priceHistoryMap}
                                     optimalPriceResults={optimalPriceResults}
+                                    navigateToEntity={navigateToEntity}
                                 />
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full text-gray-400">
@@ -812,7 +866,12 @@ const App: React.FC = () => {
                                     promotions={frozenPromoOverviewRef.current}
                                     themeColor={userProfile.themeColor}
                                     onAnalyze={handleAnalyze}
-                                    onDeepDive={handleDeepDiveRequest}
+                                    onDeepDive={(sku) => navigateToEntity({
+                                        targetView: 'search',
+                                        entityType: 'sku',
+                                        entityId: sku,
+                                        sourceView: currentView
+                                    })}
                                     onSearch={handleSearch}
                                     thresholds={thresholds}
                                     mapJumpState={mapJumpState}
@@ -834,7 +893,12 @@ const App: React.FC = () => {
                                 onViewElasticity={handleViewElasticityWithResult}
                                 themeColor={userProfile.themeColor}
                                 onAnalyze={handleAnalyze}
-                                onDeepDive={handleDeepDiveRequest}
+                                onDeepDive={(sku) => navigateToEntity({
+                                    targetView: 'search',
+                                    entityType: 'sku',
+                                    entityId: sku,
+                                    sourceView: currentView
+                                })}
                                 onSearch={handleSearch}
                                 thresholds={thresholds}
                                 onAnalyzeCarrier={handleAnalyzeCarrier}
@@ -849,6 +913,7 @@ const App: React.FC = () => {
                                 onRecalculateBenchmarks={handleRecalculateBenchmarks}
                                 benchmarkRecalcState={benchmarkRecalcState}
                                 onCancelBenchmarkRecalculation={handleCancelBenchmarkRecalculation}
+                                onDismissBenchmarkRecalcState={handleDismissBenchmarkRecalcState}
                                 onStampLandedAt={handleStampLandedAt}
                             />
                         </div>)}
@@ -913,6 +978,8 @@ const App: React.FC = () => {
                                 onDeletePromotion={(id) => startTransition(() => setPromotions(prev => (prev || []).filter(p => p.id !== id)))}
                                 themeColor={userProfile.themeColor}
                                 headerStyle={headerStyle}
+                                navigationIntent={navigationIntent}
+                                onConsumeNavigationIntent={handleConsumeNavigationIntent}
                             />
                         </div>)}
                         {mountedPages.has('ad-campaigns') && (
@@ -1163,8 +1230,19 @@ const App: React.FC = () => {
                     </div>
                 )
             }
+            {
+                navigationNotice && (
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex items-center gap-2.5 px-5 py-3 bg-amber-600 text-white rounded-xl shadow-xl font-bold text-sm">
+                            <Bell className="w-4 h-4" />
+                            {navigationNotice}
+                        </div>
+                    </div>
+                )
+            }
         </>
     );
 };
 
 export default App;
+

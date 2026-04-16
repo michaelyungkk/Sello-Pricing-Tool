@@ -34,9 +34,11 @@ import {
     InventoryChangeRecord,
     AttributeMap,
     SkuFamily,
-    AdGroup
+    AdGroup,
+    AppView,
+    NavigationIntent
 } from '../types';
-import { analyzePriceAdjustment, parseSearchQuery, SearchIntent } from '../services/geminiService';
+import { analyzePriceAdjustment, parseSearchQuery, createTextFallbackIntent, SearchIntent } from '../services/searchIntentService';
 import { processDataForSearch } from '../services/searchExecution';
 import { getThresholdConfig, ThresholdConfig, saveThresholdConfig } from '../services/thresholdsConfig';
 import { migrateRestoredDatabase, auditRestoredDatabase } from '../services/migrationService';
@@ -428,7 +430,8 @@ export const useAppState = () => {
     const [isSearchLoading, setIsSearchLoading] = useState(false);
     const [searchSessions, setSearchSessions] = useState<SearchSession[]>([]);
     const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
-    const [currentView, setCurrentView] = useState<'overview' | 'strategy' | 'products' | 'platforms' | 'settings' | 'costs' | 'definitions' | 'promotions' | 'tools' | 'search' | 'custom-report' | 'family-groups'>('overview');
+    const [currentView, setCurrentView] = useState<AppView>('overview');
+    const [navigationIntent, setNavigationIntent] = useState<NavigationIntent | null>(null);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [isFreshnessExpanded, setIsFreshnessExpanded] = useState(false);
     const [mapJumpState, setMapJumpState] = useState<{ carrier: string, metric: 'RETURN_RATE' | 'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS' } | null>(null);
@@ -513,6 +516,15 @@ export const useAppState = () => {
     }, [products, pricingRules, brandMap, categoryMap]);
 
     const handleSearch = useCallback(async (queryOrChips: string | SearchChip[]) => {
+        const devSearchLog = (label: string, payload?: unknown) => {
+            if (!import.meta.env.DEV) return;
+            if (payload === undefined) {
+                console.log(`[search-debug] ${label}`);
+                return;
+            }
+            console.log(`[search-debug] ${label}`, payload);
+        };
+
         let rawText = "";
         if (typeof queryOrChips === 'string') { rawText = queryOrChips; }
         else { const chips = queryOrChips; const metrics = chips.filter(c => c.type === 'METRIC').map(c => c.label).join(' '); const conditions = chips.filter(c => c.type === 'CONDITION').map(c => c.label).join(' '); const platforms = chips.filter(c => c.type === 'PLATFORM').map(c => `on ${c.label}`).join(' '); const text = chips.filter(c => c.type === 'TEXT').map(c => c.value).join(' '); const time = chips.filter(c => c.type === 'TIME').map(c => c.label).join(' '); rawText = `${time} ${conditions} ${metrics} ${platforms} ${text}`.trim(); }
@@ -546,13 +558,72 @@ export const useAppState = () => {
         setIsSearchLoading(true);
         try {
             const intent = await parseSearchQuery(rawText);
-            const { results, timeLabel } = processDataForSearch(intent, products, salesHistory, pricingRules, refundHistory);
-            const newSession: SearchSession = { id: `search-${Date.now()}`, query: rawText, results: results || [], params: intent, explanation: intent.explanation, timeLabel: timeLabel, timestamp: Date.now() };
+            devSearchLog('parsed intent', {
+                query: rawText,
+                targetData: intent.targetData,
+                primaryMetric: intent.primaryMetric,
+                filterCount: intent.filters?.length || 0,
+                sortField: intent.sort?.field,
+                sortDirection: intent.sort?.direction,
+                limit: intent.limit,
+                timeRange: intent.timeRange?.value
+            });
+            let { results, timeLabel } = processDataForSearch(intent, products, salesHistory, pricingRules, refundHistory);
+            let finalIntent = intent;
+            let fallbackUsed = false;
+
+            if ((!results || results.length === 0) && rawText.trim().length > 0) {
+                const fallbackIntent = createTextFallbackIntent(rawText);
+                const fallbackSearch = processDataForSearch(fallbackIntent, products, salesHistory, pricingRules, refundHistory);
+                fallbackUsed = true;
+                devSearchLog('fallback attempted', {
+                    query: rawText,
+                    fallbackTargetData: fallbackIntent.targetData,
+                    fallbackFilterCount: fallbackIntent.filters?.length || 0,
+                    fallbackResults: fallbackSearch.results?.length || 0
+                });
+                if ((fallbackSearch.results || []).length > 0) {
+                    results = fallbackSearch.results;
+                    timeLabel = fallbackSearch.timeLabel;
+                    finalIntent = fallbackIntent;
+                }
+            }
+
+            devSearchLog('search completed', {
+                query: rawText,
+                fallbackUsed,
+                finalTargetData: finalIntent.targetData,
+                finalPrimaryMetric: finalIntent.primaryMetric,
+                finalFilterCount: finalIntent.filters?.length || 0,
+                resultCount: results?.length || 0,
+                timeLabel
+            });
+
+            const newSession: SearchSession = { id: `search-${Date.now()}`, query: rawText, results: results || [], params: finalIntent, explanation: finalIntent.explanation, timeLabel: timeLabel, timestamp: Date.now() };
             setSearchSessions(prev => [newSession, ...(prev || [])]); setActiveSearchId(newSession.id); setCurrentView('search');
-        } catch (e) { console.error("Search failed", e); } finally { setIsSearchLoading(false); }
+        } catch (e) {
+            devSearchLog('search failed', { query: rawText, error: e });
+            console.error("Search failed", e);
+        } finally { setIsSearchLoading(false); }
     }, [products, salesHistory, pricingRules, refundHistory]);
 
     const handleDeepDiveRequest = useCallback((sku: string) => { handleSearch(`SKU: ${sku}`); }, [handleSearch]);
+
+    /**
+     * navigateToEntity is the single entrypoint for cross-page entity navigation.
+     * Callers must pass typed intent (`targetView`, `entityType`, `entityId`, `sourceView`).
+     * Consumers must resolve, handle once, and clear intent to avoid stale reopen behavior.
+     */
+    const navigateToEntity = useCallback((intent: Omit<NavigationIntent, 'createdAt'>) => {
+        setNavigationIntent({
+            ...intent,
+            createdAt: Date.now()
+        });
+    }, []);
+
+    const clearNavigationIntent = useCallback(() => {
+        setNavigationIntent(null);
+    }, []);
 
     const handleManualPriceChange = useCallback((data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => {
         const { sku, productName, date, oldPrice, newPrice } = data;
@@ -573,9 +644,15 @@ export const useAppState = () => {
     }, [isAdminMode]);
 
     const handleAnalyzeCarrier = useCallback((carrier: string) => {
-        setMapJumpState({ carrier, metric: 'RETURN_RATE' });
-        setCurrentView('overview');
-    }, []);
+        const trimmedCarrier = (carrier || '').trim();
+        if (!trimmedCarrier) return;
+        navigateToEntity({
+            targetView: 'overview',
+            entityType: 'sales_map_carrier',
+            entityId: trimmedCarrier,
+            sourceView: currentView
+        });
+    }, [navigateToEntity, currentView]);
 
     const handleRefineSearch = useCallback((sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, salesHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel }; } return s; })); setIsSearchLoading(false); }, 150); }, [products, salesHistory, pricingRules, refundHistory]);
     const deleteSearchSession = useCallback((id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } }, [activeSearchId]);
@@ -825,7 +902,7 @@ export const useAppState = () => {
     const handleUpdateCostChangeRecord = useCallback((recordToUpdate: CostChangeRecord) => { setCostChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
     const handleUpdateInventoryChangeRecord = useCallback((recordToUpdate: InventoryChangeRecord) => { setInventoryChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
 
-    const handleSalesImportConfirm = useCallback((updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: any[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>) => {
+    const handleSalesImportConfirm = useCallback(async (updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: any[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>) => {
         if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
         let updatedPriceHistory = [...(salesHistory || [])];
         if (historyPayload && historyPayload.length > 0) {
@@ -862,44 +939,63 @@ export const useAppState = () => {
         // Auto-recalculate optimal prices for SKUs that received new transactions
         if (historyPayload && historyPayload.length > 0 && cohortSnapshot) {
             const todayKey = new Date().toISOString().split('T')[0];
-            const resolver = buildCanonicalResolver(learnedAliases);
-            const affectedSkus = new Set(historyPayload.map(tx => resolver(tx.sku)));
-
-            setOptimalPriceResults(prev => {
-                const next = new Map(prev);
-                affectedSkus.forEach(canonicalSku => {
-                    const product = products.find(p => resolver(p.sku) === canonicalSku);
-                    if (!product) return;
-                    const bucketKey = cohortSnapshot.skuAssignments.get(canonicalSku);
-                    const cohort = bucketKey ? cohortSnapshot.cohortStats.get(bucketKey) : undefined;
-                    if (!cohort) return;
-                    const result = calculateOptimalPrice({
-                        sku: product,
-                        priceHistory: salesHistory,
-                        priceChangeLog: priceChangeHistory,
-                        promotions,
-                        pricingRules,
-                        cohortSnapshot,
-                        learnedAliases,
-                        today: todayKey,
-                    });
-                    next.set(canonicalSku, result);
-                });
-                return next;
+            const yieldToUi = async () => new Promise<void>(resolve => setTimeout(resolve, 0));
+            const resolver = buildCanonicalResolver({ ...(learnedAliases || {}), ...(newlyLearnedAliases || {}) });
+            const affectedSkus = Array.from(new Set(historyPayload.map(tx => resolver(tx.sku))));
+            const productByCanonical = new Map<string, Product>();
+            (products || []).forEach(p => {
+                const key = resolver(p.sku);
+                if (!productByCanonical.has(key)) productByCanonical.set(key, p);
             });
 
-            // Detect if any categories need benchmark update
-            const notices = detectBenchmarkUpdateNeeded(products, cohortSnapshot, Array.from(affectedSkus));
+            const nextOptimalUpdates = new Map<string, any>();
+            const chunkSize = 120;
+            for (let i = 0; i < affectedSkus.length; i++) {
+                const canonicalSku = affectedSkus[i];
+                const product = productByCanonical.get(canonicalSku);
+                if (!product) continue;
+                const bucketKey = cohortSnapshot.skuAssignments.get(canonicalSku);
+                const cohort = bucketKey ? cohortSnapshot.cohortStats.get(bucketKey) : undefined;
+                if (!cohort) continue;
+
+                const result = calculateOptimalPrice({
+                    sku: product,
+                    priceHistory: redistributed,
+                    priceChangeLog: priceChangeHistory,
+                    promotions,
+                    pricingRules,
+                    cohortSnapshot,
+                    learnedAliases: { ...(learnedAliases || {}), ...(newlyLearnedAliases || {}) },
+                    today: todayKey,
+                });
+                nextOptimalUpdates.set(canonicalSku, result);
+
+                if ((i + 1) % chunkSize === 0) {
+                    setOptimalPriceResults(prev => {
+                        const next = new Map(prev);
+                        nextOptimalUpdates.forEach((value, key) => next.set(key, value));
+                        return next;
+                    });
+                    nextOptimalUpdates.clear();
+                    await yieldToUi();
+                }
+            }
+            if (nextOptimalUpdates.size > 0) {
+                setOptimalPriceResults(prev => {
+                    const next = new Map(prev);
+                    nextOptimalUpdates.forEach((value, key) => next.set(key, value));
+                    return next;
+                });
+            }
+
+            const notices = detectBenchmarkUpdateNeeded(products, cohortSnapshot, affectedSkus);
             if (notices.length > 0) {
                 setBenchmarkUpdateNotices(prev => {
                     const merged = [...prev];
                     notices.forEach(n => {
                         const existing = merged.findIndex(m => m.category === n.category);
-                        if (existing >= 0) {
-                            merged[existing] = { ...merged[existing], skuCount: merged[existing].skuCount + n.skuCount };
-                        } else {
-                            merged.push(n);
-                        }
+                        if (existing >= 0) merged[existing] = { ...merged[existing], skuCount: merged[existing].skuCount + n.skuCount };
+                        else merged.push(n);
                     });
                     return merged;
                 });
@@ -1738,6 +1834,26 @@ export const useAppState = () => {
                     const time = localStorage.getItem('sello_last_synced_at')
                         || cache.cachedAt;
                     setLastSyncedAt(time);
+                    const cachedPromotions = normalizePromotionStatuses(
+                        Array.isArray(cache.snapshot?.promotions) ? cache.snapshot.promotions : []
+                    );
+                    if (cachedPromotions.length > 0) {
+                        setPromotions(cachedPromotions);
+                    }
+                    const promoRes = await pullPromotions();
+                    if (promoRes.success && Array.isArray(promoRes.promotions)) {
+                        const remotePromotions = normalizePromotionStatuses(promoRes.promotions);
+                        const nextPromotions = (remotePromotions.length === 0 && cachedPromotions.length > 0)
+                            ? cachedPromotions
+                            : remotePromotions;
+                        if (remotePromotions.length === 0 && cachedPromotions.length > 0) {
+                            console.warn('[init] promotions pull returned empty; preserving cached ' + cachedPromotions.length);
+                        }
+                        setPromotions(nextPromotions);
+                        console.log('[init] promotions loaded from DB - ' + nextPromotions.length + ' campaigns');
+                    } else {
+                        console.warn('[init] promotions pull failed on cache init (non-fatal):', promoRes.error);
+                    }
                     setSyncStatus('idle');
                     console.log('[init] loaded from cache instantly');
                     return;
@@ -1756,6 +1872,11 @@ export const useAppState = () => {
     // --- OPTIMAL PRICING: RECALCULATE BENCHMARKS ---
     const handleCancelBenchmarkRecalculation = useCallback(() => {
         benchmarkRunRef.current.cancelled = true;
+    }, []);
+
+    const handleDismissBenchmarkRecalcState = useCallback(() => {
+        if (benchmarkRunRef.current.running) return;
+        setBenchmarkRecalcState(BENCHMARK_IDLE_STATE);
     }, []);
 
     const handleRecalculateBenchmarks = useCallback(async (options?: RecalculateBenchmarkOptions): Promise<CohortShiftWarning[]> => {
@@ -2200,6 +2321,9 @@ export const useAppState = () => {
         setActiveSearchId,
         currentView,
         setCurrentView,
+        navigationIntent,
+        navigateToEntity,
+        clearNavigationIntent,
         isOnline,
         isFreshnessExpanded,
         setIsFreshnessExpanded,
@@ -2268,5 +2392,8 @@ export const useAppState = () => {
         benchmarkRecalcState,
         handleRecalculateBenchmarks,
         handleCancelBenchmarkRecalculation,
+        handleDismissBenchmarkRecalcState,
     };
 };
+
+

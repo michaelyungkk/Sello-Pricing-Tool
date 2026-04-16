@@ -354,6 +354,31 @@ export interface SearchSession {
     timestamp: number;
 }
 
+export type AppView =
+    | 'overview'
+    | 'strategy'
+    | 'products'
+    | 'platforms'
+    | 'settings'
+    | 'costs'
+    | 'definitions'
+    | 'promotions'
+    | 'tools'
+    | 'search'
+    | 'custom-report'
+    | 'family-groups'
+    | 'ad-campaigns';
+
+export type NavigationEntityType = 'promotion_campaign' | 'sku' | 'sales_map_carrier';
+
+export interface NavigationIntent {
+    targetView: AppView;
+    entityType: NavigationEntityType;
+    entityId: string;
+    sourceView: AppView;
+    createdAt: number;
+}
+
 export interface SingleBufferRule {
     id: string;
     operator: 'EQ' | 'LT' | 'GT' | 'LTE' | 'GTE' | 'RANGE' | string;

@@ -14,6 +14,12 @@ Key stack: React, TypeScript, Vite, Firebase, Recharts, Tailwind CSS, XLSX, D3.
 - Make surgical changes: touch only what is required for the task and avoid unrelated cleanup/refactors.
 - Goal-driven execution: define clear success checks and verify changes before finishing.
 
+### Cross-page navigation rule
+All "from here to there" actions (deep links between pages) must use the shared `navigateToEntity(...)` dispatcher and typed navigation intent contract.  
+Do not call `setCurrentView(...)` directly from feature pages/components for entity jumps.  
+Destination pages must consume intent once and clear it after handling.  
+If target entity is missing, open destination page and show a user-visible fallback message.
+
 ---
 
 ## Token & Performance Rules (Claude Code)
@@ -42,6 +48,10 @@ Key stack: React, TypeScript, Vite, Firebase, Recharts, Tailwind CSS, XLSX, D3.
 - Date keys are `YYYY-MM-DD` strings - use `asDateKey()` from `services/dateUtils.ts`
 - Profit figures are **ex-VAT** internally; display values are inc-VAT
 - Use `formatMoney()` and `formatPct()` from `utils/format.ts` for display
+- Encoding safety for currency:
+  - Preserve UTF-8 when editing files; do not rewrite text files using system-default ANSI encodings.
+  - If tooling encoding is uncertain, use `\u00A3` in JSX/TS string literals instead of a raw `£` glyph.
+  - If mojibake appears (for example `Â£` or `�`), stop and fix encoding before continuing.
 
 ---
 

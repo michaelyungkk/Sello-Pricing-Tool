@@ -1,6 +1,6 @@
 
 import { Product, PriceLog, PricingRules, RefundLog } from '../types';
-import { SearchIntent } from './geminiService';
+import { SearchIntent } from './searchIntentService';
 import { isAdsEnabled } from './platformCapabilities';
 import { scaleMoneyInclTax } from './taxPolicy';
 import { VAT_MULTIPLIER } from '../constants';
@@ -20,6 +20,10 @@ export const safeCalculateMargin = (p: Product | undefined, price: number): numb
     const netProfit = totalIncome - totalCost;
     const margin = price > 0 ? (netProfit / price) * 100 : 0;
     return isNaN(margin) ? 0 : margin;
+};
+
+const isMissingFilterValue = (value: unknown): boolean => {
+    return value === undefined || value === null || (typeof value === 'number' && Number.isNaN(value));
 };
 
 export const processDataForSearch = (intent: SearchIntent, products: Product[], priceHistory: PriceLog[], pricingRules: PricingRules, refundHistory: RefundLog[]) => {
@@ -114,6 +118,9 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
                     const skuMatch = p.sku.toLowerCase().includes(strCriteria);
                     const aliasMatch = p.channels.some(c => c.skuAlias && c.skuAlias.toLowerCase().includes(strCriteria));
                     return nameMatch || skuMatch || aliasMatch;
+                }
+                if (isMissingFilterValue(val)) {
+                    return true;
                 }
                 if (f.operator === 'CONTAINS') return String(val).toLowerCase().includes(String(criteria).toLowerCase());
                 if (f.operator === '=') return String(val).toLowerCase() === String(criteria).toLowerCase();
@@ -326,6 +333,9 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
                 const aliasMatch = product.channels.some(c => c.skuAlias && c.skuAlias.toLowerCase().includes(strCriteria));
                 return nameMatch || skuMatch || aliasMatch;
             }
+            if (isMissingFilterValue(val)) {
+                return f.field === 'postcode' ? false : true;
+            }
             if (f.operator === 'CONTAINS') return valStr.includes(strCriteria);
             if (f.operator === '=') return valStr === strCriteria || val == f.value;
             if (f.operator === '>') return val > criteria;
@@ -415,6 +425,9 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
                 const skuMatch = product.sku.toLowerCase().includes(strCriteria);
                 const aliasMatch = product.channels.some(c => c.skuAlias && c.skuAlias.toLowerCase().includes(strCriteria));
                 return nameMatch || skuMatch || aliasMatch;
+            }
+            if (isMissingFilterValue(val)) {
+                return true;
             }
             if (f.operator === 'CONTAINS') return valStr.includes(strCriteria);
             if (f.operator === '=') return valStr === strCriteria || val == f.value;

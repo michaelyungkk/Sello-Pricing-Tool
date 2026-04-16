@@ -4,7 +4,7 @@ import { LayoutDashboard, List } from 'lucide-react';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { CampaignsTab } from './tabs/CampaignsTab';
 import { MasterPromoLogTab } from './tabs/MasterPromoLogTab';
-import { PromotionEvent, Product, PricingRules, PriceLog, LogisticsRule, PriceChangeRecord } from '../../types';
+import { PromotionEvent, Product, PricingRules, PriceLog, LogisticsRule, PriceChangeRecord, NavigationIntent } from '../../types';
 
 interface PromotionManagerPageContainerProps {
     products: Product[];
@@ -18,6 +18,8 @@ interface PromotionManagerPageContainerProps {
     themeColor: string;
     headerStyle: React.CSSProperties;
     priceChangeHistory?: PriceChangeRecord[];
+    navigationIntent?: NavigationIntent | null;
+    onConsumeNavigationIntent?: (result?: { success: boolean; message?: string }) => void;
 }
 
 type Tab = 'dashboard' | 'all_skus';
@@ -33,7 +35,9 @@ const PromotionManagerPageContainerInner: React.FC<PromotionManagerPageContainer
     onDeletePromotion,
     themeColor,
     _headerStyle,
-    priceChangeHistory
+    priceChangeHistory,
+    navigationIntent,
+    onConsumeNavigationIntent
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
@@ -60,6 +64,8 @@ const PromotionManagerPageContainerInner: React.FC<PromotionManagerPageContainer
                         priceHistoryMap={priceHistoryMap || new Map()}
                         priceChangeHistory={priceChangeHistory}
                         themeColor={themeColor}
+                        navigationIntent={navigationIntent}
+                        onConsumeNavigationIntent={onConsumeNavigationIntent}
                     />
                 )}
 

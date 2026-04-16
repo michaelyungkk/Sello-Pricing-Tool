@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PromotionDashboard } from '../parts/PromotionDashboard';
 import { EventDetailView } from '../parts/EventDetailView';
 import { ProductSelector } from '../parts/ProductSelector';
-import { PromotionEvent, Product, PricingRules, PriceLog, PriceChangeRecord, PromotionItem } from '../../../types';
+import { PromotionEvent, Product, PricingRules, PriceLog, PriceChangeRecord, PromotionItem, NavigationIntent } from '../../../types';
 
 type ViewMode = 'dashboard' | 'event_detail' | 'add_products';
 
@@ -17,6 +17,8 @@ interface CampaignsTabProps {
     priceHistoryMap: Map<string, PriceLog[]>;
     priceChangeHistory?: PriceChangeRecord[];
     themeColor: string;
+    navigationIntent?: NavigationIntent | null;
+    onConsumeNavigationIntent?: (result?: { success: boolean; message?: string }) => void;
 }
 
 export const CampaignsTab: React.FC<CampaignsTabProps> = ({
@@ -28,7 +30,9 @@ export const CampaignsTab: React.FC<CampaignsTabProps> = ({
     products,
     priceHistoryMap,
     priceChangeHistory,
-    themeColor
+    themeColor,
+    navigationIntent,
+    onConsumeNavigationIntent
 }) => {
     const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
     const [selectedPromoId, setSelectedPromoId] = useState<string | null>(null);
@@ -36,6 +40,21 @@ export const CampaignsTab: React.FC<CampaignsTabProps> = ({
     const selectedPromo = useMemo(() =>
         (promotions || []).find(p => p && p.id === selectedPromoId),
         [promotions, selectedPromoId]);
+
+    useEffect(() => {
+        if (!navigationIntent) return;
+        if (navigationIntent.targetView !== 'promotions' || navigationIntent.entityType !== 'promotion_campaign') return;
+        const targetPromoId = navigationIntent.entityId;
+        const exists = (promotions || []).some(p => p && p.id === targetPromoId);
+        if (!exists) {
+            setViewMode('dashboard');
+            onConsumeNavigationIntent?.({ success: false, message: 'Campaign not found' });
+            return;
+        }
+        setSelectedPromoId(targetPromoId);
+        setViewMode('event_detail');
+        onConsumeNavigationIntent?.({ success: true });
+    }, [navigationIntent, promotions, onConsumeNavigationIntent]);
 
     const handleCreateEvent = (newEvent: PromotionEvent) => {
         onAddPromotion(newEvent);

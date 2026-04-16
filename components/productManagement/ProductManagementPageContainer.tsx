@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice, SkuFamily } from '../../types';
 import type { CohortShiftWarning } from '../../services/cohortAnalysis';
 
-import { List, Ship, RotateCcw, DollarSign, Activity, Columns, Layers } from 'lucide-react';
+import { List, Ship, RotateCcw, DollarSign, Activity, Columns, Layers, X } from 'lucide-react';
 
 import { MasterCatalogueTab } from './tabs/MasterCatalogueTab';
 import { ShipmentsTab } from './tabs/ShipmentsTab';
@@ -61,6 +61,7 @@ interface ProductManagementPageContainerProps {
     onRecalculateBenchmarks?: (options?: { mode?: BenchmarkRecalcMode; categories?: string[] }) => Promise<CohortShiftWarning[]>;
     benchmarkRecalcState?: BenchmarkRecalcState;
     onCancelBenchmarkRecalculation?: () => void;
+    onDismissBenchmarkRecalcState?: () => void;
 }
 
 type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison' | 'family-groups';
@@ -90,6 +91,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     onRecalculateBenchmarks,
     benchmarkRecalcState,
     onCancelBenchmarkRecalculation,
+    onDismissBenchmarkRecalcState,
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
@@ -223,6 +225,15 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                                 <span className="text-[11px] font-medium text-gray-500">
                                     Last updated {new Date(benchmarkRecalcState.completedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
+                            )}
+                            {benchmarkRecalcState.status !== 'running' && onDismissBenchmarkRecalcState && (
+                                <button
+                                    onClick={onDismissBenchmarkRecalcState}
+                                    className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                                    title="Close"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
                             )}
                         </div>
                     </div>
