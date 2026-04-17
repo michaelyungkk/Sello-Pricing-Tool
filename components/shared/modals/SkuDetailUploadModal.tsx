@@ -125,7 +125,7 @@ const SkuDetailUploadModal: React.FC<SkuDetailUploadModalProps> = ({ products, o
                 aliasMap.set(p.sku.toLowerCase(), p.sku);
                 p.channels.forEach(c => {
                     if (c.skuAlias) {
-                        c.skuAlias.split(',').forEach(a => aliasMap.set(a.trim().toLowerCase(), p.sku));
+                        c.skuAlias.split(',').map(a => a.trim()).filter(Boolean).forEach(a => aliasMap.set(a.toLowerCase(), p.sku));
                     }
                 });
             });

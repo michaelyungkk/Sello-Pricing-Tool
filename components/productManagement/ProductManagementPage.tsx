@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { ProductManagementPageContainer } from './ProductManagementPageContainer';
-import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, RefundLog, SearchChip, SkuFamily, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice } from '../../types';
+import { Product, PricingRules, PromotionEvent, PriceLog, PriceChangeRecord, RefundLog, SearchChip, SkuFamily, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice, InventoryChangeRecord } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import type { CohortShiftWarning } from '../../services/cohortAnalysis';
 
@@ -28,6 +28,7 @@ interface ProductManagementPageProps {
     priceHistoryMap?: Map<string, PriceLog[]>;
     refundHistory?: RefundLog[];
     priceChangeHistory?: PriceChangeRecord[];
+    inventoryChangeHistory?: InventoryChangeRecord[];
     onOpenMappingModal: () => void;
     onAnalyze: (product: Product, context?: string) => void;
     dateLabels: { current: string, last: string };
@@ -53,6 +54,7 @@ interface ProductManagementPageProps {
     benchmarkRecalcState?: BenchmarkRecalcState;
     onCancelBenchmarkRecalculation?: () => void;
     onDismissBenchmarkRecalcState?: () => void;
+    onConfirmContainersArrived?: (payload: { containerId: string; confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }[]) => void;
 }
 
 const ProductManagementPage: React.FC<ProductManagementPageProps> = (props) => {

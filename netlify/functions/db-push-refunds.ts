@@ -17,7 +17,7 @@ export default async (req: Request) => {
             { status: 405, headers: CORS }
         );
     try {
-        const { password, refunds } = await req.json();
+        const { password, refunds, forceClear } = await req.json();
         const hash = process.env.ADMIN_PASSWORD_HASH;
         const dbUrl = process.env.NETLIFY_DATABASE_URL_UNPOOLED || process.env.NETLIFY_DATABASE_URL;
         if (!hash || !dbUrl) throw new Error('Server config error');
@@ -31,7 +31,9 @@ export default async (req: Request) => {
         const sql = neon(dbUrl);
         console.log(`[db-push-refunds] received: ${refunds?.length ?? 0} refunds`);
 
-        await sql`DELETE FROM refund_history`;
+        if (forceClear === true) {
+            await sql`DELETE FROM refund_history`;
+        }
         if (Array.isArray(refunds) && refunds.length > 0) {
             const BATCH = 200;
             for (let i = 0; i < refunds.length; i += BATCH) {

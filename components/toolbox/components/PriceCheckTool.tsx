@@ -94,7 +94,7 @@ export const PriceCheckTool: React.FC<PriceCheckToolProps> = ({
             const master = p.sku.toUpperCase();
             map.set(master, master);
             p.channels?.forEach(c => {
-                c.skuAlias?.split(',').forEach(a => {
+                c.skuAlias?.split(',').map(a => a.trim()).filter(Boolean).forEach(a => {
                     const alias = a.trim().toUpperCase();
                     if (alias) map.set(alias, master);
                 });

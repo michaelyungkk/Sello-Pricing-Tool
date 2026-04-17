@@ -50,11 +50,15 @@ export default async (req: Request) => {
             );
         }
 
-        // Full replace — delete all then insert (promotions list is owned by admin)
-        // Run as a transaction so partial failures cannot leave the table empty.
+        // Delta-friendly write path:
+        // - default: upsert incoming rows only
+        // - optional forceClear=true: clear then insert incoming rows
+        // Run as a transaction so partial failures cannot leave table in a partial state.
         await sql`BEGIN`;
         try {
-            await sql`DELETE FROM promotions`;
+            if (forceClear === true) {
+                await sql`DELETE FROM promotions`;
+            }
 
             if (incomingPromotions.length > 0) {
                 const BATCH = 100;

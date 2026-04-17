@@ -252,12 +252,12 @@ const ProductRow = React.memo(({
                             )}
                             {confidenceBadge}
                             {/* Inline reasoning tooltip */}
-                            <div className="absolute bottom-full right-0 mb-2 w-72 p-3 bg-gray-900 text-white text-[11px] rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all pointer-events-none z-[60]">
+                            <div className="absolute top-full right-0 mt-2 w-72 p-3 bg-gray-900 text-white text-[11px] rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all pointer-events-none z-[60]">
                                 <p className="leading-relaxed">{result.reasoning.split('. ').slice(0, 2).join('. ')}.</p>
                                 <div className="mt-1.5 text-gray-400 text-[10px]">
                                     Last calculated: {new Date(result.calculatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                 </div>
-                                <div className="absolute top-full right-4 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                                <div className="absolute bottom-full right-4 -mb-1 border-4 border-transparent border-b-gray-900"></div>
                             </div>
                         </div>
                     );
@@ -1128,8 +1128,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                 </div>
             )}
 
-            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
-                <div className="overflow-x-auto">
+            <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-visible backdrop-blur-custom">
+                <div className="overflow-x-auto overflow-y-visible">
                     <table className="tbl w-full text-left border-separate border-spacing-0">
                         <thead className="sticky top-0">
                             <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-semibold backdrop-blur-sm shadow-sm">

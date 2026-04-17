@@ -150,13 +150,14 @@ export async function clearTransactions(password: string):
 export async function pushRefundsAndShipments(
     password: string,
     refunds: any[],
-    shipments: any[]
+    shipments: any[],
+    forceClear: boolean = false
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const res = await fetch(`${BASE}/db-push-refunds`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password, refunds, shipments })
+            body: JSON.stringify({ password, refunds, shipments, forceClear })
         });
         return await res.json();
     } catch {
@@ -164,18 +165,37 @@ export async function pushRefundsAndShipments(
     }
 }
 
-export async function pullRefundsAndShipments():
+export async function pullRefundsAndShipments(since?: string):
     Promise<{
         success: boolean;
         refunds?: any[];
         shipments?: any[];
+        incremental?: boolean;
+        latestUpdatedAt?: string | null;
         error?: string
     }> {
     try {
-        const res = await fetch(`${BASE}/db-pull-refunds`);
+        const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+        const res = await fetch(`${BASE}/db-pull-refunds${qs}`);
         return await res.json();
     } catch {
         return { success: false, error: 'Network error' };
+    }
+}
+
+export async function pullRefundSignatures():
+    Promise<{
+        success: boolean;
+        signatures?: { id: string; rowHash: string }[];
+        totalRows?: number;
+        latestUpdatedAt?: string | null;
+        error?: string;
+    }> {
+    try {
+        const res = await fetch(`${BASE}/db-pull-refunds?signaturesOnly=1`);
+        return await res.json();
+    } catch {
+        return { success: false, signatures: [], error: 'Network error' };
     }
 }
 
@@ -292,11 +312,36 @@ export async function pushPromotions(
 }
 
 export async function pullPromotions():
-    Promise<{ success: boolean; promotions?: any[]; error?: string }> {
+    Promise<{ success: boolean; promotions?: any[]; incremental?: boolean; latestUpdatedAt?: string | null; error?: string }> {
     try {
         const res = await fetch(`${BASE}/db-pull-promotions`);
         return await res.json();
     } catch { return { success: false, promotions: [], error: 'Network error' }; }
+}
+
+export async function pullPromotionsSince(since?: string):
+    Promise<{ success: boolean; promotions?: any[]; incremental?: boolean; latestUpdatedAt?: string | null; error?: string }> {
+    try {
+        const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+        const res = await fetch(`${BASE}/db-pull-promotions${qs}`);
+        return await res.json();
+    } catch { return { success: false, promotions: [], error: 'Network error' }; }
+}
+
+export async function pullPromotionSignatures():
+    Promise<{
+        success: boolean;
+        signatures?: { id: string; rowHash: string }[];
+        totalRows?: number;
+        latestUpdatedAt?: string | null;
+        error?: string;
+    }> {
+    try {
+        const res = await fetch(`${BASE}/db-pull-promotions?signaturesOnly=1`);
+        return await res.json();
+    } catch {
+        return { success: false, signatures: [], error: 'Network error' };
+    }
 }
 
 

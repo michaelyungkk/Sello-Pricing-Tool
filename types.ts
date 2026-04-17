@@ -32,6 +32,10 @@ export interface ShipmentDetail {
     quantity: number;
     status: string; // 'Delivered' | 'Pending' etc
     eta?: string;
+    arrivalConfirmedQty?: number;
+    arrivalConfirmedAt?: string;
+    arrivalConfirmationMode?: 'INFERRED' | 'MANUAL';
+    arrivalConfirmedSkuQtys?: Record<string, number>;
 }
 
 export interface SkuCostDetail {
@@ -102,6 +106,11 @@ export interface Product {
     subscriptionFee?: number;
     costDetail?: SkuCostDetail;
     shipments?: ShipmentDetail[];
+    reorderPlacedDate?: string;
+    productionScheduledQty?: number;
+    toBeShippedQty?: number;
+    shippedOutQty?: number;
+    shipmentStatus?: string;
     imageUrl?: string;
     inventoryStatus?: string; // 'New Product'
 

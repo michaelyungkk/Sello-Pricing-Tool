@@ -55,7 +55,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
         products.forEach(p => {
             p.channels.forEach(c => {
                 if (c.skuAlias) {
-                    c.skuAlias.split(',').forEach(a => {
+                    c.skuAlias.split(',').map(a => a.trim()).filter(Boolean).forEach(a => {
                         map[a.trim()] = p.sku; // Map Alias -> Master SKU
                     });
                 }

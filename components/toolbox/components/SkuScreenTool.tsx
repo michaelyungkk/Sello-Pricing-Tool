@@ -62,7 +62,7 @@ export const SkuScreenTool: React.FC<SkuScreenToolProps> = ({
         // From product channels
         products.forEach(p => {
             (p.channels || []).forEach(ch => {
-                (ch.skuAlias || '').split(',').forEach(a => {
+                (ch.skuAlias || '').split(',').map(a => a.trim()).filter(Boolean).forEach(a => {
                     const alias = a.trim().toUpperCase();
                     if (alias) m.set(alias, p.sku.toUpperCase());
                 });

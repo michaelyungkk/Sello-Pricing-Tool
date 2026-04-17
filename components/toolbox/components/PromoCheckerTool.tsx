@@ -27,8 +27,8 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
             // Map Aliases
             p.channels.forEach(c => {
                 if (c.skuAlias) {
-                    c.skuAlias.split(',').forEach(alias => {
-                        map.set(alias.toUpperCase().trim(), p);
+                    c.skuAlias.split(',').map(alias => alias.trim()).filter(Boolean).forEach(alias => {
+                        map.set(alias.toUpperCase(), p);
                     });
                 }
             });
@@ -128,7 +128,7 @@ export const PromoCheckerTool: React.FC<PromoCheckerToolProps> = ({ promotions, 
 
                             // Resolve correct Platform SKU
                             if (channel.skuAlias) {
-                                const aliases = channel.skuAlias.split(',').map(s => s.trim());
+                                const aliases = channel.skuAlias.split(',').map(s => s.trim()).filter(Boolean);
                                 // If the UPLOADED sku matches an alias for this platform, use it (user intent).
                                 // Otherwise, fallback to the first alias listed for this platform.
                                 if (aliases.some(a => a.toUpperCase() === lookupKey)) {

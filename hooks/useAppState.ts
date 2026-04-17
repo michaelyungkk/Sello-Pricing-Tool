@@ -69,9 +69,9 @@ import {
     pullSnapshotIfUpdated,
     pushTransactions, pullTransactions, getLatestTransactionDate,
     pullTransactionPage, pullTransactionPageSince, checkVersion,
-    pushRefundsAndShipments, pullRefundsAndShipments,
+    pushRefundsAndShipments, pullRefundsAndShipments, pullRefundSignatures,
     pushAdData, pullAdData,
-    pushPromotions, pullPromotions
+    pushPromotions, pullPromotionsSince, pullPromotionSignatures
 } from '../services/dbService';
 import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
 
@@ -283,6 +283,65 @@ const BENCHMARK_IDLE_STATE: BenchmarkRecalcState = {
     startedAt: null,
     completedAt: null,
     summary: '',
+};
+
+const buildStableString = (value: any): string => {
+    if (value === null || value === undefined) return 'null';
+    if (Array.isArray(value)) return `[${value.map(buildStableString).join(',')}]`;
+    if (typeof value === 'object') {
+        const keys = Object.keys(value).sort();
+        return `{${keys.map((k) => `${JSON.stringify(k)}:${buildStableString(value[k])}`).join(',')}}`;
+    }
+    return JSON.stringify(value);
+};
+
+const toHash = (raw: string): string => {
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    for (let i = 0; i < raw.length; i++) {
+        const ch = raw.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return `${(h2 >>> 0).toString(16).padStart(8, '0')}${(h1 >>> 0).toString(16).padStart(8, '0')}`;
+};
+
+const getRefundId = (r: any): string => String(r?.id || `${r?.sku || ''}|${r?.orderId || r?.date || ''}`);
+
+const refundSignaturePayload = (r: any) => ({
+    id: getRefundId(r),
+    sku: r?.sku ?? null,
+    rawSku: r?.rawSku ?? null,
+    date: String(r?.date || '').split('T')[0],
+    amount: r?.amount == null ? null : Number(r.amount),
+    freightAmount: r?.freightAmount == null ? null : Number(r.freightAmount),
+    quantity: r?.quantity == null ? null : Number(r.quantity),
+    platform: r?.platform ?? null,
+    reason: r?.reason ?? null,
+    customerReason: r?.customerReason ?? null,
+    platformReason: r?.platformReason ?? null,
+    comments: r?.comments ?? null,
+    commentEn: r?.commentEn ?? null,
+    commentCn: r?.commentCn ?? null,
+    remarks: r?.remarks ?? null,
+    orderId: r?.orderId ?? null,
+    orderType: r?.orderType ?? null,
+    resendBaseOrderId: r?.resendBaseOrderId ?? null,
+    status: r?.status ?? null,
+    logisticPartner: r?.logisticPartner ?? null
+});
+
+const buildRefundSignature = (r: any): string => toHash(buildStableString(refundSignaturePayload(r)));
+const buildPromotionSignature = (promotion: any): string => toHash(buildStableString(promotion));
+
+const isArrivedShipmentStatus = (status?: string): boolean => {
+    const raw = String(status || '').trim();
+    if (!raw) return false;
+    const first = raw.includes('/') ? raw.split('/')[0].trim() : raw;
+    const cleaned = first.replace(/[\u4E00-\u9FFF]/g, '').trim().toLowerCase();
+    return cleaned.includes('arrived') || cleaned.includes('delivered') || cleaned.includes('cleared') || cleaned.includes('received') || cleaned.includes('landed');
 };
 
 export const useAppState = () => {
@@ -535,7 +594,7 @@ export const useAppState = () => {
         const directMatch = products.find(p => {
             if (!p) return false;
             if (p.sku.toLowerCase() === normalizedQuery) return true;
-            return (p.channels || []).some(c => c.skuAlias && c.skuAlias.split(',').some(a => a.trim().toLowerCase() === normalizedQuery));
+            return normalizedQuery !== '' && (p.channels || []).some(c => c.skuAlias && c.skuAlias.split(',').map(a => a.trim()).filter(Boolean).some(a => a.toLowerCase() === normalizedQuery));
         });
 
         if (directMatch) {
@@ -1017,11 +1076,11 @@ export const useAppState = () => {
             const canonicalSku = getCanonicalSku(rawSku);
             const existing = aggregatedDataMap.get(canonicalSku) || {};
             Object.entries(item).forEach(([k, v]) => {
-                if (v !== undefined) {
-                    if (k === 'stock') existing[k] = (Number(existing.k) || 0) + Number(v);
-                    else if (k === 'sku') existing[k] = canonicalSku;
-                    else existing[k] = v;
-                }
+                    if (v !== undefined) {
+                        if (k === 'stock') existing[k] = (Number(existing[k]) || 0) + Number(v);
+                        else if (k === 'sku') existing[k] = canonicalSku;
+                        else existing[k] = v;
+                    }
             });
             aggregatedDataMap.set(canonicalSku, existing);
         });
@@ -1245,8 +1304,22 @@ export const useAppState = () => {
         setProducts(prev => (prev || []).map(p => {
             const update = updates.find(u => u.sku === p.sku);
             if (update) {
-                const incomingStock = update.shipments.reduce((sum: number, s: any) => sum + s.quantity, 0);
-                return { ...p, shipments: update.shipments, incomingStock };
+                const nextShipments = Array.isArray(update.shipments) && update.shipments.length > 0
+                    ? update.shipments
+                    : (p.shipments || []);
+                const incomingStock = nextShipments.reduce((sum: number, s: any) => {
+                    return isArrivedShipmentStatus(s?.status) ? sum : sum + (Number(s?.quantity) || 0);
+                }, 0);
+                return {
+                    ...p,
+                    shipments: nextShipments,
+                    incomingStock,
+                    reorderPlacedDate: update.reorderPlacedDate || undefined,
+                    productionScheduledQty: Number(update.productionScheduledQty) || 0,
+                    toBeShippedQty: Number(update.toBeShippedQty) || 0,
+                    shippedOutQty: Number(update.shippedOutQty) || 0,
+                    shipmentStatus: update.shipmentStatus || ''
+                };
             }
             return p;
         }));
@@ -1402,37 +1475,68 @@ export const useAppState = () => {
 
             console.log(`[push] complete — pushed ${newTransactions.length} transactions`);
 
-            // Push refunds and shipments
-            console.log(`[push] pushing ${refundHistory?.length || 0} refunds`);
-            const refundPushRes = await pushRefundsAndShipments(
-                storedAdminPassword,
-                refundHistory || [],
-                []
-            );
-            if (!refundPushRes.success) {
-                console.error('[push] refunds error:', refundPushRes.error);
-                setSyncStatus('error');
-                return;
+            // Push refunds and shipments (delta only: new/changed rows by id+signature)
+            const localRefunds = refundHistory || [];
+            let refundsToPush = localRefunds;
+            const refundSigRes = await pullRefundSignatures();
+            if (refundSigRes.success && Array.isArray(refundSigRes.signatures)) {
+                const remoteSigMap = new Map(refundSigRes.signatures.map((s: any) => [String(s.id), String(s.rowHash)]));
+                refundsToPush = localRefunds.filter((r: any) => {
+                    const id = getRefundId(r);
+                    return remoteSigMap.get(id) !== buildRefundSignature(r);
+                });
+                console.log(`[push] refunds local: ${localRefunds.length}, changed/new: ${refundsToPush.length}`);
+            } else {
+                console.warn('[push] refunds signature check failed, falling back to full refunds push');
+                console.log(`[push] refunds local: ${localRefunds.length}, changed/new: ${localRefunds.length}`);
+            }
+            if (refundsToPush.length > 0) {
+                const refundPushRes = await pushRefundsAndShipments(
+                    storedAdminPassword,
+                    refundsToPush,
+                    []
+                );
+                if (!refundPushRes.success) {
+                    console.error('[push] refunds error:', refundPushRes.error);
+                    setSyncStatus('error');
+                    return;
+                }
             }
             console.log(`[push] refunds pushed`);
 
-            // Push promotions to separate table
+            // Push promotions to separate table (delta only: new/changed rows by id+signature)
             if ((promotions?.length || 0) === 0) {
                 console.error('[push] blocked: local promotions list is empty. Refusing to push empty promotions payload.');
                 setSyncStatus('error');
                 return;
             }
             const normalizedPromotionsForPush = normalizePromotionStatuses(promotions || []);
-            const promoPushRes = await pushPromotions(
-                storedAdminPassword,
-                normalizedPromotionsForPush
-            );
-            if (!promoPushRes.success) {
-                console.error('[push] promotions push failed:', promoPushRes.error);
-                setSyncStatus('error');
-                return;
+            let promotionsToPush = normalizedPromotionsForPush;
+            const promoSigRes = await pullPromotionSignatures();
+            if (promoSigRes.success && Array.isArray(promoSigRes.signatures)) {
+                const remoteSigMap = new Map(promoSigRes.signatures.map((s: any) => [String(s.id), String(s.rowHash)]));
+                promotionsToPush = normalizedPromotionsForPush.filter((promo: any) => {
+                    const id = String(promo?.id || '').trim();
+                    if (!id) return false;
+                    return remoteSigMap.get(id) !== buildPromotionSignature(promo);
+                });
+                console.log(`[push] promotions local: ${normalizedPromotionsForPush.length}, changed/new: ${promotionsToPush.length}`);
+            } else {
+                console.warn('[push] promotions signature check failed, falling back to full promotions push');
+                console.log(`[push] promotions local: ${normalizedPromotionsForPush.length}, changed/new: ${normalizedPromotionsForPush.length}`);
             }
-            console.log(`[push] promotions pushed — ${promotions?.length || 0} campaigns`);
+            if (promotionsToPush.length > 0) {
+                const promoPushRes = await pushPromotions(
+                    storedAdminPassword,
+                    promotionsToPush
+                );
+                if (!promoPushRes.success) {
+                    console.error('[push] promotions push failed:', promoPushRes.error);
+                    setSyncStatus('error');
+                    return;
+                }
+            }
+            console.log(`[push] promotions pushed — ${promotionsToPush.length} campaigns`);
 
             // Push ad campaign data to separate table
             const adPushRes = await pushAdData(
@@ -1689,8 +1793,10 @@ export const useAppState = () => {
 
             setSyncStep('Applying data...');
 
-            // Pull refunds only
-            const refundRes = await pullRefundsAndShipments();
+            // Pull refunds (incremental when cursor exists)
+            const refundCursorKey = 'sello_refunds_updated_at';
+            const lastRefundUpdatedAt = localStorage.getItem(refundCursorKey) || undefined;
+            const refundRes = await pullRefundsAndShipments(lastRefundUpdatedAt);
             const keepLocalIfRemoteEmpty = <T,>(label: string, remote: any, local: T[]): T[] => {
                 const remoteSafe = Array.isArray(remote) ? remote as T[] : [];
                 const localSafe = Array.isArray(local) ? local : [];
@@ -1700,11 +1806,36 @@ export const useAppState = () => {
                 }
                 return remoteSafe;
             };
+            const mergeById = <T extends { id?: string }>(base: T[], incoming: T[]): T[] => {
+                const out = [...base];
+                const idxById = new Map<string, number>();
+                out.forEach((row, idx) => {
+                    if (row?.id) idxById.set(String(row.id), idx);
+                });
+                for (const row of incoming) {
+                    const id = row?.id ? String(row.id) : '';
+                    if (id && idxById.has(id)) {
+                        out[idxById.get(id)!] = row;
+                    } else {
+                        out.push(row);
+                    }
+                }
+                return out;
+            };
             const refunds = refundRes.success
-                ? keepLocalIfRemoteEmpty('refunds', refundRes.refunds || [], refundHistory || [])
+                ? (() => {
+                    const remoteRows = Array.isArray(refundRes.refunds) ? refundRes.refunds : [];
+                    const localRows = Array.isArray(refundHistory) ? refundHistory : [];
+                    if (lastRefundUpdatedAt && refundRes.incremental) {
+                        return remoteRows.length === 0 ? localRows : mergeById(localRows as any[], remoteRows as any[]);
+                    }
+                    return keepLocalIfRemoteEmpty('refunds', remoteRows, localRows);
+                })()
                 : (refundHistory || []);
             if (!refundRes.success) {
                 console.warn('[sync] refunds pull failed (non-fatal):', refundRes.error);
+            } else if (refundRes.latestUpdatedAt) {
+                localStorage.setItem(refundCursorKey, refundRes.latestUpdatedAt);
             }
 
             // Pull ad campaign data from separate table
@@ -1737,13 +1868,24 @@ export const useAppState = () => {
                 console.warn('[sync] ad data pull failed (non-fatal):', adRes.error);
             }
 
-            // Pull promotions from separate table
-            const promoRes = await pullPromotions();
+            // Pull promotions from separate table (incremental when cursor exists)
+            const promoCursorKey = 'sello_promotions_updated_at';
+            const lastPromoUpdatedAt = localStorage.getItem(promoCursorKey) || undefined;
+            const promoRes = await pullPromotionsSince(lastPromoUpdatedAt);
             if (promoRes.success && Array.isArray(promoRes.promotions)) {
-                const nextPromotionsRaw = keepLocalIfRemoteEmpty('promotions', promoRes.promotions, promotions || []);
+                const remotePromotions = promoRes.promotions;
+                const localPromotions = promotions || [];
+                const nextPromotionsRaw = (lastPromoUpdatedAt && promoRes.incremental)
+                    ? (remotePromotions.length === 0
+                        ? localPromotions
+                        : mergeById(localPromotions as any[], remotePromotions as any[]))
+                    : keepLocalIfRemoteEmpty('promotions', remotePromotions, localPromotions);
                 const nextPromotions = normalizePromotionStatuses(nextPromotionsRaw);
                 setPromotions(nextPromotions);
                 console.log(`[sync] promotions loaded — ${nextPromotions.length} campaigns`);
+                if (promoRes.latestUpdatedAt) {
+                    localStorage.setItem(promoCursorKey, promoRes.latestUpdatedAt);
+                }
             } else {
                 console.warn('[sync] promotions pull failed (non-fatal):', promoRes.error);
             }

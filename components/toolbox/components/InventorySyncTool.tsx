@@ -133,7 +133,7 @@ export const InventorySyncTool: React.FC<InventorySyncToolProps> = ({
             map.set(master, master);
             p.channels.forEach(c => {
                 if (c.skuAlias) {
-                    c.skuAlias.split(',').forEach(a => {
+                    c.skuAlias.split(',').map(a => a.trim()).filter(Boolean).forEach(a => {
                         const alias = a.trim().toUpperCase();
                         if (alias) map.set(alias, master);
                     });

@@ -117,7 +117,7 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
         products.forEach(p => {
             map.set(p.sku.toUpperCase(), p.sku);
             p.channels?.forEach(c => {
-                c.skuAlias?.split(',').forEach(a => {
+                c.skuAlias?.split(',').map(a => a.trim()).filter(Boolean).forEach(a => {
                     const alias = a.trim().toUpperCase();
                     if (alias) map.set(alias, p.sku);
                 });

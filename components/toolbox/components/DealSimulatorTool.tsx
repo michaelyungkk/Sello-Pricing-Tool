@@ -258,7 +258,7 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
             const p = productMap.get(skuUp)
                 ?? products.find(pr =>
                     (pr.channels || []).some(ch =>
-                        (ch.skuAlias || '').split(',').some(a => a.trim().toUpperCase() === skuUp)
+                        skuUp !== '' && (ch.skuAlias || '').split(',').map(a => a.trim()).filter(Boolean).some(a => a.toUpperCase() === skuUp)
                     )
                 )
                 ?? products.find(pr => pr.sku.toUpperCase().startsWith(skuUp) || skuUp.startsWith(pr.sku.toUpperCase()));
@@ -433,6 +433,12 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                             {rows_calc.map((row, idx) => {
                                 const hasPrice   = row.effectiveProposedPrice > 0;
                                 const belowFloorRow = hasPrice && row.floorPrice > 0 && row.effectiveProposedPrice < row.floorPrice;
+                                const matchedProduct = productMap.get((row.sku || '').toUpperCase())
+                                    ?? products.find(p =>
+                                        (p.channels || []).some(ch =>
+                                            ((row.sku || '').trim() !== '' && (ch.skuAlias || '').split(',').map(a => a.trim()).filter(Boolean).some(a => a.toUpperCase() === (row.sku || '').toUpperCase()))
+                                        )
+                                    );
                                 const displayProposedPrice = hasPrice && Number.isFinite(row.effectiveProposedPrice)
                                     ? Number(row.effectiveProposedPrice.toFixed(2))
                                     : '';
@@ -450,18 +456,24 @@ export const DealSimulatorTool: React.FC<DealSimulatorToolProps> = ({
                                             <span className="v-dim text-[10px]">{idx + 1}</span>
                                         </td>
                                         <td className="p-0" style={{ maxWidth: 0, overflow: 'hidden' }}>
-                                            <SkuDropdown
-                                                value={row.sku}
-                                                products={products}
-                                                freightMap={freightMap}
-                                                onChange={v => update(row.id, { sku: v })}
-                                                onSelect={(p, freight) => update(row.id, {
-                                                    sku: p.sku,
-                                                    cogs: p.costPrice || 0,
-                                                    caPrice: p.caPrice || 0,
-                                                    freight,
-                                                })}
-                                            />
+                                            <div className="py-0.5">
+                                                <SkuDropdown
+                                                    value={row.sku}
+                                                    products={products}
+                                                    freightMap={freightMap}
+                                                    onChange={v => update(row.id, { sku: v })}
+                                                    onSelect={(p, freight) => update(row.id, {
+                                                        sku: p.sku,
+                                                        cogs: p.costPrice || 0,
+                                                        caPrice: p.caPrice || 0,
+                                                        freight,
+                                                    })}
+                                                />
+                                                <div className="px-3 pb-1 text-[10px] text-gray-400 flex items-center gap-2">
+                                                    <span>Grade: <strong className="text-gray-600">{matchedProduct?.gradeLevel ?? '-'}</strong></span>
+                                                    <span>Inv: <strong className="text-gray-600">{matchedProduct?.stockLevel ?? 0}</strong></span>
+                                                </div>
+                                            </div>
                                         </td>
                                         {(['cogs','freight'] as (keyof SimRow)[]).map(field => (
                                             <td key={field} className="p-0" style={{ maxWidth: 0, overflow: 'hidden' }}>

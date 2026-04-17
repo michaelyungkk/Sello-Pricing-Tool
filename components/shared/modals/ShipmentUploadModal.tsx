@@ -6,6 +6,11 @@ import { Product, ShipmentDetail } from '../../../types';
 interface ShipmentUpdate {
     sku: string;
     shipments: ShipmentDetail[];
+    reorderPlacedDate?: string;
+    productionScheduledQty?: number;
+    toBeShippedQty?: number;
+    shippedOutQty?: number;
+    shipmentStatus?: string;
 }
 
 type ChangeType = 'DELAYED' | 'EARLIER' | 'STATUS_CHANGE' | 'NEW' | 'UNCHANGED';
@@ -131,17 +136,45 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
             const c1Idx = findCol(['containerno.1', '1号柜']);
             const c1QtyIdx = findCol(['containerno.1stockqty', '1号柜装柜数量']);
             const c1StatusIdx = findCol(['containerno.1status', '1号柜状态']);
-            const c1EtaIdx = findCol(['containerno.1expectedeta', '1号柜预计eta']);
+            const c1EtaIdx = findCol([
+                'containerno.1expectedeta',
+                'container1eta(wh)',
+                'container1eta',
+                '1号柜预计eta',
+                '1号柜预计到仓日期'
+            ]);
+            const c1EtaCustomsIdx = findCol([
+                'container1eta(wh,customsagent)',
+                'container1etawhcustomsagent',
+                '1号柜预计到仓日期（清关）'
+            ]);
 
             // Container 2
             const c2Idx = findCol(['containerno.2', '2号柜']);
             const c2QtyIdx = findCol(['containerno.2stockqty', '2号柜装柜数量']);
             const c2StatusIdx = findCol(['containerno.2status', '2号柜状态']);
-            const c2EtaIdx = findCol(['containerno.2expectedeta', '2号柜预计eta']);
+            const c2EtaIdx = findCol([
+                'containerno.2expectedeta',
+                'container2eta(wh)',
+                'container2eta',
+                '2号柜预计eta',
+                '2号柜预计到仓日期'
+            ]);
+            const c2EtaCustomsIdx = findCol([
+                'container2eta(wh,customsagent)',
+                'container2etawhcustomsagent',
+                '2号柜预计到仓日期（清关）'
+            ]);
 
             if (skuIdx === -1) throw new Error("Could not detect 'Product SKU' column.");
 
-            const updatesMap: Record<string, ShipmentDetail[]> = {};
+            const reorderDateIdx = findCol(['reorderplaceddate']);
+            const productionScheduledQtyIdx = findCol(['productionscheduledquantity']);
+            const toBeShippedQtyIdx = findCol(['tobeshippedquantity']);
+            const shippedOutQtyIdx = findCol(['shippedoutquantity']);
+            const shipmentStatusIdx = findCol(['shipmentstatus']);
+
+            const updatesMap: Record<string, ShipmentUpdate> = {};
             const summaryMap: Record<string, ContainerSummary> = {};
 
             const cleanStatus = (val: any): string => {
@@ -149,6 +182,16 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                 if (!str || str === 'undefined' || str === 'null') return 'Pending';
                 if (str.includes('/')) return str.split('/')[0].trim();
                 return str.replace(/[\u4E00-\u9FFF]/g, '').trim();
+            };
+            const cleanEnglishText = (val: any): string => {
+                const str = String(val ?? '').trim();
+                if (!str || str === 'undefined' || str === 'null') return '';
+                const first = str.includes('/') ? str.split('/')[0].trim() : str;
+                return first.replace(/[\u4E00-\u9FFF]/g, '').trim();
+            };
+            const parseQty = (val: any): number => {
+                const n = Number(val);
+                return Number.isFinite(n) ? n : 0;
             };
 
             const updateSummary = (id: string, status: string, eta: string | undefined, qty: number) => {
@@ -222,7 +265,11 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                     const id = String(row[c1Idx]).trim();
                     const qty = parseFloat(row[c1QtyIdx]) || 0;
                     const status = c1StatusIdx !== -1 ? cleanStatus(row[c1StatusIdx]) : 'Pending';
-                    const eta = parseDate(row[c1EtaIdx]);
+                    const eta = parseDate(
+                        c1EtaIdx !== -1 ? row[c1EtaIdx] : undefined
+                    ) || parseDate(
+                        c1EtaCustomsIdx !== -1 ? row[c1EtaCustomsIdx] : undefined
+                    );
                     if (id) {
                         shipments.push({ containerId: id, quantity: qty, status, eta });
                         updateSummary(id, status, eta, qty);
@@ -234,19 +281,37 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                     const id = String(row[c2Idx]).trim();
                     const qty = parseFloat(row[c2QtyIdx]) || 0;
                     const status = c2StatusIdx !== -1 ? cleanStatus(row[c2StatusIdx]) : 'Pending';
-                    const eta = parseDate(row[c2EtaIdx]);
+                    const eta = parseDate(
+                        c2EtaIdx !== -1 ? row[c2EtaIdx] : undefined
+                    ) || parseDate(
+                        c2EtaCustomsIdx !== -1 ? row[c2EtaCustomsIdx] : undefined
+                    );
                     if (id) {
                         shipments.push({ containerId: id, quantity: qty, status, eta });
                         updateSummary(id, status, eta, qty);
                     }
                 }
 
-                if (shipments.length > 0) {
-                    updatesMap[rawSku] = shipments;
+                const reorderPlacedDate = parseDate(reorderDateIdx !== -1 ? row[reorderDateIdx] : undefined);
+                const productionScheduledQty = parseQty(productionScheduledQtyIdx !== -1 ? row[productionScheduledQtyIdx] : undefined);
+                const toBeShippedQty = parseQty(toBeShippedQtyIdx !== -1 ? row[toBeShippedQtyIdx] : undefined);
+                const shippedOutQty = parseQty(shippedOutQtyIdx !== -1 ? row[shippedOutQtyIdx] : undefined);
+                const shipmentStatus = cleanEnglishText(shipmentStatusIdx !== -1 ? row[shipmentStatusIdx] : undefined);
+
+                if (shipments.length > 0 || reorderPlacedDate || productionScheduledQty > 0 || toBeShippedQty > 0 || shippedOutQty > 0 || shipmentStatus) {
+                    updatesMap[rawSku] = {
+                        sku: rawSku,
+                        shipments,
+                        reorderPlacedDate,
+                        productionScheduledQty,
+                        toBeShippedQty,
+                        shippedOutQty,
+                        shipmentStatus
+                    };
                 }
             }
 
-            const result: ShipmentUpdate[] = Object.entries(updatesMap).map(([sku, shipments]) => ({ sku, shipments }));
+            const result: ShipmentUpdate[] = Object.values(updatesMap);
 
             // Sort summaries: Problems (Delays) first, then Opportunities (Earlier), then Updates, then New, then Unchanged
             const getPriority = (c: ContainerSummary) => {

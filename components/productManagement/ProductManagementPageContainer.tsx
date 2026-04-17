@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice, SkuFamily } from '../../types';
+import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice, SkuFamily, InventoryChangeRecord } from '../../types';
 import type { CohortShiftWarning } from '../../services/cohortAnalysis';
 
 import { List, Ship, RotateCcw, DollarSign, Activity, Columns, Layers, X } from 'lucide-react';
@@ -41,6 +41,7 @@ interface ProductManagementPageContainerProps {
     promotions?: PromotionEvent[];
     priceHistoryMap?: Map<string, PriceLog[]>;
     refundHistory?: RefundLog[];
+    inventoryChangeHistory?: InventoryChangeRecord[];
 
     dateLabels: { current: string, last: string };
     onUpdateProduct?: (product: Product) => void;
@@ -62,6 +63,7 @@ interface ProductManagementPageContainerProps {
     benchmarkRecalcState?: BenchmarkRecalcState;
     onCancelBenchmarkRecalculation?: () => void;
     onDismissBenchmarkRecalcState?: () => void;
+    onConfirmContainersArrived?: (payload: { containerId: string; confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }[]) => void;
 }
 
 type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison' | 'family-groups';
@@ -71,6 +73,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     pricingRules,
     priceHistoryMap = new Map(),
     refundHistory = [],
+    inventoryChangeHistory = [],
 
     dateLabels,
     onUpdateProduct,
@@ -92,6 +95,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     benchmarkRecalcState,
     onCancelBenchmarkRecalculation,
     onDismissBenchmarkRecalcState,
+    onConfirmContainersArrived,
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
@@ -361,6 +365,8 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                 {activeTab === 'shipments' && (
                     <ShipmentsTab
                         products={products}
+                        inventoryChangeHistory={inventoryChangeHistory}
+                        onConfirmContainersArrived={onConfirmContainersArrived}
                         themeColor={themeColor}
                         initialTags={shipmentSearchTags}
                         onTagsChange={setShipmentSearchTags}

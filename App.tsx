@@ -887,6 +887,7 @@ const App: React.FC = () => {
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory || []}
                                 priceChangeHistory={priceChangeHistory || []}
+                                inventoryChangeHistory={inventoryChangeHistory || []}
                                 onOpenMappingModal={() => setIsMappingModalOpen(true)}
                                 dateLabels={dynamicDateLabels}
                                 onUpdateProduct={(p) => setProducts(prev => (prev || []).map(old => old.id === p.id ? p : old))}
@@ -915,6 +916,66 @@ const App: React.FC = () => {
                                 onCancelBenchmarkRecalculation={handleCancelBenchmarkRecalculation}
                                 onDismissBenchmarkRecalcState={handleDismissBenchmarkRecalcState}
                                 onStampLandedAt={handleStampLandedAt}
+                                onConfirmContainersArrived={(payload: { containerId: string; confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }[]) => {
+                                    const targetRecords = new Map<string, { confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }>();
+                                    (payload || []).forEach((item) => {
+                                        const id = String(item?.containerId || '').trim();
+                                        if (!id) return;
+                                        targetRecords.set(id, {
+                                            confirmedQty: item?.confirmedQty,
+                                            confirmedSkuQtys: item?.confirmedSkuQtys,
+                                            mode: item?.mode || 'MANUAL'
+                                        });
+                                    });
+                                    if (targetRecords.size === 0) return;
+                                    const isArrivedLike = (status?: string) => {
+                                        const raw = String(status || '').trim();
+                                        if (!raw) return false;
+                                        const first = raw.includes('/') ? raw.split('/')[0].trim() : raw;
+                                        const cleaned = first.replace(/[\u4E00-\u9FFF]/g, '').trim().toLowerCase();
+                                        return cleaned.includes('arrived') || cleaned.includes('delivered') || cleaned.includes('cleared') || cleaned.includes('received') || cleaned.includes('landed');
+                                    };
+                                    const nowIso = new Date().toISOString();
+                                    setProducts(prev => {
+                                        if (!Array.isArray(prev) || prev.length === 0) return prev;
+                                        return prev.map(p => {
+                                            const currentShipments = Array.isArray(p.shipments) ? p.shipments : [];
+                                            if (currentShipments.length === 0) return p;
+                                            let touched = false;
+                                            const nextShipments = new Array(currentShipments.length);
+                                            for (let i = 0; i < currentShipments.length; i++) {
+                                                const s = currentShipments[i];
+                                                const id = String(s?.containerId || '').trim();
+                                                const rec = id ? targetRecords.get(id) : undefined;
+                                                if (!rec) {
+                                                    nextShipments[i] = s;
+                                                    continue;
+                                                }
+                                                touched = true;
+                                                const skuKey = String(p.sku || '').trim();
+                                                const skuOverrideRaw = rec.confirmedSkuQtys ? rec.confirmedSkuQtys[skuKey] : undefined;
+                                                const skuOverride = Number.isFinite(Number(skuOverrideRaw)) ? Math.round(Number(skuOverrideRaw)) : undefined;
+                                                nextShipments[i] = {
+                                                    ...s,
+                                                    status: 'Arrived (Confirmed)',
+                                                    arrivalConfirmedQty: typeof skuOverride === 'number'
+                                                        ? Math.max(0, skuOverride)
+                                                        : rec.confirmedQty,
+                                                    arrivalConfirmedAt: nowIso,
+                                                    arrivalConfirmationMode: rec.mode || 'MANUAL',
+                                                    arrivalConfirmedSkuQtys: rec.confirmedSkuQtys
+                                                };
+                                            }
+                                            if (!touched) return p;
+                                            let incomingStock = 0;
+                                            for (let i = 0; i < nextShipments.length; i++) {
+                                                const s = nextShipments[i];
+                                                if (!isArrivedLike(s?.status)) incomingStock += (Number(s?.quantity) || 0);
+                                            }
+                                            return { ...p, shipments: nextShipments, incomingStock };
+                                        });
+                                    });
+                                }}
                             />
                         </div>)}
                         {mountedPages.has('platforms') && (
