@@ -1277,7 +1277,7 @@ export const useAppState = () => {
         if (isAdminMode) setIsDirty(true);
     }, [updateTimestamp, isAdminMode]);
 
-    const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string }[], reportDate: string) => {
+    const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => {
         const changes: PriceChangeRecord[] = [];
         setProducts(prev => (prev || []).map(p => {
             const update = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
@@ -1286,11 +1286,18 @@ export const useAppState = () => {
                 if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
                     changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
                 }
+                const nextImageUrl = update.imageUrl || p.imageUrl;
+                const nextDescription = update.description || p.description;
+                const wasListingReady = !!(p.imageUrl && p.description);
+                const isListingReady = !!(nextImageUrl && nextDescription);
+                const becameListingReady = !p.listingReadyAt && !wasListingReady && isListingReady;
                 return {
                     ...p,
                     caPrice: update.caPrice,
                     lastUpdated: reportDate,
-                    imageUrl: update.imageUrl || p.imageUrl
+                    imageUrl: nextImageUrl,
+                    description: nextDescription,
+                    listingReadyAt: p.listingReadyAt || (becameListingReady ? reportDate : undefined)
                 };
             }
             return p;

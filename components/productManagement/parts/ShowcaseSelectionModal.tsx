@@ -53,13 +53,11 @@ export const ShowcaseSelectionModal: React.FC<ShowcaseSelectionModalProps> = ({
     const { suggested, notReady } = useMemo(() => {
         const recent = products
             .filter(p => {
-                // Use landedAt if set, otherwise fall back to lastUpdated
-                const dateKey = p.landedAt || p.lastUpdated;
-                return dateKey && dateKey >= cutoffDate;
+                return !!p.landedAt && p.landedAt >= cutoffDate;
             })
             .sort((a, b) => {
-                const da = b.landedAt || b.lastUpdated || '';
-                const db = a.landedAt || a.lastUpdated || '';
+                const da = b.landedAt || '';
+                const db = a.landedAt || '';
                 return da.localeCompare(db);
             });
 
@@ -316,7 +314,7 @@ export const ShowcaseSelectionModal: React.FC<ShowcaseSelectionModalProps> = ({
                                             </div>
                                             <div className="flex items-center gap-1 text-[10px] text-gray-400 shrink-0">
                                                 <Clock className="w-3 h-3" />
-                                                {formatDate(p.landedAt || p.lastUpdated)}{!p.landedAt && <span className="text-[9px] text-amber-400 ml-1">(est.)</span>}
+                                                {formatDate(p.landedAt)}
                                             </div>
                                         </div>
                                     ))}
