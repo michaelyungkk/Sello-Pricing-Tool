@@ -27,18 +27,20 @@ type Tab = 'dashboard' | 'all_skus';
 const PromotionManagerPageContainerInner: React.FC<PromotionManagerPageContainerProps> = ({
     products = [],
     pricingRules = {},
-    _logisticsRules = [], // Unused in this refactor but kept for API compat
+    logisticsRules = [], // Unused in this refactor but kept for API compat
     promotions = [],
     priceHistoryMap,
     onAddPromotion,
     onUpdatePromotion,
     onDeletePromotion,
     themeColor,
-    _headerStyle,
+    headerStyle,
     priceChangeHistory,
     navigationIntent,
     onConsumeNavigationIntent
 }) => {
+    void logisticsRules;
+    void headerStyle;
     const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
     return (

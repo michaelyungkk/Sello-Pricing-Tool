@@ -160,7 +160,7 @@ export const aggregateProductTrends = (
     return {
       sku: p.sku,
       name: p.name,
-      category: p.category,
+      category: p.category || 'Uncategorized',
       gradeLevel: p.gradeLevel,
       current,
       prior,

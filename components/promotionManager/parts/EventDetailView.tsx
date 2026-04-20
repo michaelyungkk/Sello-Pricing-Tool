@@ -540,7 +540,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                             <label className="text-[10px] font-bold text-theme uppercase block mb-1">Type</label>
                                             <select 
                                                 value={promo.shopDiscountType}
-                                                onChange={(e) => onUpdateMeta({ shopDiscountType: e.target.value })}
+                                                onChange={(e) => onUpdateMeta({ shopDiscountType: e.target.value as PromotionItem['discountType'] })}
                                                 className="text-sm font-bold border-theme-20 rounded-lg py-1.5 px-3 bg-white focus:ring-2 focus:ring-theme"
                                             >
                                                 <option value="PERCENT_OFF">% Off</option>
@@ -665,7 +665,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                     <button
                                         onClick={() => onUpdateMeta({ expectedLiftPct: suggestedLiftData.val })}
                                         className="flex items-center gap-1 text-[9px] font-bold text-theme bg-theme-10 px-2 py-1 rounded-full border border-indigo-100 hover:bg-theme-10 hover:border-theme-20 transition-all"
-                                        title={`${suggestedLiftData.source}. Calculated Sensitivity: ${suggestedLiftData.elasticity.toFixed(1)}`}
+                                        title={`${suggestedLiftData.source}. Calculated Sensitivity: ${(suggestedLiftData.elasticity ?? 0).toFixed(1)}`}
                                     >
                                         <Sparkles className="w-2.5 h-2.5" />
                                         Sugg: {suggestedLiftData.val}%
@@ -692,7 +692,7 @@ export const EventDetailView = ({ promo, allPromotions = [], products, priceHist
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-indigo-800">Expected Revenue</span>
-                                    <span className="text-lg font-bold text-indigo-900">{formatSmartMoney(aggregatedEffectiveness.totals.forecastUnits * (aggregatedEffectiveness.totals.baselineRevenue / (aggregatedEffectiveness.totals.baselineDailyUnits * (windows.event?.days || 1) || 1)), 0)}</span>
+                                    <span className="text-lg font-bold text-indigo-900">{formatSmartMoney(aggregatedEffectiveness.totals.forecastUnits * (aggregatedEffectiveness.totals.baselineRevenue / (aggregatedEffectiveness.totals.baselineDailyUnits * (windows.event?.days || 1) || 1)))}</span>
                                 </div>
                             </div>
                             

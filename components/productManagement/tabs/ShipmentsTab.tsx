@@ -80,7 +80,8 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
             }
         });
         return Object.values(map).map((container: any) => {
-            const items = Array.from(container.itemQtyBySku.entries())
+            const itemEntries = Array.from(container.itemQtyBySku.entries()) as Array<[string, number]>;
+            const items = itemEntries
                 .map(([sku, qty]) => ({ sku, qty }))
                 .sort((a, b) => a.sku.localeCompare(b.sku));
             return { ...container, items };

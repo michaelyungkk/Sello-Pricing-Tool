@@ -95,7 +95,10 @@ export const FeeBreakdownTable: React.FC<FeeBreakdownTableProps> = ({
                             const detail = product.costDetail;
                             if (!detail) return null;
                             const skuQty = detail.skuQty > 0 ? detail.skuQty : 1;
-                            const perUnit = (v: number) => viewMode === 'PER_UNIT' ? v / skuQty : v;
+                            const perUnit = (v?: number) => {
+                                const safeValue = Number(v) || 0;
+                                return viewMode === 'PER_UNIT' ? safeValue / skuQty : safeValue;
+                            };
                             const isNegProfit = (detail.profitInclRn || 0) < 0;
 
                             return (

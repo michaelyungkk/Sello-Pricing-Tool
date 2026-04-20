@@ -685,10 +685,10 @@ export const useAppState = () => {
     }, []);
 
     const handleManualPriceChange = useCallback((data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => {
-        const { sku, productName, date, oldPrice, newPrice } = data;
+        const { sku, productName, date, platform, oldPrice, newPrice } = data;
         const changeType = newPrice > oldPrice ? 'INCREASE' : 'DECREASE';
         const percentChange = oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : (newPrice > 0 ? 100 : 0);
-        const newRecord: PriceChangeRecord = { id: `manual-${Date.now()}-${sku}`, sku, productName, date, oldPrice, newPrice, changeType, percentChange };
+        const newRecord: PriceChangeRecord = { id: `manual-${Date.now()}-${sku}`, sku, productName, date, platform: platform || 'Unknown', oldPrice, newPrice, changeType, percentChange };
         setPriceChangeHistory(prev => [newRecord, ...(prev || [])]);
         if (isAdminMode) setIsDirty(true);
     }, [isAdminMode]);
@@ -717,7 +717,7 @@ export const useAppState = () => {
     const deleteSearchSession = useCallback((id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } }, [activeSearchId]);
     const handleViewElasticity = useCallback((product: Product) => { setSelectedElasticityProduct(product); }, []);
     const handleAnalyze = useCallback(async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } }, [pricingRules, thresholds]);
-    const handleApplyPrice = useCallback((productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = (prev || []).find(p => p.id === productId); if (!productToUpdate) return prev; const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...(prevHistory || []), change]); return prev.map(p => { if (p.id !== productId) return p; return { ...p, caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }; }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); }, []);
+    const handleApplyPrice = useCallback((productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = (prev || []).find(p => p.id === productId); if (!productToUpdate) return prev; const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], platform: productToUpdate.platform || 'Unknown', oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...(prevHistory || []), change]); return prev.map(p => { if (p.id !== productId) return p; return { ...p, caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }; }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); }, []);
 
     const handleAdGroupSave = useCallback((
         updatedAdGroups: AdGroup[],
@@ -1284,7 +1284,7 @@ export const useAppState = () => {
             if (update) {
                 const oldPrice = p.caPrice || (p.currentPrice * VAT_MULTIPLIER);
                 if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
-                    changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
+                    changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, platform: p.platform || 'Unknown', oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
                 }
                 const nextImageUrl = update.imageUrl || p.imageUrl;
                 const nextDescription = update.description || p.description;
@@ -1306,6 +1306,46 @@ export const useAppState = () => {
         updateTimestamp('CA Prices');
         setIsCAUploadModalOpen(false);
     }, [updateTimestamp]);
+
+    const handleDescriptionImport = useCallback((data: { sku: string; description: string; imageUrl?: string }[]) => {
+        const todayKey = getTodayKeyMelbourne();
+        if (!Array.isArray(data) || data.length === 0) return;
+        setProducts(prev => (prev || []).map(p => {
+            const update = data.find(d =>
+                d.sku.toUpperCase() === p.sku.toUpperCase() ||
+                d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, '')
+            );
+            if (!update) return p;
+            const nextImageUrl = update.imageUrl || p.imageUrl;
+            const nextDescription = update.description || p.description;
+            const wasListingReady = !!(p.imageUrl && p.description);
+            const isListingReady = !!(nextImageUrl && nextDescription);
+            const becameListingReady = !p.listingReadyAt && !wasListingReady && isListingReady;
+            return {
+                ...p,
+                imageUrl: nextImageUrl,
+                description: nextDescription,
+                listingReadyAt: p.listingReadyAt || (becameListingReady ? todayKey : undefined),
+                lastUpdated: todayKey
+            };
+        }));
+        updateTimestamp('Descriptions');
+        if (isAdminMode) setIsDirty(true);
+    }, [updateTimestamp, isAdminMode]);
+
+    const handleStampLandedAt = useCallback((skus: string[], date: string) => {
+        if (!Array.isArray(skus) || skus.length === 0 || !date) return;
+        const lookup = new Set(skus.map(s => String(s || '').trim().toUpperCase()).filter(Boolean));
+        setProducts(prev => (prev || []).map(p => {
+            const skuUpper = p.sku.toUpperCase();
+            const skuStripped = skuUpper.replace(/[-_]UK$/i, '');
+            if (!lookup.has(skuUpper) && !lookup.has(skuStripped)) return p;
+            if (p.landedAt) return p;
+            return { ...p, landedAt: date };
+        }));
+        updateTimestamp('Landed Date');
+        if (isAdminMode) setIsDirty(true);
+    }, [updateTimestamp, isAdminMode]);
 
     const handleShipmentImport = useCallback((updates: any[]) => {
         setProducts(prev => (prev || []).map(p => {
@@ -2509,6 +2549,8 @@ export const useAppState = () => {
         handleMappingImport,
         handleReturnsImport,
         handleCAImport,
+        handleDescriptionImport,
+        handleStampLandedAt,
         handleShipmentImport,
         // DB Sync
         isAdminMode,

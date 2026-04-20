@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent } from '../../../types';
 import { TagSearchInput } from '../../common/TagSearchInput';
 import { Download, Info, DollarSign, Activity, ChevronLeft, ChevronRight, Tag } from 'lucide-react';

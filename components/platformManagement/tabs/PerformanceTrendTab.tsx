@@ -344,7 +344,7 @@ export const PerformanceTrendTab: React.FC<PerformanceTrendTabProps> = ({
                     <table className="sello-table">
                         <thead className="sticky top-0">
                             <tr>
-                                <SortableHeader label="Rank" sortKey="rank" sort={tableSort} onChange={setTableSort} align="center" style={{ width: 40 }} />
+                                <SortableHeader label="Rank" sortKey="rank" sort={tableSort} onChange={setTableSort} align="center" className="w-10" />
                                 <SortableHeader label="Platform Performance" sortKey="name" sort={tableSort} onChange={setTableSort} />
                                 <SortableHeader label="Revenue" sortKey="revenue" sort={tableSort} onChange={setTableSort} align="right" />
                                 <SortableHeader label="Efficiency (Margin)" sortKey="margin" sort={tableSort} onChange={setTableSort} align="right" />

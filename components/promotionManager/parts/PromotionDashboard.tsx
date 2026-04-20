@@ -336,7 +336,7 @@ export const PromotionDashboard: React.FC<PromotionDashboardProps> = ({
                     promo={editingPromo}
                     onClose={() => setEditingPromo(null)}
                     onSave={handleUpdateSchedule}
-                   
+                    themeColor={themeColor}
                 />
             )}
         </div>

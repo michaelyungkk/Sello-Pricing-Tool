@@ -14,8 +14,7 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
         activeTab, setActiveTab, rules, logistics, searchConfig, setSearchConfig,
         newPlatformName, setNewPlatformName, isSaved, discoveredPlatforms, platformKeys,
         handleFieldChange, toggleExclusion, toggleAdsSupported, handleAddPlatform, handleDeletePlatform,
-        handleLogisticsChange, handleFreightFileUpload, freightRates,
-        freightUploadStatus, freightUploadCount, handleSave
+        freightRates, freightUploadCount, handleSave
     } = useConfigurationState(props);
 
     return (
@@ -54,12 +53,9 @@ export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
 
                 {activeTab === 'logistics' && (
                     <SystemBehaviorSection
-                        logistics={logistics}
-                        handleLogisticsChange={handleLogisticsChange}
-                        handleFreightFileUpload={handleFreightFileUpload}
                         freightRates={freightRates}
-                        freightUploadStatus={freightUploadStatus}
                         freightUploadCount={freightUploadCount}
+                        onOpenFreightUpload={props.onOpenFreightUpload}
                         themeColor={props.themeColor}
                         headerStyle={props.headerStyle}
                     />

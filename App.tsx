@@ -370,6 +370,7 @@ const App: React.FC = () => {
     // Admin mode local UI state
     const [showAdminModal, setShowAdminModal] = useState(false);
     const [showExitConfirm, setShowExitConfirm] = useState(false);
+    const [deductRefunds, setDeductRefunds] = useState(false);
 
     const quickUploadActions = [
         { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-theme' },
@@ -886,6 +887,8 @@ const App: React.FC = () => {
                                 promotions={frozenPromoProductsRef.current}
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory || []}
+                                deductRefunds={deductRefunds}
+                                setDeductRefunds={setDeductRefunds}
                                 priceChangeHistory={priceChangeHistory || []}
                                 inventoryChangeHistory={inventoryChangeHistory || []}
                                 onOpenMappingModal={() => setIsMappingModalOpen(true)}
@@ -1050,6 +1053,8 @@ const App: React.FC = () => {
                                 products={products}
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory}
+                                deductRefunds={deductRefunds}
+                                setDeductRefunds={setDeductRefunds}
                                 pricingRules={pricingRules}
                                 themeColor={userProfile.themeColor}
                                 adGroups={adGroups}
@@ -1073,6 +1078,8 @@ const App: React.FC = () => {
                                 themeColor={userProfile.themeColor}
                                 priceHistoryMap={priceHistoryMap}
                                 refundHistory={refundHistory}
+                                deductRefunds={deductRefunds}
+                                setDeductRefunds={setDeductRefunds}
                                 promotions={strategyPromotions}
                                 priceChangeHistory={priceChangeHistory || []}
                                 costChangeHistory={costChangeHistory || []}
@@ -1170,7 +1177,6 @@ const App: React.FC = () => {
                                 onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }}
                                 products={products}
                                 freightRates={freightRates || []}
-                                learnedAliases={learnedAliases || {}}
                                 onFreightRatesUpload={handleFreightRatesUpload}
                                 onOpenFreightUpload={() => setIsFreightModalOpen(true)}
                                 themeColor={userProfile.themeColor}

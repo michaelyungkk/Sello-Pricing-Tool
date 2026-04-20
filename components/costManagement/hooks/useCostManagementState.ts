@@ -50,7 +50,10 @@ export const useCostManagementState = (products: Product[]) => {
             if (!detail) return 0;
             
             const skuQty = detail.skuQty > 0 ? detail.skuQty : 1;
-            const perUnit = (value: number) => viewMode === 'PER_UNIT' ? value / skuQty : value;
+            const perUnit = (value?: number) => {
+                const safeValue = Number(value) || 0;
+                return viewMode === 'PER_UNIT' ? safeValue / skuQty : safeValue;
+            };
 
             let val: any;
             if (key in detail) {
@@ -95,10 +98,10 @@ export const useCostManagementState = (products: Product[]) => {
             
             // Helper to process values based on current view settings
             // isAlreadyPerUnit flag prevents double-division for metrics that are inherently per-unit (like Unit Price)
-            const proc = (val: number, isAlreadyPerUnit = false) => {
-                let v = val;
+            const proc = (val?: number, isAlreadyPerUnit = false) => {
+                let v = Number(val) || 0;
                 if (viewMode === 'PER_UNIT' && !isAlreadyPerUnit) {
-                    v = val / skuQty;
+                    v = v / skuQty;
                 }
                 if (includeVat) v *= VAT_RATE;
                 return v.toFixed(2);

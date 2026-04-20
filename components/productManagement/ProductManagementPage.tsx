@@ -56,6 +56,7 @@ interface ProductManagementPageProps {
     onDismissBenchmarkRecalcState?: () => void;
     onConfirmContainersArrived?: (payload: { containerId: string; confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }[]) => void;
     onEditContainerShipments?: (payload: { containerId: string; status?: string; eta?: string; items: { sku: string; quantity: number }[] }) => void;
+    onStampLandedAt?: (skus: string[], date: string) => void;
 }
 
 const ProductManagementPage: React.FC<ProductManagementPageProps> = (props) => {

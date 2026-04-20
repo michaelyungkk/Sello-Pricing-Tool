@@ -67,9 +67,10 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     calcProfit,
     calcAdSpend,
     marginPct,
-    _product,
+    product,
     adRedistributionSummary
 }) => {
+    void product;
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">

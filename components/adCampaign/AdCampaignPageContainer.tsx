@@ -576,6 +576,10 @@ function SkuTable({ group, snapshot, products, onRemove }: {
 }) {
     const [sort, setSort] = useState<SortState<SkuSortKey>>({ key: 'spend', dir: 'desc' });
     const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+    const productMap = useMemo(
+        () => new Map((products || []).map((product) => [String(product.sku || '').toUpperCase(), product])),
+        [products]
+    );
 
     const summaries = useMemo(() => {
         const rows = snapshot.dailySkuData.filter(r => r.adGroup === group.name);

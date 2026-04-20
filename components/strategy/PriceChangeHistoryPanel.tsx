@@ -135,7 +135,7 @@ export const PriceChangeHistoryPanel: React.FC<PriceChangeHistoryPanelProps> = (
                                              {formatSmartMoney(record.newPrice)}
                                          </td>
                                          <td className={`r font-bold ${isIncrease ? 'text-green-600' : 'text-red-600'}`}>
-                                             {isIncrease ? '+' : ''}{formatSmartMoney(delta)} ({isIncrease ? '+' : ''}{record.percentChange.toFixed(1)}%)
+                                             {isIncrease ? '+' : ''}{formatSmartMoney(delta)} ({isIncrease ? '+' : ''}{(record.percentChange ?? 0).toFixed(1)}%)
                                          </td>
                                          <td className="r">
                                              <span className="sello-badge badge-gray">

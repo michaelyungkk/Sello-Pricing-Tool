@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { Upload, Check, AlertTriangle, Download, Settings, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { PriceCheckToolProps, PriceCheckTemplate } from '../types';
+import { PriceCheckToolProps } from '../types';
+import { PriceCheckTemplate } from '../../../types';
 import { localDateStamp } from '../../../utils/format';
 
 // ─────────────────────────────────────────────────────────────

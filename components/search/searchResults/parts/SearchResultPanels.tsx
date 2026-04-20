@@ -151,7 +151,7 @@ export const SearchResultPanels: React.FC<SearchResultPanelsProps> = ({
                                 <span className="font-bold text-gray-900 text-sm">{formatSmartMoney(group.totalRevenue)}</span>
                                 <div className={`flex items-center gap-1 text-xs font-bold ${revDiff < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                     {revDiff < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-                                    {revDiff > 0 ? '+' : '-'}{formatSmartMoney(Math.abs(revDiff), 0)} ({revDiffPct.toFixed(1)}%)
+                                    {revDiff > 0 ? '+' : '-'}{formatSmartMoney(Math.abs(revDiff))} ({revDiffPct.toFixed(1)}%)
                                 </div>
                             </div>
                         ) : (

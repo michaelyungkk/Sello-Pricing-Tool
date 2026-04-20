@@ -26,6 +26,7 @@ export interface ToolboxPageProps {
     priceCheckTemplates: PriceCheckTemplate[];
     onSavePriceCheckTemplates: (templates: PriceCheckTemplate[]) => void;
     freightRates?: import('../../types').FreightRate[];
+    onDescriptionImport?: (data: { sku: string; description: string }[]) => void;
 }
 
 export interface UploadedItem {

@@ -91,7 +91,6 @@ const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
                 <DealSimulatorTool
                     products={products || []}
                     freightRates={freightRates || []}
-                    learnedAliases={learnedAliases || {}}
                     themeColor={themeColor}
                 />
             )}

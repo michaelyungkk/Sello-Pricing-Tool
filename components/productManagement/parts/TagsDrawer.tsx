@@ -89,7 +89,7 @@ export const TagsDrawer: React.FC<TagsDrawerProps> = ({ product, products, onClo
                     value={inputValue}
                     onChange={e => setInputValue(e.target.value)}
                     onKeyDown={e => handleKeyDown(e, type)}
-                    onPaste={handlePaste}
+                    onPaste={e => handlePaste(e, type)}
                     placeholder={`Add a ${type} tag...`}
                     className="flex-1 min-w-[120px] outline-none text-sm bg-transparent border-none focus:ring-0 p-1"
                 />

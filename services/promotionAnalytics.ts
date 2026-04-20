@@ -46,10 +46,8 @@ export function deriveDiscountedPrice(
 
   switch (discountType) {
     case 'PERCENT_OFF':
-    case 'PERCENTAGE':
       return baselinePrice * (1 - discountValue / 100);
     case 'FIXED_OFF':
-    case 'FIXED':
       return Math.max(0.01, baselinePrice - discountValue);
     case 'FIXED_PRICE':
     default:

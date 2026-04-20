@@ -190,7 +190,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         const carrier = r.logisticPartner || orderCtx?.carrier || 'Unknown';
         if (selectedCarrier !== 'All' && carrier !== selectedCarrier) return;
 
-        const postcode = r.postcode || orderCtx?.postcode;
+        const postcode = orderCtx?.postcode;
         if (!postcode) return;
 
         const areaMatch = postcode.match(/^([A-Z]{1,2})/i);

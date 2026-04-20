@@ -446,7 +446,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const categoryData = useMemo(() => {
         if (activeTab !== 'categories') return [];
         const result = aggregateCategoryData(products, priceHistoryMap, dateRange);
-        return result.mainCategories;
+        return result.categories;
     }, [activeTab, products, priceHistoryMap, dateRange]);
 
     const totalPages = Math.ceil(workbenchData.length / itemsPerPage);
@@ -902,9 +902,9 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                         <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight">Cost Breakdown (Ex VAT)</div>
                                                                         <div className="space-y-0.5">
                                                                             <div className="flex justify-between"><span>Unit Revenue:</span><span>{formatSmartMoney(p.displayPrice)}</span></div>
-                                                                            <div className="flex justify-between text-orange-400"><span>Ad Cost:</span><span>-{formatSmartMoney((p.adsFee || 0), 2)} ({formatPct(p.tacos)})</span></div>
-                                                                            <div className="flex justify-between text-red-400"><span>Refund Impact:</span><span>-{formatSmartMoney((p.refundRateValue / 100 * p.displayPrice), 2)}</span></div>
-                                                                            <div className="flex justify-between text-gray-400"><span>COGS + Ops:</span><span>-{formatSmartMoney((p.costPrice || 0) + (p.postage || 0) + (p.wmsFee || 0), 2)}</span></div>
+                                                                            <div className="flex justify-between text-orange-400"><span>Ad Cost:</span><span>-{formatSmartMoney((p.adsFee || 0))} ({formatPct(p.tacos)})</span></div>
+                                                                            <div className="flex justify-between text-red-400"><span>Refund Impact:</span><span>-{formatSmartMoney((p.refundRateValue / 100 * p.displayPrice))}</span></div>
+                                                                            <div className="flex justify-between text-gray-400"><span>COGS + Ops:</span><span>-{formatSmartMoney((p.costPrice || 0) + (p.postage || 0) + (p.wmsFee || 0))}</span></div>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -968,20 +968,20 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                         </div>
                     </div>
                 )}
-                {activeTab === 'map' && (<div className="h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope.length === 1 ? platformScope[0] : 'All'} refundHistory={refundHistory} deductRefunds={deductRefunds} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
+                {activeTab === 'map' && (<div className="h-auto"><UkSalesMap products={products} priceHistoryMap={priceHistoryMap} dateRange={dateRange} selectedPlatform={platformScope.length === 1 ? platformScope[0] : 'All'} themeColor={themeColor} refundHistory={refundHistory} deductRefunds={deductRefunds} onSearch={onSearch} timePeriodLabel={periodLabel} externalConfig={mapJumpState} /></div>)}
                 {activeTab === 'categories' && (
                     <div className="space-y-4 pb-24 h-auto">
 
                         {isAuditVisible && (
                             <div className="">
-                                <AuditPanel
+                                <AuditPanel<any>
                                     title="Categories Performance Audit"
                                     startKey={asDateKey(dateRange.start) || ''}
                                     endKey={asDateKey(dateRange.end) || ''}
                                     rows={categoryData}
                                     getDateKey={() => null}
                         distinctDaysCount={startKey && endKey ? Math.round((new Date(endKey).getTime() - new Date(startKey).getTime()) / 86400000) + 1 : 0}
-                                    getRevenue={(row) => row.total.revenue}
+                                    getRevenue={(row: any) => row.total.revenue}
                                     getQty={() => 0}
                                     getProfit={() => 0}
                                     getAdSpend={() => 0}
@@ -993,7 +993,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                             products={products}
                             priceHistoryMap={priceHistoryMap}
                             dateRange={dateRange}
-                           
+                            themeColor={themeColor}
                             refundHistory={refundHistory}
                             deductRefunds={deductRefunds}
                             platformScope={platformScope}

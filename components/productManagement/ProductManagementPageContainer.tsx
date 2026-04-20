@@ -65,6 +65,7 @@ interface ProductManagementPageContainerProps {
     onDismissBenchmarkRecalcState?: () => void;
     onConfirmContainersArrived?: (payload: { containerId: string; confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }[]) => void;
     onEditContainerShipments?: (payload: { containerId: string; status?: string; eta?: string; items: { sku: string; quantity: number }[] }) => void;
+    onStampLandedAt?: (skus: string[], date: string) => void;
 }
 
 type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison' | 'family-groups';
@@ -98,6 +99,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     onDismissBenchmarkRecalcState,
     onConfirmContainersArrived,
     onEditContainerShipments,
+    onStampLandedAt,
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
@@ -167,7 +169,6 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
             days,
             startKey: customStart,
             endKey: customEnd,
-            excludeToday: timeWindow === 'YESTERDAY',
             excludeToday: true
         });
     }, [timeWindow, customStart, customEnd]);
@@ -347,6 +348,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                         benchmarkUpdateNotices={benchmarkUpdateNotices}
                         onRecalculateBenchmarks={onRecalculateBenchmarks}
                         benchmarkRecalcState={benchmarkRecalcState}
+                        onStampLandedAt={onStampLandedAt}
                     />
                 )}
 

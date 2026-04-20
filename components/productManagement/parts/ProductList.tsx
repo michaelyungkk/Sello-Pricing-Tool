@@ -8,7 +8,7 @@ import { getCanonicalSku } from '../../../services/skuNormalization';
 import * as XLSX from 'xlsx-js-style';
 import { FilterBar } from '../../common/FilterBar';
 import { GradeBadge } from '../../common/GradeBadge';
-import { Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, Star, X, Layers, Tag, Info, GitMerge, User, Globe, CornerDownLeft, List, Ship, LineChart, Zap, Eye } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, Star, X, Layers, Tag, Info, GitMerge, User, Globe, CornerDownLeft, List, Ship, LineChart, Zap, Eye, CheckSquare, Square } from 'lucide-react';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
 

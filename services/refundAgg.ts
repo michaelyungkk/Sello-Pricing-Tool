@@ -107,7 +107,7 @@ export const buildRefundOverview = (
     if (row.platform) columnsSeen.add('platform');
     if (row.orderId) columnsSeen.add('orderId');
     if (row.reason) columnsSeen.add('reason');
-    if (row.type) columnsSeen.add('type');
+    if (row.orderType) columnsSeen.add('type');
     if (row.customerReason) columnsSeen.add('customerReason');
 
     // --- SKU Aggregation ---
