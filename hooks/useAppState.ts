@@ -1984,7 +1984,7 @@ export const useAppState = () => {
                     if (cachedPromotions.length > 0) {
                         setPromotions(cachedPromotions);
                     }
-                    const promoRes = await pullPromotions();
+                    const promoRes = await pullPromotionsSince(undefined);
                     if (promoRes.success && Array.isArray(promoRes.promotions)) {
                         const remotePromotions = normalizePromotionStatuses(promoRes.promotions);
                         const nextPromotions = (remotePromotions.length === 0 && cachedPromotions.length > 0)
