@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .ts,.tsx",
-    "build:ci": "npm run lint && npm run build"
+    "typecheck": "tsc --noEmit",
+    "validate": "npm run typecheck && npm run lint && npm run build",
+    "build:ci": "npm run validate"
   },
   "dependencies": {
     "@netlify/neon": "^0.1.2",

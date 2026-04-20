@@ -465,7 +465,7 @@ export const CategoryPerformanceSlide: React.FC<CategoryPerformanceSlideProps> =
                     </div>
 
                     {viewMode === 'MATRIX' ? (
-                        <div className="relative">
+                        <div className="relative sello-table-scroll">
                             <table className="sello-table">
                                 <thead className="sticky top-0">
                                     <tr>

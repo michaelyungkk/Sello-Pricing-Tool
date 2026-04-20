@@ -36,6 +36,10 @@ export const ShowcaseSelectionModal: React.FC<ShowcaseSelectionModalProps> = ({
     const [initialized, setInitialized] = useState(false);
     const [stampDate, setStampDate] = useState(new Date().toISOString().split('T')[0]);
     const [stampConfirmed, setStampConfirmed] = useState(false);
+    const [pastedSkuInput, setPastedSkuInput] = useState('');
+    const [lastPasteMatchCount, setLastPasteMatchCount] = useState(0);
+    const [lastPasteMissing, setLastPasteMissing] = useState<string[]>([]);
+    const [lastPasteApplied, setLastPasteApplied] = useState(false);
 
     const cutoffDate = useMemo(() => {
         const days = period === 'custom'
@@ -109,6 +113,49 @@ export const ShowcaseSelectionModal: React.FC<ShowcaseSelectionModalProps> = ({
         });
     };
 
+    const parseSkuTokens = (raw: string): string[] => {
+        return Array.from(new Set(
+            raw
+                .split(/[\r\n\t,; ]+/)
+                .map(token => token.trim().toUpperCase())
+                .filter(Boolean)
+        ));
+    };
+
+    const applyPastedSkus = (mode: 'add' | 'replace') => {
+        const tokens = parseSkuTokens(pastedSkuInput);
+        if (tokens.length === 0) {
+            setLastPasteApplied(false);
+            setLastPasteMatchCount(0);
+            setLastPasteMissing([]);
+            return;
+        }
+
+        const skuMap = new Map(products.map(p => [p.sku.toUpperCase(), p.sku]));
+        const matched: string[] = [];
+        const missing: string[] = [];
+
+        tokens.forEach(token => {
+            const resolved = skuMap.get(token);
+            if (resolved) matched.push(resolved);
+            else missing.push(token);
+        });
+
+        if (mode === 'replace') {
+            setSelectedSkus(new Set(matched));
+        } else {
+            setSelectedSkus(prev => {
+                const next = new Set(prev);
+                matched.forEach(sku => next.add(sku));
+                return next;
+            });
+        }
+
+        setLastPasteApplied(true);
+        setLastPasteMatchCount(matched.length);
+        setLastPasteMissing(missing.slice(0, 12));
+    };
+
     const estimatedPages = Math.ceil(selectedSkus.size / 4);
 
     const formatDate = (iso?: string) => {
@@ -178,6 +225,42 @@ export const ShowcaseSelectionModal: React.FC<ShowcaseSelectionModalProps> = ({
                     <span className="ml-auto text-xs text-gray-500">
                         <span className="font-bold text-gray-700">{suggested.length + notReady.length}</span> products found
                     </span>
+                </div>
+
+                {/* SKU paste selector */}
+                <div className="px-6 py-3 border-b border-gray-100 bg-white">
+                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Paste SKUs (from Excel)</div>
+                    <div className="flex gap-2 items-start">
+                        <textarea
+                            value={pastedSkuInput}
+                            onChange={e => setPastedSkuInput(e.target.value)}
+                            placeholder="Paste SKU list here (newline / tab / comma / space separated)"
+                            className="flex-1 min-h-[68px] max-h-36 resize-y text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-700"
+                        />
+                        <div className="flex flex-col gap-2 shrink-0">
+                            <button
+                                onClick={() => applyPastedSkus('add')}
+                                className="px-3 py-1.5 text-xs font-bold text-white rounded-lg shadow-sm"
+                                style={{ background: themeColor }}
+                            >
+                                Add to selection
+                            </button>
+                            <button
+                                onClick={() => applyPastedSkus('replace')}
+                                className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+                            >
+                                Replace selection
+                            </button>
+                        </div>
+                    </div>
+                    {lastPasteApplied && (
+                        <div className="mt-2 text-[11px] text-gray-600">
+                            Matched <span className="font-bold text-gray-900">{lastPasteMatchCount}</span> SKU(s)
+                            {lastPasteMissing.length > 0 && (
+                                <span className="text-amber-600"> · Not found: {lastPasteMissing.join(', ')}{parseSkuTokens(pastedSkuInput).length - lastPasteMatchCount > lastPasteMissing.length ? ' …' : ''}</span>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Content */}

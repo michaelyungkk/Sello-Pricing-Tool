@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Product, PricingRules, SkuFamily, PriceLog, OptimalPriceResult } from '../../../types';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { getCanonicalSku } from '../../../services/skuNormalization';
+import * as XLSX from 'xlsx-js-style';
 import { FilterBar } from '../../common/FilterBar';
 import { GradeBadge } from '../../common/GradeBadge';
 import { Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, Star, X, Layers, Tag, Info, GitMerge, User, Globe, CornerDownLeft, List, Ship, LineChart, Zap, Eye } from 'lucide-react';
@@ -862,36 +863,49 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
     const isContextFiltered = (platformFilters && platformFilters.length > 0) || managerFilters.length > 0;
 
     const handleExport = (platform: string = 'All') => {
-        const cleanChar = (val: any) => {
-            if (val === null || val === undefined) return '';
-            const str = String(val).replace(/[\r\n]+/g, ' ');
-            return `"${str.replace(/"/g, '""')}"`;
-        };
+        const headers = [
+            'SKU',
+            'Master SKU',
+            'Name',
+            'Brand',
+            'Category',
+            'Subcategory',
+            'Grade Level',
+            'Optimal Price',
+            'Current Price',
+            'CA Price',
+            'Cost',
+            'Stock (units)',
+            'Velocity (/day)',
+            'Days Remaining',
+            'Status',
+            'Return Rate'
+        ];
 
-        const headers = ['SKU', 'Master SKU', 'Name', 'Brand', 'Category', 'Subcategory', 'Optimal Price', 'Current Price', 'Stock', 'Velocity', 'Days Remaining', 'Status', 'Cost', 'Return Rate %'];
-        const rows: (string | number)[][] = [];
+        const rows: any[][] = [headers];
 
         (filteredProducts || []).forEach(p => {
-            const effectiveOptimal = p.optimalPrice || p.maxVelocityPrice;
-
+            const effectiveOptimal = (p.optimalPrice || p.maxVelocityPrice || 0);
             const commonData = [
-                cleanChar(p.sku),
-                cleanChar(p.name),
-                cleanChar(p.brand || ''),
-                cleanChar(p.category || ''),
-                cleanChar(p.subcategory || ''),
-                effectiveOptimal ? effectiveOptimal.toFixed(2) : '',
-                (p.currentPrice || 0).toFixed(2),
+                p.sku || '',
+                p.name || '',
+                p.brand || '',
+                p.category || '',
+                p.subcategory || '',
+                p.gradeLevel ?? '',
+                effectiveOptimal || '',
+                p.currentPrice || 0,
+                p.caPrice || '',
+                p.costPrice || 0,
                 p.stockLevel || 0,
-                (p.averageDailySales || 0).toFixed(2),
-                (p.daysRemaining || 0).toFixed(0),
-                cleanChar(p.status),
-                p.costPrice ? p.costPrice.toFixed(2) : '0.00',
-                (p.returnRate || 0).toFixed(2)
+                Number((p.averageDailySales || 0).toFixed(2)),
+                Number((p.daysRemaining || 0).toFixed(0)),
+                p.status || '',
+                (p.returnRate || 0) / 100
             ];
 
             if (platform === 'All') {
-                rows.push([cleanChar(p.sku), ...commonData]);
+                rows.push([p.sku || '', ...commonData]);
             } else {
                 const normalize = (s: string) => (s || '').toLowerCase().trim();
                 const targetPlatform = normalize(platform);
@@ -903,32 +917,85 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                 if (channel && channel.skuAlias) {
                     const aliases = channel.skuAlias.split(',').map(s => s.trim()).filter(Boolean);
                     if (aliases.length > 0) {
-                        aliases.forEach(alias => {
-                            rows.push([cleanChar(alias), ...commonData]);
-                        });
+                        aliases.forEach(alias => rows.push([alias, ...commonData]));
                     } else {
-                        rows.push([cleanChar(p.sku), ...commonData]);
+                        rows.push([p.sku || '', ...commonData]);
                     }
                 } else {
-                    rows.push([cleanChar(p.sku), ...commonData]);
+                    rows.push([p.sku || '', ...commonData]);
                 }
             }
         });
 
-        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob(['\uFEFF', csvContent], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = url;
-        const filename = platform === 'All' ? 'inventory_export_master.csv' : `inventory_export_${platform.toLowerCase().replace(/\s+/g, '_')}.csv`;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-            if (document.body.contains(link)) document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 60000);
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+
+        ws['!cols'] = [
+            { wch: 20 }, // SKU
+            { wch: 20 }, // Master SKU
+            { wch: 40 }, // Name
+            { wch: 18 }, // Brand
+            { wch: 18 }, // Category
+            { wch: 18 }, // Subcategory
+            { wch: 12 }, // Grade
+            { wch: 14 }, // Optimal
+            { wch: 14 }, // Current
+            { wch: 14 }, // CA
+            { wch: 12 }, // Cost
+            { wch: 14 }, // Stock
+            { wch: 14 }, // Velocity
+            { wch: 14 }, // Days
+            { wch: 12 }, // Status
+            { wch: 12 }, // Return rate
+        ];
+
+        ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
+        ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+        for (let c = range.s.c; c <= range.e.c; c++) {
+            const headerAddr = XLSX.utils.encode_cell({ r: 0, c });
+            const headerCell = ws[headerAddr];
+            if (!headerCell) continue;
+            headerCell.s = {
+                font: { bold: true, color: { rgb: '1F2937' } },
+                fill: { fgColor: { rgb: 'F3F4F6' } },
+                alignment: { horizontal: 'center', vertical: 'center' }
+            };
+        }
+
+        const gbpCols = [7, 8, 9, 10]; // Optimal, Current, CA, Cost
+        const intCols = [6, 11, 13]; // Grade, Stock, Days
+        const velocityCol = 12;
+        const returnRateCol = 15;
+
+        for (let r = 1; r <= range.e.r; r++) {
+            for (let c = range.s.c; c <= range.e.c; c++) {
+                const addr = XLSX.utils.encode_cell({ r, c });
+                const cell = ws[addr];
+                if (!cell) continue;
+
+                if (gbpCols.includes(c) && typeof cell.v === 'number') {
+                    cell.z = '"£"#,##0.00';
+                    cell.t = 'n';
+                } else if (intCols.includes(c) && typeof cell.v === 'number') {
+                    cell.z = '#,##0';
+                    cell.t = 'n';
+                } else if (c === velocityCol && typeof cell.v === 'number') {
+                    cell.z = '0.00';
+                    cell.t = 'n';
+                } else if (c === returnRateCol && typeof cell.v === 'number') {
+                    cell.z = '0.00%';
+                    cell.t = 'n';
+                }
+            }
+        }
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Master Catalogue');
+        const filename = platform === 'All'
+            ? 'inventory_export_master.xlsx'
+            : `inventory_export_${platform.toLowerCase().replace(/\s+/g, '_')}.xlsx`;
+        XLSX.writeFile(wb, filename, { cellStyles: true });
         setIsExportMenuOpen(false);
     };
 

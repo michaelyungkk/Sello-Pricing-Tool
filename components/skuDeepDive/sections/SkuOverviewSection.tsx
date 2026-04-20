@@ -26,14 +26,6 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
     hasTransactions,
     onScrollToSection
 }) => {
-    const normalizedShipmentStatus = (status?: string): string => {
-        const raw = String(status || '').trim();
-        if (!raw) return 'Pending';
-        const first = raw.includes('/') ? raw.split('/')[0].trim() : raw;
-        const cleaned = first.replace(/[\u4E00-\u9FFF]/g, '').trim();
-        return cleaned || 'Pending';
-    };
-
     return (
         <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
             <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
@@ -178,22 +170,6 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                             <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">All-Time Sales</span>
                             <div className="text-lg font-bold text-gray-800">
                                 {formatSmartMoney(allTimeSales)}
-                            </div>
-                        </div>
-
-                        <div className="col-span-2 sm:col-span-2 p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
-                            <span className="text-[10px] font-medium text-gray-500 uppercase block mb-2">Replenishment Plan</span>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                                <div className="text-gray-500">Reorder Placed</div>
-                                <div className="text-right font-semibold text-gray-800">{product.reorderPlacedDate || '-'}</div>
-                                <div className="text-gray-500">Production Scheduled</div>
-                                <div className="text-right font-semibold text-gray-800">{formatNumber(product.productionScheduledQty || 0)}</div>
-                                <div className="text-gray-500">To Be Shipped</div>
-                                <div className="text-right font-semibold text-amber-700">{formatNumber(product.toBeShippedQty || 0)}</div>
-                                <div className="text-gray-500">Shipped Out</div>
-                                <div className="text-right font-semibold text-blue-700">{formatNumber(product.shippedOutQty || 0)}</div>
-                                <div className="text-gray-500">Shipment Status</div>
-                                <div className="text-right font-semibold text-gray-800">{normalizedShipmentStatus(product.shipmentStatus)}</div>
                             </div>
                         </div>
 

@@ -114,6 +114,14 @@ async function loadImg(url: string): Promise<string | null> {
     } catch { return null; }
 }
 
+function detectImageFormats(dataUrl: string): string[] {
+    const head = dataUrl.slice(0, 40).toLowerCase();
+    if (head.startsWith('data:image/png')) return ['PNG', 'JPEG'];
+    if (head.startsWith('data:image/webp')) return ['WEBP', 'PNG', 'JPEG'];
+    if (head.startsWith('data:image/jpg') || head.startsWith('data:image/jpeg')) return ['JPEG', 'PNG'];
+    return ['JPEG', 'PNG'];
+}
+
 function splitText(doc: any, text: string, maxW: number): string[] {
     return doc.splitTextToSize(text, maxW);
 }
@@ -209,11 +217,17 @@ async function drawCard(
         let d = imgCache.get(p.imageUrl);
         if (d === undefined) { d = await loadImg(p.imageUrl); imgCache.set(p.imageUrl, d); }
         if (d) {
-            try {
-                rrect(doc, imgX, imgY, IMG_SIZE, IMG_SIZE, 2, TEAL_50);
-                doc.addImage(d, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE, undefined, 'FAST');
-                drawn = true;
-            } catch { /* fall through */ }
+            const formats = detectImageFormats(d);
+            for (const fmt of formats) {
+                try {
+                    rrect(doc, imgX, imgY, IMG_SIZE, IMG_SIZE, 2, TEAL_50);
+                    doc.addImage(d, fmt, imgX, imgY, IMG_SIZE, IMG_SIZE, undefined, 'FAST');
+                    drawn = true;
+                    break;
+                } catch {
+                    // Try next compatible format
+                }
+            }
         }
     }
     if (!drawn) {
