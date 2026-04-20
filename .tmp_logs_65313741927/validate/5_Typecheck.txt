@@ -1,0 +1,8 @@
+﻿2026-04-20T06:46:41.8205458Z ##[group]Run npm run typecheck
+2026-04-20T06:46:41.8205751Z [36;1mnpm run typecheck[0m
+2026-04-20T06:46:41.8219107Z shell: /usr/bin/bash -e {0}
+2026-04-20T06:46:41.8219375Z ##[endgroup]
+2026-04-20T06:46:41.9285837Z 
+2026-04-20T06:46:41.9286608Z > ecompulse-pricing-optimizer@1.0.0 typecheck
+2026-04-20T06:46:41.9287129Z > tsc --noEmit
+2026-04-20T06:46:41.9287263Z 

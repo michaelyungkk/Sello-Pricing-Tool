@@ -113,7 +113,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
     // --- DERIVED DATA ---
     const stats = useMemo(() => {
-        let total = adGroups.length;
+        const total = adGroups.length;
         let ongoing = 0;
         let ended = 0;
         let scheduled = 0;
@@ -129,7 +129,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
     const platformOptions = useMemo(() => Array.from(new Set(adGroups.map(g => g.platform))).sort(), [adGroups]);
 
     const filteredAndSortedGroups = useMemo(() => {
-        let result = adGroups.filter(g => {
+        const result = adGroups.filter(g => {
             const matchesTerm = (term: string) =>
                 g.name.toLowerCase().includes(term.toLowerCase()) ||
                 g.memberSkus.some(s => s.toLowerCase().includes(term.toLowerCase()));
@@ -279,7 +279,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
     const handleDeleteSelected = () => {
         if (window.confirm(`Are you sure you want to delete ${selectedIds.size} ad groups? This will trigger a full ad spend recalculation.`)) {
-            let nextGroups = adGroups.filter(g => !selectedIds.has(g.id));
+            const nextGroups = adGroups.filter(g => !selectedIds.has(g.id));
             onSaveAdGroups(nextGroups);
             setSelectedIds(new Set());
         }
@@ -287,7 +287,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
     const handleBulkSetEndDate = () => {
         if (!bulkEndDate) return;
-        let nextGroups = adGroups.map(g => selectedIds.has(g.id) ? { ...g, endDate: bulkEndDate, updatedAt: new Date().toISOString() } : g);
+        const nextGroups = adGroups.map(g => selectedIds.has(g.id) ? { ...g, endDate: bulkEndDate, updatedAt: new Date().toISOString() } : g);
         onSaveAdGroups(nextGroups);
         setIsBulkEndDateModalOpen(false);
         setBulkEndDate('');
@@ -334,7 +334,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
                         <Info className="w-4 h-4 text-indigo-500 mt-0.5 shrink-0" />
                         <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
                             Ad spend is redistributed equally across all group members
-                            for transactions within each group's active date range.
+                            for transactions within each group&apos;s active date range.
                             Applied to full history on every upload.
                         </p>
                     </div>
@@ -762,7 +762,7 @@ export const AdGroupsTab: React.FC<AdGroupsTabProps> = ({
 
                         <div className="p-6 space-y-4">
                             <p className="text-sm text-gray-600 italic">
-                                This will create Ad Groups for all SKU Families that don't already have one for the selected platform. New groups start today and are ongoing.
+                                This will create Ad Groups for all SKU Families that don&apos;t already have one for the selected platform. New groups start today and are ongoing.
                             </p>
 
                             <div className="space-y-1.5">

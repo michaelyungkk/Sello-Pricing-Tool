@@ -364,7 +364,7 @@ export const useAppState = () => {
     });
     const handleSavePriceCheckTemplates = (templates: PriceCheckTemplate[]) => {
         setPriceCheckTemplates(templates);
-        try { localStorage.setItem('sello_price_check_templates', JSON.stringify(templates)); } catch {}
+        try { localStorage.setItem('sello_price_check_templates', JSON.stringify(templates)); } catch { /* ignore localStorage write failures */ }
     };
 
     const [pricingRules, setPricingRules] = useState<PricingRules>(DEFAULT_PRICING_RULES);
@@ -808,17 +808,17 @@ export const useAppState = () => {
             // Replace if same week+platform exists, otherwise prepend
             const filtered = prev.filter(s => !(s.platform === snapshot.platform && s.weekStartDate === snapshot.weekStartDate));
             const next = [snapshot, ...filtered];
-            try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(next)); } catch {}
+            try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(next)); } catch { /* ignore localStorage write failures */ }
             return next;
         });
         setAdBudgets(updatedBudgets);
-        try { localStorage.setItem('sello_ad_budgets', JSON.stringify(updatedBudgets)); } catch {}
+        try { localStorage.setItem('sello_ad_budgets', JSON.stringify(updatedBudgets)); } catch { /* ignore localStorage write failures */ }
     }, []);
 
     const handleAdRosterChange = useCallback((change: AdRosterChange) => {
         setAdRosterChanges(prev => {
             const next = [change, ...prev];
-            try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(next)); } catch {}
+            try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(next)); } catch { /* ignore localStorage write failures */ }
             return next;
         });
     }, []);
@@ -1893,12 +1893,12 @@ export const useAppState = () => {
                 const nextSnapshots = keepLocalIfRemoteEmpty('ad snapshots', adRes.adSnapshots || [], adSnapshots || []);
                 if (Array.isArray(nextSnapshots)) {
                     setAdSnapshots(nextSnapshots);
-                    try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(nextSnapshots)); } catch {}
+                    try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(nextSnapshots)); } catch { /* ignore localStorage write failures */ }
                 }
                 const nextRoster = keepLocalIfRemoteEmpty('ad roster changes', adRes.adRosterChanges || [], adRosterChanges || []);
                 if (Array.isArray(nextRoster)) {
                     setAdRosterChanges(nextRoster);
-                    try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(nextRoster)); } catch {}
+                    try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(nextRoster)); } catch { /* ignore localStorage write failures */ }
                 }
                 if (adRes.adBudgets && typeof adRes.adBudgets === 'object') {
                     const remoteBudgetKeys = Object.keys(adRes.adBudgets).length;
@@ -1910,7 +1910,7 @@ export const useAppState = () => {
                         console.warn(`[sync] ad budgets pull returned empty; preserving local ${localBudgetKeys}`);
                     }
                     setAdBudgets(nextBudgets);
-                    try { localStorage.setItem('sello_ad_budgets', JSON.stringify(nextBudgets)); } catch {}
+                    try { localStorage.setItem('sello_ad_budgets', JSON.stringify(nextBudgets)); } catch { /* ignore localStorage write failures */ }
                 }
                 console.log(`[sync] ad data loaded — ${(Array.isArray(adRes.adSnapshots) ? adRes.adSnapshots.length : 0)} snapshots`);
             } else {

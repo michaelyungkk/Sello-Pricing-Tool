@@ -345,7 +345,7 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                 <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
                     <div>
                         <h3 className="font-bold text-gray-900">Map Unmatched SKUs</h3>
-                        <p className="text-[11px] text-gray-400 mt-0.5">{unmatched.length} SKUs from your file couldn't be auto-matched. Map them manually or skip.</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">{unmatched.length} SKUs from your file couldn&apos;t be auto-matched. Map them manually or skip.</p>
                     </div>
                     <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
                 </div>

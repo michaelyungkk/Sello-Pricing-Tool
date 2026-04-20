@@ -201,7 +201,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
 
             group.items.forEach(it => {
                 const { row, sku, rawSku } = it;
-                let amt = it.amt;
+                const amt = it.amt;
 
                 let qty = 0;
                 if (qtyIdx !== -1) {

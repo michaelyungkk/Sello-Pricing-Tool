@@ -309,7 +309,7 @@ async function drawCard(
     if (bi) {
         const panelH = 16;
         rrect(doc, txtX, cy, txtW, panelH, 2, TEAL_50);
-        let py = cy + 3;
+        const py = cy + 3;
 
         doc.setFontSize(5.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(themeColor);
         doc.text('PRICE POSITION', txtX + txtW / 2, py, { align: 'center' });
@@ -389,7 +389,7 @@ async function drawProductPages(
     const cardH = (availH - GAP) / ROWS;
 
     for (const [category, products] of byCategory) {
-        let remaining = [...products];
+        const remaining = [...products];
         while (remaining.length > 0) {
             doc.addPage();
             const chunk = remaining.splice(0, CARDS_PER_PAGE);

@@ -290,7 +290,7 @@ const App: React.FC = () => {
     const [navigationNotice, setNavigationNotice] = useState<string | null>(null);
     const toggleSidebar = () => setSidebarCollapsed(prev => {
         const next = !prev;
-        try { localStorage.setItem('sello_sidebar_collapsed', String(next)); } catch {}
+        try { localStorage.setItem('sello_sidebar_collapsed', String(next)); } catch { /* ignore localStorage write failures */ }
         return next;
     });
 
@@ -1325,7 +1325,7 @@ const App: React.FC = () => {
                         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
                             <div className="p-6">
                                 <h3 className="text-base font-bold text-gray-900 mb-2">Unsaved Changes</h3>
-                                <p className="text-sm text-gray-600">You have changes that haven't been pushed to the database. What would you like to do?</p>
+                                <p className="text-sm text-gray-600">You have changes that haven&apos;t been pushed to the database. What would you like to do?</p>
                             </div>
                             <div className="px-6 pb-6 flex flex-col gap-2">
                                 <button

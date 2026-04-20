@@ -550,27 +550,27 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
 
     // Lazy initialisers — read from localStorage once on mount, fall back to defaults
     const [rowDims, setRowDims] = useState<string[]>(() => {
-        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.rowDims?.length) return d.rowDims; } catch {}
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.rowDims?.length) return d.rowDims; } catch { /* ignore invalid draft JSON */ }
         return ['sku'];
     });
     const [colDims, setColDims] = useState<string[]>(() => {
-        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.colDims?.length) return d.colDims; } catch {}
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.colDims?.length) return d.colDims; } catch { /* ignore invalid draft JSON */ }
         return ['platform'];
     });
     const [pendingMetrics, setPendingMetrics] = useState<MetricInstance[]>(() => {
-        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.pendingMetrics?.length) return d.pendingMetrics; } catch {}
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.pendingMetrics?.length) return d.pendingMetrics; } catch { /* ignore invalid draft JSON */ }
         return [mkInst('units'), mkInst('revenue'), mkInst('profit')];
     });
     const [pendingFilters, setPendingFilters] = useState<FilterRule[]>(() => {
-        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.pendingFilters?.length) return d.pendingFilters; } catch {}
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.pendingFilters?.length) return d.pendingFilters; } catch { /* ignore invalid draft JSON */ }
         return [];
     });
     const [reportName, setReportName] = useState<string>(() => {
-        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.reportName) return d.reportName; } catch {}
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.reportName) return d.reportName; } catch { /* ignore invalid draft JSON */ }
         return 'New Custom Report';
     });
     const [sortRules, setSortRules] = useState<SortRule[]>(() => {
-        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.sortRules?.length) return d.sortRules; } catch {}
+        try { const d = JSON.parse(localStorage.getItem('sello_custom_report_draft') || '{}'); if (d.sortRules?.length) return d.sortRules; } catch { /* ignore invalid draft JSON */ }
         return [{ key: 'total_units', dir: 'desc' }];
     });
 
@@ -644,7 +644,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
         try {
             const draft = { rowDims, colDims, pendingMetrics, pendingFilters, reportName, sortRules };
             localStorage.setItem('sello_custom_report_draft', JSON.stringify(draft));
-        } catch {}
+        } catch { /* ignore localStorage write failures */ }
     }, [rowDims, colDims, pendingMetrics, pendingFilters, reportName, sortRules]);
 
 

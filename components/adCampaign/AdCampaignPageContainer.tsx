@@ -157,6 +157,7 @@ function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesC
     campaignNotes: Record<string, string>;
     setCampaignNotes: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }) {
+    const [noteOpen, setNoteOpen] = React.useState(false);
     // Show up to last 6 weeks, newest first for header but oldest→newest for Δ calc
     const weeks = platformSnapshots.slice(0, 6).reverse(); // oldest → newest
     const weeksDesc = [...weeks].reverse(); // newest first for display
@@ -205,7 +206,6 @@ function SummaryTab({ campaign, platformSnapshots, prevCampaign, notes, onNotesC
             {/* Campaign summary — structured card */}
             {(() => {
                 const data = getCampaignSummaryData(campaign, prevCampaign);
-                const [noteOpen, setNoteOpen] = React.useState(false);
                 return (
                     <div className="bg-custom-glass rounded-xl border border-custom-glass overflow-hidden">
                         {/* Top row: name + headline metrics */}
@@ -1136,7 +1136,7 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
                             ))}
                         </select>
                         <p className="text-[10px] text-amber-600">
-                            This will replace the selected week's data with your new upload.
+                            This will replace the selected week&apos;s data with your new upload.
                         </p>
                     </div>
                 )}

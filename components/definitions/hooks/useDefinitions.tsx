@@ -319,7 +319,7 @@ export const useDefinitions = () => {
                     <div className="bg-custom-glass rounded-xl p-5 border border-custom-glass">
                         <h4 className="font-bold text-sm text-gray-900 mb-3">Strategy Engine — How It Works</h4>
                         <p className="text-xs text-gray-600 leading-relaxed mb-3">
-                            The Strategy Engine evaluates each SKU's runway and applies configured rules to
+                            The Strategy Engine evaluates each SKU&apos;s runway and applies configured rules to
                             decide whether to increase, decrease, or maintain the current CA price:
                         </p>
                         <div className="space-y-2 mb-4">
@@ -359,7 +359,7 @@ export const useDefinitions = () => {
                             <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100">
                                 <div className="text-[10px] font-bold uppercase text-purple-600 mb-2">Layer 1 — SKU Evidence</div>
                                 <p className="text-xs text-gray-600 leading-relaxed">
-                                    Builds a price-velocity curve from the SKU's own history, segmented into
+                                    Builds a price-velocity curve from the SKU&apos;s own history, segmented into
                                     Price Eras defined by CA price change events. Within each era, velocity =
                                     <strong> median weekly units ÷ 7</strong>. Selects the price point with
                                     the highest <strong>Daily Profit = Margin × Velocity</strong>.
@@ -386,7 +386,7 @@ export const useDefinitions = () => {
                         <div className="mt-3 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
                             <p className="text-xs text-blue-800">
                                 <strong>Promotions as Elasticity Signals:</strong> Promotional transactions are
-                                not excluded — they are tagged as <code className="bg-white px-1 rounded border text-[10px]">source: 'promo'</code> and
+                                not excluded — they are tagged as <code className="bg-white px-1 rounded border text-[10px]">source: &apos;promo&apos;</code> and
                                 modelled as separate price points. This lets the engine learn from promo-period
                                 velocity without distorting organic recommendations.
                             </p>
@@ -470,7 +470,7 @@ export const useDefinitions = () => {
                                 </li>
                                 <li className="flex gap-2">
                                     <Search className="w-3.5 h-3.5 shrink-0 text-blue-500 mt-0.5" />
-                                    <div><strong>ERP Cross-Check</strong> — compares your ERP stock figures against the system's records to surface any discrepancies before they cause runway miscalculations.</div>
+                                    <div><strong>ERP Cross-Check</strong> — compares your ERP stock figures against the system&apos;s records to surface any discrepancies before they cause runway miscalculations.</div>
                                 </li>
                             </ul>
                         </div>

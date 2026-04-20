@@ -568,7 +568,7 @@ export async function exportCampaignMasterXlsx(
         addStyle(2, ci, { font: hFont(true, 8, GRAY_F), fill: hFill(bg), alignment: hAlign('center') });
     });
 
-    let dataRowStart = 3;
+    const dataRowStart = 3;
 
     for (const campName of campaignNames) {
         const campTotalRow: any[] = [campName, '', 'Auto', ''];
@@ -682,7 +682,7 @@ export async function exportCampaignMasterXlsx(
 
     for (const key of allGroupNames) {
         const [campName, groupName] = key.split('||');
-        const sheetName = `${groupName}`.slice(0, 31).replace(/[*/\?[\]:]/g, '-');
+        const sheetName = `${groupName}`.slice(0, 31).replace(/\*|\/|\?|\[|\]|:/g, '-');
 
         const aoa2: any[][] = [];
         const styles2: { r: number; c: number; s: any }[] = [];

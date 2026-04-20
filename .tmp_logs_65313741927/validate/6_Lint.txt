@@ -1,0 +1,502 @@
+﻿2026-04-20T06:46:55.9123050Z ##[group]Run npm run lint
+2026-04-20T06:46:55.9123323Z [36;1mnpm run lint[0m
+2026-04-20T06:46:55.9136950Z shell: /usr/bin/bash -e {0}
+2026-04-20T06:46:55.9137246Z ##[endgroup]
+2026-04-20T06:46:56.0160990Z 
+2026-04-20T06:46:56.0161774Z > ecompulse-pricing-optimizer@1.0.0 lint
+2026-04-20T06:46:56.0162429Z > eslint . --ext .ts,.tsx
+2026-04-20T06:46:56.0162682Z 
+2026-04-20T06:47:03.8431332Z 
+2026-04-20T06:47:03.8434389Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/App.tsx
+2026-04-20T06:47:03.8471048Z ##[warning]    17:84  warning  'BarChart2' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8484144Z ##[warning]    41:10  warning  'TAX_NOTE_SHORT' is defined but never used                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8487786Z ##[warning]    44:15  warning  'CohortShiftWarning' is defined but never used                                                                 @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8491847Z ##[warning]   135:9   warning  'setAdGroups' is assigned a value but never used                                                               @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8495526Z ##[error]   293:86  error    Empty block statement                                                                                          no-empty
+2026-04-20T06:47:03.8499075Z ##[warning]   368:8   warning  React Hook useEffect has a missing dependency: 'PAGE_ORDER'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8502013Z ##[error]  1328:97  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                react/no-unescaped-entities
+2026-04-20T06:47:03.8503481Z 
+2026-04-20T06:47:03.8504254Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/adCampaign/AdCampaignPageContainer.tsx
+2026-04-20T06:47:03.8506900Z ##[warning]     4:42  warning  'AlertTriangle' is defined but never used                                                                                                                 @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8510239Z ##[warning]     6:5   warning  'CalendarDays' is defined but never used                                                                                                                  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8513412Z ##[warning]     6:27  warning  'ChevronUp' is defined but never used                                                                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8516513Z ##[warning]     6:38  warning  'ChevronDown' is defined but never used                                                                                                                   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8519957Z ##[warning]    13:5   warning  'generateCampaignSummary' is defined but never used                                                                                                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8523409Z ##[warning]    14:23  warning  'weekLabel' is defined but never used                                                                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8526618Z ##[warning]    21:21  warning  'toggleSort' is defined but never used                                                                                                                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8529963Z ##[warning]    80:7   warning  'KpiInline' is assigned a value but never used                                                                                                            @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8533194Z ##[warning]   151:66  warning  'notes' is defined but never used                                                                                                                         @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8536852Z ##[warning]   151:73  warning  'onNotesChange' is defined but never used                                                                                                                 @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8540852Z ##[error]   208:49  error    React Hook "React.useState" cannot be called inside a callback. React Hooks must be called in a React function component or a custom React Hook function  react-hooks/rules-of-hooks
+2026-04-20T06:47:03.8545399Z ##[warning]   637:8   warning  React Hook useMemo has a missing dependency: 'productMap'. Either include it or remove the dependency array                                               react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8549079Z ##[error]  1139:64  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                                                           react/no-unescaped-entities
+2026-04-20T06:47:03.8552828Z ##[warning]  1183:10  warning  'exportCampaignReport' is defined but never used                                                                                                          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8556249Z ##[warning]  1219:11  warning  'productMap' is assigned a value but never used                                                                                                           @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8559623Z ##[warning]  1252:11  warning  'prevGroup' is assigned a value but never used                                                                                                            @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8562942Z ##[warning]  1288:11  warning  'weekOptions' is assigned a value but never used                                                                                                          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8564765Z 
+2026-04-20T06:47:03.8565617Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/adCampaign/Modals/AdCampaignUploadModal.tsx
+2026-04-20T06:47:03.8567394Z ##[warning]   2:41  warning  'ChevronDown' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8570639Z ##[warning]   2:54  warning  'ChevronRight' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8572304Z ##[warning]  39:5   warning  'salesHistory' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8573166Z 
+2026-04-20T06:47:03.8573565Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/common/MetricValue.tsx
+2026-04-20T06:47:03.8574660Z ##[warning]  40:11  warning  'getSizeClass' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8575572Z 
+2026-04-20T06:47:03.8576060Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/configuration/ConfigurationPageContainer.tsx
+2026-04-20T06:47:03.8577279Z ##[warning]  14:41  warning  'logistics' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8578172Z 
+2026-04-20T06:47:03.8578744Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/configuration/hooks/useConfigurationState.ts
+2026-04-20T06:47:03.8579883Z ##[warning]   2:40  warning  'useRef' is defined but never used                          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8581415Z ##[warning]   3:97  warning  'FreightRate' is defined but never used                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8582927Z ##[warning]  17:5   warning  'onFreightRatesUpload' is defined but never used            @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8584508Z ##[warning]  24:32  warning  'setFreightUploadCount' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8586483Z ##[warning]  28:12  warning  'adsRefresh' is assigned a value but never used             @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8587414Z 
+2026-04-20T06:47:03.8587800Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/configuration/index.tsx
+2026-04-20T06:47:03.8588852Z ##[warning]  14:41  warning  'logistics' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8589726Z 
+2026-04-20T06:47:03.8590259Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/configuration/sections/SystemBehaviorSection.tsx
+2026-04-20T06:47:03.8591392Z ##[warning]  14:19  warning  'freightUploadCount' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8592280Z 
+2026-04-20T06:47:03.8592779Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/costManagement/sections/FeeBreakdownTable.tsx
+2026-04-20T06:47:03.8593993Z ##[warning]  31:51  warning  'themeColor' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8594866Z 
+2026-04-20T06:47:03.8595332Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/customReport/CustomReportPage.tsx
+2026-04-20T06:47:03.8596371Z ##[warning]    21:5    warning  'Filter' is defined but never used                      @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8597848Z ##[warning]    23:5    warning  'Settings2' is defined but never used                   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8599585Z ##[warning]    26:5    warning  'CheckSquare' is defined but never used                 @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8601059Z ##[warning]    27:5    warning  'Square' is defined but never used                      @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8602463Z ##[warning]    28:5    warning  'Search' is defined but never used                      @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8603907Z ##[warning]    32:10   warning  'formatMoney' is defined but never used                 @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8605288Z ##[error]   553:145  error    Empty block statement                                   no-empty
+2026-04-20T06:47:03.8606513Z ##[error]   557:145  error    Empty block statement                                   no-empty
+2026-04-20T06:47:03.8607792Z ##[error]   561:159  error    Empty block statement                                   no-empty
+2026-04-20T06:47:03.8609352Z ##[error]   565:159  error    Empty block statement                                   no-empty
+2026-04-20T06:47:03.8610609Z ##[error]   569:143  error    Empty block statement                                   no-empty
+2026-04-20T06:47:03.8611894Z ##[error]   573:149  error    Empty block statement                                   no-empty
+2026-04-20T06:47:03.8613359Z ##[warning]   583:12   warning  'cmMode' is assigned a value but never used             @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8614891Z ##[warning]   583:20   warning  'setCmMode' is assigned a value but never used          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8616436Z ##[warning]   584:12   warning  'cmFormula' is assigned a value but never used          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8617971Z ##[warning]   584:23   warning  'setCmFormula' is assigned a value but never used       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8619603Z ##[warning]   602:27   warning  'setSkuSearchTags' is assigned a value but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8621217Z ##[warning]   603:28   warning  'setSkuSearchInput' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8622825Z ##[error]   647:17   error    Empty block statement                                   no-empty
+2026-04-20T06:47:03.8624348Z ##[warning]   892:11   warning  'onDropFilter' is assigned a value but never used       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8625873Z ##[warning]  2407:70   warning  'chIdx' is defined but never used                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8627578Z ##[warning]  2434:70   warning  'chIdx' is defined but never used                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8629113Z ##[warning]  2523:74   warning  'chIdx' is defined but never used                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8630061Z 
+2026-04-20T06:47:03.8630554Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/definitions/DefinitionsPageContainer.tsx
+2026-04-20T06:47:03.8631616Z ##[warning]  17:60  warning  'headerStyle' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8632511Z 
+2026-04-20T06:47:03.8632959Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/definitions/hooks/useDefinitions.tsx
+2026-04-20T06:47:03.8634053Z ##[warning]    6:5    warning  'ShieldCheck' is defined but never used                          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8635753Z ##[warning]    7:32   warning  'RotateCcw' is defined but never used                            @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8637363Z ##[warning]    8:5    warning  'FileBarChart' is defined but never used                         @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8639052Z ##[warning]    8:19   warning  'Ship' is defined but never used                                 @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8640608Z ##[warning]    8:25   warning  'Hash' is defined but never used                                 @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8642113Z ##[warning]    8:52   warning  'BookOpen' is defined but never used                             @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8643619Z ##[error]  322:67   error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+2026-04-20T06:47:03.8645136Z ##[error]  362:79   error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+2026-04-20T06:47:03.8646607Z ##[error]  389:134  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+2026-04-20T06:47:03.8648074Z ##[error]  389:140  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+2026-04-20T06:47:03.8649676Z ##[error]  473:127  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+2026-04-20T06:47:03.8650602Z 
+2026-04-20T06:47:03.8650985Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/definitions/index.tsx
+2026-04-20T06:47:03.8651894Z ##[warning]  13:60  warning  'headerStyle' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8652788Z 
+2026-04-20T06:47:03.8653234Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/overview/OverviewPageContainer.tsx
+2026-04-20T06:47:03.8654693Z ##[warning]    6:79   warning  'getYesterdayKeyMelbourne' is defined but never used                                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8656653Z ##[warning]   18:10   warning  'FilterBar' is defined but never used                                                                                                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8658497Z ##[warning]   21:122  warning  'BarChart' is defined but never used                                                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8660384Z ##[warning]   21:132  warning  'Cell' is defined but never used                                                                                                         @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8662235Z ##[warning]   69:5    warning  'onAnalyze' is defined but never used                                                                                                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8664339Z ##[warning]   89:12   warning  'showDatePicker' is assigned a value but never used                                                                                      @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8666281Z ##[warning]   94:26   warning  'setItemsPerPage' is assigned a value but never used                                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8668440Z ##[warning]  390:8    warning  React Hook useMemo has an unnecessary dependency: 'pricingRules'. Either exclude it or remove the dependency array                       react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8670909Z ##[warning]  411:9    warning  React Hook useMemo has a missing dependency: 'processedDataWithToggle'. Either include it or remove the dependency array                 react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8673398Z ##[warning]  498:8    warning  React Hook useMemo has unnecessary dependencies: 'platformScope' and 'pricingRules'. Either exclude them or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8674630Z 
+2026-04-20T06:47:03.8675032Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/overview/tabs/MapTab.tsx
+2026-04-20T06:47:03.8676022Z ##[warning]   98:17  warning  'areaName' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8677483Z ##[warning]  939:76  warning  'index' is defined but never used              @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8678371Z 
+2026-04-20T06:47:03.8679130Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/platformManagement/PlatformManagementPageContainer.tsx
+2026-04-20T06:47:03.8680562Z ##[warning]    4:10  warning  'Product' is defined but never used                                                                                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8682443Z ##[warning]    4:19  warning  'PricingRules' is defined but never used                                                                                  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8684246Z ##[warning]    4:43  warning  'RefundLog' is defined but never used                                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8686122Z ##[warning]   12:61  warning  'addDaysToDateKey' is defined but never used                                                                              @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8688003Z ##[warning]   26:3   warning  'headerStyle' is defined but never used                                                                                   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8689970Z ##[warning]   38:11  warning  't' is assigned a value but never used                                                                                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8692056Z ##[warning]  470:6   warning  React Hook useEffect has a missing dependency: 'zoomState.lastDataLen'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8694273Z ##[warning]  586:6   warning  React Hook useEffect has a missing dependency: 'selectedPlatformKey'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8695470Z 
+2026-04-20T06:47:03.8695972Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/platformManagement/parts/PlatformMetricCard.tsx
+2026-04-20T06:47:03.8696999Z ##[warning]  3:56  warning  'Info' is defined but never used         @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8698410Z ##[warning]  4:10  warning  'formatMoney' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8699392Z 
+2026-04-20T06:47:03.8699842Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/platformManagement/tabs/AdGroupsTab.tsx
+2026-04-20T06:47:03.8701308Z ##[warning]   15:5   warning  'SlidersHorizontal' is defined but never used                                                               @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8703123Z ##[warning]   17:5   warning  'ChevronDown' is defined but never used                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8704906Z ##[warning]   19:5   warning  'Filter' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8706634Z ##[warning]   24:10  warning  'formatMoney' is defined but never used                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8708433Z ##[warning]   24:23  warning  'formatSmartMoney' is defined but never used                                                                @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8710469Z ##[warning]   48:5   warning  'skuFamilies' is assigned a value but never used                                                            @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8712289Z ##[warning]   51:5   warning  'onAddAdGroup' is defined but never used                                                                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8714059Z ##[warning]   52:5   warning  'onEditAdGroup' is defined but never used                                                                   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8715793Z ##[error]  116:13  error    'total' is never reassigned. Use 'const' instead                                                            prefer-const
+2026-04-20T06:47:03.8717722Z ##[warning]  127:8   warning  React Hook useMemo has a missing dependency: 'getStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8719810Z ##[error]  132:13  error    'result' is never reassigned. Use 'const' instead                                                           prefer-const
+2026-04-20T06:47:03.8721817Z ##[warning]  163:8   warning  React Hook useMemo has a missing dependency: 'getStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8723679Z ##[error]  282:17  error    'nextGroups' is never reassigned. Use 'const' instead                                                       prefer-const
+2026-04-20T06:47:03.8725430Z ##[error]  290:13  error    'nextGroups' is never reassigned. Use 'const' instead                                                       prefer-const
+2026-04-20T06:47:03.8727163Z ##[error]  337:63  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                             react/no-unescaped-entities
+2026-04-20T06:47:03.8729005Z ##[error]  765:89  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                             react/no-unescaped-entities
+2026-04-20T06:47:03.8730002Z 
+2026-04-20T06:47:03.8730478Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/platformManagement/tabs/AdGroupsTab1.tsx
+2026-04-20T06:47:03.8731744Z ##[warning]   15:5   warning  'SlidersHorizontal' is defined but never used                                                               @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8733543Z ##[warning]   17:5   warning  'ChevronDown' is defined but never used                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8735239Z ##[warning]   19:5   warning  'Filter' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8736974Z ##[warning]   24:10  warning  'formatMoney' is defined but never used                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8739126Z ##[warning]   24:23  warning  'formatSmartMoney' is defined but never used                                                                @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8740955Z ##[warning]   48:5   warning  'skuFamilies' is assigned a value but never used                                                            @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8742739Z ##[warning]   51:5   warning  'onAddAdGroup' is defined but never used                                                                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8744531Z ##[warning]   52:5   warning  'onEditAdGroup' is defined but never used                                                                   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8746272Z ##[error]  116:13  error    'total' is never reassigned. Use 'const' instead                                                            prefer-const
+2026-04-20T06:47:03.8748334Z ##[warning]  127:8   warning  React Hook useMemo has a missing dependency: 'getStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8750304Z ##[error]  132:13  error    'result' is never reassigned. Use 'const' instead                                                           prefer-const
+2026-04-20T06:47:03.8752249Z ##[warning]  163:8   warning  React Hook useMemo has a missing dependency: 'getStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8754141Z ##[error]  282:17  error    'nextGroups' is never reassigned. Use 'const' instead                                                       prefer-const
+2026-04-20T06:47:03.8755882Z ##[error]  290:13  error    'nextGroups' is never reassigned. Use 'const' instead                                                       prefer-const
+2026-04-20T06:47:03.8757632Z ##[error]  337:63  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                             react/no-unescaped-entities
+2026-04-20T06:47:03.8759418Z ##[error]  765:89  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                             react/no-unescaped-entities
+2026-04-20T06:47:03.8760397Z 
+2026-04-20T06:47:03.8760880Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/platformManagement/tabs/FeesAndRoiTab.tsx
+2026-04-20T06:47:03.8761846Z ##[warning]  149:144  warning  '_i' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8762733Z 
+2026-04-20T06:47:03.8763204Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/platformManagement/tabs/FeesAndRoiTab1.tsx
+2026-04-20T06:47:03.8764125Z ##[warning]  148:144  warning  '_i' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8765004Z 
+2026-04-20T06:47:03.8765492Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/platformManagement/tabs/PerformanceTrendTab.tsx
+2026-04-20T06:47:03.8766539Z ##[warning]    2:27   warning  'useEffect' is defined but never used             @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8767999Z ##[warning]    2:38   warning  'useRef' is defined but never used                @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8769660Z ##[warning]    3:151  warning  'Medal' is defined but never used                 @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8771123Z ##[warning]    3:158  warning  'Info' is defined but never used                  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8772568Z ##[warning]    3:217  warning  'Search' is defined but never used                @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8774037Z ##[warning]   13:10   warning  'FilterBar' is defined but never used             @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8775517Z ##[warning]  102:5    warning  'timeWindow' is defined but never used            @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8777219Z ##[warning]  109:5    warning  'setPlatformGroups' is defined but never used     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8778929Z ##[warning]  115:5    warning  'setNewGroupPlatforms' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8779940Z 
+2026-04-20T06:47:03.8780459Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/platformManagement/tabs/PlatformOverviewTab.tsx
+2026-04-20T06:47:03.8781445Z ##[warning]   2:17  warning  'useState' is defined but never used     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8782864Z ##[warning]   6:10  warning  'formatMoney' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8784272Z ##[warning]  12:10  warning  'FilterBar' is defined but never used    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8785177Z 
+2026-04-20T06:47:03.8785650Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/parts/AliasDrawer.tsx
+2026-04-20T06:47:03.8786934Z ##[warning]  14:99  warning  'themeColor' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8787865Z 
+2026-04-20T06:47:03.8788302Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/parts/BcgMatrix.tsx
+2026-04-20T06:47:03.8789337Z ##[warning]  3:135  warning  'LabelList' is defined but never used          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8790809Z ##[warning]  5:10   warning  'formatMoney' is defined but never used        @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8792723Z ##[warning]  6:24   warning  'Filter' is defined but never used             @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8794485Z ##[warning]  6:32   warning  'MousePointerClick' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8795464Z 
+2026-04-20T06:47:03.8795956Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/parts/ProductList.tsx
+2026-04-20T06:47:03.8797049Z ##[warning]   11:196  warning  'Zap' is defined but never used                           @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8798732Z ##[warning]  104:5    warning  'themeColor' is defined but never used                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8800406Z ##[warning]  134:11   warning  'volumePriceWithVat' is assigned a value but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8801893Z ##[warning]  352:7    warning  'FilterDropdown' is assigned a value but never used       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8803483Z ##[warning]  377:7    warning  'MultiSelectDropdown' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8804430Z 
+2026-04-20T06:47:03.8804959Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/parts/ShowcaseSelectionModal.tsx
+2026-04-20T06:47:03.8806012Z ##[warning]    2:66  warning  'Stamp' is defined but never used                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8807525Z ##[warning]   26:5   warning  'cohortSnapshot' is defined but never used           @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8809295Z ##[warning]   36:12  warning  'initialized' is assigned a value but never used     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8810911Z ##[warning]  106:11  warning  'toggleNotReady' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8811902Z 
+2026-04-20T06:47:03.8812417Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/tabs/MasterCatalogueTab.tsx
+2026-04-20T06:47:03.8813552Z ##[warning]    3:21  warning  'X' is defined but never used                         @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8815081Z ##[warning]   14:10  warning  'getCanonicalSku' is defined but never used           @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8816604Z ##[warning]   15:10  warning  'formatSmartMoney' is defined but never used          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8818301Z ##[warning]   65:7   warning  'ConfidenceBadge' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8820131Z ##[warning]  160:5   warning  'dateLabels' is defined but never used                @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8821077Z 
+2026-04-20T06:47:03.8821604Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/tabs/PlatformComparisonTab.tsx
+2026-04-20T06:47:03.8822677Z ##[warning]  6:10  warning  'Columns' is defined but never used      @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8824206Z ##[warning]  6:32  warning  'CheckSquare' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8825728Z ##[warning]  6:45  warning  'Square' is defined but never used       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8827407Z ##[warning]  9:35  warning  'formatMoney' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8828464Z 
+2026-04-20T06:47:03.8829136Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/tabs/ProductPerformanceTrendTab.tsx
+2026-04-20T06:47:03.8830283Z ##[warning]  71:72  warning  'themeColor' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8831261Z 
+2026-04-20T06:47:03.8831821Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/tabs/ReturnsAndRefundsTab.tsx
+2026-04-20T06:47:03.8832918Z ##[warning]   7:21  warning  'formatMoney' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8834442Z ##[warning]  39:5   warning  'themeColor' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8835393Z 
+2026-04-20T06:47:03.8835909Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/tabs/ReturnsAndRefundsTab1.tsx
+2026-04-20T06:47:03.8836992Z ##[warning]   7:21  warning  'formatMoney' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8838500Z ##[warning]  39:5   warning  'themeColor' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8839469Z 
+2026-04-20T06:47:03.8839941Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/productManagement/tabs/ShipmentsTab.tsx
+2026-04-20T06:47:03.8841505Z ##[warning]  203:8  warning  React Hook useMemo has a missing dependency: 'isArrivedLikeStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8843862Z ##[warning]  215:8  warning  React Hook useMemo has a missing dependency: 'isArrivedLikeStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8845135Z 
+2026-04-20T06:47:03.8845671Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/promotionManager/parts/AllPromoSkusView.tsx
+2026-04-20T06:47:03.8846885Z ##[warning]  4:35  warning  'PromotionItem' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8848002Z 
+2026-04-20T06:47:03.8848770Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/promotionManager/parts/EventDetailView.tsx
+2026-04-20T06:47:03.8850441Z ##[warning]   10:10  warning  'formatMoney' is defined but never used                                                                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8852810Z ##[warning]   10:55  warning  'formatPct' is defined but never used                                                                         @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8854864Z ##[warning]   45:15  warning  'isSkuScope' is defined but never used                                                                        @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8856563Z ##[warning]  301:8   warning  React Hook useMemo has a missing dependency: 'promo.items'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8857662Z 
+2026-04-20T06:47:03.8858093Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/promotionManager/parts/PromoUploadModal.tsx
+2026-04-20T06:47:03.8859421Z ##[warning]    4:61   warning  'ChevronRight' is defined but never used                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8860962Z ##[warning]    4:75   warning  'ArrowRight' is defined but never used                                                                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8862497Z ##[warning]   94:79   warning  'themeColor' is defined but never used                                                                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8864271Z ##[warning]  157:8    warning  React Hook useMemo has a missing dependency: 'resolveSku'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8866235Z ##[error]  348:118  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                              react/no-unescaped-entities
+2026-04-20T06:47:03.8867662Z 
+2026-04-20T06:47:03.8868120Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/promotionManager/parts/PromotionDashboard.tsx
+2026-04-20T06:47:03.8870324Z ##[warning]  54:11  warning  The 'txMap' logical expression could make the dependencies of useMemo Hook (at line 89) change on every render. Move it inside the useMemo callback. Alternatively, wrap the initialization of 'txMap' in its own useMemo() Hook  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8871675Z 
+2026-04-20T06:47:03.8872051Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/search/SearchAssistantPopover.tsx
+2026-04-20T06:47:03.8873428Z ##[warning]  4:73   warning  'DollarSign' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8875083Z ##[warning]  4:106  warning  'ShoppingBag' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8875888Z 
+2026-04-20T06:47:03.8876346Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/search/searchResults/SearchResultsPageContainer.tsx
+2026-04-20T06:47:03.8877538Z ##[warning]   34:47  warning  'headerStyle' is defined but never used                                                                                  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8879594Z ##[warning]   74:8   warning  React Hook useMemo has a missing dependency: 'checkContext'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8881582Z ##[warning]   79:8   warning  React Hook useMemo has a missing dependency: 'checkContext'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8883431Z ##[warning]   84:8   warning  React Hook useMemo has a missing dependency: 'checkContext'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8885304Z ##[warning]   89:8   warning  React Hook useMemo has a missing dependency: 'checkContext'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8887153Z ##[warning]   94:8   warning  React Hook useMemo has a missing dependency: 'checkContext'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8889234Z ##[warning]   99:8   warning  React Hook useMemo has a missing dependency: 'checkContext'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8891172Z ##[warning]  104:8   warning  React Hook useMemo has a missing dependency: 'checkContext'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8893079Z ##[warning]  109:8   warning  React Hook useMemo has a missing dependency: 'checkContext'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8895108Z ##[warning]  114:8   warning  React Hook useMemo has a missing dependency: 'checkContext'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8896987Z ##[warning]  425:8   warning  React Hook useMemo has an unnecessary dependency: 'isPostcodeContext'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.8898768Z ##[warning]  453:50  warning  'e' is defined but never used                                                                                            @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8899713Z 
+2026-04-20T06:47:03.8900134Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/search/searchResults/parts/FilterChip.tsx
+2026-04-20T06:47:03.8901030Z ##[warning]  35:85  warning  'themeColor' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8901904Z 
+2026-04-20T06:47:03.8902349Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/search/searchResults/parts/SearchResultPanels.tsx
+2026-04-20T06:47:03.8903222Z ##[warning]  5:24  warning  'formatMoney' is defined but never used     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8904475Z ##[warning]  6:35  warning  'calcUnits' is defined but never used       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8905736Z ##[warning]  6:46  warning  'calcAdSpend' is defined but never used     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8906946Z ##[warning]  9:10  warning  'SortableHeader' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8907735Z 
+2026-04-20T06:47:03.8908063Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/shared/GlobalSearch.tsx
+2026-04-20T06:47:03.8909049Z ##[warning]  17:75  warning  'platforms' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8910341Z ##[warning]  50:11  warning  'addChip' is assigned a value but never used    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8911151Z 
+2026-04-20T06:47:03.8911477Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/shared/UserProfile.tsx
+2026-04-20T06:47:03.8912238Z ##[warning]  5:16   warning  'Settings' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8913420Z ##[warning]  5:26   warning  'Palette' is defined but never used    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8914580Z ##[warning]  5:44   warning  'ImageIcon' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8915739Z ##[warning]  5:91   warning  'Type' is defined but never used       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8916951Z ##[warning]  5:134  warning  'RotateCw' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8917724Z 
+2026-04-20T06:47:03.8918099Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/shared/modals/CostUploadModal.tsx
+2026-04-20T06:47:03.8919135Z ##[warning]  3:21  warning  'FileText' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8920326Z ##[warning]  3:31  warning  'Check' is defined but never used     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8921064Z 
+2026-04-20T06:47:03.8921452Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/shared/modals/FreightUploadModal.tsx
+2026-04-20T06:47:03.8922291Z ##[warning]   75:23  warning  'keys' is assigned a value but never used          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8923564Z ##[warning]  125:21  warning  'formulaCount' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8924369Z 
+2026-04-20T06:47:03.8924750Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/shared/modals/ReturnsUploadModal.tsx
+2026-04-20T06:47:03.8925567Z ##[warning]    4:10  warning  'Upload' is defined but never used              @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8927634Z ##[error]  204:21  error    'amt' is never reassigned. Use 'const' instead  prefer-const
+2026-04-20T06:47:03.8928397Z 
+2026-04-20T06:47:03.8929043Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/shared/modals/SalesImportModal.tsx
+2026-04-20T06:47:03.8929879Z ##[warning]  5:64   warning  'RefreshCw' is defined but never used        @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8931128Z ##[warning]  5:120  warning  'DollarSign' is defined but never used       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8932332Z ##[warning]  5:132  warning  'Tag' is defined but never used              @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8933517Z ##[warning]  5:163  warning  'Hash' is defined but never used             @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.8934729Z ##[warning]  6:10   warning  'asDateKeyNaive' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9037225Z ##[warning]  7:10   warning  'getCanonicalSku' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9039357Z 
+2026-04-20T06:47:03.9040266Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/shared/modals/ShipmentUploadModal.tsx
+2026-04-20T06:47:03.9041586Z ##[warning]  2:10  warning  'Upload' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9042411Z 
+2026-04-20T06:47:03.9042817Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/skuDeepDive/SkuDeepDivePage.tsx
+2026-04-20T06:47:03.9044120Z ##[warning]  121:31  warning  'expectedDays' is assigned a value but never used                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9045833Z ##[warning]  129:11  warning  'historyEndKey' is assigned a value but never used                                                                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9047722Z ##[warning]  405:8   warning  React Hook useMemo has an unnecessary dependency: 'periodSalesQty'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9049877Z ##[warning]  457:8   warning  React Hook useMemo has a missing dependency: 'getStats'. Either include it or remove the dependency array             react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9050936Z 
+2026-04-20T06:47:03.9051305Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/skuDeepDive/charts/BoxPlot.tsx
+2026-04-20T06:47:03.9052195Z ##[warning]  6:10  warning  'formatMoney' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9053021Z 
+2026-04-20T06:47:03.9053470Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/skuDeepDive/sections/PricingHistorySection.tsx
+2026-04-20T06:47:03.9054390Z ##[warning]  3:53  warning  'ArrowRight' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9055622Z ##[warning]  8:10  warning  'formatMoney' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9056420Z 
+2026-04-20T06:47:03.9056855Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/skuDeepDive/sections/ReturnsAnalysisSection.tsx
+2026-04-20T06:47:03.9057771Z ##[warning]   4:10  warning  'formatMoney' is defined but never used         @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9059252Z ##[warning]   4:41  warning  'formatNumber' is defined but never used        @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9060523Z ##[warning]   4:55  warning  'formatPct' is defined but never used           @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9061830Z ##[warning]  56:5   warning  'refundItemsPerPage' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9063096Z ##[warning]  57:5   warning  'themeColor' is defined but never used          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9064357Z ##[warning]  59:5   warning  'thresholds' is defined but never used          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9065346Z 
+2026-04-20T06:47:03.9065770Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/skuDeepDive/sections/SkuOverviewSection.tsx
+2026-04-20T06:47:03.9066626Z ##[warning]  6:10  warning  'formatMoney' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9067419Z 
+2026-04-20T06:47:03.9067811Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/strategy/PriceChangeHistoryPanel.tsx
+2026-04-20T06:47:03.9068951Z ##[warning]   5:10  warning  'formatMoney' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9070222Z ##[warning]   6:10  warning  'asDateKey' is defined but never used    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9071439Z ##[warning]  19:3   warning  'windowStart' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9072635Z ##[warning]  20:3   warning  'windowEnd' is defined but never used    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9073953Z ##[warning]  21:3   warning  'themeColor' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9074729Z 
+2026-04-20T06:47:03.9075106Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/strategy/StrategyPageContainer.tsx
+2026-04-20T06:47:03.9076250Z ##[warning]   19:10  warning  'SortableHeader' is defined but never used                                                                                                   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9078248Z ##[warning]  450:8   warning  React Hook useMemo has missing dependencies: 'calculateMetrics' and 'getRecommendation'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9080440Z ##[warning]  646:27  warning  'platform' is assigned a value but never used                                                                                                @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9081380Z 
+2026-04-20T06:47:03.9081819Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/strategy/panels/AuditReconciliationPanel.tsx
+2026-04-20T06:47:03.9082690Z ##[warning]  24:30  warning  'row' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9083842Z ##[warning]  28:30  warning  'row' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9084592Z 
+2026-04-20T06:47:03.9085013Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/strategy/panels/ConfigParametersPanel.tsx
+2026-04-20T06:47:03.9085883Z ##[warning]  13:120  warning  'setIsConfigOpen' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9086690Z 
+2026-04-20T06:47:03.9087085Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/strategy/panels/RecommendationsTable.tsx
+2026-04-20T06:47:03.9087914Z ##[warning]  99:13  warning  'status' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9088975Z 
+2026-04-20T06:47:03.9089341Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/toolbox/ToolboxPageContainer.tsx
+2026-04-20T06:47:03.9090201Z ##[warning]  23:5  warning  'headerStyle' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9090992Z 
+2026-04-20T06:47:03.9091385Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/toolbox/components/DealSimulatorTool.tsx
+2026-04-20T06:47:03.9092661Z ##[warning]  280:8  warning  React Hook useCallback has a missing dependency: 'products'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9093658Z 
+2026-04-20T06:47:03.9094050Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/toolbox/components/ERPCrossCheckTool.tsx
+2026-04-20T06:47:03.9095180Z ##[warning]  151:15  warning  'typeI' is assigned a value but never used                                                                                          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9096978Z ##[warning]  152:15  warning  'orderI' is assigned a value but never used                                                                                         @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9098755Z ##[warning]  461:34  warning  'pricingRules' is defined but never used                                                                                            @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9100436Z ##[warning]  461:74  warning  'themeColor' is defined but never used                                                                                              @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9102316Z ##[warning]  574:8   warning  React Hook React.useMemo has unnecessary dependencies: 'endKey' and 'startKey'. Either exclude them or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9103366Z 
+2026-04-20T06:47:03.9103852Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/toolbox/components/InventorySyncTool.tsx
+2026-04-20T06:47:03.9104736Z ##[warning]    4:83   warning  'Play' is defined but never used                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9106036Z ##[warning]    4:139  warning  'ShieldCheck' is defined but never used                @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9107332Z ##[warning]    4:152  warning  'XCircle' is defined but never used                    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9108746Z ##[warning]    4:161  warning  'FileWarning' is defined but never used                @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9110122Z ##[warning]    4:193  warning  'Search' is defined but never used                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9111430Z ##[warning]   57:12   warning  'templateFile' is assigned a value but never used      @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9112762Z ##[warning]   67:12   warning  'platformHeaders' is assigned a value but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9114094Z ##[warning]   68:12   warning  'platformMetaRows' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9115429Z ##[warning]  587:15   warning  'effectiveRules' is assigned a value but never used    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9116239Z 
+2026-04-20T06:47:03.9116639Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/toolbox/components/PromoCheckerTool.tsx
+2026-04-20T06:47:03.9117479Z ##[warning]    4:18  warning  'X' is defined but never used                      @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9118869Z ##[warning]    6:19  warning  'PromotionItem' is defined but never used          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9120204Z ##[warning]  153:31  warning  'isAliasValid' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9121017Z 
+2026-04-20T06:47:03.9121397Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/components/toolbox/components/SkuScreenTool.tsx
+2026-04-20T06:47:03.9122576Z ##[warning]  115:60  warning  React Hook useMemo has a missing dependency: 'resolve'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9124328Z ##[warning]  116:60  warning  React Hook useMemo has a missing dependency: 'resolve'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9125279Z 
+2026-04-20T06:47:03.9125557Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/hooks/useAppState.ts
+2026-04-20T06:47:03.9126974Z ##[warning]    14:5    warning  'AdCampaignState' is defined but never used                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9129187Z ##[warning]    47:51   warning  'CANONICAL_MAP' is defined but never used                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9131392Z ##[warning]    70:5    warning  'pushTransactions' is defined but never used                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9133423Z ##[warning]    70:23   warning  'pullTransactions' is defined but never used                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9135467Z ##[warning]    76:38   warning  'clearCache' is defined but never used                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9137479Z ##[warning]   350:12   warning  'isDataLoaded' is assigned a value but never used                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9139525Z ##[error]   367:103  error    Empty block statement                                                                                                                                                                                                                      no-empty
+2026-04-20T06:47:03.9141487Z ##[warning]   494:22   warning  'setIsOnline' is assigned a value but never used                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9143805Z ##[warning]   543:8    warning  React Hook useCallback has a missing dependency: 'priceHistoryMap'. Either include it or remove the dependency array                                                                                                                       react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9145812Z ##[error]   811:93   error    Empty block statement                                                                                                                                                                                                                      no-empty
+2026-04-20T06:47:03.9147600Z ##[error]   815:97   error    Empty block statement                                                                                                                                                                                                                      no-empty
+2026-04-20T06:47:03.9149631Z ##[error]   821:98   error    Empty block statement                                                                                                                                                                                                                      no-empty
+2026-04-20T06:47:03.9151633Z ##[warning]   926:21   warning  'currentThresholds' is assigned a value but never used                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9153725Z ##[warning]   933:21   warning  'currentVelocity' is assigned a value but never used                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9156151Z ##[warning]  1063:8    warning  React Hook useCallback has a missing dependency: 'adGroups'. Either include it or remove the dependency array                                                                                                                              react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9158165Z ##[error]  1896:110  error    Empty block statement                                                                                                                                                                                                                      no-empty
+2026-04-20T06:47:03.9160141Z ##[error]  1901:112  error    Empty block statement                                                                                                                                                                                                                      no-empty
+2026-04-20T06:47:03.9162062Z ##[error]  1913:106  error    Empty block statement                                                                                                                                                                                                                      no-empty
+2026-04-20T06:47:03.9164681Z ##[warning]  1983:8    warning  React Hook useCallback has a missing dependency: 'salesHistory'. Either include it or remove the dependency array. Outer scope values like 'pullSnapshot' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+2026-04-20T06:47:03.9166062Z 
+2026-04-20T06:47:03.9166381Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/netlify/functions/db-init.ts
+2026-04-20T06:47:03.9167229Z ##[warning]  3:23  warning  'req' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9167980Z 
+2026-04-20T06:47:03.9168334Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/ShowcaseSelectionModal.tsx
+2026-04-20T06:47:03.9169369Z ##[warning]  25:5   warning  'cohortSnapshot' is defined but never used           @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9170693Z ##[warning]  34:12  warning  'initialized' is assigned a value but never used     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9171988Z ##[warning]  87:11  warning  'toggleNotReady' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9172788Z 
+2026-04-20T06:47:03.9173104Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/adCampaignService.ts
+2026-04-20T06:47:03.9173937Z ##[warning]    21:5   warning  'AdRosterChange' is defined but never used               @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9175275Z ##[warning]   318:5   warning  'groupAvgConvRate' is defined but never used             @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9176604Z ##[warning]   571:9   warning  'dataRowStart' is assigned a value but never used        @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9177852Z ##[error]   571:9   error    'dataRowStart' is never reassigned. Use 'const' instead  prefer-const
+2026-04-20T06:47:03.9179229Z ##[warning]   593:35  warning  'wi' is defined but never used                           @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9180475Z ##[error]   685:67  error    Unnecessary escape character: \?                         no-useless-escape
+2026-04-20T06:47:03.9181694Z ##[warning]   771:53  warning  'si' is defined but never used                           @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9183005Z ##[warning]  1081:11  warning  'groupAvgConvRate' is assigned a value but never used    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9183844Z 
+2026-04-20T06:47:03.9184146Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/bulletExtractor.ts
+2026-04-20T06:47:03.9184934Z ##[error]  30:18  error  Unexpected control character(s) in regular expression: \x00  no-control-regex
+2026-04-20T06:47:03.9186186Z ##[error]  30:24  error  Irregular whitespace not allowed                             no-irregular-whitespace
+2026-04-20T06:47:03.9187145Z 
+2026-04-20T06:47:03.9187415Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/metrics.ts
+2026-04-20T06:47:03.9188142Z ##[warning]  2:29  warning  'RefundLog' is defined but never used        @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9189623Z ##[warning]  2:40  warning  'ReturnDateBasis' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9190426Z 
+2026-04-20T06:47:03.9190744Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/migrationService.ts
+2026-04-20T06:47:03.9191498Z ##[warning]  3:27  warning  'isMergeVariant' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9192270Z 
+2026-04-20T06:47:03.9192570Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/platformTrendAgg.ts
+2026-04-20T06:47:03.9193314Z ##[warning]  6:10  warning  'VAT_MULTIPLIER' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9194177Z 
+2026-04-20T06:47:03.9194477Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/productTrendAgg.ts
+2026-04-20T06:47:03.9195225Z ##[warning]  3:46  warning  'calcAdSpend' is defined but never used     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9196433Z ##[warning]  6:10  warning  'VAT_MULTIPLIER' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9197207Z 
+2026-04-20T06:47:03.9197476Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/refundAgg.ts
+2026-04-20T06:47:03.9198162Z ##[warning]  2:10  warning  'asDateKey' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9199095Z 
+2026-04-20T06:47:03.9199399Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/search/aiParser.ts
+2026-04-20T06:47:03.9200177Z ##[warning]  2:21  warning  'MetricId' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9200947Z 
+2026-04-20T06:47:03.9201284Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/search/suggestionConfig.ts
+2026-04-20T06:47:03.9202110Z ##[warning]  1:88  warning  'ChipSelectionState' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9202909Z 
+2026-04-20T06:47:03.9203237Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/search/suggestionEngine.ts
+2026-04-20T06:47:03.9203984Z ##[warning]  2:62  warning  'MetricId' is defined but never used     @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9205182Z ##[warning]  2:72  warning  'ConditionId' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9206378Z ##[warning]  2:85  warning  'PlatformId' is defined but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9207142Z 
+2026-04-20T06:47:03.9207436Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/searchExecution.ts
+2026-04-20T06:47:03.9208262Z ##[warning]  35:11  warning  'safePricingRules' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9209275Z 
+2026-04-20T06:47:03.9209592Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/searchIntentService.ts
+2026-04-20T06:47:03.9210406Z ##[warning]  13:114  warning  '_thresholds' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9211215Z 
+2026-04-20T06:47:03.9211532Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/showcasePdfGenerator.ts
+2026-04-20T06:47:03.9212351Z ##[warning]   22:7   warning  'GREEN_100' is assigned a value but never used        @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9213632Z ##[warning]   25:7   warning  'BLUE_100' is assigned a value but never used         @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9214897Z ##[warning]   28:7   warning  'AMBER_100' is assigned a value but never used        @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9216159Z ##[warning]   31:7   warning  'RED_100' is assigned a value but never used          @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9217494Z ##[error]  312:13  error    'py' is never reassigned. Use 'const' instead         prefer-const
+2026-04-20T06:47:03.9218774Z ##[error]  392:13  error    'remaining' is never reassigned. Use 'const' instead  prefer-const
+2026-04-20T06:47:03.9219558Z 
+2026-04-20T06:47:03.9219838Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/taxPolicy.ts
+2026-04-20T06:47:03.9220559Z ##[warning]  25:40  warning  'context' is defined but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9221744Z ##[warning]  25:57  warning  'value' is defined but never used    @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9222500Z 
+2026-04-20T06:47:03.9222800Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/workers/salesImportWorker.ts
+2026-04-20T06:47:03.9223646Z ##[warning]  237:9  warning  'matchCount' is assigned a value but never used  @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9225018Z ##[warning]  238:9  warning  'skipCount' is assigned a value but never used   @typescript-eslint/no-unused-vars
+2026-04-20T06:47:03.9225816Z 
+2026-04-20T06:47:03.9226215Z ✖ 325 problems (43 errors, 282 warnings)
+2026-04-20T06:47:03.9226614Z   12 errors and 0 warnings potentially fixable with the `--fix` option.
+2026-04-20T06:47:03.9226867Z 
+2026-04-20T06:47:03.9230618Z ##[error]Process completed with exit code 1.
