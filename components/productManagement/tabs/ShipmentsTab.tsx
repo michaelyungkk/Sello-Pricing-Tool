@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, InventoryChangeRecord } from '../../../types';
-import { Ship, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Ship, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { TagSearchInput } from '../../common/TagSearchInput';
 
 interface ShipmentsTabProps {
@@ -10,11 +10,13 @@ interface ShipmentsTabProps {
     initialTags?: string[];
     onTagsChange?: (tags: string[]) => void;
     onConfirmContainersArrived?: (payload: { containerId: string; confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }[]) => void;
+    onEditContainerShipments?: (payload: { containerId: string; status?: string; eta?: string; items: { sku: string; quantity: number }[] }) => void;
 }
 
 type ContainerGroup = 'needs-confirmation' | 'in-transit' | 'arrived';
 type ArrivalConfirmMode = 'INFERRED' | 'MANUAL';
 type ConfirmDialogItem = { sku: string; plannedQty: number };
+type EditDialogItem = { id: string; sku: string; quantity: string };
 
 export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
     products,
@@ -22,13 +24,15 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
     themeColor,
     initialTags = [],
     onTagsChange,
-    onConfirmContainersArrived
+    onConfirmContainersArrived,
+    onEditContainerShipments
 }) => {
     const [inputValue, setInputValue] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [showReplenishmentTable, setShowReplenishmentTable] = useState(false);
     const [confirmDialog, setConfirmDialog] = useState<{ containerId: string; mode: 'INFERRED' | 'MANUAL'; items: ConfirmDialogItem[] } | null>(null);
     const [confirmSkuQtyInputs, setConfirmSkuQtyInputs] = useState<Record<string, string>>({});
+    const [editDialog, setEditDialog] = useState<{ containerId: string; status: string; eta: string; items: EditDialogItem[] } | null>(null);
     const itemsPerPage = 25;
     const searchTags = initialTags;
     const updateTags = (newTags: string[]) => { if (onTagsChange) onTagsChange(newTags); };
@@ -53,15 +57,34 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
                 p.shipments.forEach(s => {
                     const containerId = String(s.containerId || '').trim();
                     if (!containerId) return;
-                    if (!map[containerId]) map[containerId] = { id: containerId, eta: s.eta || '', status: s.status, totalQty: 0, items: [] };
-                    map[containerId].totalQty += Number(s.quantity) || 0;
-                    map[containerId].items.push({ sku: p.sku, qty: Number(s.quantity) || 0 });
+                    if (!map[containerId]) {
+                        map[containerId] = {
+                            id: containerId,
+                            eta: s.eta || '',
+                            status: s.status,
+                            totalQty: 0,
+                            items: [],
+                            itemQtyBySku: new Map<string, number>()
+                        };
+                    }
+                    const qty = Number(s.quantity) || 0;
+                    map[containerId].totalQty += qty;
+                    const skuKey = String(p.sku || '').trim();
+                    if (skuKey) {
+                        const prev = map[containerId].itemQtyBySku.get(skuKey) || 0;
+                        map[containerId].itemQtyBySku.set(skuKey, prev + qty);
+                    }
                     if (s.eta) map[containerId].eta = s.eta;
                     if (s.status) map[containerId].status = s.status;
                 });
             }
         });
-        return Object.values(map).sort((a: any, b: any) => {
+        return Object.values(map).map((container: any) => {
+            const items = Array.from(container.itemQtyBySku.entries())
+                .map(([sku, qty]) => ({ sku, qty }))
+                .sort((a, b) => a.sku.localeCompare(b.sku));
+            return { ...container, items };
+        }).sort((a: any, b: any) => {
             if (!a.eta && !b.eta) return 0;
             if (!a.eta) return 1;
             if (!b.eta) return -1;
@@ -217,6 +240,23 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
         ).length;
     }, [searchTags, allShipmentItems]);
 
+    const replenishmentKpiRows = useMemo(() => {
+        return products
+            .map((p) => ({
+                sku: p.sku,
+                reorderPlacedDate: p.reorderPlacedDate || '',
+                productionScheduledQty: Number(p.productionScheduledQty) || 0,
+                toBeShippedQty: Number(p.toBeShippedQty) || 0,
+                shippedOutQty: Number(p.shippedOutQty) || 0,
+            }))
+            .filter((r) =>
+                !!r.reorderPlacedDate ||
+                r.productionScheduledQty > 0 ||
+                r.toBeShippedQty > 0 ||
+                r.shippedOutQty > 0
+            );
+    }, [products]);
+
     const replenishmentRows = useMemo(() => {
         return products
             .map((p) => ({
@@ -226,18 +266,19 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
                 productionScheduledQty: Number(p.productionScheduledQty) || 0,
                 toBeShippedQty: Number(p.toBeShippedQty) || 0,
                 shippedOutQty: Number(p.shippedOutQty) || 0,
-                shipmentStatus: normalizedShipmentStatus(p.shipmentStatus),
+                shipmentStatus: 'In Production',
             }))
             .filter((r) => {
-                const inOrderedOrProduction = !!r.reorderPlacedDate || r.productionScheduledQty > 0;
-                if (!inOrderedOrProduction) return false;
+                const inProductionOnly = r.productionScheduledQty > 0;
+                if (!inProductionOnly) return false;
                 if (!r.hasShipment && !r.reorderPlacedDate) return false;
+                if (r.toBeShippedQty > 0 || r.shippedOutQty > 0) return false;
                 return true;
             });
     }, [products]);
 
     const replenishmentSummary = useMemo(() => {
-        const totals = replenishmentRows.reduce((acc, row) => {
+        const totals = replenishmentKpiRows.reduce((acc, row) => {
             acc.production += row.productionScheduledQty;
             acc.toBeShipped += row.toBeShippedQty;
             acc.shippedOut += row.shippedOutQty;
@@ -245,9 +286,9 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
         }, { production: 0, toBeShipped: 0, shippedOut: 0 });
         return {
             ...totals,
-            skuCount: replenishmentRows.length
+            skuCount: replenishmentKpiRows.length
         };
-    }, [replenishmentRows]);
+    }, [replenishmentKpiRows]);
 
     const filteredReplenishmentRows = useMemo(() => {
         if (searchTags.length === 0 && !inputValue.trim()) {
@@ -269,6 +310,33 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
             return terms.some(term => hay.includes(term));
         });
     }, [replenishmentRows, searchTags, inputValue]);
+
+    const handleExportReplenishmentRows = () => {
+        if (!filteredReplenishmentRows.length) return;
+        const escapeCsv = (value: string | number) => {
+            const str = String(value ?? '');
+            if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+            return str;
+        };
+        const lines = [
+            ['SKU', 'Reorder Date', 'Production'].join(','),
+            ...filteredReplenishmentRows.map((row) => [
+                escapeCsv(row.sku),
+                escapeCsv(row.reorderPlacedDate || ''),
+                escapeCsv(row.productionScheduledQty),
+            ].join(','))
+        ];
+        const csv = lines.join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `replenishment-ordered-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+    };
 
     const getStatusStyle = (status: string) => {
         if (!status) return { background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' };
@@ -344,48 +412,134 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
         onConfirmContainersArrived(payload);
     };
 
+    const openEditDialog = (containerId: string) => {
+        const c = containers.find(x => x.id === containerId);
+        if (!c) return;
+        const qtyBySku = new Map<string, number>();
+        (c.items || []).forEach((item: any) => {
+            const sku = String(item?.sku || '').trim();
+            if (!sku) return;
+            const qty = Math.max(0, Math.round(Number(item?.qty) || 0));
+            qtyBySku.set(sku, (qtyBySku.get(sku) || 0) + qty);
+        });
+        const items: EditDialogItem[] = Array.from(qtyBySku.entries())
+            .map(([sku, quantity], idx) => ({ id: `${sku}-${idx}`, sku, quantity: String(quantity) }))
+            .sort((a, b) => a.sku.localeCompare(b.sku));
+        setEditDialog({
+            containerId,
+            status: normalizedShipmentStatus(c.status),
+            eta: String(c.eta || ''),
+            items: items.length > 0 ? items : [{ id: `new-${Date.now()}`, sku: '', quantity: '' }]
+        });
+    };
+
+    const closeEditDialog = () => setEditDialog(null);
+
+    const handleEditItemChange = (id: string, field: 'sku' | 'quantity', value: string) => {
+        setEditDialog(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                items: prev.items.map((it) => it.id === id ? { ...it, [field]: value } : it)
+            };
+        });
+    };
+
+    const handleAddEditItem = () => {
+        setEditDialog(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                items: [...prev.items, { id: `new-${Date.now()}-${Math.random()}`, sku: '', quantity: '' }]
+            };
+        });
+    };
+
+    const handleRemoveEditItem = (id: string) => {
+        setEditDialog(prev => {
+            if (!prev) return prev;
+            const next = prev.items.filter((it) => it.id !== id);
+            return { ...prev, items: next.length > 0 ? next : [{ id: `new-${Date.now()}`, sku: '', quantity: '' }] };
+        });
+    };
+
+    const handleSaveEditDialog = () => {
+        if (!editDialog || !onEditContainerShipments) return;
+        const mergedBySku = new Map<string, number>();
+        for (let i = 0; i < editDialog.items.length; i++) {
+            const row = editDialog.items[i];
+            const sku = String(row.sku || '').trim();
+            const qty = Math.round(Number(row.quantity));
+            if (!sku || !Number.isFinite(qty) || qty <= 0) continue;
+            mergedBySku.set(sku, (mergedBySku.get(sku) || 0) + qty);
+        }
+        onEditContainerShipments({
+            containerId: editDialog.containerId,
+            status: normalizedShipmentStatus(editDialog.status),
+            eta: String(editDialog.eta || '').trim() || undefined,
+            items: Array.from(mergedBySku.entries()).map(([sku, quantity]) => ({ sku, quantity }))
+        });
+        closeEditDialog();
+    };
+
     const renderContainerCard = (c: any) => (
         <div key={c.id} className="sello-glass rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow">
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--glass-divider)', background: 'rgba(249,250,251,0.5)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                    <h3 style={{ fontWeight: 700, fontSize: 13, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Ship style={{ width: 14, height: 14, color: 'var(--theme)' }} />{c.id}
-                    </h3>
-                    <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>ETA: {c.eta || 'Pending'}</div>
-                    {c.inferredMeta && (
-                        <div style={{ fontSize: 10, color: '#065f46', marginTop: 2, fontWeight: 700, letterSpacing: '0.02em' }}>
-                            Inferred via inventory change signals
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--glass-divider)', background: 'rgba(249,250,251,0.5)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+                        <h3 style={{ fontWeight: 700, fontSize: 13, color: '#111827', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                            <Ship style={{ width: 14, height: 14, color: 'var(--theme)' }} />{c.id}
+                        </h3>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 6px', borderRadius: 4, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                            <span style={{ fontSize: 9, color: '#0f172a', fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1 }}>ETA: {c.eta || 'Pending'}</span>
                         </div>
-                    )}
+                    </div>
+                    <span style={{ ...getStatusStyle(c.displayStatus), fontSize: 9, fontWeight: 700, padding: '3px 6px', borderRadius: 4, textTransform: 'uppercase', flexShrink: 0 }}>
+                        {c.displayStatus}
+                    </span>
                 </div>
-                <span style={{ ...getStatusStyle(c.displayStatus), fontSize: 9, fontWeight: 700, padding: '3px 6px', borderRadius: 4, textTransform: 'uppercase' }}>
-                    {c.displayStatus}
-                </span>
+                {c.inferredMeta && (
+                    <div style={{ fontSize: 10, color: '#065f46', marginTop: 4, fontWeight: 700, letterSpacing: '0.02em' }}>
+                        Inferred via inventory change signals
+                    </div>
+                )}
             </div>
             <div style={{ padding: 16, flex: 1, maxHeight: 160, overflowY: 'auto' }}>
                 {c.items.map((item: any, idx: number) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, paddingBottom: 4, marginBottom: 4, borderBottom: '1px solid var(--glass-divider)' }}>
-                        <span className="v-dim">{item.sku}</span>
+                        <span className="v-num">{item.sku}</span>
                         <span className="v-num v-bold">{item.qty}</span>
                     </div>
                 ))}
             </div>
-            {(c.inferredMeta || c.group === 'in-transit') && onConfirmContainersArrived && (
+            {(onEditContainerShipments || ((c.inferredMeta || c.group === 'in-transit') && onConfirmContainersArrived)) && (
                 <div style={{ padding: '10px 12px', borderTop: '1px solid var(--glass-divider)', background: '#f0fdf4' }}>
-                    {(() => {
-                        const isManual = !c.inferredMeta;
-                        const btnClass = isManual
-                            ? 'w-full px-3 py-1.5 text-xs font-bold rounded border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 transition-colors'
-                            : 'w-full px-3 py-1.5 text-xs font-bold rounded border border-green-300 bg-white text-green-700 hover:bg-green-50 transition-colors';
-                        return (
-                    <button
-                        onClick={() => handleConfirmOne(c.id, c.inferredMeta ? 'INFERRED' : 'MANUAL')}
-                        className={btnClass}
-                    >
-                        {c.inferredMeta ? 'Confirm Arrival' : 'Manual Confirm Arrival'}
-                    </button>
-                        );
-                    })()}
+                    <div className="flex items-center gap-2">
+                        {onEditContainerShipments && (
+                            <button
+                                onClick={() => openEditDialog(c.id)}
+                                className="flex-1 px-3 py-1.5 text-xs font-bold rounded border border-amber-300 bg-white text-amber-700 hover:bg-amber-50 transition-colors inline-flex items-center justify-center gap-1"
+                            >
+                                <Pencil className="w-3 h-3" /> Edit Container
+                            </button>
+                        )}
+                        {(c.inferredMeta || c.group === 'in-transit') && onConfirmContainersArrived && (
+                            (() => {
+                                const isManual = !c.inferredMeta;
+                                const btnClass = isManual
+                                    ? 'flex-1 px-3 py-1.5 text-xs font-bold rounded border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 transition-colors'
+                                    : 'flex-1 px-3 py-1.5 text-xs font-bold rounded border border-green-300 bg-white text-green-700 hover:bg-green-50 transition-colors';
+                                return (
+                                    <button
+                                        onClick={() => handleConfirmOne(c.id, c.inferredMeta ? 'INFERRED' : 'MANUAL')}
+                                        className={btnClass}
+                                    >
+                                        {c.inferredMeta ? 'Confirm Arrival' : 'Manual Confirm Arrival'}
+                                    </button>
+                                );
+                            })()
+                        )}
+                    </div>
                 </div>
             )}
         </div>
@@ -439,45 +593,53 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
             <div className="sello-glass rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-custom-glass flex items-center justify-between">
                     <h4 className="text-xs font-bold uppercase tracking-wide text-gray-700">Replenishment SKU Detail</h4>
-                    <span className="text-[11px] text-gray-500">{filteredReplenishmentRows.length} SKU rows</span>
+                    <div className="flex items-center gap-3">
+                        <span className="text-[11px] text-gray-500">
+                            {filteredReplenishmentRows.length} SKUs in production • {filteredReplenishmentRows.reduce((sum, row) => sum + row.productionScheduledQty, 0).toLocaleString()} units
+                        </span>
+                        <button
+                            onClick={handleExportReplenishmentRows}
+                            disabled={filteredReplenishmentRows.length === 0}
+                            className="px-2.5 py-1 rounded border border-gray-200 text-[11px] font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Export
+                        </button>
+                    </div>
                 </div>
                 {showReplenishmentTable && (
                     <div className="sello-table-scroll max-h-[260px]">
-                        <table className="sello-table">
-                            <thead>
-                                <tr>
-                                    <th>SKU</th>
-                                    <th>Reorder Date</th>
-                                    <th className="r">Production</th>
-                                    <th className="r">To Be Shipped</th>
-                                    <th className="r">Shipped Out</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredReplenishmentRows.map((row) => (
-                                    <tr key={row.sku}>
-                                        <td><span className="v-num v-bold">{row.sku}</span></td>
-                                        <td><span className="v-num">{row.reorderPlacedDate || '-'}</span></td>
-                                        <td className="r"><span className="v-num v-bold">{row.productionScheduledQty.toLocaleString()}</span></td>
-                                        <td className="r"><span className="v-num v-bold">{row.toBeShippedQty.toLocaleString()}</span></td>
-                                        <td className="r"><span className="v-num v-bold">{row.shippedOutQty.toLocaleString()}</span></td>
-                                        <td>
-                                            <span style={{ ...getStatusStyle(row.shipmentStatus), padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', display: 'inline-block' }}>
-                                                {row.shipmentStatus || 'Pending'}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {filteredReplenishmentRows.length === 0 && (
+                        <div className="mx-auto w-full max-w-[980px]">
+                            <table className="sello-table table-fixed">
+                                <colgroup>
+                                    <col style={{ width: '56%' }} />
+                                    <col style={{ width: '26%' }} />
+                                    <col style={{ width: '18%' }} />
+                                </colgroup>
+                                <thead>
                                     <tr>
-                                        <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#9ca3af' }}>
-                                            No replenishment rows found for current filter.
-                                        </td>
+                                        <th>SKU</th>
+                                        <th>Reorder Date</th>
+                                        <th className="r">Production</th>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {filteredReplenishmentRows.map((row) => (
+                                        <tr key={row.sku}>
+                                            <td><span className="v-num v-bold">{row.sku}</span></td>
+                                            <td><span className="v-num">{row.reorderPlacedDate || '-'}</span></td>
+                                            <td className="r"><span className="v-num v-bold">{row.productionScheduledQty.toLocaleString()}</span></td>
+                                        </tr>
+                                    ))}
+                                    {filteredReplenishmentRows.length === 0 && (
+                                        <tr>
+                                            <td colSpan={3} style={{ padding: 24, textAlign: 'center', color: '#9ca3af' }}>
+                                                No replenishment rows found for current filter.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
             </div>
@@ -535,11 +697,28 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
                                                             Confirm
                                                         </button>
                                                     ) : onConfirmContainersArrived && !isArrivedLikeStatus(row.status) ? (
+                                                        <div className="inline-flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => handleConfirmOne(row.containerId, 'MANUAL')}
+                                                                className="px-2 py-1 text-[10px] font-bold rounded border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 transition-colors"
+                                                            >
+                                                                Manual
+                                                            </button>
+                                                            {onEditContainerShipments && (
+                                                                <button
+                                                                    onClick={() => openEditDialog(row.containerId)}
+                                                                    className="px-2 py-1 text-[10px] font-bold rounded border border-amber-300 bg-white text-amber-700 hover:bg-amber-50 transition-colors"
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ) : onEditContainerShipments ? (
                                                         <button
-                                                            onClick={() => handleConfirmOne(row.containerId, 'MANUAL')}
-                                                            className="px-2 py-1 text-[10px] font-bold rounded border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 transition-colors"
+                                                            onClick={() => openEditDialog(row.containerId)}
+                                                            className="px-2 py-1 text-[10px] font-bold rounded border border-amber-300 bg-white text-amber-700 hover:bg-amber-50 transition-colors"
                                                         >
-                                                            Manual
+                                                            Edit
                                                         </button>
                                                     ) : (
                                                         <span className="v-dim">-</span>
@@ -594,7 +773,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
                     {inferredContainerIds.length > 0 && (
                         <section className="space-y-3">
                             <div className="px-1 text-xs font-bold uppercase tracking-wide text-green-700">Needs Confirmation</div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                                 {containers.filter(c => c.group === 'needs-confirmation').map(renderContainerCard)}
                             </div>
                         </section>
@@ -603,7 +782,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
                     {inTransitContainers.length > 0 && (
                         <section className="space-y-3">
                             <div className="px-1 text-xs font-bold uppercase tracking-wide text-blue-700">In Transit</div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                                 {containers.filter(c => c.group === 'in-transit').map(renderContainerCard)}
                             </div>
                         </section>
@@ -612,7 +791,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
                     {arrivedContainers.length > 0 && (
                         <section className="space-y-3">
                             <div className="px-1 text-xs font-bold uppercase tracking-wide text-gray-700">Arrived</div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                                 {containers.filter(c => c.group === 'arrived').map(renderContainerCard)}
                             </div>
                         </section>
@@ -686,6 +865,103 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
                                 className="px-3 py-1.5 text-xs font-bold rounded-lg border border-green-300 bg-green-600 text-white hover:bg-green-700"
                             >
                                 Confirm with Edits
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {editDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-xl w-[760px] max-w-[96vw] p-4">
+                        <div className="text-sm font-bold text-gray-900">Edit Container</div>
+                        <div className="text-xs text-gray-600 mt-1">
+                            Container <span className="font-bold">{editDialog.containerId}</span>
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-[11px] uppercase tracking-wide text-gray-500 font-bold">Status</label>
+                                <input
+                                    type="text"
+                                    value={editDialog.status}
+                                    onChange={(e) => setEditDialog(prev => prev ? { ...prev, status: e.target.value } : prev)}
+                                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-theme/20"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[11px] uppercase tracking-wide text-gray-500 font-bold">ETA</label>
+                                <input
+                                    type="date"
+                                    value={editDialog.eta}
+                                    onChange={(e) => setEditDialog(prev => prev ? { ...prev, eta: e.target.value } : prev)}
+                                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-theme/20"
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-3 border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="max-h-[320px] overflow-y-auto">
+                                <table className="sello-table">
+                                    <thead>
+                                        <tr>
+                                            <th>SKU</th>
+                                            <th className="r">Qty</th>
+                                            <th className="r">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {editDialog.items.map((item) => (
+                                            <tr key={item.id}>
+                                                <td>
+                                                    <input
+                                                        type="text"
+                                                        value={item.sku}
+                                                        onChange={(e) => handleEditItemChange(item.id, 'sku', e.target.value)}
+                                                        className="w-full border border-gray-300 rounded px-2 py-1 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-theme/20"
+                                                    />
+                                                </td>
+                                                <td className="r">
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        value={item.quantity}
+                                                        onChange={(e) => handleEditItemChange(item.id, 'quantity', e.target.value)}
+                                                        className="w-24 border border-gray-300 rounded px-2 py-1 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-theme/20 text-right"
+                                                    />
+                                                </td>
+                                                <td className="r">
+                                                    <button
+                                                        onClick={() => handleRemoveEditItem(item.id)}
+                                                        className="px-2 py-1 text-[10px] font-bold rounded border border-red-300 bg-white text-red-700 hover:bg-red-50 transition-colors inline-flex items-center gap-1"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" /> Remove
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="mt-3">
+                            <button
+                                onClick={handleAddEditItem}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> Add SKU Row
+                            </button>
+                        </div>
+                        <div className="mt-4 flex items-center justify-end gap-2">
+                            <button
+                                onClick={closeEditDialog}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveEditDialog}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg border border-amber-300 bg-amber-600 text-white hover:bg-amber-700"
+                            >
+                                Save Container Changes
                             </button>
                         </div>
                     </div>

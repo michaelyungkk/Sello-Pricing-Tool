@@ -6,6 +6,7 @@ import { Product, ShipmentDetail } from '../../../types';
 interface ShipmentUpdate {
     sku: string;
     shipments: ShipmentDetail[];
+    clearShipments?: boolean;
     reorderPlacedDate?: string;
     productionScheduledQty?: number;
     toBeShippedQty?: number;
@@ -258,50 +259,63 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                     return !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : undefined;
                 };
 
-                const shipments: ShipmentDetail[] = [];
+                const shipmentByContainer = new Map<string, ShipmentDetail>();
+                const upsertShipment = (containerIdRaw: any, qtyRaw: any, statusRaw: any, etaRaw: any) => {
+                    const id = String(containerIdRaw || '').trim();
+                    if (!id) return;
+                    const qty = parseQty(qtyRaw);
+                    if (qty <= 0) return;
+                    const status = cleanStatus(statusRaw);
+                    const eta = parseDate(etaRaw);
+                    const existing = shipmentByContainer.get(id);
+                    if (existing) {
+                        existing.quantity = (Number(existing.quantity) || 0) + qty;
+                        if (status) existing.status = status;
+                        if (eta) existing.eta = eta;
+                        shipmentByContainer.set(id, existing);
+                    } else {
+                        shipmentByContainer.set(id, { containerId: id, quantity: qty, status, eta });
+                    }
+                };
 
                 // Process C1
-                if (c1Idx !== -1 && row[c1Idx]) {
-                    const id = String(row[c1Idx]).trim();
-                    const qty = parseFloat(row[c1QtyIdx]) || 0;
-                    const status = c1StatusIdx !== -1 ? cleanStatus(row[c1StatusIdx]) : 'Pending';
-                    const eta = parseDate(
-                        c1EtaIdx !== -1 ? row[c1EtaIdx] : undefined
-                    ) || parseDate(
-                        c1EtaCustomsIdx !== -1 ? row[c1EtaCustomsIdx] : undefined
-                    );
-                    if (id) {
-                        shipments.push({ containerId: id, quantity: qty, status, eta });
-                        updateSummary(id, status, eta, qty);
-                    }
-                }
+                upsertShipment(
+                    c1Idx !== -1 ? row[c1Idx] : undefined,
+                    c1QtyIdx !== -1 ? row[c1QtyIdx] : undefined,
+                    c1StatusIdx !== -1 ? row[c1StatusIdx] : undefined,
+                    (c1EtaIdx !== -1 ? row[c1EtaIdx] : undefined) || (c1EtaCustomsIdx !== -1 ? row[c1EtaCustomsIdx] : undefined)
+                );
 
                 // Process C2
-                if (c2Idx !== -1 && row[c2Idx]) {
-                    const id = String(row[c2Idx]).trim();
-                    const qty = parseFloat(row[c2QtyIdx]) || 0;
-                    const status = c2StatusIdx !== -1 ? cleanStatus(row[c2StatusIdx]) : 'Pending';
-                    const eta = parseDate(
-                        c2EtaIdx !== -1 ? row[c2EtaIdx] : undefined
-                    ) || parseDate(
-                        c2EtaCustomsIdx !== -1 ? row[c2EtaCustomsIdx] : undefined
-                    );
-                    if (id) {
-                        shipments.push({ containerId: id, quantity: qty, status, eta });
-                        updateSummary(id, status, eta, qty);
-                    }
-                }
+                upsertShipment(
+                    c2Idx !== -1 ? row[c2Idx] : undefined,
+                    c2QtyIdx !== -1 ? row[c2QtyIdx] : undefined,
+                    c2StatusIdx !== -1 ? row[c2StatusIdx] : undefined,
+                    (c2EtaIdx !== -1 ? row[c2EtaIdx] : undefined) || (c2EtaCustomsIdx !== -1 ? row[c2EtaCustomsIdx] : undefined)
+                );
+
+                const shipments: ShipmentDetail[] = Array.from(shipmentByContainer.values());
+                shipments.forEach((s) => updateSummary(s.containerId, s.status, s.eta, s.quantity));
 
                 const reorderPlacedDate = parseDate(reorderDateIdx !== -1 ? row[reorderDateIdx] : undefined);
                 const productionScheduledQty = parseQty(productionScheduledQtyIdx !== -1 ? row[productionScheduledQtyIdx] : undefined);
                 const toBeShippedQty = parseQty(toBeShippedQtyIdx !== -1 ? row[toBeShippedQtyIdx] : undefined);
                 const shippedOutQty = parseQty(shippedOutQtyIdx !== -1 ? row[shippedOutQtyIdx] : undefined);
                 const shipmentStatus = cleanEnglishText(shipmentStatusIdx !== -1 ? row[shipmentStatusIdx] : undefined);
+                const isNoShipmentSignal = (
+                    shipmentStatus.toLowerCase() === 'na' &&
+                    shipments.length === 0 &&
+                    !reorderPlacedDate &&
+                    productionScheduledQty <= 0 &&
+                    toBeShippedQty <= 0 &&
+                    shippedOutQty <= 0
+                );
 
                 if (shipments.length > 0 || reorderPlacedDate || productionScheduledQty > 0 || toBeShippedQty > 0 || shippedOutQty > 0 || shipmentStatus) {
                     updatesMap[rawSku] = {
                         sku: rawSku,
                         shipments,
+                        clearShipments: isNoShipmentSignal,
                         reorderPlacedDate,
                         productionScheduledQty,
                         toBeShippedQty,

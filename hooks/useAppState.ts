@@ -1304,9 +1304,11 @@ export const useAppState = () => {
         setProducts(prev => (prev || []).map(p => {
             const update = updates.find(u => u.sku === p.sku);
             if (update) {
-                const nextShipments = Array.isArray(update.shipments) && update.shipments.length > 0
-                    ? update.shipments
-                    : (p.shipments || []);
+                const nextShipments = update.clearShipments === true
+                    ? (p.shipments || []).filter((s: any) => isArrivedShipmentStatus(s?.status))
+                    : (Array.isArray(update.shipments) && update.shipments.length > 0
+                        ? update.shipments
+                        : (p.shipments || []));
                 const incomingStock = nextShipments.reduce((sum: number, s: any) => {
                     return isArrivedShipmentStatus(s?.status) ? sum : sum + (Number(s?.quantity) || 0);
                 }, 0);

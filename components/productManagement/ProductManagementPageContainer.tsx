@@ -64,6 +64,7 @@ interface ProductManagementPageContainerProps {
     onCancelBenchmarkRecalculation?: () => void;
     onDismissBenchmarkRecalcState?: () => void;
     onConfirmContainersArrived?: (payload: { containerId: string; confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }[]) => void;
+    onEditContainerShipments?: (payload: { containerId: string; status?: string; eta?: string; items: { sku: string; quantity: number }[] }) => void;
 }
 
 type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison' | 'family-groups';
@@ -96,6 +97,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     onCancelBenchmarkRecalculation,
     onDismissBenchmarkRecalcState,
     onConfirmContainersArrived,
+    onEditContainerShipments,
 }) => {
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
@@ -367,6 +369,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                         products={products}
                         inventoryChangeHistory={inventoryChangeHistory}
                         onConfirmContainersArrived={onConfirmContainersArrived}
+                        onEditContainerShipments={onEditContainerShipments}
                         themeColor={themeColor}
                         initialTags={shipmentSearchTags}
                         onTagsChange={setShipmentSearchTags}

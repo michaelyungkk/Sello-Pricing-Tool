@@ -916,6 +916,72 @@ const App: React.FC = () => {
                                 onCancelBenchmarkRecalculation={handleCancelBenchmarkRecalculation}
                                 onDismissBenchmarkRecalcState={handleDismissBenchmarkRecalcState}
                                 onStampLandedAt={handleStampLandedAt}
+                                onEditContainerShipments={(payload: { containerId: string; status?: string; eta?: string; items: { sku: string; quantity: number }[] }) => {
+                                    const targetId = String(payload?.containerId || '').trim();
+                                    if (!targetId) return;
+                                    const normalizeStatus = (status?: string): string => {
+                                        const raw = String(status || '').trim();
+                                        if (!raw) return 'Pending';
+                                        const first = raw.includes('/') ? raw.split('/')[0].trim() : raw;
+                                        const cleaned = first.replace(/[\u4E00-\u9FFF]/g, '').trim();
+                                        return cleaned || 'Pending';
+                                    };
+                                    const isArrivedLike = (status?: string) => {
+                                        const cleaned = normalizeStatus(status).toLowerCase();
+                                        return cleaned.includes('arrived') || cleaned.includes('delivered') || cleaned.includes('cleared') || cleaned.includes('received') || cleaned.includes('landed');
+                                    };
+                                    const qtyBySku = new Map<string, number>();
+                                    (payload?.items || []).forEach((item) => {
+                                        const sku = String(item?.sku || '').trim();
+                                        const qty = Math.max(0, Math.round(Number(item?.quantity) || 0));
+                                        if (!sku || qty <= 0) return;
+                                        qtyBySku.set(sku, qty);
+                                    });
+                                    setProducts(prev => {
+                                        if (!Array.isArray(prev) || prev.length === 0) return prev;
+                                        let fallbackStatus = normalizeStatus(payload?.status);
+                                        let fallbackEta = String(payload?.eta || '').trim() || undefined;
+                                        if (!payload?.status || !payload?.eta) {
+                                            for (let i = 0; i < prev.length; i++) {
+                                                const p = prev[i];
+                                                const shipments = Array.isArray(p.shipments) ? p.shipments : [];
+                                                for (let j = 0; j < shipments.length; j++) {
+                                                    const s = shipments[j];
+                                                    if (String(s?.containerId || '').trim() !== targetId) continue;
+                                                    if (!payload?.status && s?.status) fallbackStatus = normalizeStatus(s.status);
+                                                    if (!payload?.eta && s?.eta) fallbackEta = String(s.eta).trim();
+                                                    break;
+                                                }
+                                                if ((!payload?.status && fallbackStatus) && (!payload?.eta ? !!fallbackEta : true)) break;
+                                            }
+                                        }
+
+                                        return prev.map((p) => {
+                                            const currentShipments = Array.isArray(p.shipments) ? p.shipments : [];
+                                            const kept = currentShipments.filter((s: any) => String(s?.containerId || '').trim() !== targetId);
+                                            const nextShipments = [...kept];
+                                            const nextQty = qtyBySku.get(String(p.sku || '').trim());
+                                            if (typeof nextQty === 'number' && nextQty > 0) {
+                                                nextShipments.push({
+                                                    containerId: targetId,
+                                                    quantity: nextQty,
+                                                    status: fallbackStatus || 'Pending',
+                                                    eta: fallbackEta
+                                                });
+                                            }
+                                            if (nextShipments.length === currentShipments.length &&
+                                                nextShipments.every((s, idx) => s === currentShipments[idx])) {
+                                                return p;
+                                            }
+                                            let incomingStock = 0;
+                                            for (let i = 0; i < nextShipments.length; i++) {
+                                                const s = nextShipments[i];
+                                                if (!isArrivedLike(s?.status)) incomingStock += (Number(s?.quantity) || 0);
+                                            }
+                                            return { ...p, shipments: nextShipments, incomingStock };
+                                        });
+                                    });
+                                }}
                                 onConfirmContainersArrived={(payload: { containerId: string; confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }[]) => {
                                     const targetRecords = new Map<string, { confirmedQty?: number; confirmedSkuQtys?: Record<string, number>; mode?: 'INFERRED' | 'MANUAL' }>();
                                     (payload || []).forEach((item) => {
