@@ -16,7 +16,6 @@ const PW = 297;
 const PH = 210;
 const MARGIN = 10;
 const CONTENT_W = PW - (MARGIN * 2);
-const MIN_ROW_H = 36;
 const FUNCTIONS_BASE = '/.netlify/functions';
 
 function roundedRect(doc: any, x: number, y: number, w: number, h: number, radius: number, fill?: string, stroke?: string) {
@@ -134,17 +133,6 @@ function drawImageCell(doc: any, imageDataUrl: string | null, product: Product, 
     drawImagePlaceholder(doc, x, y, size, (product.brand || product.name || 'P').slice(0, 1).toUpperCase());
 }
 
-function fitSingleLine(doc: any, text: string, maxWidth: number): string {
-    const lines = doc.splitTextToSize(text, maxWidth);
-    if (lines.length <= 1) return lines[0] || '';
-    const first = String(lines[0] || '');
-    let short = first;
-    while (short.length > 1 && doc.getTextWidth(`${short}...`) > maxWidth) {
-        short = short.slice(0, -1);
-    }
-    return `${short}...`;
-}
-
 function getFeatureLines(doc: any, features: string[], maxWidth: number): string[] {
     if (!features || features.length === 0) return ['-'];
     const lines: string[] = [];
@@ -159,15 +147,43 @@ function getFeatureLines(doc: any, features: string[], maxWidth: number): string
     return lines;
 }
 
-function computeRowHeight(doc: any, product: Product): number {
-    const featuresX = MARGIN + 146;
-    const featuresWidth = CONTENT_W - (featuresX - MARGIN) - 4;
+function getDescriptionFallbackFeatures(description: string): string[] {
+    if (!description || description.length < 10) return [];
+    return description
+        .replace(/\r/g, '\n')
+        .split(/\n+/)
+        .map(line => String(line || '').replace(/\s{2,}/g, ' ').trim())
+        .filter(line => line.length > 20);
+}
+
+function getRowLayout(doc: any, product: Product, titleWidth: number, featuresWidth: number) {
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    const titleLines = (doc.splitTextToSize(product.name || '-', titleWidth) as string[]).map(line => String(line));
+
     doc.setFontSize(7);
-    const features = extractProductBullets(product.description || '').features.slice(0, 3);
+    const extractedFeatures = extractProductBullets(product.description || '').features;
+    const features = extractedFeatures.length > 0
+        ? extractedFeatures
+        : getDescriptionFallbackFeatures(product.description || '');
     const featureLines = getFeatureLines(doc, features, featuresWidth);
-    const featureHeight = featureLines.length > 0 ? ((featureLines.length - 1) * 4.2) : 0;
-    return Math.max(MIN_ROW_H, 24 + featureHeight);
+
+    const titleLineHeight = 4.2;
+    const featureLineHeight = 4.2;
+    const titleStartOffset = 7;
+    const featureStartOffset = 7;
+    const imageBottomOffset = 3.5 + 16;
+    const priceHeight = 7;
+    const priceGap = 2;
+
+    const titleHeight = Math.max(1, titleLines.length) * titleLineHeight;
+    const featureHeight = Math.max(1, featureLines.length) * featureLineHeight;
+    const priceTopOffset = titleStartOffset + titleHeight + priceGap;
+    const textBottomOffset = Math.max(priceTopOffset + priceHeight, featureStartOffset + featureHeight);
+
+    const rowHeight = Math.max(imageBottomOffset + 3, textBottomOffset + 3);
+
+    return { titleLines, featureLines, priceTopOffset, rowHeight };
 }
 
 function drawRow(doc: any, product: Product, y: number, rowH: number, imageDataUrl: string | null) {
@@ -184,31 +200,28 @@ function drawRow(doc: any, product: Product, y: number, rowH: number, imageDataU
     const featuresX = MARGIN + 146;
     const titleWidth = 84;
     const featuresWidth = CONTENT_W - (featuresX - MARGIN) - 4;
+    const layout = getRowLayout(doc, product, titleWidth, featuresWidth);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(GRAY_700);
-    const nameLines = doc.splitTextToSize(product.name || '-', titleWidth).slice(0, 2);
-    doc.text(nameLines, titleX, y + 7);
-
-    const features = extractProductBullets(product.description || '').features.slice(0, 3);
-    const featureLines = getFeatureLines(doc, features, featuresWidth);
+    doc.text(layout.titleLines, titleX, y + 7);
     const priceText = typeof product.caPrice === 'number' && Number.isFinite(product.caPrice)
         ? `\u00A3${product.caPrice.toFixed(2)}`
         : '-';
 
     // Price sits under product title for easier scanning
-    roundedRect(doc, titleX, y + 16, 30, 7, 1.2, RED_50);
+    roundedRect(doc, titleX, y + layout.priceTopOffset, 30, 7, 1.2, RED_50);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
     doc.setTextColor(RED_700);
-    doc.text(priceText, titleX + 28, y + 20.8, { align: 'right' });
+    doc.text(priceText, titleX + 28, y + layout.priceTopOffset + 4.8, { align: 'right' });
 
     // Features rendered line-by-line to avoid merged/garbled wrapping
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(GRAY_700);
-    featureLines.forEach((line, idx) => {
+    layout.featureLines.forEach((line, idx) => {
         doc.text(line, featuresX, y + 7 + (idx * 4.2));
     });
 }
@@ -246,7 +259,9 @@ export async function generatePitchingCataloguePdf(
     y += 10;
 
     selected.forEach((product, idx) => {
-        const rowH = computeRowHeight(doc, product);
+        const titleWidth = 84;
+        const featuresWidth = CONTENT_W - ((MARGIN + 146) - MARGIN) - 4;
+        const rowH = getRowLayout(doc, product, titleWidth, featuresWidth).rowHeight;
         if (y + rowH + 8 > PH) {
             doc.addPage();
             pageNo += 1;
