@@ -16,7 +16,7 @@ const PW = 297;
 const PH = 210;
 const MARGIN = 10;
 const CONTENT_W = PW - (MARGIN * 2);
-const ROW_H = 36;
+const MIN_ROW_H = 36;
 const FUNCTIONS_BASE = '/.netlify/functions';
 
 function roundedRect(doc: any, x: number, y: number, w: number, h: number, radius: number, fill?: string, stroke?: string) {
@@ -145,8 +145,33 @@ function fitSingleLine(doc: any, text: string, maxWidth: number): string {
     return `${short}...`;
 }
 
-function drawRow(doc: any, product: Product, y: number, imageDataUrl: string | null) {
-    roundedRect(doc, MARGIN, y, CONTENT_W, ROW_H, 1.5, WHITE, GRAY_200);
+function getFeatureLines(doc: any, features: string[], maxWidth: number): string[] {
+    if (!features || features.length === 0) return ['-'];
+    const lines: string[] = [];
+    features.forEach(feature => {
+        const wrapped = doc.splitTextToSize(`- ${feature}`, maxWidth) as string[];
+        if (wrapped.length === 0) {
+            lines.push('-');
+        } else {
+            wrapped.forEach(line => lines.push(String(line)));
+        }
+    });
+    return lines;
+}
+
+function computeRowHeight(doc: any, product: Product): number {
+    const featuresX = MARGIN + 146;
+    const featuresWidth = CONTENT_W - (featuresX - MARGIN) - 4;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    const features = extractProductBullets(product.description || '').features.slice(0, 3);
+    const featureLines = getFeatureLines(doc, features, featuresWidth);
+    const featureHeight = featureLines.length > 0 ? ((featureLines.length - 1) * 4.2) : 0;
+    return Math.max(MIN_ROW_H, 24 + featureHeight);
+}
+
+function drawRow(doc: any, product: Product, y: number, rowH: number, imageDataUrl: string | null) {
+    roundedRect(doc, MARGIN, y, CONTENT_W, rowH, 1.5, WHITE, GRAY_200);
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
@@ -167,6 +192,7 @@ function drawRow(doc: any, product: Product, y: number, imageDataUrl: string | n
     doc.text(nameLines, titleX, y + 7);
 
     const features = extractProductBullets(product.description || '').features.slice(0, 3);
+    const featureLines = getFeatureLines(doc, features, featuresWidth);
     const priceText = typeof product.caPrice === 'number' && Number.isFinite(product.caPrice)
         ? `\u00A3${product.caPrice.toFixed(2)}`
         : '-';
@@ -182,14 +208,9 @@ function drawRow(doc: any, product: Product, y: number, imageDataUrl: string | n
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(GRAY_700);
-    if (features.length === 0) {
-        doc.text('-', featuresX, y + 7);
-    } else {
-        features.forEach((feature, idx) => {
-            const line = fitSingleLine(doc, `- ${feature}`, featuresWidth);
-            doc.text(line, featuresX, y + 7 + (idx * 8.5));
-        });
-    }
+    featureLines.forEach((line, idx) => {
+        doc.text(line, featuresX, y + 7 + (idx * 4.2));
+    });
 }
 
 export async function generatePitchingCataloguePdf(
@@ -225,7 +246,8 @@ export async function generatePitchingCataloguePdf(
     y += 10;
 
     selected.forEach((product, idx) => {
-        if (y + ROW_H + 8 > PH) {
+        const rowH = computeRowHeight(doc, product);
+        if (y + rowH + 8 > PH) {
             doc.addPage();
             pageNo += 1;
             drawHeader(doc, themeColor, pageNo);
@@ -234,8 +256,8 @@ export async function generatePitchingCataloguePdf(
             y += 10;
         }
         const imageDataUrl = product.imageUrl ? (imageCache.get(product.imageUrl) ?? null) : null;
-        drawRow(doc, product, y, imageDataUrl);
-        y += ROW_H + 2;
+        drawRow(doc, product, y, rowH, imageDataUrl);
+        y += rowH + 2;
 
         if (idx === selected.length - 1) {
             doc.setFont('helvetica', 'normal');

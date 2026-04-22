@@ -289,6 +289,23 @@ export const ShowcaseSelectionModal: React.FC<ShowcaseSelectionModalProps> = ({
         pushStatus(`${label}: ${removed} removed from generation list`, 'neutral');
     };
 
+    const excludeMissingFromGeneration = (kind: 'image' | 'description' | 'caPrice') => {
+        const skuToRemove = generationProducts
+            .filter(product => {
+                if (kind === 'image') return !product.imageUrl;
+                if (kind === 'description') return !product.description;
+                return !(typeof product.caPrice === 'number' && Number.isFinite(product.caPrice));
+            })
+            .map(product => product.sku);
+
+        const label = kind === 'image'
+            ? 'Exclude missing image'
+            : kind === 'description'
+                ? 'Exclude missing description'
+                : 'Exclude missing CA price';
+        removeMatchedFromGeneration(skuToRemove, label);
+    };
+
     const togglePickedSku = (sku: string) => {
         setPickedSkus(prev => {
             const next = new Set(prev);
@@ -797,9 +814,33 @@ export const ShowcaseSelectionModal: React.FC<ShowcaseSelectionModalProps> = ({
                     <div className="mb-3 grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px]">
                         <div className="px-2 py-1 rounded border border-gray-200 bg-white text-gray-600">Generation: <span className="font-bold text-gray-900">{generationSkus.size}</span></div>
                         <div className="px-2 py-1 rounded border border-gray-200 bg-white text-gray-600">Matched: <span className="font-bold text-gray-900">{matchedCount}</span></div>
-                        <div className="px-2 py-1 rounded border border-gray-200 bg-white text-gray-600">Missing image: <span className="font-bold text-gray-900">{generationSummary.missingImage}</span></div>
-                        <div className="px-2 py-1 rounded border border-gray-200 bg-white text-gray-600">Missing description: <span className="font-bold text-gray-900">{generationSummary.missingDescription}</span></div>
-                        <div className="px-2 py-1 rounded border border-gray-200 bg-white text-gray-600">Missing CA price: <span className="font-bold text-gray-900">{generationSummary.missingCaPrice}</span></div>
+                        <button
+                            type="button"
+                            onClick={() => excludeMissingFromGeneration('image')}
+                            disabled={generationSummary.missingImage === 0}
+                            className="px-2 py-1 rounded border border-gray-200 bg-white text-left text-gray-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 transition-colors"
+                            title="Exclude SKUs missing image from generation list"
+                        >
+                            Missing image: <span className="font-bold text-gray-900">{generationSummary.missingImage}</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => excludeMissingFromGeneration('description')}
+                            disabled={generationSummary.missingDescription === 0}
+                            className="px-2 py-1 rounded border border-gray-200 bg-white text-left text-gray-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 transition-colors"
+                            title="Exclude SKUs missing description from generation list"
+                        >
+                            Missing description: <span className="font-bold text-gray-900">{generationSummary.missingDescription}</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => excludeMissingFromGeneration('caPrice')}
+                            disabled={generationSummary.missingCaPrice === 0}
+                            className="px-2 py-1 rounded border border-gray-200 bg-white text-left text-gray-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 transition-colors"
+                            title="Exclude SKUs missing CA price from generation list"
+                        >
+                            Missing CA price: <span className="font-bold text-gray-900">{generationSummary.missingCaPrice}</span>
+                        </button>
                         {reportType === 'new_product_preview' && (
                             <div className="px-2 py-1 rounded border border-gray-200 bg-white text-gray-600">Estimated pages: <span className="font-bold text-gray-900">{estimatedPages}</span></div>
                         )}
