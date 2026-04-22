@@ -1,0 +1,28 @@
+﻿2026-04-22T06:26:14.8864878Z ##[group]Run npm ci
+2026-04-22T06:26:14.8865198Z [36;1mnpm ci[0m
+2026-04-22T06:26:14.8896765Z shell: /usr/bin/bash -e {0}
+2026-04-22T06:26:14.8897078Z ##[endgroup]
+2026-04-22T06:26:18.0919685Z npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-04-22T06:26:18.2017460Z npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead
+2026-04-22T06:26:18.2090843Z npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+2026-04-22T06:26:18.2798209Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-04-22T06:26:18.2882572Z npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+2026-04-22T06:26:19.7478201Z npm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+2026-04-22T06:27:10.1067677Z 
+2026-04-22T06:27:10.1071057Z added 424 packages, and audited 425 packages in 55s
+2026-04-22T06:27:10.1072306Z 
+2026-04-22T06:27:10.1072854Z 123 packages are looking for funding
+2026-04-22T06:27:10.1073619Z   run `npm fund` for details
+2026-04-22T06:27:10.2858796Z 
+2026-04-22T06:27:10.2860047Z 18 vulnerabilities (3 moderate, 15 high)
+2026-04-22T06:27:10.2860619Z 
+2026-04-22T06:27:10.2862490Z To address issues that do not require attention, run:
+2026-04-22T06:27:10.2863152Z   npm audit fix
+2026-04-22T06:27:10.2863496Z 
+2026-04-22T06:27:10.2864004Z To address all issues possible (including breaking changes), run:
+2026-04-22T06:27:10.2864714Z   npm audit fix --force
+2026-04-22T06:27:10.2865090Z 
+2026-04-22T06:27:10.2865493Z Some issues need review, and may require choosing
+2026-04-22T06:27:10.2866182Z a different dependency.
+2026-04-22T06:27:10.2866456Z 
+2026-04-22T06:27:10.2866688Z Run `npm audit` for details.

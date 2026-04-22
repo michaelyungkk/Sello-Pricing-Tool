@@ -1,0 +1,183 @@
+﻿2026-04-22T06:26:08.5559176Z Current runner version: '2.333.1'
+2026-04-22T06:26:08.5583451Z ##[group]Runner Image Provisioner
+2026-04-22T06:26:08.5584226Z Hosted Compute Agent
+2026-04-22T06:26:08.5584787Z Version: 20260213.493
+2026-04-22T06:26:08.5585479Z Commit: 5c115507f6dd24b8de37d8bbe0bb4509d0cc0fa3
+2026-04-22T06:26:08.5586235Z Build Date: 2026-02-13T00:28:41Z
+2026-04-22T06:26:08.5586898Z Worker ID: {113ef5a3-fac2-49ca-b59a-f44456d55d16}
+2026-04-22T06:26:08.5587552Z Azure Region: northcentralus
+2026-04-22T06:26:08.5588208Z ##[endgroup]
+2026-04-22T06:26:08.5589558Z ##[group]Operating System
+2026-04-22T06:26:08.5590162Z Ubuntu
+2026-04-22T06:26:08.5590707Z 24.04.4
+2026-04-22T06:26:08.5591213Z LTS
+2026-04-22T06:26:08.5591986Z ##[endgroup]
+2026-04-22T06:26:08.5592550Z ##[group]Runner Image
+2026-04-22T06:26:08.5593124Z Image: ubuntu-24.04
+2026-04-22T06:26:08.5593606Z Version: 20260413.86.1
+2026-04-22T06:26:08.5594889Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260413.86/images/ubuntu/Ubuntu2404-Readme.md
+2026-04-22T06:26:08.5596318Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260413.86
+2026-04-22T06:26:08.5597333Z ##[endgroup]
+2026-04-22T06:26:08.5598298Z ##[group]GITHUB_TOKEN Permissions
+2026-04-22T06:26:08.5600141Z Contents: write
+2026-04-22T06:26:08.5600823Z Metadata: read
+2026-04-22T06:26:08.5601298Z ##[endgroup]
+2026-04-22T06:26:08.5603701Z Secret source: Actions
+2026-04-22T06:26:08.5604410Z Prepare workflow directory
+2026-04-22T06:26:08.6065103Z Prepare all required actions
+2026-04-22T06:26:08.6120719Z Getting action download info
+2026-04-22T06:26:08.9643383Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2026-04-22T06:26:09.1101114Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-04-22T06:26:09.3065063Z Complete job name: validate
+2026-04-22T06:26:09.3819795Z ##[group]Run actions/checkout@v4
+2026-04-22T06:26:09.3820692Z with:
+2026-04-22T06:26:09.3821186Z   repository: michaelyungkk/Sello-Pricing-Tool
+2026-04-22T06:26:09.3822311Z   token: ***
+2026-04-22T06:26:09.3822728Z   ssh-strict: true
+2026-04-22T06:26:09.3823160Z   ssh-user: git
+2026-04-22T06:26:09.3823584Z   persist-credentials: true
+2026-04-22T06:26:09.3824054Z   clean: true
+2026-04-22T06:26:09.3824493Z   sparse-checkout-cone-mode: true
+2026-04-22T06:26:09.3825012Z   fetch-depth: 1
+2026-04-22T06:26:09.3825436Z   fetch-tags: false
+2026-04-22T06:26:09.3825882Z   show-progress: true
+2026-04-22T06:26:09.3826328Z   lfs: false
+2026-04-22T06:26:09.3826724Z   submodules: false
+2026-04-22T06:26:09.3827162Z   set-safe-directory: true
+2026-04-22T06:26:09.3827934Z ##[endgroup]
+2026-04-22T06:26:09.4906518Z Syncing repository: michaelyungkk/Sello-Pricing-Tool
+2026-04-22T06:26:09.4908425Z ##[group]Getting Git version info
+2026-04-22T06:26:09.4909382Z Working directory is '/home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool'
+2026-04-22T06:26:09.4910525Z [command]/usr/bin/git version
+2026-04-22T06:26:09.4950044Z git version 2.53.0
+2026-04-22T06:26:09.4976155Z ##[endgroup]
+2026-04-22T06:26:09.4989996Z Temporarily overriding HOME='/home/runner/work/_temp/25ebc313-06b1-4c9d-afc6-1380daeffebd' before making global git config changes
+2026-04-22T06:26:09.4991782Z Adding repository directory to the temporary git global config as a safe directory
+2026-04-22T06:26:09.5002604Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool
+2026-04-22T06:26:09.5034271Z Deleting the contents of '/home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool'
+2026-04-22T06:26:09.5037615Z ##[group]Initializing the repository
+2026-04-22T06:26:09.5041787Z [command]/usr/bin/git init /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool
+2026-04-22T06:26:09.5122179Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-04-22T06:26:09.5124117Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-04-22T06:26:09.5125150Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-04-22T06:26:09.5126189Z hint: call:
+2026-04-22T06:26:09.5126749Z hint:
+2026-04-22T06:26:09.5127284Z hint: 	git config --global init.defaultBranch <name>
+2026-04-22T06:26:09.5127920Z hint:
+2026-04-22T06:26:09.5128509Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-04-22T06:26:09.5129456Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-04-22T06:26:09.5130228Z hint:
+2026-04-22T06:26:09.5130647Z hint: 	git branch -m <name>
+2026-04-22T06:26:09.5131147Z hint:
+2026-04-22T06:26:09.5132319Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-04-22T06:26:09.5133622Z Initialized empty Git repository in /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/.git/
+2026-04-22T06:26:09.5135630Z [command]/usr/bin/git remote add origin https://github.com/michaelyungkk/Sello-Pricing-Tool
+2026-04-22T06:26:09.5163430Z ##[endgroup]
+2026-04-22T06:26:09.5164208Z ##[group]Disabling automatic garbage collection
+2026-04-22T06:26:09.5167825Z [command]/usr/bin/git config --local gc.auto 0
+2026-04-22T06:26:09.5196790Z ##[endgroup]
+2026-04-22T06:26:09.5197583Z ##[group]Setting up auth
+2026-04-22T06:26:09.5204662Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-04-22T06:26:09.5239416Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-04-22T06:26:09.5540282Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-04-22T06:26:09.5569936Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-04-22T06:26:09.5790133Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-04-22T06:26:09.5838284Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-04-22T06:26:09.6075499Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-04-22T06:26:09.6112400Z ##[endgroup]
+2026-04-22T06:26:09.6113881Z ##[group]Fetching the repository
+2026-04-22T06:26:09.6122523Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +0af106f2c0409a67d68df3761dea869ca65cf7a6:refs/remotes/origin/main
+2026-04-22T06:26:10.2505204Z From https://github.com/michaelyungkk/Sello-Pricing-Tool
+2026-04-22T06:26:10.2506925Z  * [new ref]         0af106f2c0409a67d68df3761dea869ca65cf7a6 -> origin/main
+2026-04-22T06:26:10.2535283Z ##[endgroup]
+2026-04-22T06:26:10.2536701Z ##[group]Determining the checkout info
+2026-04-22T06:26:10.2538143Z ##[endgroup]
+2026-04-22T06:26:10.2542083Z [command]/usr/bin/git sparse-checkout disable
+2026-04-22T06:26:10.2577609Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-04-22T06:26:10.2603935Z ##[group]Checking out the ref
+2026-04-22T06:26:10.2607388Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-04-22T06:26:10.3031672Z Switched to a new branch 'main'
+2026-04-22T06:26:10.3033289Z branch 'main' set up to track 'origin/main'.
+2026-04-22T06:26:10.3044932Z ##[endgroup]
+2026-04-22T06:26:10.3079951Z [command]/usr/bin/git log -1 --format=%H
+2026-04-22T06:26:10.3102558Z 0af106f2c0409a67d68df3761dea869ca65cf7a6
+2026-04-22T06:26:10.3432224Z ##[group]Run actions/setup-node@v4
+2026-04-22T06:26:10.3433518Z with:
+2026-04-22T06:26:10.3434355Z   node-version: 20
+2026-04-22T06:26:10.3435228Z   cache: npm
+2026-04-22T06:26:10.3436060Z   always-auth: false
+2026-04-22T06:26:10.3436986Z   check-latest: false
+2026-04-22T06:26:10.3438211Z   token: ***
+2026-04-22T06:26:10.3439059Z ##[endgroup]
+2026-04-22T06:26:10.5244169Z Found in cache @ /opt/hostedtoolcache/node/20.20.2/x64
+2026-04-22T06:26:10.5250081Z ##[group]Environment details
+2026-04-22T06:26:13.5480917Z node: v20.20.2
+2026-04-22T06:26:13.5481804Z npm: 10.8.2
+2026-04-22T06:26:13.5482126Z yarn: 1.22.22
+2026-04-22T06:26:13.5483377Z ##[endgroup]
+2026-04-22T06:26:13.5510649Z [command]/opt/hostedtoolcache/node/20.20.2/x64/bin/npm config get cache
+2026-04-22T06:26:13.7331657Z /home/runner/.npm
+2026-04-22T06:26:13.8786174Z Cache hit for: node-cache-Linux-x64-npm-0f0e87d23aaa07fe730971b6f3a2f356bce67ea17c7137ea1a5bbe5e72c65e57
+2026-04-22T06:26:14.6961698Z Received 48210672 of 48210672 (100.0%), 65.1 MBs/sec
+2026-04-22T06:26:14.6962848Z Cache Size: ~46 MB (48210672 B)
+2026-04-22T06:26:14.7029002Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ca4f8577-056a-4be7-a6fb-7bced3d95a7a/cache.tzst -P -C /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool --use-compress-program unzstd
+2026-04-22T06:26:14.8687055Z Cache restored successfully
+2026-04-22T06:26:14.8714005Z Cache restored from key: node-cache-Linux-x64-npm-0f0e87d23aaa07fe730971b6f3a2f356bce67ea17c7137ea1a5bbe5e72c65e57
+2026-04-22T06:26:14.8864898Z ##[group]Run npm ci
+2026-04-22T06:26:14.8865203Z [36;1mnpm ci[0m
+2026-04-22T06:26:14.8896787Z shell: /usr/bin/bash -e {0}
+2026-04-22T06:26:14.8897082Z ##[endgroup]
+2026-04-22T06:26:18.0919727Z npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-04-22T06:26:18.2017498Z npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead
+2026-04-22T06:26:18.2090865Z npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+2026-04-22T06:26:18.2798248Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-04-22T06:26:18.2882654Z npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+2026-04-22T06:26:19.7478239Z npm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+2026-04-22T06:27:10.1067729Z 
+2026-04-22T06:27:10.1071068Z added 424 packages, and audited 425 packages in 55s
+2026-04-22T06:27:10.1072317Z 
+2026-04-22T06:27:10.1072859Z 123 packages are looking for funding
+2026-04-22T06:27:10.1073624Z   run `npm fund` for details
+2026-04-22T06:27:10.2858841Z 
+2026-04-22T06:27:10.2860069Z 18 vulnerabilities (3 moderate, 15 high)
+2026-04-22T06:27:10.2860626Z 
+2026-04-22T06:27:10.2862504Z To address issues that do not require attention, run:
+2026-04-22T06:27:10.2863160Z   npm audit fix
+2026-04-22T06:27:10.2863503Z 
+2026-04-22T06:27:10.2864013Z To address all issues possible (including breaking changes), run:
+2026-04-22T06:27:10.2864723Z   npm audit fix --force
+2026-04-22T06:27:10.2865097Z 
+2026-04-22T06:27:10.2865521Z Some issues need review, and may require choosing
+2026-04-22T06:27:10.2866192Z a different dependency.
+2026-04-22T06:27:10.2866462Z 
+2026-04-22T06:27:10.2866694Z Run `npm audit` for details.
+2026-04-22T06:27:10.3483565Z ##[group]Run npm run lint:encoding
+2026-04-22T06:27:10.3483901Z [36;1mnpm run lint:encoding[0m
+2026-04-22T06:27:10.3504795Z shell: /usr/bin/bash -e {0}
+2026-04-22T06:27:10.3505042Z ##[endgroup]
+2026-04-22T06:27:10.4639148Z 
+2026-04-22T06:27:10.4640046Z > ecompulse-pricing-optimizer@1.0.0 lint:encoding
+2026-04-22T06:27:10.4640794Z > node scripts/check-mojibake.js
+2026-04-22T06:27:10.4641023Z 
+2026-04-22T06:27:10.5359525Z [encoding] Mojibake detected:
+2026-04-22T06:27:10.5365355Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/restoreSanitizer.ts:25 token="Â£" 'Â£': '\u00A3',
+2026-04-22T06:27:10.5367389Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/restoreSanitizer.ts:32 token="â€”" 'â€”': '-',
+2026-04-22T06:27:10.5369608Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/restoreSanitizer.ts:40 token="Ã" value.includes('Ã') ||
+2026-04-22T06:27:10.5371332Z /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool/services/restoreSanitizer.ts:49 token="Ã" const markers = ['Â', 'Ã', 'â', '\uFFFD'];
+2026-04-22T06:27:10.5491794Z ##[error]Process completed with exit code 1.
+2026-04-22T06:27:10.5620543Z Post job cleanup.
+2026-04-22T06:27:10.6567148Z [command]/usr/bin/git version
+2026-04-22T06:27:10.6603119Z git version 2.53.0
+2026-04-22T06:27:10.6648455Z Temporarily overriding HOME='/home/runner/work/_temp/0eff9d5b-5591-4096-8b46-1c44c903beb2' before making global git config changes
+2026-04-22T06:27:10.6650083Z Adding repository directory to the temporary git global config as a safe directory
+2026-04-22T06:27:10.6655470Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Sello-Pricing-Tool/Sello-Pricing-Tool
+2026-04-22T06:27:10.6696448Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-04-22T06:27:10.6727841Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-04-22T06:27:10.6949924Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-04-22T06:27:10.6971472Z http.https://github.com/.extraheader
+2026-04-22T06:27:10.6983780Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-04-22T06:27:10.7014042Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-04-22T06:27:10.7228989Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-04-22T06:27:10.7261357Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-04-22T06:27:10.7590683Z Cleaning up orphan processes
+2026-04-22T06:27:10.7879468Z ##[warning]Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: actions/checkout@v4, actions/setup-node@v4. Actions will be forced to run with Node.js 24 by default starting June 2nd, 2026. Node.js 20 will be removed from the runner on September 16th, 2026. Please check if updated versions of these actions are available that support Node.js 24. To opt into Node.js 24 now, set the FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true environment variable on the runner or in your workflow file. Once Node.js 24 becomes the default, you can temporarily opt out by setting ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

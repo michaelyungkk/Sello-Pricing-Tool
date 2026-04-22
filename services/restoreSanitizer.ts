@@ -22,23 +22,23 @@ const toString = (x: any, fallback: string = ''): string =>
   (typeof x === 'string' ? x : fallback);
 
 const MOJIBAKE_REPLACEMENTS: Record<string, string> = {
-  'Â£': '\u00A3',
-  'â‚¬': '\u20AC',
-  'â€œ': '"',
-  'â€\u009D': '"',
-  'â€˜': '\'',
-  'â€™': '\'',
-  'â€“': '-',
-  'â€”': '-',
-  'â€¦': '...',
+  '\u00C2\u00A3': '\u00A3',
+  '\u00E2\u201A\u00AC': '\u20AC',
+  '\u00E2\u20AC\u0153': '"',
+  '\u00E2\u20AC\u009D': '"',
+  '\u00E2\u20AC\u02DC': '\'',
+  '\u00E2\u20AC\u2122': '\'',
+  '\u00E2\u20AC\u201C': '-',
+  '\u00E2\u20AC\u201D': '-',
+  '\u00E2\u20AC\u00A6': '...',
 };
 
 const hasSuspiciousEncodingMarkers = (value: string): boolean => {
   if (!value) return false;
   return (
-    value.includes('Â') ||
-    value.includes('Ã') ||
-    value.includes('â') ||
+    value.includes('\u00C2') ||
+    value.includes('\u00C3') ||
+    value.includes('\u00E2') ||
     value.includes('\uFFFD')
   );
 };
@@ -46,7 +46,7 @@ const hasSuspiciousEncodingMarkers = (value: string): boolean => {
 const encodingNoiseScore = (value: string): number => {
   if (!value) return 0;
   let score = 0;
-  const markers = ['Â', 'Ã', 'â', '\uFFFD'];
+  const markers = ['\u00C2', '\u00C3', '\u00E2', '\uFFFD'];
   markers.forEach(marker => {
     let idx = value.indexOf(marker);
     while (idx !== -1) {
