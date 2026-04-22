@@ -1,5 +1,5 @@
 
-import React, { startTransition, useState, useEffect } from 'react';
+import React, { startTransition, useState, useEffect, useCallback } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { QuickUploadMenu } from './components/shared/QuickUploadMenu';
 
@@ -98,6 +98,14 @@ const AdminModal: React.FC<AdminModalProps> = ({ onClose, onSuccess, handleAdmin
         </div>
     );
 };
+
+interface ReleaseNoteItem {
+    id: string;
+    date: string;
+    summary: string;
+}
+
+const RELEASE_NOTES_SEEN_KEY = 'sello_release_notes_seen_id';
 
 const App: React.FC = () => {
     const {
@@ -371,6 +379,28 @@ const App: React.FC = () => {
     const [showAdminModal, setShowAdminModal] = useState(false);
     const [showExitConfirm, setShowExitConfirm] = useState(false);
     const [deductRefunds, setDeductRefunds] = useState(false);
+    const [isReleaseNotesOpen, setIsReleaseNotesOpen] = useState(false);
+    const [releaseNotes, setReleaseNotes] = useState<ReleaseNoteItem[]>([]);
+    const [releaseNotesLoading, setReleaseNotesLoading] = useState(false);
+    const [releaseNotesError, setReleaseNotesError] = useState<string | null>(null);
+    const [releaseNotesSeenId, setReleaseNotesSeenId] = useState<string>(() => {
+        try {
+            return localStorage.getItem(RELEASE_NOTES_SEEN_KEY) || '';
+        } catch {
+            return '';
+        }
+    });
+    const releaseNotesPopoverRef = React.useRef<HTMLDivElement | null>(null);
+
+    const markReleaseNotesSeen = useCallback((noteId: string) => {
+        if (!noteId) return;
+        setReleaseNotesSeenId(noteId);
+        try {
+            localStorage.setItem(RELEASE_NOTES_SEEN_KEY, noteId);
+        } catch {
+            // ignore localStorage write failures
+        }
+    }, []);
 
     const quickUploadActions = [
         { label: t('quick_upload_inventory'), icon: Database, action: () => setIsUploadModalOpen(true), color: 'text-theme' },
@@ -421,6 +451,62 @@ const App: React.FC = () => {
         'ad-campaigns': 'Track and manage ad group performance',
         settings: t('desc_settings'),
     };
+
+    const latestReleaseNoteId = releaseNotes[0]?.id || '';
+    const hasUnreadReleaseNotes = !!latestReleaseNoteId && latestReleaseNoteId !== releaseNotesSeenId;
+
+    useEffect(() => {
+        let active = true;
+        setReleaseNotesLoading(true);
+        setReleaseNotesError(null);
+
+        fetch('/release-notes.json', { cache: 'no-store' })
+            .then(async response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const payload = await response.json();
+                if (!active) return;
+                const items = Array.isArray(payload?.items) ? payload.items : [];
+                const normalized = items
+                    .filter((item: any) => item && typeof item.summary === 'string')
+                    .map((item: any) => ({
+                        id: String(item.id || ''),
+                        date: String(item.date || ''),
+                        summary: String(item.summary || '').trim()
+                    }))
+                    .filter((item: ReleaseNoteItem) => item.id && item.summary);
+                setReleaseNotes(normalized);
+            })
+            .catch(() => {
+                if (!active) return;
+                setReleaseNotes([]);
+                setReleaseNotesError('Unable to load updates');
+            })
+            .finally(() => {
+                if (!active) return;
+                setReleaseNotesLoading(false);
+            });
+
+        return () => { active = false; };
+    }, []);
+
+    useEffect(() => {
+        if (!isReleaseNotesOpen) return;
+        if (latestReleaseNoteId) {
+            markReleaseNotesSeen(latestReleaseNoteId);
+        }
+    }, [isReleaseNotesOpen, latestReleaseNoteId, markReleaseNotesSeen]);
+
+    useEffect(() => {
+        if (!isReleaseNotesOpen) return;
+        const onPointerDown = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (releaseNotesPopoverRef.current && !releaseNotesPopoverRef.current.contains(target)) {
+                setIsReleaseNotesOpen(false);
+            }
+        };
+        window.addEventListener('mousedown', onPointerDown);
+        return () => window.removeEventListener('mousedown', onPointerDown);
+    }, [isReleaseNotesOpen]);
 
     return (
         <>
@@ -639,7 +725,50 @@ const App: React.FC = () => {
                         <div className="flex items-center gap-3">
                                 {userProfile.name && <span className="text-xs font-semibold" style={headerStyle}>{t('hello')}, {userProfile.name}!</span>}
                                 {hasInventory && <QuickUploadMenu themeColor={userProfile.themeColor} actions={quickUploadActions} />}
-                                <button className="relative p-1.5 hover:opacity-70 transition-opacity" style={headerStyle}><Bell className="w-4 h-4" /></button>
+                                <div className="relative" ref={releaseNotesPopoverRef}>
+                                    <button
+                                        onClick={() => setIsReleaseNotesOpen(prev => !prev)}
+                                        className="relative p-1.5 hover:opacity-70 transition-opacity"
+                                        style={headerStyle}
+                                        title="What's New"
+                                    >
+                                        <Bell className="w-4 h-4" />
+                                        {hasUnreadReleaseNotes && (
+                                            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 border border-white" />
+                                        )}
+                                    </button>
+                                    {isReleaseNotesOpen && (
+                                        <div className="absolute right-0 mt-2 w-[360px] max-h-[420px] overflow-y-auto rounded-xl border border-custom-glass bg-custom-glass shadow-xl backdrop-blur-custom p-3 z-[210]">
+                                            <div className="flex items-center justify-between mb-2 px-1">
+                                                <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wide">Update Summary</h3>
+                                                <button
+                                                    onClick={() => setIsReleaseNotesOpen(false)}
+                                                    className="text-xs text-gray-500 hover:text-gray-700"
+                                                >
+                                                    Close
+                                                </button>
+                                            </div>
+                                            {releaseNotesLoading ? (
+                                                <div className="text-xs text-gray-500 px-1 py-2">Loading updates...</div>
+                                            ) : releaseNotesError ? (
+                                                <div className="text-xs text-red-600 px-1 py-2">{releaseNotesError}</div>
+                                            ) : releaseNotes.length === 0 ? (
+                                                <div className="text-xs text-gray-500 px-1 py-2">No updates available.</div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {releaseNotes.map(note => (
+                                                        <div key={note.id} className="rounded-lg border border-gray-200/70 bg-white/70 px-3 py-2">
+                                                            <div className="text-[11px] font-semibold text-gray-500 mb-1">
+                                                                {new Date(note.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                            </div>
+                                                            <p className="text-xs text-gray-800 leading-relaxed">{note.summary}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="h-4 w-px" style={{ backgroundColor: `${headerTextColor}40` }}></div>
 
                                 {/* Admin Mode Controls */}
