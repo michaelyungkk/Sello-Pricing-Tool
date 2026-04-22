@@ -113,15 +113,51 @@ const ProductRow = React.memo(({
     optimalPriceResults,
 }: ProductRowProps) => {
 
-    const { totalAdSpend, acos } = useMemo(() => {
-        if (!priceHistoryMap || !priceHistoryMap.get) return { totalAdSpend: 0, acos: null };
+    const { totalAdSpend, rawAdSpend, adDelta, redistributedRows, hasRedistribution, acos } = useMemo(() => {
+        if (!priceHistoryMap || !priceHistoryMap.get) {
+            return {
+                totalAdSpend: 0,
+                rawAdSpend: 0,
+                adDelta: 0,
+                redistributedRows: 0,
+                hasRedistribution: false,
+                acos: null
+            };
+        }
         const logs = priceHistoryMap.get(product.sku) || [];
         const adSpend = logs.reduce((sum, l) => sum + (l.adsSpend || 0), 0);
+        const rawSpend = logs.reduce((sum, l) => sum + (l.rawAdsSpend ?? l.adsSpend ?? 0), 0);
+        const delta = adSpend - rawSpend;
+        const redistributedCount = logs.filter(l =>
+            l.rawAdsSpend !== undefined &&
+            l.rawAdsSpend !== null &&
+            Math.abs((l.adsSpend || 0) - (l.rawAdsSpend || 0)) > 0.0001
+        ).length;
         const revenue = logs.reduce((sum, l) =>
             sum + (l.price * (l.velocity || 0) * VAT_MULTIPLIER), 0);
         const acosVal = revenue > 0 ? (adSpend / revenue) * 100 : null;
-        return { totalAdSpend: adSpend, acos: acosVal };
+        return {
+            totalAdSpend: adSpend,
+            rawAdSpend: rawSpend,
+            adDelta: delta,
+            redistributedRows: redistributedCount,
+            hasRedistribution: redistributedCount > 0,
+            acos: acosVal
+        };
     }, [product.sku, priceHistoryMap]);
+    const [showOptimalReason, setShowOptimalReason] = useState(false);
+    const optimalReasonRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!showOptimalReason) return;
+        const handleClickOutside = (event: MouseEvent) => {
+            if (optimalReasonRef.current && !optimalReasonRef.current.contains(event.target as Node)) {
+                setShowOptimalReason(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showOptimalReason]);
 
     // Apply 20% VAT Uplift for Display using shared constant
     const currentPriceWithVat = (product.currentPrice || 0) * VAT_MULTIPLIER;
@@ -239,26 +275,43 @@ const ProductRow = React.memo(({
                         return <span className="px-1 py-0.5 text-[8px] font-bold rounded bg-gray-100 text-gray-500">Low</span>;
                     })();
                     return (
-                        <div className="group relative flex flex-col items-end gap-0.5">
+                        <div ref={optimalReasonRef} className="relative flex flex-col items-end gap-0.5">
                             <div className="flex items-center gap-1">
                                 <span className="font-bold text-gray-900" style={{ fontSize: 13 }}>
                                     {formatSmartMoney(result.recommendedPrice)}
                                 </span>
                                 {isStale && <span title={`Last calculated ${new Date(result.calculatedAt).toLocaleDateString()}`} className="text-gray-400 text-[10px]">🕐</span>}
+                                {confidenceBadge}
+                                {showOptimalReason && (
+                                    <div className="absolute top-full right-0 mt-2 w-72 p-3 bg-gray-900 text-white text-[11px] rounded-xl shadow-2xl z-[80] normal-case tracking-normal">
+                                        <p className="leading-relaxed">{result.reasoning.split('. ').slice(0, 2).join('. ')}.</p>
+                                        <div className="mt-1.5 text-gray-400 text-[10px]">
+                                            Last calculated: {new Date(result.calculatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                        </div>
+                                        <div className="absolute bottom-full right-5 -mb-1 border-4 border-transparent border-b-gray-900"></div>
+                                    </div>
+                                )}
                             </div>
-                            {Math.abs(delta) >= 0.01 && (
-                                <span className={`text-[10px] font-bold ${delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                    {delta > 0 ? '+' : ''}{formatSmartMoney(delta)}
-                                </span>
-                            )}
-                            {confidenceBadge}
-                            {/* Inline reasoning tooltip */}
-                            <div className="absolute top-full right-0 mt-2 w-72 p-3 bg-gray-900 text-white text-[11px] rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all pointer-events-none z-[60]">
-                                <p className="leading-relaxed">{result.reasoning.split('. ').slice(0, 2).join('. ')}.</p>
-                                <div className="mt-1.5 text-gray-400 text-[10px]">
-                                    Last calculated: {new Date(result.calculatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                </div>
-                                <div className="absolute bottom-full right-4 -mb-1 border-4 border-transparent border-b-gray-900"></div>
+                            <div className="flex items-center justify-end gap-1">
+                                {Math.abs(delta) >= 0.01 ? (
+                                    <span className={`text-[10px] font-bold ${delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                        {delta > 0 ? '+' : ''}{formatSmartMoney(delta)}
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] text-transparent">.</span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowOptimalReason(prev => !prev);
+                                    }}
+                                    className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-300 text-[10px] font-bold text-gray-600 bg-white hover:bg-gray-50"
+                                    title="Show optimal price summary"
+                                    aria-label="Show optimal price summary"
+                                >
+                                    ?
+                                </button>
                             </div>
                         </div>
                     );
@@ -328,10 +381,28 @@ const ProductRow = React.memo(({
                 ) : <span className="text-gray-300">-</span>}
             </td>
             <td className="px-4 py-4 text-right">
-                <div className="flex flex-col items-end">
-                    <span className="text-orange-600 font-bold">
-                        £{(totalAdSpend || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
+                <div
+                    className="flex flex-col items-end"
+                    title={hasRedistribution
+                        ? `Raw ${formatSmartMoney(rawAdSpend)} | Adjusted ${formatSmartMoney(totalAdSpend)} | Delta ${adDelta > 0 ? '+' : ''}${formatSmartMoney(adDelta)} | ${redistributedRows} redistributed row${redistributedRows === 1 ? '' : 's'}`
+                        : 'No ad redistribution on this SKU'}
+                >
+                    <div className="flex items-center justify-end gap-1">
+                        <span
+                            className={`font-bold ${hasRedistribution ? (adDelta >= 0 ? 'text-blue-600' : 'text-violet-700') : 'text-gray-900'}`}
+                            style={{ color: hasRedistribution ? (adDelta >= 0 ? '#2563eb' : '#5B21B6') : '#111827' }}
+                        >
+                            {formatSmartMoney(totalAdSpend)}
+                        </span>
+                        {hasRedistribution && (
+                            <span
+                                className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold bg-blue-100 text-blue-700"
+                                aria-label="Redistributed ads"
+                            >
+                                R
+                            </span>
+                        )}
+                    </div>
                     {totalAdSpend > 0 ? (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold mt-1 ${acos === null ? 'text-gray-400 italic' :
                             acos < 15 ? 'text-green-600 bg-green-50' :
@@ -1209,7 +1280,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                 <SortableHeader label="Inventory" sortKey="stockLevel" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[120px]" />
                                 <SortableHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[140px]" />
                                 <SortableHeader label="Returns" sortKey="returnRate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
-                                <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[120px]" title="All-time ad spend and ACOS. ACOS = Ad Spend / Revenue × 100">
+                                <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[120px]" title="All-time ad spend and ACOS. ACOS = Ad Spend / Revenue × 100. Hover each cell for raw vs adjusted ad details.">
                                     Ad Spend / ACOS
                                 </th>
                             </tr>

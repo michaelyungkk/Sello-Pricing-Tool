@@ -21,6 +21,78 @@ const toNumber = (x: any, fallback: number = 0): number => {
 const toString = (x: any, fallback: string = ''): string =>
   (typeof x === 'string' ? x : fallback);
 
+const MOJIBAKE_REPLACEMENTS: Record<string, string> = {
+  'Â£': '\u00A3',
+  'â‚¬': '\u20AC',
+  'â€œ': '"',
+  'â€\u009D': '"',
+  'â€˜': '\'',
+  'â€™': '\'',
+  'â€“': '-',
+  'â€”': '-',
+  'â€¦': '...',
+};
+
+const hasSuspiciousEncodingMarkers = (value: string): boolean => {
+  if (!value) return false;
+  return (
+    value.includes('Â') ||
+    value.includes('Ã') ||
+    value.includes('â') ||
+    value.includes('\uFFFD')
+  );
+};
+
+const encodingNoiseScore = (value: string): number => {
+  if (!value) return 0;
+  let score = 0;
+  const markers = ['Â', 'Ã', 'â', '\uFFFD'];
+  markers.forEach(marker => {
+    let idx = value.indexOf(marker);
+    while (idx !== -1) {
+      score += 1;
+      idx = value.indexOf(marker, idx + marker.length);
+    }
+  });
+  return score;
+};
+
+const tryDecodeLatin1AsUtf8 = (value: string): string => {
+  const bytes = new Uint8Array(Array.from(value).map(ch => ch.charCodeAt(0) & 0xFF));
+  return new TextDecoder('utf-8').decode(bytes);
+};
+
+/**
+ * Repairs common mojibake patterns while preserving valid UTF-8 text.
+ * Used at restore-time and upload-time before saving to state.
+ */
+export const repairMojibakeText = (input: string): string => {
+  if (typeof input !== 'string' || input.length === 0) return input;
+
+  let repaired = input;
+
+  // Direct common replacements first.
+  Object.entries(MOJIBAKE_REPLACEMENTS).forEach(([bad, good]) => {
+    if (repaired.includes(bad)) {
+      repaired = repaired.split(bad).join(good);
+    }
+  });
+
+  // Attempt latin1->utf8 re-decode only when suspicious markers remain.
+  if (hasSuspiciousEncodingMarkers(repaired)) {
+    try {
+      const decoded = tryDecodeLatin1AsUtf8(repaired);
+      if (decoded && encodingNoiseScore(decoded) < encodingNoiseScore(repaired)) {
+        repaired = decoded;
+      }
+    } catch {
+      // Keep best-effort replacements above.
+    }
+  }
+
+  return repaired;
+};
+
 /**
  * Sanitizes a single product object.
  */

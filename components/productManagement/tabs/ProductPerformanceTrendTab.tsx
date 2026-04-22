@@ -1,6 +1,6 @@
-
-import React, { useMemo, useState } from 'react';
-import { Activity, Search, ArrowUpRight, ArrowDownRight, Minus, Trophy, LayoutGrid, List, Info, X } from 'lucide-react';
+﻿
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { Activity, Search, ArrowUpRight, ArrowDownRight, Minus, Trophy, LayoutGrid, List } from 'lucide-react';
 import { Product, PriceLog, RefundLog } from '../../../types';
 import { aggregateProductTrends, ProductTrendData } from '../../../services/productTrendAgg';
 import { formatSmartMoney, formatPct } from '../../../utils/format';
@@ -8,7 +8,7 @@ import { GradeBadge } from '../../common/GradeBadge';
 import { SortableHeader } from '../../common/SortableHeader';
 import AuditPanel from '../../common/AuditPanel';
 import { SortState, sortRows } from '../../../utils/tableSort';
-import { BcgMatrix } from '../parts/BcgMatrix';
+import { BcgMatrix, QuadrantKey } from '../parts/BcgMatrix';
 
 interface ProductPerformanceTrendTabProps {
   products: Product[];
@@ -33,7 +33,7 @@ const SummaryCard = ({ title, sku, delta, value, type }: any) => {
       <div className="min-w-0 flex-1">
         <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1 truncate tracking-wider">{title}</span>
         <div className="font-bold text-gray-900 truncate text-sm font-mono">
-          {sku || '—'}
+          {sku || '\u2014'}
         </div>
         <div className={`text-xs font-bold mt-1 flex items-center gap-1 ${colorClass}`}>
           {delta !== undefined && delta !== null ? (
@@ -42,7 +42,7 @@ const SummaryCard = ({ title, sku, delta, value, type }: any) => {
             </>
           ) : value !== undefined ? (
             formatSmartMoney(value)
-          ) : '—'}
+          ) : '\u2014'}
         </div>
       </div>
       <div className={`p-2 rounded-lg shrink-0 ml-3 ${bgClass} ${colorClass}`}>
@@ -68,12 +68,31 @@ const TrendDeltaPill = ({ value, isPp = false, invert = false }: { value: number
 };
 
 export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProps> = ({
-  products, priceHistoryMap, refundHistory, dateWindow, deductRefunds, themeColor, onDeepDive,
+  products, priceHistoryMap, refundHistory, dateWindow, deductRefunds, onDeepDive,
   startKey, endKey, isAuditVisible
 }) => {
   const [sort, setSort] = useState<SortState<string>>({ key: 'revenue', dir: 'desc' });
   const [viewMode, setViewMode] = useState<'LIST' | 'MATRIX'>('LIST');
-  const [showMatrixInfo, setShowMatrixInfo] = useState(false);
+  const [selectedQuadrants, setSelectedQuadrants] = useState<QuadrantKey[]>([]);
+  const pendingScrollRestoreRef = useRef<number | null>(null);
+
+  const switchViewMode = (mode: 'LIST' | 'MATRIX') => {
+    pendingScrollRestoreRef.current = window.scrollY;
+    setViewMode(mode);
+  };
+
+  useEffect(() => {
+    if (pendingScrollRestoreRef.current === null) return;
+    const targetY = pendingScrollRestoreRef.current;
+    pendingScrollRestoreRef.current = null;
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: targetY, behavior: 'auto' });
+    });
+  }, [viewMode]);
+
+  const toggleQuadrant = (quadrant: QuadrantKey) => {
+    setSelectedQuadrants(prev => prev.includes(quadrant) ? prev.filter(q => q !== quadrant) : [...prev, quadrant]);
+  };
 
   // 1. Trend Aggregation
   const trendData = useMemo(() => {
@@ -136,58 +155,77 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
 
       {/* Main Content Area: Matrix or List */}
       {viewMode === 'MATRIX' ? (
-        <div className="relative">
-          <div className="absolute top-0 right-0 z-10 p-2 flex gap-2">
-            {/* Matrix Toggle Controls */}
-            <div className="relative">
-              <button
-                onClick={() => setShowMatrixInfo(!showMatrixInfo)}
-                className="p-1.5 rounded-lg bg-white/80 border border-gray-200 shadow-sm backdrop-blur-sm text-gray-500 hover:text-theme transition-colors"
-                title="How to read this chart"
-              >
-                <Info className="w-4 h-4" />
-              </button>
-              {showMatrixInfo && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-50 ">
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-bold text-gray-900 text-xs uppercase">House vs. Classic BCG</h4>
-                    <button onClick={() => setShowMatrixInfo(false)}><X className="w-3 h-3 text-gray-400" /></button>
-                  </div>
-                  <p className="text-[11px] text-gray-600 leading-relaxed mb-3">
-                    The traditional BCG Matrix uses <strong>Relative Market Share</strong> vs. <strong>Market Growth Rate</strong> to categorize products.
-                  </p>
-                  <p className="text-[11px] text-gray-600 leading-relaxed border-t border-gray-100 pt-2">
-                    This <strong>Internal Adaptation</strong> uses:
-                    <br />
-                    • <strong>Revenue</strong> as a proxy for Market Share.
-                    <br />
-                    • <strong>Volume Growth (PoP)</strong> as a proxy for Market Growth.
-                  </p>
-                  <div className="mt-2 text-[10px] text-theme font-bold bg-theme-10 px-2 py-1 rounded">
-                    Goal: Identify internal cash cows without external competitor data.
-                  </div>
-                </div>
-              )}
+        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
+          <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-start gap-3">
+            <div className="flex flex-col gap-2 min-w-0">
+              <div className="inline-flex max-w-full items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
+                <button
+                  onClick={() => toggleQuadrant('STARS')}
+                  aria-pressed={selectedQuadrants.includes('STARS')}
+                  className={`h-[34px] px-2.5 rounded-md border inline-flex items-center gap-1.5 cursor-pointer transition-all duration-150 hover:-translate-y-[1px] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-300 ${selectedQuadrants.includes('STARS') ? 'border-green-400 bg-green-50 shadow-sm ring-1 ring-green-200' : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/60'}`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                  <span className="text-[10px] font-bold text-green-700 uppercase">Stars</span>
+                  <span className="text-[9px] text-gray-500">High Rev / Growing</span>
+                </button>
+                <button
+                  onClick={() => toggleQuadrant('CASH_COWS')}
+                  aria-pressed={selectedQuadrants.includes('CASH_COWS')}
+                  className={`h-[34px] px-2.5 rounded-md border inline-flex items-center gap-1.5 cursor-pointer transition-all duration-150 hover:-translate-y-[1px] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300 ${selectedQuadrants.includes('CASH_COWS') ? 'border-yellow-400 bg-yellow-50 shadow-sm ring-1 ring-yellow-200' : 'border-gray-200 bg-white hover:border-yellow-300 hover:bg-yellow-50/60'}`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                  <span className="text-[10px] font-bold text-yellow-700 uppercase">Cash Cows</span>
+                  <span className="text-[9px] text-gray-500">High Rev / Stable</span>
+                </button>
+                <button
+                  onClick={() => toggleQuadrant('QUESTIONS')}
+                  aria-pressed={selectedQuadrants.includes('QUESTIONS')}
+                  className={`h-[34px] px-2.5 rounded-md border inline-flex items-center gap-1.5 cursor-pointer transition-all duration-150 hover:-translate-y-[1px] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 ${selectedQuadrants.includes('QUESTIONS') ? 'border-[#8B5CF6] bg-purple-50 shadow-sm ring-1 ring-purple-200' : 'border-gray-200 bg-white hover:border-purple-300 hover:bg-purple-50/60'}`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#5B21B6]"></span>
+                  <span className="text-[10px] font-bold text-[#5B21B6] uppercase">Questions</span>
+                  <span className="text-[9px] text-gray-500">Low Rev / Growing</span>
+                </button>
+                <button
+                  onClick={() => toggleQuadrant('DOGS')}
+                  aria-pressed={selectedQuadrants.includes('DOGS')}
+                  className={`h-[34px] px-2.5 rounded-md border inline-flex items-center gap-1.5 cursor-pointer transition-all duration-150 hover:-translate-y-[1px] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 ${selectedQuadrants.includes('DOGS') ? 'border-red-400 bg-red-50 shadow-sm ring-1 ring-red-200' : 'border-gray-200 bg-white hover:border-red-300 hover:bg-red-50/60'}`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                  <span className="text-[10px] font-bold text-red-700 uppercase">Dogs</span>
+                  <span className="text-[9px] text-gray-500">Low Rev / Declining</span>
+                </button>
+              </div>
             </div>
-
-            <div className="flex bg-white/80 p-1 rounded-lg border border-gray-200 shadow-sm backdrop-blur-sm">
-              <button
-                onClick={() => setViewMode('LIST')}
-                className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'LIST' ? 'bg-theme-10 text-theme' : 'text-gray-500 hover:text-gray-900'}`}
-                title="List View"
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('MATRIX')}
-                className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'MATRIX' ? 'bg-theme-10 text-theme' : 'text-gray-500 hover:text-gray-900'}`}
-                title="Matrix View"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="flex bg-white p-1 rounded-lg border border-gray-200">
+                <button
+                  onClick={() => switchViewMode('LIST')}
+                  className={`px-2.5 py-1.5 rounded-md transition-all text-[12px] font-medium flex items-center gap-1.5 ${(viewMode as string) === 'LIST' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                  title="Momentum Matrix Table"
+                >
+                  <List className="w-4 h-4" />
+                  <span>Momentum Matrix Table</span>
+                </button>
+                <button
+                  onClick={() => switchViewMode('MATRIX')}
+                  className={`px-2.5 py-1.5 rounded-md transition-all text-[12px] font-medium flex items-center gap-1.5 ${(viewMode as string) === 'MATRIX' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                  title="BCG Chart"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                  <span>BCG Chart</span>
+                </button>
+              </div>
             </div>
           </div>
-          <BcgMatrix data={trendData} onDeepDive={onDeepDive} />
+          <BcgMatrix
+            data={trendData}
+            onDeepDive={onDeepDive}
+            hideLegend
+            embedded
+            selectedQuadrants={selectedQuadrants}
+            onToggleQuadrant={toggleQuadrant}
+          />
         </div>
       ) : (
         <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom">
@@ -196,7 +234,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
               <Trophy className="w-5 h-5 text-amber-500" />
               <div>
                 <h3 className="font-bold text-gray-800 text-sm">SKU Momentum Matrix</h3>
-                <p className="text-[10px] text-gray-500 uppercase tracking-tighter">Current vs Prior • Ranked by Revenue</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-tighter">Current vs Prior {'\u2022'} Ranked by Revenue</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -205,18 +243,20 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
               </div>
               <div className="flex bg-white p-1 rounded-lg border border-gray-200">
                 <button
-                  onClick={() => setViewMode('LIST')}
-                  className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'LIST' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                  title="List View"
+                  onClick={() => switchViewMode('LIST')}
+                  className={`px-2.5 py-1.5 rounded-md transition-all text-[12px] font-medium flex items-center gap-1.5 ${(viewMode as string) === 'LIST' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                  title="Momentum Matrix Table"
                 >
                   <List className="w-4 h-4" />
+                  <span>Momentum Matrix Table</span>
                 </button>
                 <button
-                  onClick={() => setViewMode('MATRIX')}
-                  className={`p-1.5 rounded-md transition-all ${(viewMode as string) === 'MATRIX' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                  title="BCG Matrix View"
+                  onClick={() => switchViewMode('MATRIX')}
+                  className={`px-2.5 py-1.5 rounded-md transition-all text-[12px] font-medium flex items-center gap-1.5 ${(viewMode as string) === 'MATRIX' ? 'bg-theme-10 text-theme shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                  title="BCG Chart"
                 >
                   <LayoutGrid className="w-4 h-4" />
+                  <span>BCG Chart</span>
                 </button>
               </div>
             </div>
@@ -284,7 +324,7 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
                       <td className={`r transition-colors ${isTacosHigh ? 'bg-purple-50/30' : ''}`}>
                         <div className="flex flex-col items-end">
                           <span className="font-medium text-gray-700">
-                            {row.current.tacosPct !== null ? formatPct(row.current.tacosPct) : '—'}
+                            {row.current.tacosPct !== null ? formatPct(row.current.tacosPct) : '\u2014'}
                           </span>
                           <TrendDeltaPill value={row.deltas.tacosDeltaPp} isPp invert />
                         </div>
@@ -314,3 +354,4 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
     </div>
   );
 };
+

@@ -309,7 +309,7 @@
   position: relative;
 }
 
-.sello-search-wrap svg {
+.sello-search-wrap > svg {
   position: absolute;
   left: 9px;
   top: 50%;

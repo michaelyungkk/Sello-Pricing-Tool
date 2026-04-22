@@ -593,7 +593,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
 
             <div className="sello-glass rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-custom-glass flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wide text-gray-700">Replenishment SKU Detail</h4>
+                                <h4 className="text-xs font-bold uppercase tracking-wide text-gray-700">SKU Production Detail</h4>
                     <div className="flex items-center gap-3">
                         <span className="text-[11px] text-gray-500">
                             {filteredReplenishmentRows.length} SKUs in production • {filteredReplenishmentRows.reduce((sum, row) => sum + row.productionScheduledQty, 0).toLocaleString()} units

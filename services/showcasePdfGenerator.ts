@@ -100,11 +100,15 @@ function getBucketInfo(sku: string, category: string, snap: CohortSnapshot | nul
     };
 }
 
-async function loadImg(url: string): Promise<string | null> {
+const FUNCTIONS_BASE = '/.netlify/functions';
+
+async function fetchImageAsDataUrl(url: string): Promise<string | null> {
     try {
         const resp = await fetch(url, { mode: 'cors' });
         if (!resp.ok) return null;
         const blob = await resp.blob();
+        const blobType = (blob.type || '').toLowerCase();
+        if (!blobType.startsWith('image/')) return null;
         return new Promise(res => {
             const r = new FileReader();
             r.onload  = () => res(r.result as string);
@@ -112,6 +116,18 @@ async function loadImg(url: string): Promise<string | null> {
             r.readAsDataURL(blob);
         });
     } catch { return null; }
+}
+
+async function loadImg(url: string): Promise<string | null> {
+    const direct = await fetchImageAsDataUrl(url);
+    if (direct) return direct;
+
+    try {
+        const proxiedUrl = `${FUNCTIONS_BASE}/image-proxy?url=${encodeURIComponent(url)}`;
+        return await fetchImageAsDataUrl(proxiedUrl);
+    } catch {
+        return null;
+    }
 }
 
 function detectImageFormats(dataUrl: string): string[] {
@@ -516,10 +532,21 @@ export async function generateShowcasePdf(
 
     // Pre-load all images in parallel
     const imgCache = new Map<string, string | null>();
+    let imageAttemptCount = 0;
+    let imageLoadedCount = 0;
     await Promise.all(
         selected.filter(p => p.imageUrl)
-                .map(p => loadImg(p.imageUrl!).then(d => imgCache.set(p.imageUrl!, d)))
+                .map(async (p) => {
+                    imageAttemptCount += 1;
+                    const d = await loadImg(p.imageUrl!);
+                    if (d) imageLoadedCount += 1;
+                    imgCache.set(p.imageUrl!, d);
+                })
     );
+    if (imageAttemptCount > 0) {
+        const failed = imageAttemptCount - imageLoadedCount;
+        console.log(`[showcasePdf] image preload: ${imageLoadedCount}/${imageAttemptCount} loaded${failed > 0 ? ` (${failed} fallback to placeholder)` : ''}`);
+    }
 
     // Cover
     drawCover(doc, selected, themeColor);

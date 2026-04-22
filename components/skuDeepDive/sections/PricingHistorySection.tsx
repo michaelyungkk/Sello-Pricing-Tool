@@ -1,12 +1,11 @@
 
 import React, { useMemo, useState } from 'react';
-import { DollarSign, Tag, TrendingUp, TrendingDown, ArrowRight, Info, Users, Clock, LayoutGrid } from 'lucide-react';
+import { DollarSign, Tag, TrendingUp, TrendingDown, ArrowRight, Info, Users, Clock, LayoutGrid, ExternalLink } from 'lucide-react';
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, ReferenceArea, ReferenceLine, Tooltip as RechartsTooltip, Legend, BarChart, Bar, ComposedChart, Line } from 'recharts';
 import { PriceChangeHistoryPanel } from '../../strategy/PriceChangeHistoryPanel';
 import { OptimalPriceCard } from '../parts/OptimalPriceCard';
 import { Product, PriceLog, OptimalPriceResult, PricePoint } from '../../../types';
 import { formatMoney, formatSmartMoney } from '../../../utils/format';
-import { VAT_MULTIPLIER } from '../../../constants';
 import { asDateKey, addDaysToDateKey } from '../../../services/dateUtils';
 
 interface PricingHistorySectionProps {
@@ -31,6 +30,7 @@ interface PricingHistorySectionProps {
     siblings: Product[];
     isInFamily: boolean;
     priceHistoryMap: Map<string, PriceLog[]>;
+    onOpenSiblingDeepDive?: (sku: string) => void;
 }
 
 export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
@@ -53,7 +53,8 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
     currentPrice,
     siblings,
     isInFamily,
-    priceHistoryMap
+    priceHistoryMap,
+    onOpenSiblingDeepDive
 }) => {
     const [viewMode, setViewMode] = useState<'deviation' | 'velocity'>('deviation');
 
@@ -637,12 +638,25 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                 </tr>
                                 {siblings.map((sib) => (
                                     <tr key={sib.sku} className="">
-                                        <td className="font-mono text-gray-600">{sib.sku}</td>
+                                        <td>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono text-gray-600">{sib.sku}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onOpenSiblingDeepDive?.(sib.sku)}
+                                                    className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-1.5 py-0.5 text-[10px] font-bold text-gray-600 hover:bg-gray-50"
+                                                    title={`Open deep dive for ${sib.sku}`}
+                                                >
+                                                    <ExternalLink className="w-3 h-3" />
+                                                    Deep Dive
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td>
                                             <div className="text-xs text-gray-600 truncate max-w-[300px]" title={sib.name}>{sib.name}</div>
                                         </td>
                                         <td className="r">
-                                            <span className="font-mono font-bold text-gray-900">{formatSmartMoney(sib.currentPrice * VAT_MULTIPLIER)}</span>
+                                            <span className="font-mono font-bold text-gray-900">{formatSmartMoney(sib.caPrice ?? sib.currentPrice)}</span>
                                         </td>
                                         <td className="r">
                                             <div className="flex items-center justify-end gap-1.5 text-xs text-gray-400">

@@ -1,11 +1,11 @@
-
+﻿
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Info, AlertTriangle, Package, RotateCcw, Megaphone, DollarSign, TrendingDown, TrendingUp, ExternalLink } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules, OptimalPriceResult, PromotionEvent, NavigationIntent } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { calcProfit, calcRevenue, calcAdSpend, marginPct, calcTACoSPct, calcUnits } from '../../services/metrics';
 import { buildWindow } from '../../services/dateWindow';
-import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, getReturnDateKey, addDaysToDateKey } from '../../services/dateUtils';
+import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, getYesterdayKeyMelbourne, getReturnDateKey, addDaysToDateKey } from '../../services/dateUtils';
 import { VAT_MULTIPLIER } from '../../constants';
 import { buildRefundOverview } from '../../services/refundAgg';
 import { parseReturnsReason } from '../../services/returnsReasonCodes';
@@ -23,6 +23,8 @@ import { PricingHistorySection } from './sections/PricingHistorySection';
 import { TransactionLedgerSection } from './sections/TransactionLedgerSection';
 import { ReturnsAnalysisSection } from './sections/ReturnsAnalysisSection';
 import { StatusBadge } from '../promotionManager/parts/StatusBadge';
+
+type LedgerWindowPreset = '7d' | '14d' | '30d' | '90d' | 'all' | 'custom';
 
 interface SkuDeepDivePageProps {
     data: {
@@ -64,8 +66,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     // Analytics State
     const [txFilterPlatform, setTxFilterPlatform] = useState('All');
     const [txFilterType, setTxFilterType] = useState('All');
+    const [showRedistributedOnly, setShowRedistributedOnly] = useState(false);
     const [txLimit, setTxLimit] = useState(50);
-    const [txDays, setTxDays] = useState(() => {
+    const [txDays] = useState(() => {
         if (initialTimeWindow === 'yesterday') return 1;
         if (initialTimeWindow === '7d') return 7;
         if (initialTimeWindow === '30d') return 30;
@@ -76,6 +79,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     const [chartLayout, setChartLayout] = useState<'horizontal' | 'vertical'>('horizontal');
     const [tooltip, setTooltip] = useState<{ visible: boolean, content: any, x: number, y: number, source?: string } | null>(null);
     const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
+    const [ledgerWindowPreset, setLedgerWindowPreset] = useState<LedgerWindowPreset>('all');
+    const [ledgerCustomStart, setLedgerCustomStart] = useState(() => addDaysToDateKey(getYesterdayKeyMelbourne(), -6));
+    const [ledgerCustomEnd, setLedgerCustomEnd] = useState(() => getYesterdayKeyMelbourne());
 
     // AI Toggle
     const [showAiInsights, setShowAiInsights] = useState(false);
@@ -124,6 +130,34 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         excludeToday: true
     }), [txDays]);
 
+    const { startKey: ledgerStartKey, endKey: ledgerEndKey } = useMemo(() => {
+        if (ledgerWindowPreset === 'all') {
+            return buildWindow({
+                mode: 'all',
+                excludeToday: true
+            });
+        }
+        if (ledgerWindowPreset === 'custom') {
+            return buildWindow({
+                mode: 'custom',
+                startKey: ledgerCustomStart,
+                endKey: ledgerCustomEnd,
+                excludeToday: true
+            });
+        }
+        const daysByPreset: Record<Exclude<LedgerWindowPreset, 'all' | 'custom'>, number> = {
+            '7d': 7,
+            '14d': 14,
+            '30d': 30,
+            '90d': 90
+        };
+        return buildWindow({
+            mode: 'days',
+            days: daysByPreset[ledgerWindowPreset],
+            excludeToday: true
+        });
+    }, [ledgerWindowPreset, ledgerCustomStart, ledgerCustomEnd]);
+
     // For Price History, we extend to Today to show recent actions
     const todayKey = getTodayKeyMelbourne();
     const historyEndKey = todayKey > endKey ? todayKey : endKey;
@@ -165,6 +199,16 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             : []
         , [myFamily, products, product.sku]);
 
+    const handleOpenSiblingDeepDive = (sku: string) => {
+        if (!sku || sku === product.sku) return;
+        navigateToEntity?.({
+            targetView: 'search',
+            entityType: 'sku',
+            entityId: sku,
+            sourceView: 'search'
+        });
+    };
+
     const sortedTransactions = useMemo(() => {
         const safeTx = Array.isArray(transactions) ? transactions : [];
         const safeRefunds = Array.isArray(refunds) ? refunds : [];
@@ -193,7 +237,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         // Date Filter
         list = list.filter(t => {
             const dKey = asDateKey(t.date);
-            return dKey && isDateKeyBetween(dKey, startKey, endKey);
+            return dKey && isDateKeyBetween(dKey, ledgerStartKey, ledgerEndKey);
         });
 
         if (txFilterPlatform !== 'All') {
@@ -207,8 +251,15 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 return true;
             });
         }
+        if (showRedistributedOnly) {
+            list = list.filter(t =>
+                t.rawAdsSpend !== undefined &&
+                t.rawAdsSpend !== null &&
+                Math.abs((t.adsSpend || 0) - (t.rawAdsSpend || 0)) > 0.0001
+            );
+        }
         return list;
-    }, [sortedTransactions, txFilterPlatform, txFilterType, startKey, endKey]);
+    }, [sortedTransactions, txFilterPlatform, txFilterType, showRedistributedOnly, ledgerStartKey, ledgerEndKey]);
 
     const activeAdGroupInFamily = useMemo(() => adGroups.find((g: any) =>
         g.isActive && g.memberSkus.includes(product.sku)
@@ -218,22 +269,29 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     const adRedistributionSummary = useMemo(() => {
         if (!activeAdGroupInFamily || !isInFamily) return null;
 
-        const redistributedLogs = filteredTransactions.filter(l =>
-            l.rawAdsSpend !== undefined && l.rawAdsSpend !== null
+        const adLogs = filteredTransactions.filter(l =>
+            (l.adsSpend || 0) > 0 || (l.rawAdsSpend || 0) > 0
         );
+        if (adLogs.length === 0) return null;
 
-        const rawSpend = redistributedLogs.reduce((sum, l) => sum + (l.rawAdsSpend || 0), 0);
-        const adjustedSpend = redistributedLogs.reduce((sum, l) => sum + (l.adsSpend || 0), 0);
+        const rowsRedistributed = adLogs.filter(l =>
+            l.rawAdsSpend !== undefined &&
+            l.rawAdsSpend !== null &&
+            Math.abs((l.adsSpend || 0) - (l.rawAdsSpend || 0)) > 0.0001
+        ).length;
 
-        const active = redistributedLogs.length > 0 && Math.abs(rawSpend - adjustedSpend) > 0.01;
-
-        if (!active) return null;
+        const rawSpend = adLogs.reduce((sum, l) => sum + (l.rawAdsSpend ?? l.adsSpend ?? 0), 0);
+        const adjustedSpend = adLogs.reduce((sum, l) => sum + (l.adsSpend || 0), 0);
+        const delta = adjustedSpend - rawSpend;
 
         return {
-            active: true,
+            active: rowsRedistributed > 0,
             groupName: activeAdGroupInFamily.name,
+            groupMemberCount: Array.isArray(activeAdGroupInFamily.memberSkus) ? activeAdGroupInFamily.memberSkus.length : 0,
             rawSpend: rawSpend * VAT_MULTIPLIER,
-            adjustedSpend: adjustedSpend * VAT_MULTIPLIER
+            adjustedSpend: adjustedSpend * VAT_MULTIPLIER,
+            delta: delta * VAT_MULTIPLIER,
+            rowsRedistributed
         };
     }, [activeAdGroupInFamily, isInFamily, filteredTransactions]);
 
@@ -618,7 +676,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         const subtotals: Record<string, {
             platform: string;
             soldQty: number;
-            adSpend: number;
+            rawAdSpend: number;
+            adjustedAdSpend: number;
             revenue: number;
             profit: number;
         }> = {};
@@ -629,7 +688,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 subtotals[platform] = {
                     platform,
                     soldQty: 0,
-                    adSpend: 0,
+                    rawAdSpend: 0,
+                    adjustedAdSpend: 0,
                     revenue: 0,
                     profit: 0
                 };
@@ -643,11 +703,15 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 group.revenue += txRevenue;
                 totalRevenueAllPlatforms += txRevenue;
             }
-            group.adSpend += calcAdSpend(tx) * VAT_MULTIPLIER;
+            const rawAd = (tx.rawAdsSpend ?? tx.adsSpend ?? 0) * VAT_MULTIPLIER;
+            const adjustedAd = calcAdSpend(tx) * VAT_MULTIPLIER;
+            group.rawAdSpend += rawAd;
+            group.adjustedAdSpend += adjustedAd;
             group.profit += calcProfit(tx) * VAT_MULTIPLIER;
         });
         return Object.values(subtotals).map(group => ({
             ...group,
+            adDelta: group.adjustedAdSpend - group.rawAdSpend,
             margin: marginPct(group.profit, group.revenue),
             revenueSharePct: totalRevenueAllPlatforms > 0 ? (group.revenue / totalRevenueAllPlatforms) * 100 : 0,
         })).sort((a, b) => b.revenue - a.revenue);
@@ -799,7 +863,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     return (
         <div className="pb-20">
 
-            {/* â”€â”€ Page header â”€â”€ */}
+            {/* Page header */}
             <div className="flex items-center justify-between px-0 py-4">
                 <div className="flex items-center gap-2">
                     {onBack && (
@@ -819,7 +883,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             </div>
 
-            {/* â”€â”€ 1. Overview â€” white â”€â”€ */}
+            {/* 1. Overview - white */}
             <div ref={overviewRef} className={`${band}`}>
                 <SkuOverviewSection
                     product={product}
@@ -833,7 +897,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 />
             </div>
 
-            {/* â”€â”€ 2. Diagnostic Signals â€” amber tint â”€â”€ */}
+            {/* 2. Diagnostic Signals - amber tint */}
             {diagnostics.length > 0 && (
                 <div ref={signalsRef} className={`${band}`}>
                     <DiagnosticSignalsSection
@@ -844,7 +908,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
-            {/* â”€â”€ 3. Distribution Analysis â€” light slate â”€â”€ */}
+            {/* 3. Distribution Analysis - light slate */}
             {sortedTransactions.length > 0 && (
                 <div ref={analysisRef} className={`${band} bg-slate-50 border-y border-slate-100`}>
                     <DistributionAnalysisSection
@@ -860,7 +924,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 </div>
             )}
 
-            {/* â”€â”€ 4. Pricing History â€” white â”€â”€ */}
+            {/* 4. Pricing History - white */}
             {sortedTransactions.length > 0 && (
                 <div ref={pricingRef} className={`${band} bg-lime-50 border-y border-gray-100`}>
                     <PricingHistorySection
@@ -884,6 +948,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                         siblings={siblings}
                         isInFamily={isInFamily}
                         priceHistoryMap={priceHistoryMap}
+                        onOpenSiblingDeepDive={handleOpenSiblingDeepDive}
                     />
                 </div>
             )}
@@ -986,15 +1051,21 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                         setTxLimit={setTxLimit}
                         isAuditPanelVisible={isAuditPanelVisible}
                         setIsAuditPanelVisible={setIsAuditPanelVisible}
-                        txDays={txDays}
-                        setTxDays={setTxDays}
+                        ledgerWindowPreset={ledgerWindowPreset}
+                        setLedgerWindowPreset={setLedgerWindowPreset}
+                        ledgerCustomStart={ledgerCustomStart}
+                        setLedgerCustomStart={setLedgerCustomStart}
+                        ledgerCustomEnd={ledgerCustomEnd}
+                        setLedgerCustomEnd={setLedgerCustomEnd}
                         txFilterPlatform={txFilterPlatform}
                         setTxFilterPlatform={setTxFilterPlatform}
                         txFilterType={txFilterType}
                         setTxFilterType={setTxFilterType}
+                        showRedistributedOnly={showRedistributedOnly}
+                        setShowRedistributedOnly={setShowRedistributedOnly}
                         platforms={platforms}
-                        startKey={startKey}
-                        endKey={endKey}
+                        startKey={ledgerStartKey}
+                        endKey={ledgerEndKey}
                         filteredTransactions={filteredTransactions}
                         thresholds={thresholds}
                         calcRevenue={calcRevenue}
@@ -1040,3 +1111,4 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
 };
 
 export default SkuDeepDivePage;
+

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Activity, Calendar, Search, Info, Rows } from 'lucide-react';
 import { SelectFilter } from '../../common/SelectFilter';
@@ -17,12 +16,18 @@ interface TransactionLedgerSectionProps {
     setTxLimit: (n: number | ((prev: number) => number)) => void;
     isAuditPanelVisible: boolean;
     setIsAuditPanelVisible: (b: boolean) => void;
-    txDays: number;
-    setTxDays: (n: number) => void;
+    ledgerWindowPreset: '7d' | '14d' | '30d' | '90d' | 'all' | 'custom';
+    setLedgerWindowPreset: (preset: '7d' | '14d' | '30d' | '90d' | 'all' | 'custom') => void;
+    ledgerCustomStart: string;
+    setLedgerCustomStart: (value: string) => void;
+    ledgerCustomEnd: string;
+    setLedgerCustomEnd: (value: string) => void;
     txFilterPlatform: string;
     setTxFilterPlatform: (s: string) => void;
     txFilterType: string;
     setTxFilterType: (s: string) => void;
+    showRedistributedOnly: boolean;
+    setShowRedistributedOnly: (value: boolean) => void;
     platforms: string[];
     startKey: string;
     endKey: string;
@@ -37,8 +42,11 @@ interface TransactionLedgerSectionProps {
     adRedistributionSummary: {
         active: boolean;
         groupName: string;
+        groupMemberCount: number;
         rawSpend: number;
         adjustedSpend: number;
+        delta: number;
+        rowsRedistributed: number;
     } | null;
 }
 
@@ -51,12 +59,18 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     setTxLimit,
     isAuditPanelVisible,
     setIsAuditPanelVisible,
-    txDays,
-    setTxDays,
+    ledgerWindowPreset,
+    setLedgerWindowPreset,
+    ledgerCustomStart,
+    setLedgerCustomStart,
+    ledgerCustomEnd,
+    setLedgerCustomEnd,
     txFilterPlatform,
     setTxFilterPlatform,
     txFilterType,
     setTxFilterType,
+    showRedistributedOnly,
+    setShowRedistributedOnly,
     platforms,
     startKey,
     endKey,
@@ -83,17 +97,36 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 </div>
                 <div className="relative">
                     <select
-                        value={txDays}
-                        onChange={e => setTxDays(Number(e.target.value))}
+                        value={ledgerWindowPreset}
+                        onChange={e => setLedgerWindowPreset(e.target.value as '7d' | '14d' | '30d' | '90d' | 'all' | 'custom')}
                         className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-theme"
                     >
-                        <option value={7}>Last 7 Days</option>
-                        <option value={14}>Last 14 Days</option>
-                        <option value={30}>Last 30 Days</option>
-                        <option value={90}>Last 90 Days</option>
+                        <option value="7d">Last 7 Days</option>
+                        <option value="14d">Last 14 Days</option>
+                        <option value="30d">Last 30 Days</option>
+                        <option value="90d">Last 90 Days</option>
+                        <option value="all">All Time</option>
+                        <option value="custom">Custom Date</option>
                     </select>
                     <Calendar className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 </div>
+                {ledgerWindowPreset === 'custom' && (
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="date"
+                            value={ledgerCustomStart}
+                            onChange={e => setLedgerCustomStart(e.target.value)}
+                            className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-theme"
+                        />
+                        <span className="text-xs text-gray-500">to</span>
+                        <input
+                            type="date"
+                            value={ledgerCustomEnd}
+                            onChange={e => setLedgerCustomEnd(e.target.value)}
+                            className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-theme"
+                        />
+                    </div>
+                )}
                 <SelectFilter
                     label="Platform"
                     options={platforms}
@@ -116,6 +149,12 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 </div>
                 <button
+                    onClick={() => setShowRedistributedOnly(!showRedistributedOnly)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border ${showRedistributedOnly ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                >
+                    {showRedistributedOnly ? 'Redistributed Only: On' : 'Redistributed Only'}
+                </button>
+                <button
                     onClick={() => setIsAuditPanelVisible(!isAuditPanelVisible)}
                     className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border flex items-center gap-2 ${isAuditPanelVisible ? 'bg-theme-10 border-theme-20 text-theme' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                 >
@@ -123,16 +162,22 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     {isAuditPanelVisible ? 'Hide Audit' : 'Audit Reconciliation'}
                 </button>
             </div>
-            {adRedistributionSummary?.active && (
-                <p className="text-[11px] text-gray-400 flex items-center gap-1.5 -mt-2 opacity-80">
-                    <Info className="w-3 h-3 flex-shrink-0" />
-                    Ad spend redistributed across family members
-                    &nbsp;·&nbsp;
-                    Raw: {formatSmartMoney(adRedistributionSummary.rawSpend)}
-                    &nbsp;→&nbsp;
-                    Adjusted: {formatSmartMoney(adRedistributionSummary.adjustedSpend)}
-                </p>
+
+            {adRedistributionSummary && (
+                <div className="flex flex-wrap items-center gap-2 -mt-2">
+                    <span className="text-[11px] text-gray-500 flex items-center gap-1.5 mr-2">
+                        <Info className="w-3 h-3 flex-shrink-0" />
+                        Group {adRedistributionSummary.groupName} ({adRedistributionSummary.groupMemberCount} SKUs)
+                    </span>
+                    <span className="sello-badge badge-gray">Raw {formatSmartMoney(adRedistributionSummary.rawSpend)}</span>
+                    <span className="sello-badge badge-theme">Adjusted {formatSmartMoney(adRedistributionSummary.adjustedSpend)}</span>
+                    <span className={`sello-badge ${Math.abs(adRedistributionSummary.delta) <= 0.01 ? 'badge-green' : 'badge-red'}`}>
+                        Net Delta {adRedistributionSummary.delta > 0 ? '+' : ''}{formatSmartMoney(adRedistributionSummary.delta)}
+                    </span>
+                    <span className="sello-badge badge-amber">Rows Redistributed {adRedistributionSummary.rowsRedistributed}</span>
+                </div>
             )}
+
             <p className="text-xs text-gray-400 -mt-2">
                 Viewing {Math.min(txLimit, filteredTransactionsLength)} of {filteredTransactionsLength} records for the selected period.
             </p>
@@ -194,8 +239,18 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                     <div className="font-mono font-bold text-gray-700">{formatNumber(sub.soldQty)}</div>
                                 </div>
                                 <div className="text-right w-24">
-                                    <div className="text-gray-400">Ad Spend</div>
-                                    <div className="font-mono font-bold text-orange-600">{formatSmartMoney(sub.adSpend)}</div>
+                                    <div className="text-gray-400">Raw Ad</div>
+                                    <div className="font-mono font-bold text-gray-700">{formatSmartMoney(sub.rawAdSpend)}</div>
+                                </div>
+                                <div className="text-right w-24">
+                                    <div className="text-gray-400">Adj. Ad</div>
+                                    <div className="font-mono font-bold text-orange-600">{formatSmartMoney(sub.adjustedAdSpend)}</div>
+                                </div>
+                                <div className="text-right w-24">
+                                    <div className="text-gray-400">Ad Delta</div>
+                                    <div className={`font-mono font-bold ${sub.adDelta > 0 ? 'text-emerald-600' : sub.adDelta < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                                        {sub.adDelta > 0 ? '+' : ''}{formatSmartMoney(sub.adDelta)}
+                                    </div>
                                 </div>
                                 <div className="text-right w-24">
                                     <div className="text-gray-400">Revenue</div>
@@ -250,8 +305,17 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 const isAdRow = tx.price === 0 && (tx.adsSpend || 0) > 0 && !isRefund;
                                 const isZeroRev = Math.abs(tx.price * tx.velocity) < 0.01 && !isAdRow && !isRefund;
                                 const margin = marginPct(calcProfit(tx), calcRevenue(tx));
+                                const rawAds = (tx.rawAdsSpend ?? tx.adsSpend ?? 0) * VAT_MULTIPLIER;
+                                const adjustedAds = (tx.adsSpend || 0) * VAT_MULTIPLIER;
+                                const adDelta = adjustedAds - rawAds;
+                                const isRedistributed = tx.rawAdsSpend !== undefined && tx.rawAdsSpend !== null && Math.abs((tx.adsSpend || 0) - (tx.rawAdsSpend || 0)) > 0.0001;
+                                const adsColorClass = isRedistributed
+                                    ? (adDelta >= 0 ? 'text-blue-600' : 'text-violet-700')
+                                    : 'text-gray-900';
+                                const adsColor = isRedistributed
+                                    ? (adDelta >= 0 ? '#2563eb' : '#5B21B6')
+                                    : '#111827';
 
-                                // USE REAL DATA FROM IMPORT (WITH VAT SCALING)
                                 const totalExtraFreight = !isRefund && !isAdRow ? (tx.realExtraFreight || 0) * VAT_MULTIPLIER : 0;
                                 const totalPostage = !isRefund && !isAdRow ? (tx.realPostage || 0) * VAT_MULTIPLIER : 0;
 
@@ -264,9 +328,17 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                         <td className="font-mono text-xs opacity-80">{new Date(tx.date).toLocaleDateString('en-GB')}</td>
                                         <td>
                                             <div className="flex flex-col">
-                                                <span className={`sello-badge ${isAdRow ? 'badge-orange' : isRefund ? 'badge-red' : tx.platform === 'Amazon' ? 'badge-amazon' : tx.platform === 'eBay' ? 'badge-ebay' : tx.platform === 'Etsy' ? 'badge-etsy' : 'badge-gray'}`}>
-                                                    {tx.platform}
-                                                </span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={`sello-badge ${isAdRow ? 'badge-orange' : isRefund ? 'badge-red' : tx.platform === 'Amazon' ? 'badge-amazon' : tx.platform === 'eBay' ? 'badge-ebay' : tx.platform === 'Etsy' ? 'badge-etsy' : 'badge-gray'}`}>
+                                                        {tx.platform}
+                                                    </span>
+                                                    <span
+                                                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isRedistributed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}
+                                                        title={isRedistributed ? `Raw ${formatSmartMoney(rawAds)} -> Adjusted ${formatSmartMoney(adjustedAds)} (Delta ${adDelta > 0 ? '+' : ''}${formatSmartMoney(adDelta)})` : 'No ad redistribution on this row'}
+                                                    >
+                                                        {isRedistributed ? 'Redistributed' : 'Raw'}
+                                                    </span>
+                                                </div>
                                                 {isRefund && tx.reason && (
                                                     <span className="text-[9px] text-red-500 mt-0.5 max-w-[120px] truncate">{tx.reason}</span>
                                                 )}
@@ -285,11 +357,15 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                         <td className="r text-orange-600 font-medium">
                                             {totalPostage > 0 ? formatSmartMoney(totalPostage) : '-'}
                                         </td>
-                                        <td className="r text-orange-600 font-medium">
-                                            {(tx.adsSpend || 0) > 0 ? formatSmartMoney(tx.adsSpend * VAT_MULTIPLIER) : '-'}
+                                        <td
+                                            className={`r font-medium ${adsColorClass}`}
+                                            style={{ color: adsColor }}
+                                            title={`Raw ${formatSmartMoney(rawAds)} | Adjusted ${formatSmartMoney(adjustedAds)} | Delta ${adDelta > 0 ? '+' : ''}${formatSmartMoney(adDelta)}`}
+                                        >
+                                            {adjustedAds > 0 ? formatSmartMoney(adjustedAds) : '-'}
                                         </td>
                                         <td className={`r font-bold ${(margin || 0) < 10 && margin !== null ? 'text-red-500' : 'text-emerald-600'}`}>
-                                            {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '—' : '-'}
+                                            {!isAdRow && !isRefund ? formatPct(margin) : isAdRow ? '\u2014' : '-'}
                                         </td>
                                     </tr>
                                 );

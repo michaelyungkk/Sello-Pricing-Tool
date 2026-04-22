@@ -62,21 +62,47 @@ export function redistributeAdSpend(salesHistory: PriceLog[], adGroups: AdGroup[
         Object.values(indicesByDate).forEach(indices => {
             if (indices.length === 0) return;
 
-            let totalPooledSpend = 0;
+            // Group rows by SKU so redistribution happens at SKU level, not per row.
+            const indicesBySku = new Map<string, number[]>();
             indices.forEach(idx => {
-                totalPooledSpend += results[idx].adsSpend || 0;
+                const sku = results[idx].sku;
+                if (!indicesBySku.has(sku)) indicesBySku.set(sku, []);
+                indicesBySku.get(sku)!.push(idx);
             });
+
+            const activeSkuCount = indicesBySku.size;
+            if (activeSkuCount === 0) return;
+
+            const totalPooledSpend = indices.reduce((sum, idx) => sum + (results[idx].adsSpend || 0), 0);
 
             if (totalPooledSpend <= 0) return;
 
-            const equalShare = totalPooledSpend / memberCount;
+            // Use active SKUs for this date to preserve date-level totals and avoid row-multiplication inflation.
+            const skuShare = totalPooledSpend / activeSkuCount;
 
-            indices.forEach(idx => {
-                const log = results[idx];
-                if (log.rawAdsSpend === undefined || log.rawAdsSpend === null) {
-                    log.rawAdsSpend = log.adsSpend || 0;
-                }
-                log.adsSpend = equalShare;
+            indicesBySku.forEach((skuIndices) => {
+                const rowValues = skuIndices.map(idx => results[idx].adsSpend || 0);
+                const skuCurrentTotal = rowValues.reduce((sum, value) => sum + value, 0);
+                const weights = skuCurrentTotal > 0
+                    ? rowValues.map(value => value / skuCurrentTotal)
+                    : skuIndices.map(() => 1 / skuIndices.length);
+
+                let allocated = 0;
+                skuIndices.forEach((idx, position) => {
+                    const log = results[idx];
+                    if (log.rawAdsSpend === undefined || log.rawAdsSpend === null) {
+                        log.rawAdsSpend = log.adsSpend || 0;
+                    }
+
+                    if (position === skuIndices.length - 1) {
+                        // Apply remainder on final row so per-SKU sum stays exact.
+                        log.adsSpend = skuShare - allocated;
+                    } else {
+                        const nextValue = skuShare * weights[position];
+                        log.adsSpend = nextValue;
+                        allocated += nextValue;
+                    }
+                });
             });
         });
     });

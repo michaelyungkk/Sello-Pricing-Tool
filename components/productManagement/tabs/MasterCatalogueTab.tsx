@@ -16,6 +16,7 @@ import { formatSmartMoney } from '../../../utils/format';
 import { CohortShiftWarning } from '../../../services/cohortAnalysis';
 import { ShowcaseSelectionModal } from '../parts/ShowcaseSelectionModal';
 import { generateShowcasePdf } from '../../../services/showcasePdfGenerator';
+import { generatePitchingCataloguePdf } from '../../../services/pitchingCataloguePdfGenerator';
 
 type BenchmarkRecalcMode = 'incremental' | 'full';
 type BenchmarkRecalcStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'error';
@@ -236,7 +237,7 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm"
                     >
                         <FileText className="w-3.5 h-3.5" />
-                        Generate Weekly Report
+                        Generate Product Catalogue
                     </button>
                     <div className="relative group">
                         <button
@@ -301,9 +302,12 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                     themeColor={themeColor}
                     onClose={() => setShowShowcaseModal(false)}
                     onStampLandedAt={onStampLandedAt}
-                    onGenerate={(selectedSkus) => {
-                        setShowShowcaseModal(false);
-                        generateShowcasePdf(selectedSkus, products, cohortSnapshot ?? null, themeColor);
+                    onGenerate={async ({ selectedSkus, reportType }) => {
+                        if (reportType === 'pitching_catalogue') {
+                            await generatePitchingCataloguePdf(selectedSkus, products, themeColor);
+                            return;
+                        }
+                        await generateShowcasePdf(selectedSkus, products, cohortSnapshot ?? null, themeColor);
                     }}
                 />
             )}

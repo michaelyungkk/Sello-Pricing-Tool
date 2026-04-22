@@ -42,7 +42,7 @@ import { analyzePriceAdjustment, parseSearchQuery, createTextFallbackIntent, Sea
 import { processDataForSearch } from '../services/searchExecution';
 import { getThresholdConfig, ThresholdConfig, saveThresholdConfig } from '../services/thresholdsConfig';
 import { migrateRestoredDatabase, auditRestoredDatabase } from '../services/migrationService';
-import { normalizeRestoredState } from '../services/restoreSanitizer';
+import { normalizeRestoredState, repairMojibakeText } from '../services/restoreSanitizer';
 import { hexToRgb, extractFirstHex } from '../utils/color';
 import { getCanonicalSku, buildCanonicalResolver, CANONICAL_MAP } from '../services/skuNormalization';
 import {
@@ -1278,9 +1278,51 @@ export const useAppState = () => {
     }, [updateTimestamp, isAdminMode]);
 
     const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => {
+        let repairedFieldCount = 0;
+        const repairedSkuSet = new Set<string>();
+        const normalizedData = (data || []).map(item => {
+            let rowChanged = false;
+
+            const originalSku = String(item.sku || '').trim();
+            const repairedSku = repairMojibakeText(originalSku);
+            if (repairedSku !== originalSku) {
+                repairedFieldCount += 1;
+                rowChanged = true;
+            }
+
+            const originalImageUrl = item.imageUrl ? String(item.imageUrl).trim() : undefined;
+            const repairedImageUrl = originalImageUrl ? repairMojibakeText(originalImageUrl) : undefined;
+            if (repairedImageUrl !== originalImageUrl) {
+                repairedFieldCount += 1;
+                rowChanged = true;
+            }
+
+            const originalDescription = item.description ? String(item.description).trim() : undefined;
+            const repairedDescription = originalDescription ? repairMojibakeText(originalDescription) : undefined;
+            if (repairedDescription !== originalDescription) {
+                repairedFieldCount += 1;
+                rowChanged = true;
+            }
+
+            if (rowChanged && repairedSku) {
+                repairedSkuSet.add(repairedSku.toUpperCase());
+            }
+
+            return {
+                ...item,
+                sku: repairedSku,
+                imageUrl: repairedImageUrl,
+                description: repairedDescription
+            };
+        });
+
+        if (repairedFieldCount > 0) {
+            console.log(`[ca-import] repaired ${repairedFieldCount} text field(s) across ${repairedSkuSet.size} SKU(s)`);
+        }
+
         const changes: PriceChangeRecord[] = [];
         setProducts(prev => (prev || []).map(p => {
-            const update = data.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
+            const update = normalizedData.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
             if (update) {
                 const oldPrice = p.caPrice || (p.currentPrice * VAT_MULTIPLIER);
                 if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {

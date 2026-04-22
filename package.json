@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .ts,.tsx",
+    "lint:encoding": "node scripts/check-mojibake.js",
     "typecheck": "tsc --noEmit",
     "validate": "npm run typecheck && npm run lint && npm run build",
     "build:ci": "npm run validate"
