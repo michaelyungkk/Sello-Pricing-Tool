@@ -144,7 +144,7 @@ function sanitizePdfText(text: string): string {
         .replace(/\u00E2\u20AC\u201C|\u00E2\u20AC\u201D/g, '-')
         .replace(/\u00E2\u20AC\u00A2/g, '-')
         .replace(/\u00C2\u00B7/g, ' | ')
-        .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A3]/g, '')
+        .replace(/[^\u0020-\u007E\u00A3]/g, '')
         .trim();
 }
 
