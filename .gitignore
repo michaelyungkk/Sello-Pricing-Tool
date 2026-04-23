@@ -28,6 +28,14 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+.lint*.json
+.lint-errors.csv
+
+# Local temp/debug artifacts
+.tmp*/
+.tmp_*/
+.tmp-*/
+.tmp*
 
 # Claude Code internal files
 .claude/

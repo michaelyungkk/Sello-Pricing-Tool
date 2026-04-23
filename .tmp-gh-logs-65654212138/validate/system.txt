@@ -1,8 +1,0 @@
-2026-04-22T06:26:05.9190000Z Evaluating validate.if
-2026-04-22T06:26:05.9190000Z Evaluating: success()
-2026-04-22T06:26:05.9190000Z Result: true
-2026-04-22T06:26:05.9210000Z Requested labels: ubuntu-latest
-2026-04-22T06:26:05.9210000Z Job defined at: michaelyungkk/Sello-Pricing-Tool/.github/workflows/ci-guardrails.yml@refs/heads/main
-2026-04-22T06:26:05.9210000Z Waiting for a runner to pick up this job...
-2026-04-22T06:26:06.2800000Z Job is about to start running on the hosted runner: GitHub Actions 1000000006
-2026-04-22T06:26:06.2800000Z Job is waiting for a hosted runner to come online.
