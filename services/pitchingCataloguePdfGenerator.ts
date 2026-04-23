@@ -147,6 +147,30 @@ function getFeatureLines(doc: any, features: string[], maxWidth: number): string
     return lines;
 }
 
+interface FeatureBlock {
+    header: string;
+    detail: string;
+}
+
+function parseFeatureBlock(feature: string): FeatureBlock {
+    const raw = String(feature || '').trim();
+    if (!raw) return { header: '-', detail: '' };
+    const separatorMatch = raw.match(/\s*[–—-]\s*/);
+    if (!separatorMatch || separatorMatch.index === undefined) {
+        return { header: raw, detail: '' };
+    }
+    const splitAt = separatorMatch.index;
+    const header = raw.slice(0, splitAt).trim();
+    const detail = raw.slice(splitAt + separatorMatch[0].length).trim();
+    if (!header) return { header: raw, detail: '' };
+    return { header, detail };
+}
+
+function toFeatureBlocks(features: string[]): FeatureBlock[] {
+    if (!features || features.length === 0) return [{ header: '-', detail: '' }];
+    return features.map(parseFeatureBlock);
+}
+
 function getDescriptionFallbackFeatures(description: string): string[] {
     if (!description || description.length < 10) return [];
     return description
@@ -166,7 +190,7 @@ function getRowLayout(doc: any, product: Product, titleWidth: number, featuresWi
     const features = extractedFeatures.length > 0
         ? extractedFeatures
         : getDescriptionFallbackFeatures(product.description || '');
-    const featureLines = getFeatureLines(doc, features, featuresWidth);
+    const featureBlocks = toFeatureBlocks(features);
 
     const titleLineHeight = 4.2;
     const featureLineHeight = 4.2;
@@ -177,13 +201,21 @@ function getRowLayout(doc: any, product: Product, titleWidth: number, featuresWi
     const priceGap = 2;
 
     const titleHeight = Math.max(1, titleLines.length) * titleLineHeight;
-    const featureHeight = Math.max(1, featureLines.length) * featureLineHeight;
+    let featureLineCount = 0;
+    featureBlocks.forEach(block => {
+        featureLineCount += 1; // header line
+        if (block.detail) {
+            const wrappedDetail = doc.splitTextToSize(block.detail, Math.max(10, featuresWidth - 4)) as string[];
+            featureLineCount += Math.max(1, wrappedDetail.length);
+        }
+    });
+    const featureHeight = Math.max(1, featureLineCount) * featureLineHeight;
     const priceTopOffset = titleStartOffset + titleHeight + priceGap;
     const textBottomOffset = Math.max(priceTopOffset + priceHeight, featureStartOffset + featureHeight);
 
     const rowHeight = Math.max(imageBottomOffset + 3, textBottomOffset + 3);
 
-    return { titleLines, featureLines, priceTopOffset, rowHeight };
+    return { titleLines, featureBlocks, priceTopOffset, rowHeight };
 }
 
 function drawRow(doc: any, product: Product, y: number, rowH: number, imageDataUrl: string | null) {
@@ -221,8 +253,24 @@ function drawRow(doc: any, product: Product, y: number, rowH: number, imageDataU
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(GRAY_700);
-    layout.featureLines.forEach((line, idx) => {
-        doc.text(line, featuresX, y + 7 + (idx * 4.2));
+    let lineCursor = 0;
+    layout.featureBlocks.forEach(block => {
+        const lineY = y + 7 + (lineCursor * 4.2);
+        doc.setFont('helvetica', 'normal');
+        doc.text('- ', featuresX, lineY);
+        doc.setFont('helvetica', 'bold');
+        doc.text(block.header || '-', featuresX + 3.2, lineY);
+        lineCursor += 1;
+
+        if (block.detail) {
+            doc.setFont('helvetica', 'normal');
+            const wrappedDetail = doc.splitTextToSize(block.detail, Math.max(10, featuresWidth - 4)) as string[];
+            wrappedDetail.forEach(detailLine => {
+                const detailY = y + 7 + (lineCursor * 4.2);
+                doc.text(String(detailLine), featuresX + 4, detailY);
+                lineCursor += 1;
+            });
+        }
     });
 }
 

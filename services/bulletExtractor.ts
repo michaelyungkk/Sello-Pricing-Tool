@@ -50,14 +50,7 @@ function scoreSentences(text: string, max: number): string[] {
         .sort((a, b) => b.score - a.score)
         .slice(0, max)
         .filter(item => item.score >= 1)
-        .map(item => {
-            let output = sanitiseLine(item.text.replace(/\.$/, ''));
-            if (output.length > 120) {
-                const cutAt = output.slice(0, 120).lastIndexOf(',');
-                output = cutAt > 50 ? output.slice(0, cutAt) : `${output.slice(0, 117)}...`;
-            }
-            return output;
-        });
+        .map(item => sanitiseLine(item.text.replace(/\.$/, '')));
 }
 
 function toOrderedFeatureLines(content: string, maxLines = 5): string[] {
@@ -68,9 +61,7 @@ function toOrderedFeatureLines(content: string, maxLines = 5): string[] {
         .filter(line => line.length > 20);
 
     if (lines.length > 0) {
-        return lines
-            .map(line => (line.length > 120 ? `${line.slice(0, 117)}...` : line))
-            .slice(0, maxLines);
+        return lines.slice(0, maxLines);
     }
 
     return scoreSentences(content, maxLines);
@@ -80,23 +71,24 @@ export function extractProductBullets(content: string): ProductBullets {
     const result: ProductBullets = { features: [], specs: {}, packageContent: [] };
     if (!content || content.length < 20) return result;
 
+    const normalizedContent = content.replace(/\r/g, '');
+
     // 1) Extract FEATURES section
-    const featMatch = content.match(
-        /FEATURES?\s*[-\u2013]?\s*\n?([\s\S]*?)(?=\n\s*SPECIFICATIONS?|\n\s*PACKAGE|\n\s*WHAT'?S?\s*INCLUDED|$)/i
+    const featMatch = normalizedContent.match(
+        /(?:^|\n)\s*FEATURES?\s*[:\-\u2013]?\s*\n([\s\S]*?)(?=\n\s*(?:SPECIFICATIONS?|PACKAGE|WHAT'?S?\s*INCLUDED)\b|$)/i
     );
     if (featMatch) {
         result.features = featMatch[1]
             .split(/\n/)
             .map(line => sanitiseLine(line.replace(/^[-\u2022*]\s*/, '')))
             .filter(line => line.length > 10)
-            .map(line => (line.length > 120 ? `${line.slice(0, 117)}...` : line))
             .slice(0, 5);
     }
 
     // 2) Fallback: preserve description order first, then score if needed
     if (result.features.length === 0) {
-        const descMatch = content.match(
-            /^([\s\S]*?)(?=\n\s*FEATURES?|\n\s*SPECIFICATIONS?|\n\s*PACKAGE|$)/i
+        const descMatch = normalizedContent.match(
+            /^([\s\S]*?)(?=\n\s*(?:FEATURES?|SPECIFICATIONS?|PACKAGE)\b|$)/i
         );
         if (descMatch) {
             result.features = toOrderedFeatureLines(descMatch[1], 5);
@@ -104,8 +96,8 @@ export function extractProductBullets(content: string): ProductBullets {
     }
 
     // 3) Extract SPECIFICATION section
-    const specMatch = content.match(
-        /SPECIFICATIONS?\s*\n?([\s\S]*?)(?=\n\s*PACKAGE|\n\s*WHAT'?S?\s*INCLUDED|$)/i
+    const specMatch = normalizedContent.match(
+        /(?:^|\n)\s*SPECIFICATIONS?\s*[:\-\u2013]?\s*\n([\s\S]*?)(?=\n\s*(?:PACKAGE|WHAT'?S?\s*INCLUDED)\b|$)/i
     );
     if (specMatch) {
         specMatch[1].split(/\n/).forEach(line => {
@@ -120,8 +112,8 @@ export function extractProductBullets(content: string): ProductBullets {
     }
 
     // 4) Extract PACKAGE CONTENT section
-    const packageMatch = content.match(
-        /(?:PACKAGE\s*CONTENT|WHAT'?S?\s*INCLUDED)\s*\n?([\s\S]*?)$/i
+    const packageMatch = normalizedContent.match(
+        /(?:^|\n)\s*(?:PACKAGE\s*CONTENT|WHAT'?S?\s*INCLUDED)\s*[:\-\u2013]?\s*\n([\s\S]*?)$/i
     );
     if (packageMatch) {
         result.packageContent = packageMatch[1]

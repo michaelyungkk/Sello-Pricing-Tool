@@ -1119,6 +1119,7 @@ export const useAppState = () => {
                     if (item.agedStock !== undefined) existing.agedStockQty = item.agedStock;
                     if (item.inventoryStatus) existing.inventoryStatus = item.inventoryStatus;
                     if (item.cartonDimensions) existing.cartonDimensions = item.cartonDimensions;
+                    if (!existing.landedAt) existing.landedAt = reportDate;
                     existing.lastUpdated = reportDate;
                     newProducts[existingIndex] = existing;
                 } else {
@@ -1135,6 +1136,7 @@ export const useAppState = () => {
                         recommendation: 'New Product',
                         daysRemaining: 999,
                         channels: [],
+                        landedAt: reportDate,
                         lastUpdated: reportDate,
                         category: item.category || 'Uncategorized',
                         subcategory: item.subcategory,
