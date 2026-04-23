@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-04-22T06:36:39.274Z",
+  "generatedAt": "2026-04-23T05:59:17.369Z",
   "items": [
     {
-      "id": "e81753d8ed1d",
-      "date": "2026-04-22T16:34:56+10:00",
-      "summary": "Fix mojibake sanitizer encoding guards"
+      "id": "2b6eec4709a6",
+      "date": "2026-04-23T15:57:38+10:00",
+      "summary": "Fix PDF sanitizer regex for showcase text"
     }
   ]
 }
