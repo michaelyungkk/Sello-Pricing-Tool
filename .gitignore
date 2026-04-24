@@ -43,6 +43,5 @@ npm-debug.log*
 # Local demographics ETL helpers/artifacts (keep local, do not commit)
 scripts/build_uk_area_demographics_external.py
 scripts/import_generated_demographics.py
-data/ukAreaDemographics.ts
 *.generated.json
 *.generated.ts
