@@ -66,6 +66,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     // Analytics State
     const [txFilterPlatform, setTxFilterPlatform] = useState('All');
     const [txFilterType, setTxFilterType] = useState('All');
+    const [txPostcodeArea, setTxPostcodeArea] = useState('All');
     const [showRedistributedOnly, setShowRedistributedOnly] = useState(false);
     const [txLimit, setTxLimit] = useState(50);
     const [txDays] = useState(() => {
@@ -251,6 +252,15 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                 return true;
             });
         }
+        if (txPostcodeArea !== 'All') {
+            list = list.filter(t => {
+                if ((t as any)._type !== 'SALE') return false;
+                const postcode = String((t as any).postcode || '').trim();
+                if (!postcode) return false;
+                const match = postcode.match(/^([A-Z]{1,2})/i);
+                return !!match && match[1].toUpperCase() === txPostcodeArea;
+            });
+        }
         if (showRedistributedOnly) {
             list = list.filter(t =>
                 t.rawAdsSpend !== undefined &&
@@ -259,7 +269,20 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             );
         }
         return list;
-    }, [sortedTransactions, txFilterPlatform, txFilterType, showRedistributedOnly, ledgerStartKey, ledgerEndKey]);
+    }, [sortedTransactions, txFilterPlatform, txFilterType, txPostcodeArea, showRedistributedOnly, ledgerStartKey, ledgerEndKey]);
+
+    const txPostcodeAreas = useMemo(() => {
+        const set = new Set<string>();
+        sortedTransactions.forEach(t => {
+            if ((t as any)._type !== 'SALE') return;
+            const postcode = String((t as any).postcode || '').trim();
+            if (!postcode) return;
+            const match = postcode.match(/^([A-Z]{1,2})/i);
+            if (!match) return;
+            set.add(match[1].toUpperCase());
+        });
+        return Array.from(set).sort();
+    }, [sortedTransactions]);
 
     const activeAdGroupInFamily = useMemo(() => adGroups.find((g: any) =>
         g.isActive && g.memberSkus.includes(product.sku)
@@ -1058,11 +1081,14 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                         ledgerCustomEnd={ledgerCustomEnd}
                         setLedgerCustomEnd={setLedgerCustomEnd}
                         txFilterPlatform={txFilterPlatform}
-                        setTxFilterPlatform={setTxFilterPlatform}
-                        txFilterType={txFilterType}
-                        setTxFilterType={setTxFilterType}
-                        showRedistributedOnly={showRedistributedOnly}
-                        setShowRedistributedOnly={setShowRedistributedOnly}
+                setTxFilterPlatform={setTxFilterPlatform}
+                txFilterType={txFilterType}
+                setTxFilterType={setTxFilterType}
+                txPostcodeArea={txPostcodeArea}
+                setTxPostcodeArea={setTxPostcodeArea}
+                txPostcodeAreas={txPostcodeAreas}
+                showRedistributedOnly={showRedistributedOnly}
+                setShowRedistributedOnly={setShowRedistributedOnly}
                         platforms={platforms}
                         startKey={ledgerStartKey}
                         endKey={ledgerEndKey}

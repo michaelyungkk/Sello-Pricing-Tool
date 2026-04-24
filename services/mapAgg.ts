@@ -1,6 +1,7 @@
 
 import { Product, PriceLog } from '../types';
 import { POSTCODE_COORDS } from '../data/ukPostcodeMapCoords';
+import { getAreaDemographics } from '../data/ukAreaDemographics';
 import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcMarginPct, calcTACoSPct } from './metrics';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey } from './dateUtils';
 import { scaleMoneyInclTax, assertNotAlreadyScaled } from './taxPolicy';
@@ -16,6 +17,10 @@ export interface DistrictData {
 }
 export interface AreaData {
     code: string;
+    incomeBand: string;
+    householdProfile: string;
+    deprivationDecile: number | null;
+    ruralUrbanFlag: string;
     revenue: number;
     volume: number;
     orders: number;
@@ -40,6 +45,23 @@ export interface AreaData {
     moneyIsTaxInclusive?: boolean;
 }
 
+export interface SkuAreaCompareRow {
+    areaCode: string;
+    units: number;
+    orders: number;
+    revenue: number;
+    profit: number;
+    sharePct: number;
+    rank: number;
+}
+
+export interface SkuAreaComparisonGroup {
+    sku: string;
+    productName: string;
+    totalUnits: number;
+    rows: SkuAreaCompareRow[];
+}
+
 
 interface MapFilters {
   startDate: Date;
@@ -49,6 +71,96 @@ interface MapFilters {
   selectedSubcategory: string;
   selectedCarrier: string;
 }
+
+export const aggregateSkuAreaComparisonData = (
+  products: Product[],
+  priceHistoryMap: Map<string, PriceLog[]>,
+  filters: MapFilters,
+  selectedSkus: string[],
+  topN: number = 10
+): SkuAreaComparisonGroup[] => {
+    const { startDate, endDate, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier } = filters;
+    const startKey = asDateKey(startDate);
+    const endKey = asDateKey(endDate);
+    if (!startKey || !endKey || !Array.isArray(selectedSkus) || selectedSkus.length === 0) return [];
+
+    const productBySku = new Map<string, Product>();
+    (products || []).forEach(p => {
+        const key = String(p.sku || '').trim().toUpperCase();
+        if (key) productBySku.set(key, p);
+    });
+
+    return selectedSkus.map(rawSku => {
+        const skuKey = String(rawSku || '').trim().toUpperCase();
+        const product = productBySku.get(skuKey);
+        const logs = priceHistoryMap.get(skuKey) || [];
+
+        const areaStats: Record<string, { units: number; orders: number; revenue: number; profit: number }> = {};
+
+        logs.forEach(log => {
+            const dKey = asDateKey(log.date);
+            if (!dKey || !isDateKeyBetween(dKey, startKey, endKey)) return;
+            if (selectedPlatform !== 'All' && log.platform !== selectedPlatform) return;
+            if (selectedCarrier !== 'All') {
+                const partner = log.logisticPartner || 'Unknown';
+                if (partner !== selectedCarrier) return;
+            }
+            if (!log.postcode) return;
+
+            const areaMatch = log.postcode.match(/^([A-Z]{1,2})/i);
+            if (!areaMatch) return;
+            const areaCode = areaMatch[1].toUpperCase();
+
+            const units = calcUnits(log);
+            if (!isFinite(units) || units <= 0) return;
+
+            if (selectedCategory !== 'All' || selectedSubcategory !== 'All') {
+                if (!product) return;
+                if (selectedCategory !== 'All' && product.category !== selectedCategory) return;
+                if (selectedSubcategory !== 'All' && product.subcategory !== selectedSubcategory) return;
+            }
+
+            if (!areaStats[areaCode]) {
+                areaStats[areaCode] = { units: 0, orders: 0, revenue: 0, profit: 0 };
+            }
+            areaStats[areaCode].units += units;
+            areaStats[areaCode].orders += 1;
+            areaStats[areaCode].revenue += calcRevenue(log);
+            areaStats[areaCode].profit += calcProfit(log);
+        });
+
+        const totalUnits = Object.values(areaStats).reduce((sum, v) => sum + v.units, 0);
+
+        const rows = Object.entries(areaStats)
+            .map(([areaCode, stats]) => {
+                const revenue = scaleMoneyInclTax(stats.revenue);
+                const profit = scaleMoneyInclTax(stats.profit);
+                return {
+                    areaCode,
+                    units: stats.units,
+                    orders: stats.orders,
+                    revenue,
+                    profit,
+                    sharePct: totalUnits > 0 ? (stats.units / totalUnits) * 100 : 0,
+                    rank: 0
+                };
+            })
+            .sort((a, b) => {
+                if (b.units !== a.units) return b.units - a.units;
+                if (b.orders !== a.orders) return b.orders - a.orders;
+                return b.revenue - a.revenue;
+            })
+            .slice(0, Math.max(1, topN))
+            .map((row, index) => ({ ...row, rank: index + 1 }));
+
+        return {
+            sku: rawSku,
+            productName: product?.name || rawSku,
+            totalUnits,
+            rows
+        };
+    });
+};
 
 export const aggregateUkMapData = (
   products: Product[],
@@ -236,9 +348,14 @@ export const aggregateUkMapData = (
             };
           })
           .sort((a, b) => b.revenue - a.revenue);
+        const demographics = getAreaDemographics(code);
 
         return {
             code,
+            incomeBand: demographics.incomeBand,
+            householdProfile: demographics.householdProfile,
+            deprivationDecile: demographics.deprivationDecile,
+            ruralUrbanFlag: demographics.ruralUrbanFlag,
             revenue: revenueInclTax,
             volume: stats.volume,
             orders: stats.orders,

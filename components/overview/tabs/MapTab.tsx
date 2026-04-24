@@ -1,13 +1,15 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { formatSmartMoney } from '../../../utils/format';
+import { formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
 import { Product, PriceLog, RefundLog, SearchChip } from '../../../types';
 import { UK_POSTCODE_AREA_NAME } from '../../../ukPostcodeAreaNames';
 import { Filter, Layers, Map as MapIcon, Info, TrendingUp, DollarSign, Package, X, BarChart2, ShoppingBag, PieChart, TrendingDown as TrendingDownIcon, ArrowUpDown, ChevronUp, ChevronDown, Search, Truck, RotateCcw, CornerDownRight } from 'lucide-react';
-import { aggregateUkMapData, AreaData } from '../../../services/mapAgg';
+import { aggregateUkMapData, aggregateSkuAreaComparisonData, AreaData, SkuAreaComparisonGroup } from '../../../services/mapAgg';
 import { asDateKey, isDateKeyBetween } from '../../../services/dateUtils';
+import { SelectFilter } from '../../common/SelectFilter';
+import { UK_AREA_DEMOGRAPHICS } from '../../../data/ukAreaDemographics';
 
 // Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
 const UK_TOPO_JSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
@@ -71,6 +73,10 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('All');
   const [selectedCarrier, setSelectedCarrier] = useState<string>('All');
+  const [selectedCompareSkus, setSelectedCompareSkus] = useState<string[]>([]);
+  const [comparePasteInput, setComparePasteInput] = useState('');
+  const [compareUnknownTokens, setCompareUnknownTokens] = useState<string[]>([]);
+  const [compareCapNotice, setCompareCapNotice] = useState(false);
   const [hoveredArea, setHoveredArea] = useState<MapMarkerData | null>(null);
   const [pinnedArea, setPinnedArea] = useState<MapMarkerData | null>(null);
   const [tableSort, setTableSort] = useState<TableSortState>({ key: 'revenue', direction: 'desc' });
@@ -95,7 +101,6 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
 
   const handleAreaDeepDive = (areaCode: string) => {
       if (onSearch) {
-          const areaName = UK_POSTCODE_AREA_NAME[areaCode] || areaCode;
           const platformText = selectedPlatform !== 'All' ? ` on ${selectedPlatform}` : '';
           const timeText = timePeriodLabel || 'Last 30 Days';
           
@@ -135,23 +140,70 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
     return Array.from(carrierSet).sort();
   }, [priceHistoryMap]);
 
+  const skuOptions = useMemo(() => {
+    return Array.from(new Set((products || []).map(p => String(p.sku || '').trim()).filter(Boolean))).sort();
+  }, [products]);
+
+  const skuOptionMap = useMemo(() => {
+    const map = new Map<string, string>();
+    skuOptions.forEach(sku => map.set(sku.toUpperCase(), sku));
+    return map;
+  }, [skuOptions]);
+
+  const applySelectedCompareSkus = (next: string[]) => {
+    const deduped = Array.from(new Set((next || []).map(s => String(s || '').trim()).filter(Boolean)));
+    if (deduped.length > 4) {
+      setSelectedCompareSkus(deduped.slice(0, 4));
+      setCompareCapNotice(true);
+      return;
+    }
+    setSelectedCompareSkus(deduped);
+    setCompareCapNotice(false);
+  };
+
+  const addCompareSkusFromPaste = () => {
+    const tokens = comparePasteInput
+      .split(/[\n,\t\s]+/)
+      .map(t => t.trim().toUpperCase())
+      .filter(Boolean);
+    if (tokens.length === 0) return;
+
+    const matched: string[] = [];
+    const unknown: string[] = [];
+    tokens.forEach(token => {
+      const resolved = skuOptionMap.get(token);
+      if (resolved) matched.push(resolved);
+      else unknown.push(token);
+    });
+
+    setCompareUnknownTokens(Array.from(new Set(unknown)).slice(0, 12));
+    if (matched.length > 0) {
+      applySelectedCompareSkus([...selectedCompareSkus, ...matched]);
+    }
+    setComparePasteInput('');
+  };
+
+  const mapScopedProducts = useMemo(() => {
+    const compareSet = selectedCompareSkus.length > 0 ? new Set(selectedCompareSkus) : null;
+    return products.filter(p => {
+      if (selectedCategory !== 'All' && p.category !== selectedCategory) return false;
+      if (selectedSubcategory !== 'All' && p.subcategory !== selectedSubcategory) return false;
+      if (compareSet && !compareSet.has(p.sku)) return false;
+      return true;
+    });
+  }, [products, selectedCategory, selectedSubcategory, selectedCompareSkus]);
+
   // 2. Aggregate Data by Postcode Area
   const mapData: AreaData[] = useMemo(() => {
     const base = aggregateUkMapData(
-        products,
+        mapScopedProducts,
         priceHistoryMap,
-        { startDate: dateRange.start, endDate: dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier }
+        { startDate: dateRange.start, endDate: dateRange.end, selectedPlatform, selectedCategory: 'All', selectedSubcategory: 'All', selectedCarrier }
     );
     if (refundHistory.length === 0) return base;
 
     const validSkus = new Set(
-        products
-            .filter(p => {
-                if (selectedCategory !== 'All' && p.category !== selectedCategory) return false;
-                if (selectedSubcategory !== 'All' && p.subcategory !== selectedSubcategory) return false;
-                return true;
-            })
-            .map(p => p.sku)
+        mapScopedProducts.map(p => p.sku)
     );
 
     const orderContextMap = new Map<string, { postcode?: string; platform?: string; carrier?: string; sku?: string }>();
@@ -214,7 +266,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         const newMargin = d.revenue > 0 ? (newProfit / d.revenue) * 100 : 0;
         return { ...d, returnRate: nextReturnRate, profit: newProfit, margin: newMargin };
     });
-  }, [products, priceHistoryMap, dateRange.start, dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier, deductRefunds, refundHistory]);
+  }, [mapScopedProducts, priceHistoryMap, dateRange.start, dateRange.end, selectedPlatform, selectedCarrier, deductRefunds, refundHistory]);
 
   // 3. Rank data and calculate shares
   const rankedMapData: MapMarkerData[] = useMemo(() => {
@@ -323,6 +375,49 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   };
 
   const sortedAreas = rankedMapData.slice(0, 5);
+
+  const skuAreaComparison: SkuAreaComparisonGroup[] = useMemo(() => {
+    if (selectedCompareSkus.length === 0) return [];
+    return aggregateSkuAreaComparisonData(
+      products,
+      priceHistoryMap,
+      { startDate: dateRange.start, endDate: dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier },
+      selectedCompareSkus,
+      10
+    );
+  }, [selectedCompareSkus, products, priceHistoryMap, dateRange.start, dateRange.end, selectedPlatform, selectedCategory, selectedSubcategory, selectedCarrier]);
+
+  const maxCompareRows = useMemo(() => {
+    if (skuAreaComparison.length === 0) return 0;
+    return Math.max(...skuAreaComparison.map(group => group.rows.length), 0);
+  }, [skuAreaComparison]);
+
+  useEffect(() => {
+    try {
+      const json = JSON.stringify(mapData);
+      const bytes = new TextEncoder().encode(json).length;
+      const kb = bytes / 1024;
+      const mb = kb / 1024;
+      console.log(
+        `[mapData] rows=${mapData.length}, size=${kb.toFixed(1)}KB (${mb.toFixed(3)}MB), compareSkus=${selectedCompareSkus.length}`
+      );
+    } catch (error) {
+      console.warn('[mapData] failed to calculate size', error);
+    }
+  }, [mapData, selectedCompareSkus.length]);
+
+  useEffect(() => {
+    try {
+      const demoRows = Object.keys(UK_AREA_DEMOGRAPHICS).length;
+      const json = JSON.stringify(UK_AREA_DEMOGRAPHICS);
+      const bytes = new TextEncoder().encode(json).length;
+      const kb = bytes / 1024;
+      const mb = kb / 1024;
+      console.log(`[demographics] rows=${demoRows}, size=${kb.toFixed(1)}KB (${mb.toFixed(3)}MB)`);
+    } catch (error) {
+      console.warn('[demographics] failed to calculate size', error);
+    }
+  }, []);
 
   const areaToShow = useMemo(() => {
     // Tooltip should only show on hover, not pin
@@ -468,9 +563,55 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                         </select>
                         <Truck className="absolute left-2.5 top-2 w-3 h-3 text-gray-400 pointer-events-none" />
                     </div>
+
+                    <div className="h-6 w-px bg-gray-300"></div>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-medium text-gray-500 whitespace-nowrap">SKU Compare</span>
+                        <SelectFilter
+                            label="SKUs"
+                            options={skuOptions}
+                            selected={selectedCompareSkus}
+                            onChange={applySelectedCompareSkus}
+                            allLabel="Select up to 4"
+                        />
+                        <input
+                            value={comparePasteInput}
+                            onChange={e => setComparePasteInput(e.target.value)}
+                            placeholder="Paste SKUs"
+                            className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white w-28"
+                        />
+                        <button
+                            onClick={addCompareSkusFromPaste}
+                            className="px-2 py-1.5 text-[10px] font-bold rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700"
+                        >
+                            Add
+                        </button>
+                        <button
+                            onClick={() => { setSelectedCompareSkus([]); setCompareUnknownTokens([]); setCompareCapNotice(false); setComparePasteInput(''); }}
+                            className="px-2 py-1.5 text-[10px] font-bold rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-600"
+                        >
+                            Clear
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
+
+        {(compareCapNotice || compareUnknownTokens.length > 0) && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-[11px]">
+                {compareCapNotice && (
+                    <span className="px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                        Compare supports up to 4 SKUs. Extra selections were ignored.
+                    </span>
+                )}
+                {compareUnknownTokens.length > 0 && (
+                    <span className="px-2 py-1 rounded bg-gray-50 text-gray-600 border border-gray-200">
+                        Unknown SKUs ignored: {compareUnknownTokens.join(', ')}
+                    </span>
+                )}
+            </div>
+        )}
 
         <div className="flex flex-col lg:flex-row gap-6">
             {/* Map Visualization */}
@@ -866,6 +1007,79 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
             </div>
         </div>
         
+        {skuAreaComparison.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col mt-6">
+                <div className="p-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                    <h4 className="text-xs font-bold text-gray-600 uppercase">Top Areas per SKU (Units Sold)</h4>
+                    <div className="text-[10px] text-gray-500 font-medium">
+                        Comparing {skuAreaComparison.length} SKU(s) {'\u2022'} Top {maxCompareRows} areas each
+                    </div>
+                </div>
+                <div className="sello-table-scroll">
+                    <table className="sello-table">
+                        <thead className="sticky top-0">
+                            <tr>
+                                <th className="c">Rank</th>
+                                {skuAreaComparison.map(group => (
+                                    <React.Fragment key={group.sku}>
+                                        <th colSpan={6} className="c bg-theme-10/30">
+                                            <div className="text-[10px] font-bold text-gray-800">{group.sku}</div>
+                                            <div className="text-[10px] text-gray-500 font-normal truncate max-w-[220px] mx-auto">{group.productName}</div>
+                                        </th>
+                                    </React.Fragment>
+                                ))}
+                            </tr>
+                            <tr>
+                                <th className="c text-[10px]">#</th>
+                                {skuAreaComparison.map(group => (
+                                    <React.Fragment key={`${group.sku}-cols`}>
+                                        <th className="text-[10px]">Area</th>
+                                        <th className="r text-[10px]">Units</th>
+                                        <th className="r text-[10px]">Share %</th>
+                                        <th className="r text-[10px]">Orders</th>
+                                        <th className="r text-[10px]">Revenue</th>
+                                        <th className="r text-[10px]">Profit</th>
+                                    </React.Fragment>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Array.from({ length: maxCompareRows }).map((_, idx) => (
+                                <tr key={`cmp-row-${idx}`}>
+                                    <td className="c font-mono text-gray-500">{idx + 1}</td>
+                                    {skuAreaComparison.map(group => {
+                                        const row = group.rows[idx];
+                                        if (!row) {
+                                            return (
+                                                <React.Fragment key={`${group.sku}-empty-${idx}`}>
+                                                    <td className="text-gray-300">-</td>
+                                                    <td className="r text-gray-300">-</td>
+                                                    <td className="r text-gray-300">-</td>
+                                                    <td className="r text-gray-300">-</td>
+                                                    <td className="r text-gray-300">-</td>
+                                                    <td className="r text-gray-300">-</td>
+                                                </React.Fragment>
+                                            );
+                                        }
+                                        return (
+                                            <React.Fragment key={`${group.sku}-${row.areaCode}-${idx}`}>
+                                                <td className="font-medium text-gray-800">{getAreaDisplayName(row.areaCode)}</td>
+                                                <td className="r font-mono font-bold text-theme">{formatNumber(row.units)}</td>
+                                                <td className="r font-mono text-gray-700">{formatPct(row.sharePct, 1)}</td>
+                                                <td className="r font-mono text-gray-700">{formatNumber(row.orders)}</td>
+                                                <td className="r font-mono text-gray-700">{formatSmartMoney(row.revenue)}</td>
+                                                <td className={`r font-mono ${row.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatSmartMoney(row.profit)}</td>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
+
         {/* Table */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col mt-6">
             <div className="p-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
@@ -891,6 +1105,10 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                     <thead className="sticky top-0">
                         <tr>
                             <SortableHeader label="Area" sortKey="code" />
+                            <SortableHeader label="Household" sortKey="householdProfile" />
+                            <SortableHeader label="Income" sortKey="incomeBand" />
+                            <SortableHeader label="IMD" sortKey="deprivationDecile" align="right" />
+                            <SortableHeader label="Urban/Rural" sortKey="ruralUrbanFlag" />
                             <SortableHeader label="Orders" sortKey="orders" align="right"/>
                             <SortableHeader label="Units" sortKey="volume" align="right"/>
                             <SortableHeader label="Revenue" sortKey="revenue" align="right"/>
@@ -913,6 +1131,10 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         onClick={() => setPinnedArea(prev => (prev && prev.code === d.code) ? null : d)}
                                     >
                                         <td className="font-bold text-gray-800">{getAreaDisplayName(d.code)}</td>
+                                        <td className="text-gray-700">{d.householdProfile || 'Unknown'}</td>
+                                        <td className="text-gray-700">{d.incomeBand || 'Unknown'}</td>
+                                        <td className="r font-mono text-gray-700">{d.deprivationDecile ?? '-'}</td>
+                                        <td className="text-gray-700">{d.ruralUrbanFlag || 'Unknown'}</td>
                                         <td className="r font-mono">{d.orders}</td>
                                         <td className="r font-mono">{d.volume}</td>
                                         <td className="r font-mono">{formatSmartMoney(d.revenue)}</td>
@@ -936,7 +1158,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         </td>
                                     </tr>
                                     {isPinned && d.districtBreakdown.length > 0 && (
-                                        d.districtBreakdown.map((district, index) => (
+                                        d.districtBreakdown.map((district) => (
                                             <tr key={`${d.code}-${district.code}`} className="bg-gray-50/50 text-gray-600">
                                                 <td>
                                                     <div className="flex items-center gap-2 pl-4">
@@ -944,6 +1166,10 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                                         <span className="font-mono font-medium">{district.code}</span>
                                                     </div>
                                                 </td>
+                                                <td className="text-gray-300">-</td>
+                                                <td className="text-gray-300">-</td>
+                                                <td className="c text-gray-300">-</td>
+                                                <td className="text-gray-300">-</td>
                                                 <td className="r font-mono">-</td>
                                                 <td className="r font-mono">{district.volume}</td>
                                                 <td className="r font-mono">{formatSmartMoney(district.revenue)}</td>

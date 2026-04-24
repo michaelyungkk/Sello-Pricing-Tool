@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Calendar, Search, Info, Rows } from 'lucide-react';
+import { Activity, Calendar, Search, Info, Rows, MapPin } from 'lucide-react';
 import { SelectFilter } from '../../common/SelectFilter';
 import AuditPanel from '../../common/AuditPanel';
 import { formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
@@ -26,6 +26,9 @@ interface TransactionLedgerSectionProps {
     setTxFilterPlatform: (s: string) => void;
     txFilterType: string;
     setTxFilterType: (s: string) => void;
+    txPostcodeArea: string;
+    setTxPostcodeArea: (s: string) => void;
+    txPostcodeAreas: string[];
     showRedistributedOnly: boolean;
     setShowRedistributedOnly: (value: boolean) => void;
     platforms: string[];
@@ -69,6 +72,9 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     setTxFilterPlatform,
     txFilterType,
     setTxFilterType,
+    txPostcodeArea,
+    setTxPostcodeArea,
+    txPostcodeAreas,
     showRedistributedOnly,
     setShowRedistributedOnly,
     platforms,
@@ -148,6 +154,17 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     </select>
                     <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                 </div>
+                <div className="relative">
+                    <select
+                        value={txPostcodeArea}
+                        onChange={e => setTxPostcodeArea(e.target.value)}
+                        className="pl-8 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm appearance-none bg-white focus:ring-2 focus:ring-theme"
+                    >
+                        <option value="All">All Areas</option>
+                        {txPostcodeAreas.map(area => <option key={area} value={area}>{area}</option>)}
+                    </select>
+                    <MapPin className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                </div>
                 <button
                     onClick={() => setShowRedistributedOnly(!showRedistributedOnly)}
                     className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border ${showRedistributedOnly ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
@@ -181,6 +198,11 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             <p className="text-xs text-gray-400 -mt-2">
                 Viewing {Math.min(txLimit, filteredTransactionsLength)} of {filteredTransactionsLength} records for the selected period.
             </p>
+            {txPostcodeArea !== 'All' && (
+                <p className="text-xs text-gray-500 -mt-2">
+                    Postcode filter is active ({txPostcodeArea}). This filtered view includes sales rows with matching postcode area.
+                </p>
+            )}
 
             {isAuditPanelVisible && (
                 <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm animate-in fade-in zoom-in-95 duration-200">

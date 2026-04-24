@@ -127,3 +127,23 @@ See `.agent/workflows/code-generation.md` for complete Antigravity rules.
 - Format utilities: `utils/format.ts`
 - App state: `hooks/useAppState.ts`
 - Firebase: `services/firebase.ts`, `services/dbService.ts`
+
+---
+
+## Third-Party Demographics Refresh Workflow
+- Purpose: enrich Sales Map postcode areas with lightweight context (`incomeBand`, `householdProfile`, `deprivationDecile`, `ruralUrbanFlag`).
+- Keep this workflow **outside** normal app code changes. Raw files and ETL outputs should stay local and not be committed.
+- Current raw source folder (local machine): `C:\Users\SELLOCP102-1\Downloads\uk-demographics-raw`.
+- Current source files:
+  - `nspl_nov2024_uk.zip` (postcode mapping)
+  - `imd2019_all_scores_ranks_deciles.csv` (deprivation)
+  - `ons_income_msoa_fye2023.xlsx` (income)
+  - `ons_ts003_household_composition_v4.csv` (household composition)
+- Refresh cadence:
+  - annual baseline refresh (recommended each April)
+  - ad-hoc refresh only if coverage drops or source schema changes
+- Agent behavior rules:
+  - Do not add raw demographic files into the repository.
+  - Do not commit ETL helper scripts unless explicitly instructed.
+  - If asked to refresh, run ETL locally, then update only the compact lookup used by app code.
+  - Log coverage after refresh: total area rows, and non-`Unknown` coverage for income/household/IMD/rural-urban.
