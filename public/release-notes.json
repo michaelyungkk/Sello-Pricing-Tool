@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-04-23T05:59:17.369Z",
+  "generatedAt": "2026-04-24T05:38:19.017Z",
   "items": [
     {
-      "id": "2b6eec4709a6",
-      "date": "2026-04-23T15:57:38+10:00",
-      "summary": "Fix PDF sanitizer regex for showcase text"
+      "id": "d601f12e48e5",
+      "date": "2026-04-24T15:36:09+10:00",
+      "summary": "Fix demographics module tracking for CI typecheck"
     }
   ]
 }
