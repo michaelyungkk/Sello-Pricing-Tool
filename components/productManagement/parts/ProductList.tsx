@@ -5,7 +5,6 @@ import { createPortal } from 'react-dom';
 import { Product, PricingRules, SkuFamily, PriceLog, OptimalPriceResult } from '../../../types';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { getCanonicalSku } from '../../../services/skuNormalization';
-import * as XLSX from 'xlsx-js-style';
 import { FilterBar } from '../../common/FilterBar';
 import { GradeBadge } from '../../common/GradeBadge';
 import { Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, Star, X, Layers, Tag, Info, GitMerge, User, Globe, CornerDownLeft, List, Ship, LineChart, Zap, Eye, CheckSquare, Square } from 'lucide-react';
@@ -933,7 +932,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
     const isContextFiltered = (platformFilters && platformFilters.length > 0) || managerFilters.length > 0;
 
-    const handleExport = (platform: string = 'All') => {
+    const handleExport = async (platform: string = 'All') => {
+        const XLSX = await import('xlsx-js-style');
         const headers = [
             'SKU',
             'Master SKU',

@@ -1757,6 +1757,7 @@ export const useAppState = () => {
         setSyncProgress(0);
         setSyncTotal(0);
         try {
+            let promotionsForCache: PromotionEvent[] = normalizePromotionStatuses(promotions || []);
             const lastKnownSnapshotUpdatedAt = localStorage.getItem('sello_snapshot_updated_at') || undefined;
             const masterRes = await pullSnapshotIfUpdated(lastKnownSnapshotUpdatedAt);
             if (!masterRes.success) {
@@ -1815,6 +1816,10 @@ export const useAppState = () => {
             const cachedTransactions = salesHistory || [];
             const localDates = cachedTransactions.map((t: PriceLog) => t.date).filter(Boolean).sort();
             const localNewestDate = localDates.length > 0 ? localDates[localDates.length - 1] : null;
+            console.log(
+                `[sync] transactions mode: ${localNewestDate && cachedTransactions.length > 0 ? 'incremental' : 'full'} ` +
+                `(cached=${cachedTransactions.length}, newest=${localNewestDate || 'none'})`
+            );
 
             if (localNewestDate && cachedTransactions.length > 0) {
                 // Incremental: only pull rows after the local newest date
@@ -1964,10 +1969,15 @@ export const useAppState = () => {
             // Pull promotions from separate table (incremental when cursor exists)
             const promoCursorKey = 'sello_promotions_updated_at';
             const lastPromoUpdatedAt = localStorage.getItem(promoCursorKey) || undefined;
-            const promoRes = await pullPromotionsSince(lastPromoUpdatedAt);
+            let promoRes = await pullPromotionsSince(lastPromoUpdatedAt);
             if (promoRes.success && Array.isArray(promoRes.promotions)) {
-                const remotePromotions = promoRes.promotions;
                 const localPromotions = promotions || [];
+                const isIncrementalEmpty = Boolean(lastPromoUpdatedAt && promoRes.incremental && promoRes.promotions.length === 0);
+                if (isIncrementalEmpty && localPromotions.length === 0) {
+                    console.warn('[sync] promotions incremental returned empty with empty local state; retrying full pull');
+                    promoRes = await pullPromotionsSince(undefined);
+                }
+                const remotePromotions = Array.isArray(promoRes.promotions) ? promoRes.promotions : [];
                 const nextPromotionsRaw = (lastPromoUpdatedAt && promoRes.incremental)
                     ? (remotePromotions.length === 0
                         ? localPromotions
@@ -1975,6 +1985,7 @@ export const useAppState = () => {
                     : keepLocalIfRemoteEmpty('promotions', remotePromotions, localPromotions);
                 const nextPromotions = normalizePromotionStatuses(nextPromotionsRaw);
                 setPromotions(nextPromotions);
+                promotionsForCache = nextPromotions;
                 console.log(`[sync] promotions loaded — ${nextPromotions.length} campaigns`);
                 if (promoRes.latestUpdatedAt) {
                     localStorage.setItem(promoCursorKey, promoRes.latestUpdatedAt);
@@ -2009,7 +2020,11 @@ export const useAppState = () => {
             // Save to local cache with current version
             const versionRes = await checkVersion();
             const version = versionRes.lastPushAt || time;
-            const snapshotForCache = hasSnapshotUpdate && incoming ? incoming : getSharedSnapshot();
+            const snapshotForCacheBase = hasSnapshotUpdate && incoming ? incoming : getSharedSnapshot();
+            const snapshotForCache = {
+                ...snapshotForCacheBase,
+                promotions: promotionsForCache
+            };
             await saveToCache(snapshotForCache, allTransactions, refunds, [], version);
 
             console.log(`[sync] complete — cached version: ${version}`);
@@ -2024,7 +2039,7 @@ export const useAppState = () => {
             setSyncProgress(0);
             setSyncTotal(0);
         }
-    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, pricingRules, brandMap, categoryMap, getSharedSnapshot, pullSnapshot,
+    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, salesHistory, pricingRules, brandMap, categoryMap, getSharedSnapshot, pullSnapshot,
         refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets]);
 
     const resolveConflicts = useCallback(async (keepLocal: boolean) => {

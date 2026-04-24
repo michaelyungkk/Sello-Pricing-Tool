@@ -13,6 +13,8 @@ import {
     generateCampaignSummary, getCampaignSummaryData, getBudgetRecommendation,
     findAdCandidates, weekLabel, diagnoseSkuFunnel,
     FUNNEL_DIAGNOSIS_LABELS, exportCampaignMasterXlsx,
+    detectAndParseCsv, parseDetailCsv, detectWeekFromDetailRows,
+    parseSummaryCsv, buildSnapshot,
 } from '../../services/adCampaignService';
 import { Product, PriceLog } from '../../types';
 import { MetricCard } from '../common/MetricCard';
@@ -969,8 +971,6 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
         let sRows: Record<string, string>[] = [];
         let dRows: Record<string, string>[] = [];
         try {
-            const { detectAndParseCsv, parseDetailCsv, detectWeekFromDetailRows } =
-                await import('../../services/adCampaignService');
             for (const file of Array.from(files)) {
                 names.push(file.name);
                 const text = await file.text();
@@ -1009,8 +1009,6 @@ function InlineUpload({ platform, learnedAliases, budgets, existingSnapshots, pr
         if (!dateStart || !dateEnd) { setError('Please set a date range.'); return; }
         setError(null);
         try {
-            const { parseSummaryCsv, parseDetailCsv, buildSnapshot } =
-                await import('../../services/adCampaignService');
             const campaigns = parseSummaryCsv(summaryRows, budgets, platform);
             const daily = parseDetailCsv(detailRows, learnedAliases);
             const prev = platformSnapshots[0] ?? null;

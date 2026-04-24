@@ -1,14 +1,7 @@
 
-import React, { startTransition, useState, useEffect, useCallback } from 'react';
+import React, { startTransition, useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { QuickUploadMenu } from './components/shared/QuickUploadMenu';
-
-// Components
-import { OverviewPageContainer } from './components/overview/OverviewPageContainer';
-
-import ProductManagementPage from './components/productManagement/ProductManagementPage';
-import StrategyPage from './components/strategy/StrategyPage';
-import PlatformManagementPage from './components/platformManagement/PlatformManagementPage';
 
 import {
     LayoutDashboard, FlaskConical, BadgePoundSterling, Tag, Briefcase, Settings, BookOpen, Search, X,
@@ -19,29 +12,33 @@ import {
 
 import GlobalSearch from './components/shared/GlobalSearch';
 import UserProfile from './components/shared/UserProfile';
-import SearchResultsPage from './components/search/SearchResultsPage';
-import CostManagementPage from './components/costManagement/CostManagementPage';
-import PromotionPage from './components/promotionManager/PromotionPage';
-import ToolboxPage from './components/toolbox/ToolboxPageContainer';
-import DefinitionsPage from './components/definitions/DefinitionsPageContainer';
-import SettingsPage from './components/settings/SettingsPage';
-import { CustomReportPage } from './components/customReport/CustomReportPage';
-import AdCampaignPageContainer from './components/adCampaign/AdCampaignPageContainer';
-import BatchUploadModal from './components/shared/modals/BatchUploadModal';
-import SalesImportModal from './components/shared/modals/SalesImportModal';
-import SkuDetailUploadModal from './components/shared/modals/SkuDetailUploadModal';
-import MappingUploadModal from './components/shared/modals/MappingUploadModal';
-import ReturnsUploadModal from './components/shared/modals/ReturnsUploadModal';
-import CAUploadModal from './components/shared/modals/CAUploadModal';
-import ShipmentUploadModal from './components/shared/modals/ShipmentUploadModal';
-import FreightUploadModal from './components/shared/modals/FreightUploadModal';
-import PriceElasticityModal from './components/skuDeepDive/PriceElasticityModal';
-import AnalysisModal from './components/skuDeepDive/AnalysisModal';
-
 import { TAX_NOTE_SHORT } from './services/taxPolicy';
 import { hexToRgb } from './utils/color';
 import { StrategyConfig, OptimalPriceResult } from './types';
 import type { CohortShiftWarning } from './services/cohortAnalysis';
+
+const OverviewPageContainer = lazy(() => import('./components/overview/OverviewPageContainer').then(m => ({ default: m.OverviewPageContainer })));
+const ProductManagementPage = lazy(() => import('./components/productManagement/ProductManagementPage'));
+const StrategyPage = lazy(() => import('./components/strategy/StrategyPage'));
+const PlatformManagementPage = lazy(() => import('./components/platformManagement/PlatformManagementPage'));
+const SearchResultsPage = lazy(() => import('./components/search/SearchResultsPage'));
+const CostManagementPage = lazy(() => import('./components/costManagement/CostManagementPage'));
+const PromotionPage = lazy(() => import('./components/promotionManager/PromotionPage'));
+const ToolboxPage = lazy(() => import('./components/toolbox/ToolboxPageContainer'));
+const DefinitionsPage = lazy(() => import('./components/definitions/DefinitionsPageContainer'));
+const SettingsPage = lazy(() => import('./components/settings/SettingsPage'));
+const CustomReportPage = lazy(() => import('./components/customReport/CustomReportPage').then(m => ({ default: m.CustomReportPage })));
+const AdCampaignPageContainer = lazy(() => import('./components/adCampaign/AdCampaignPageContainer'));
+const BatchUploadModal = lazy(() => import('./components/shared/modals/BatchUploadModal'));
+const SalesImportModal = lazy(() => import('./components/shared/modals/SalesImportModal'));
+const SkuDetailUploadModal = lazy(() => import('./components/shared/modals/SkuDetailUploadModal'));
+const MappingUploadModal = lazy(() => import('./components/shared/modals/MappingUploadModal'));
+const ReturnsUploadModal = lazy(() => import('./components/shared/modals/ReturnsUploadModal'));
+const CAUploadModal = lazy(() => import('./components/shared/modals/CAUploadModal'));
+const ShipmentUploadModal = lazy(() => import('./components/shared/modals/ShipmentUploadModal'));
+const FreightUploadModal = lazy(() => import('./components/shared/modals/FreightUploadModal'));
+const PriceElasticityModal = lazy(() => import('./components/skuDeepDive/PriceElasticityModal'));
+const AnalysisModal = lazy(() => import('./components/skuDeepDive/AnalysisModal'));
 
 
 const PageSpinner = () => (
@@ -106,6 +103,7 @@ interface ReleaseNoteItem {
 }
 
 const RELEASE_NOTES_SEEN_KEY = 'sello_release_notes_seen_id';
+const APP_BOOT_START_MS = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
 const App: React.FC = () => {
     const {
@@ -390,6 +388,12 @@ const App: React.FC = () => {
             return '';
         }
     });
+    const perfLoggedRef = React.useRef(false);
+    const perfMarksRef = React.useRef<{
+        shellRenderedAt?: number;
+        firstDataReadyAt?: number;
+        firstInteractiveAt?: number;
+    }>({});
     const releaseNotesPopoverRef = React.useRef<HTMLDivElement | null>(null);
 
     const markReleaseNotesSeen = useCallback((noteId: string) => {
@@ -507,6 +511,76 @@ const App: React.FC = () => {
         window.addEventListener('mousedown', onPointerDown);
         return () => window.removeEventListener('mousedown', onPointerDown);
     }, [isReleaseNotesOpen]);
+
+    useEffect(() => {
+        const markShellRendered = () => {
+            const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            if (!perfMarksRef.current.shellRenderedAt) {
+                perfMarksRef.current.shellRenderedAt = now;
+                (window as any).__selloPerf = {
+                    ...((window as any).__selloPerf || {}),
+                    appBootStartAt: APP_BOOT_START_MS,
+                    appShellRenderedAt: now
+                };
+                console.log(`[perf] app_shell_rendered: ${(now - APP_BOOT_START_MS).toFixed(1)}ms`);
+            }
+        };
+        if (typeof requestAnimationFrame !== 'undefined') {
+            requestAnimationFrame(markShellRendered);
+        } else {
+            setTimeout(markShellRendered, 0);
+        }
+    }, []);
+
+    useEffect(() => {
+        const hasAnyData = (products?.length || 0) > 0 || (salesHistory?.length || 0) > 0 || (refundHistory?.length || 0) > 0;
+        if (syncStatus === 'idle' && hasAnyData && !perfMarksRef.current.firstDataReadyAt) {
+            const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            perfMarksRef.current.firstDataReadyAt = now;
+            (window as any).__selloPerf = {
+                ...((window as any).__selloPerf || {}),
+                firstViewDataReadyAt: now
+            };
+            console.log(`[perf] first_view_data_ready: ${(now - APP_BOOT_START_MS).toFixed(1)}ms`);
+        }
+    }, [syncStatus, products, salesHistory, refundHistory]);
+
+    useEffect(() => {
+        if (perfLoggedRef.current) return;
+        if (!perfMarksRef.current.firstDataReadyAt) return;
+        if (!mountedPages.has(currentView)) return;
+
+        const stampInteractive = () => {
+            if (perfLoggedRef.current) return;
+            const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            perfMarksRef.current.firstInteractiveAt = now;
+            const shellMs = (perfMarksRef.current.shellRenderedAt || now) - APP_BOOT_START_MS;
+            const dataReadyMs = (perfMarksRef.current.firstDataReadyAt || now) - APP_BOOT_START_MS;
+            const interactiveMs = now - APP_BOOT_START_MS;
+            const readyToInteractiveMs = now - (perfMarksRef.current.firstDataReadyAt || now);
+            perfLoggedRef.current = true;
+            (window as any).__selloPerf = {
+                ...((window as any).__selloPerf || {}),
+                firstInteractiveAt: now,
+                summary: {
+                    shellMs: Number(shellMs.toFixed(1)),
+                    dataReadyMs: Number(dataReadyMs.toFixed(1)),
+                    interactiveMs: Number(interactiveMs.toFixed(1)),
+                    readyToInteractiveMs: Number(readyToInteractiveMs.toFixed(1))
+                }
+            };
+            console.log(
+                `[perf] startup_summary shell=${shellMs.toFixed(1)}ms data_ready=${dataReadyMs.toFixed(1)}ms ` +
+                `interactive=${interactiveMs.toFixed(1)}ms ready_to_interactive=${readyToInteractiveMs.toFixed(1)}ms`
+            );
+        };
+
+        if (typeof requestAnimationFrame !== 'undefined') {
+            requestAnimationFrame(() => requestAnimationFrame(stampInteractive));
+        } else {
+            setTimeout(stampInteractive, 0);
+        }
+    }, [mountedPages, currentView]);
 
     return (
         <>
@@ -842,6 +916,7 @@ const App: React.FC = () => {
                         {!mountedPages.has(currentView) && currentView !== 'overview' && currentView !== 'custom-report' && (
                             <PageSpinner />
                         )}
+                        <Suspense fallback={<PageSpinner />}>
                         {mountedPages.has('search') && (
                         <div style={{ display: currentView === 'search' ? 'block' : 'none' }}>
                             <>
@@ -1320,8 +1395,10 @@ const App: React.FC = () => {
                                 headerStyle={headerStyle}
                             />
                         </div>)}
+                        </Suspense>
                     </div>
                 </main>
+                <Suspense fallback={null}>
                 {isUploadModalOpen && (
                     <BatchUploadModal
                         products={products}
@@ -1421,6 +1498,7 @@ const App: React.FC = () => {
                         />
                     )
                 }
+                </Suspense>
 
                 <button
                     onClick={() => {

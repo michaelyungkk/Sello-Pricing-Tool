@@ -32,7 +32,6 @@ import {
 import { formatMoney, formatSmartMoney, formatPct, formatNumber } from '../../utils/format';
 import { GradeBadge } from '../common/GradeBadge';
 import { SelectFilter } from '../common/SelectFilter';
-import * as XLSX from 'xlsx-js-style';
 
 // Local alias so existing usages inside this file need no changes
 const MultiSelectDropdown = SelectFilter;
@@ -1510,8 +1509,9 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
         });
     };
 
-    const handleExport = (targetPlatform: string = 'All') => {
+    const handleExport = async (targetPlatform: string = 'All') => {
         if (!reportResult) return;
+        const XLSX = await import('xlsx-js-style');
 
         // ── Build product name lookup ──────────────────────────────────────
         const skuNameMap = new Map<string, string>();

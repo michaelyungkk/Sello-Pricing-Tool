@@ -902,6 +902,32 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                 <div className={`text-lg font-bold text-purple-900`}>{pinnedArea.tacos.toFixed(1)}%</div>
                             </div>
                         </div>
+
+                        {/* Demographics */}
+                        <div className="mb-4">
+                            <h5 className="font-bold text-gray-600 text-xs uppercase mb-2 flex items-center gap-2">
+                                <Info className="w-3 h-3" />
+                                Demographics
+                            </h5>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+                                    <div className="text-[10px] text-gray-500 uppercase">Income Band</div>
+                                    <div className="font-semibold text-gray-800">{pinnedArea.incomeBand || 'Unknown'}</div>
+                                </div>
+                                <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+                                    <div className="text-[10px] text-gray-500 uppercase">Household</div>
+                                    <div className="font-semibold text-gray-800">{pinnedArea.householdProfile || 'Unknown'}</div>
+                                </div>
+                                <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+                                    <div className="text-[10px] text-gray-500 uppercase">IMD Decile</div>
+                                    <div className="font-semibold text-gray-800">{pinnedArea.deprivationDecile ?? 'Unknown'}</div>
+                                </div>
+                                <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+                                    <div className="text-[10px] text-gray-500 uppercase">Urban / Rural</div>
+                                    <div className="font-semibold text-gray-800">{pinnedArea.ruralUrbanFlag || 'Unknown'}</div>
+                                </div>
+                            </div>
+                        </div>
                         
                         {/* Platform Breakdown */}
                         <div className="mb-4">
@@ -963,14 +989,14 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                             </div>
                                             <div>
                                                 <div className="font-medium text-gray-900 text-sm">{getAreaDisplayName(area.code)}</div>
-                                                <div className="text-[10px] text-gray-500">{metric === 'REVENUE' ? `${area.volume} units` : `£${area.revenue.toLocaleString()}`}</div>
+                                                <div className="text-[10px] text-gray-500">{metric === 'REVENUE' ? `${area.volume} units` : formatSmartMoney(area.revenue)}</div>
                                             </div>
                                         </div>
                                         <div className="text-right">
                                             <div className="font-bold text-theme text-sm">
                                                 {mode === 'ABSOLUTE'
-                                                  ? (metric === 'REVENUE' ? `£${area.revenue.toLocaleString()}` : area.volume)
-                                                  : (area.value > 0 ? '+' : '') + (metric === 'REVENUE' ? `£${Math.abs(area.value).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `${area.value}`)
+                                                  ? (metric === 'REVENUE' ? formatSmartMoney(area.revenue) : area.volume)
+                                                  : (area.value > 0 ? '+' : '') + (metric === 'REVENUE' ? formatSmartMoney(Math.abs(area.value)) : `${area.value}`)
                                                 }
                                             </div>
                                             <div className="w-16 h-1 bg-gray-100 rounded-full mt-1 ml-auto overflow-hidden">
