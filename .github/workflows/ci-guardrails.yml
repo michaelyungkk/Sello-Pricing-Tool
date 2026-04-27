@@ -38,20 +38,3 @@ jobs:
 
       - name: Build
         run: npm run build
-
-      - name: Generate Release Notes Feed
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: node scripts/generate-release-notes.js
-
-      - name: Commit Release Notes Feed
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          if git diff --quiet -- public/release-notes.json; then
-            echo "No release-notes changes."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/release-notes.json
-          git commit -m "chore: update release notes feed [skip ci]"
-          git push

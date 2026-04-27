@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-04-24T05:38:19.017Z",
+  "generatedAt": "2026-04-24T07:28:15.128Z",
   "items": [
     {
-      "id": "d601f12e48e5",
-      "date": "2026-04-24T15:36:09+10:00",
-      "summary": "Fix demographics module tracking for CI typecheck"
+      "id": "640fbb21179b",
+      "date": "2026-04-24T17:25:48+10:00",
+      "summary": "Lazy load pages and add startup diagnostics"
     }
   ]
 }
