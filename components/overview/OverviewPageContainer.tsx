@@ -212,7 +212,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             const lastSaleDate = saleLogs.length > 0 ? new Date(saleLogs[0].date).getTime() : 0;
             const daysSinceLastSale = lastSaleDate > 0 ? Math.floor((todayTs - lastSaleDate) / (1000 * 60 * 60 * 24)) : 999;
 
-            // Calculate Historical Medians
+            // Calculate historical reference metrics
             const allSkuLogs = logs.filter(l => {
                 if (platformScope.length > 0 && !platformScope.some(p => l.platform === p || l.platform?.includes(p))) return false;
                 return true;
@@ -222,13 +222,21 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
             const medDailyUnits = getMedianVal(histDailyUnits);
             const medPrice = getMedianVal(histDailyPrices);
-            const historicalMedianUnits = medDailyUnits * expectedDays;
             const historicalMedianPrice = medPrice;
-            const volumeDropPct = historicalMedianUnits > 0
-                ? ((curUnits - historicalMedianUnits) / historicalMedianUnits) * 100
+            const previousDailyVelocity = expectedDays > 0 ? (prevUnits / expectedDays) : 0;
+            const baselineQty = previousDailyVelocity * expectedDays; // equivalent to prevUnits, kept explicit for clarity
+            const volumeDropPct = baselineQty > 0
+                ? ((curUnits - baselineQty) / baselineQty) * 100
                 : 0;
-
-            const volumeDropAbs = curUnits - historicalMedianUnits;
+            const volumeDropAbs = curUnits - baselineQty;
+            const minAbsoluteDropUnits = Math.max(1, Math.ceil(expectedDays * 0.4)); // ~0.4 unit/day drop
+            const minBaselineUnits = Math.max(3, Math.ceil(expectedDays * 0.7)); // ~0.7 unit/day prior demand
+            const isVolumeDropCandidate = (
+                p.stockLevel > 0 &&
+                baselineQty >= minBaselineUnits &&
+                (baselineQty - curUnits) >= minAbsoluteDropUnits &&
+                volumeDropPct <= -Math.abs(thresholds.velocityDropPct)
+            );
 
             // DYNAMIC LEAD TIME LOGIC (Arrival ETA)
             let daysToArrival = 999;
@@ -358,7 +366,11 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 refundRateValue,
                 volumeDropPct,
                 volumeDropAbs,
-                historicalMedianUnits,
+                baselineQty,
+                previousDailyVelocity,
+                minAbsoluteDropUnits,
+                minBaselineUnits,
+                isVolumeDropCandidate,
                 historicalMedianPrice,
                 historicalMedianDemand: medDailyUnits,
                 inPromotion,
@@ -403,12 +415,12 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
     const alerts = useMemo(() => ({
         margin: processedDataWithToggle.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
-        velocity: processedDataWithToggle.filter(p => p.stockLevel > 0 && p.volumeDropPct <= -30 && p.historicalMedianUnits >= 5),
+        velocity: processedDataWithToggle.filter(p => p.isVolumeDropCandidate),
         // STOCK ALERTS: Updated logic - only alert if we HAVE an incoming shipment (Lead Time < 999) and runway is tight
         stock: processedDataWithToggle.filter(p => p.stockLevel > 2 && p.effectiveAlertLeadTime < 999 && p.periodRunway < (p.effectiveAlertLeadTime * 1.2)),
         // DEAD STOCK BUCKET: Updated logic per requirements
         dead: processedData.filter(p => p.inventoryValue > 200 && p.periodUnits === 0 && p.periodDailyVelocity < p.historicalMedianDemand)
-    }), [processedData, thresholds]);
+    }), [processedData, processedDataWithToggle, expectedDays]);
 
     const workbenchData = useMemo(() => {
         const data = !selectedAlert ? processedData.filter(p => p.periodRevenue > 0) : alerts[selectedAlert];
@@ -558,7 +570,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <AlertCard title="Fix Margin" count={alerts.margin.length} icon={DollarSign} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc={`Net PM% < 5%`} />
-                            <AlertCard title="Volume Drop" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`Drop ≤ -30% vs Median`} />
+                            <AlertCard title="Volume Drop" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`PoP drop ≥ ${Math.abs(thresholds.velocityDropPct)}% with reliable baseline`} />
                             <AlertCard title="Prevent Stockout" count={alerts.stock.length} icon={Ship} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Only Items with Arriving Stock" />
                             <AlertCard title="Clear Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc={`>£200 Value, 0 Sales`} />
                         </div>
@@ -606,17 +618,20 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 <SortableHeader label="Drop #" sortKey="volumeDrop" sort={sort} onChange={setSort} align="right" />
                                                 <SortableHeader label="Drop %" sortKey="volumeDrop" sort={sort} onChange={setSort} align="right" />
                                                 <SortableHeader label="Period Qty" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
-                                                <th className="r">
+                                                <th className="r relative group/header">
                                                     <div className="flex items-center justify-end gap-1 cursor-help">
                                                         Baseline Qty
                                                         <Info className="w-3 h-3 text-gray-400" />
                                                     </div>
-                                                    <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover/header:opacity-100 transition-all pointer-events-none z-50 border border-gray-700 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg hidden group-hover/header:block z-50 border border-gray-700 animate-in fade-in slide-in-from-top-2 duration-200">
                                                         <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight flex items-center justify-center gap-1.5">
                                                             <Calculator className="w-3 h-3 text-theme" /> Calculation Logic
                                                         </div>
                                                         <div className="leading-relaxed text-center normal-case font-medium whitespace-normal">
-                                                            Projected volume based on <span className="font-bold">Median Daily Sales</span> x <span className="font-bold">{expectedDays} days</span> window.
+                                                            Previous period average daily velocity x <span className="font-bold">{expectedDays} days</span>.
+                                                            <br />
+                                                            Candidate requires prior baseline {'>='} <span className="font-bold">{Math.max(3, Math.ceil(expectedDays * 0.7))} units</span>
+                                                            {' '}and absolute drop {'>='} <span className="font-bold">{Math.max(1, Math.ceil(expectedDays * 0.4))} units</span>.
                                                         </div>
                                                     </div>
                                                 </th>
@@ -632,12 +647,12 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
                                                 <SortableHeader label="Runway (Days)" sortKey="runway" sort={sort} onChange={setSort} align="right" />
                                                 <SortableHeader label="Lead Time" sortKey="leadTime" sort={sort} onChange={setSort} align="right" />
-                                                <th className="r">
+                                                <th className="r relative group/header">
                                                     <div className="flex items-center justify-end gap-1 cursor-help">
                                                         Global Velocity
                                                         <Info className="w-3 h-3 text-gray-400" />
                                                     </div>
-                                                    <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover/header:opacity-100 transition-all pointer-events-none z-50 border border-gray-700 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg hidden group-hover/header:block z-50 border border-gray-700 animate-in fade-in slide-in-from-top-2 duration-200">
                                                         <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight flex items-center justify-center gap-1.5">
                                                             <Calculator className="w-3 h-3 text-theme" /> Data Source
                                                         </div>
@@ -683,7 +698,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 let ctaText = isPriceHigh ? "Review Price Positioning" : "Consider Promotion";
                                                 let justification = isPriceHigh
                                                     ? `Price is currently ${formatSmartMoney(Math.abs(priceDiff))} above historical median (${formatSmartMoney(p.historicalMedianPrice)})`
-                                                    : `Velocity is down ${Math.abs(p.volumeDropPct).toFixed(0)}% despite baseline pricing`;
+                                                    : `Velocity is down ${Math.abs(p.volumeDropPct).toFixed(0)}% vs previous period baseline`;
 
                                                 if (hasRecentPriceIncrease) {
                                                     ctaText = "Monitor Intentional Slowdown";
@@ -718,7 +733,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                             <MetricValue value={p.volumeDropPct} type="percent" />
                                                         </td>
                                                         <td className="r text-gray-700 font-semibold">{formatNumber(p.periodUnits)}</td>
-                                                        <td className="r text-gray-400 font-medium">{formatNumber(p.historicalMedianUnits, 0)}</td>
+                                                        <td className="r text-gray-400 font-medium">{formatNumber(p.baselineQty, 0)}</td>
                                                         <td className="r">
                                                             <span className={isPriceHigh ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}>
                                                                 <MetricValue value={p.displayPrice} type="currency" neutral />
@@ -735,7 +750,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                     {p.priceChangeCount}
                                                                 </div>
                                                                  {p.priceChangeCount > 0 && (
-                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg opacity-0 group-hover/tooltip:opacity-100 transition-all pointer-events-none z-50 border border-gray-700 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg hidden group-hover/tooltip:block pointer-events-none z-50 border border-gray-700 animate-in fade-in slide-in-from-bottom-2 duration-200">
                                                                         <div className="font-bold border-b border-gray-700 pb-1 mb-1 uppercase tracking-tight flex justify-between items-center">
                                                                             <span>Recent Changes</span>
                                                                             <History className="w-3 h-3" />

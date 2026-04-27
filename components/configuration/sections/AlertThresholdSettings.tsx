@@ -18,14 +18,14 @@ const SETTING_META: Record<keyof Omit<ThresholdConfig, 'currentSeason'>, { label
     velocityCrashPct: {
         label: 'velocity_crash',
         unit: '%',
-        usedBy: 'Dashboard: Velocity Crashes',
-        description: 'Trigger for high-priority velocity drop alerts on the dashboard.'
+        usedBy: 'Legacy (reserved)',
+        description: 'Legacy placeholder. Not currently used by active dashboard/workbench logic.'
     },
     velocityDropPct: {
         label: 'velocity_drop',
         unit: '%',
-        usedBy: 'Deep Dive: Velocity Drop',
-        description: 'Standard sensitivity for detecting negative momentum in Deep Dive.'
+        usedBy: 'Overview: Volume Drop Workbench, Deep Dive: Velocity diagnostics',
+        description: 'Relative PoP drop threshold. Triggers when current window units fall below previous-period baseline by this percentage (with reliability gates).'
     },
     stockoutRunwayMultiplier: {
         label: 'stockout_buffer',

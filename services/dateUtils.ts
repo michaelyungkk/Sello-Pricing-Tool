@@ -23,8 +23,7 @@ export function formatDateKeyMelbourne(date: Date): string {
  */
 function excelSerialToDate(serial: number): Date {
   const excelEpoch = new Date(Date.UTC(1899, 11, 30)); // Dec 30, 1899 UTC
-  const intDays = Math.floor(serial);                  // strip time-of-day decimal
-  const days = intDays > 59 ? intDays - 1 : intDays;  // correct for Excel leap year bug
+  const days = Math.floor(serial);                     // strip time-of-day decimal
   const ms = days * 24 * 60 * 60 * 1000;
   return new Date(excelEpoch.getTime() + ms);
 }

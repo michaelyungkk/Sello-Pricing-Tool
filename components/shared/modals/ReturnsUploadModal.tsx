@@ -55,6 +55,17 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         }
     };
 
+    const parseRefundQty = (rawQty: unknown): number => {
+        if (rawQty === undefined || rawQty === null) return 1;
+        // Some ERP exports/coercions can surface qty as Date objects when cellDates is enabled.
+        if (rawQty instanceof Date) return 1;
+        const text = String(rawQty).trim();
+        if (!text) return 1;
+        const parsed = Number(text);
+        if (!Number.isFinite(parsed)) return 1;
+        return parsed > 0 ? parsed : 1;
+    };
+
     const readExcel = (file: File): Promise<any[]> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -62,7 +73,8 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                 try {
                     const data = e.target?.result;
                     if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                        // Keep raw scalar values for import parsing (avoid Date coercion on qty-like columns).
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: false });
                         const sheet = workbook.Sheets[workbook.SheetNames[0]];
                         resolve(XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[]);
                     } else {
@@ -203,16 +215,9 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                 const { row, sku, rawSku } = it;
                 const amt = it.amt;
 
-                let qty = 0;
+                let qty = 1;
                 if (qtyIdx !== -1) {
-                    const rawQty = row[qtyIdx];
-                    if (rawQty === undefined || rawQty === null || String(rawQty).trim() === '') {
-                        qty = 1;
-                    } else {
-                        qty = parseFloat(String(rawQty)) || 0;
-                    }
-                } else {
-                    qty = 1;
+                    qty = parseRefundQty(row[qtyIdx]);
                 }
 
                 // Allocate freight proportionally by item value
