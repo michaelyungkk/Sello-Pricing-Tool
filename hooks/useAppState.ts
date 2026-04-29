@@ -971,7 +971,7 @@ export const useAppState = () => {
                 date: h.date,
                 price: h.price,
                 velocity: h.velocity,
-                margin: h.margin || 0,
+                margin: h.margin,
                 profit: h.profit,
                 adsSpend: h.adsSpend,
                 platform: h.platform,
@@ -980,7 +980,15 @@ export const useAppState = () => {
                 logisticPartner: h.logisticPartner,
                 logisticService: h.logisticService,
                 realPostage: h.realPostage,
-                realExtraFreight: h.realExtraFreight
+                realExtraFreight: h.realExtraFreight,
+                cogs: h.cogs,
+                sellingFee: h.sellingFee,
+                adsFee: h.adsFee,
+                postage: h.postage,
+                otherFee: h.otherFee,
+                subscriptionFee: h.subscriptionFee,
+                wmsFee: h.wmsFee,
+                promoRel: h.promoRel
             }));
             const transactionKeys = new Set<string>(); const dailyActivityKeys = new Set<string>(); newLogs.forEach(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { transactionKeys.add(`${l.sku}|${l.orderId}`); } dailyActivityKeys.add(`${l.sku}|${d}|${p}`); });
             const keptHistory = (salesHistory || []).filter(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { const txKey = `${l.sku}|${l.orderId}`; if (transactionKeys.has(txKey)) return false; return true; } const dailyKey = `${l.sku}|${d}|${p}`; if (dailyActivityKeys.has(dailyKey)) return false; return true; });

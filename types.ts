@@ -157,6 +157,14 @@ export interface PriceLog {
 
     realPostage?: number;
     realExtraFreight?: number;
+    cogs?: number;
+    sellingFee?: number;
+    adsFee?: number;
+    postage?: number;
+    otherFee?: number;
+    subscriptionFee?: number;
+    wmsFee?: number;
+    promoRel?: number;
 }
 
 export interface RefundLog {
@@ -477,6 +485,14 @@ export interface HistoryPayload {
     logisticService?: string;
     realPostage?: number;
     realExtraFreight?: number;
+    cogs?: number;
+    sellingFee?: number;
+    adsFee?: number;
+    postage?: number;
+    otherFee?: number;
+    subscriptionFee?: number;
+    wmsFee?: number;
+    promoRel?: number;
 }
 // =============================================================================
 // OPTIMAL PRICE ALGORITHM — Types (added Session 1)

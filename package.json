@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "release-notes:generate": "node scripts/generate-release-notes.js",
+    "hooks:install": "git config core.hooksPath .githooks",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:encoding": "node scripts/check-mojibake.js",
     "typecheck": "tsc --noEmit",

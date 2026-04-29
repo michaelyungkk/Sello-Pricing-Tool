@@ -4,6 +4,7 @@ import { Upload, FileCheck, AlertTriangle, CheckCircle, XCircle, ChevronDown, Ch
 import { PriceLog, RefundLog, PricingRules, Product } from '../../../types';
 import { asDateKeyNaive } from '../../../services/dateUtils';
 import { formatMoney } from '../../../utils/format';
+import { calcRevenue, calcProfit, calcAdSpend } from '../../../services/metrics';
 
 const VAT = 1.2;
 const TOLERANCE = 2; // % variance threshold for warning
@@ -226,9 +227,9 @@ function getAppAggregates(
         const plat = log.platform || 'Unknown';
         if (!result[plat]) result[plat] = { units: 0, revenue: 0, profit: 0, ads: 0 };
         result[plat].units   += log.velocity || 0;
-        result[plat].revenue += ((log.price || 0) * (log.velocity || 0) + (log.realExtraFreight || 0)) * VAT;
-        result[plat].profit  += (log.profit ?? ((log.price || 0) * (log.velocity || 0) * ((log.margin || 0) / 100))) * VAT;
-        result[plat].ads     += (log.adsSpend || 0) * VAT;
+        result[plat].revenue += calcRevenue(log) * VAT;
+        result[plat].profit  += calcProfit(log) * VAT;
+        result[plat].ads     += calcAdSpend(log) * VAT;
     }
 
     if (deductReturns) {

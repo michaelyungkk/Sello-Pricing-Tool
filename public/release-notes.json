@@ -1,10 +1,105 @@
 {
-  "generatedAt": "2026-04-24T07:28:15.128Z",
+  "generatedAt": "2026-04-29T05:54:01.182Z",
   "items": [
+    {
+      "id": "8164de508211",
+      "date": "2026-04-27T16:23:35+10:00",
+      "summary": "Disable release notes auto-commit in CI"
+    },
+    {
+      "id": "80894a086533",
+      "date": "2026-04-27T16:06:02+10:00",
+      "summary": "Refine velocity alerts and returns import parsing"
+    },
+    {
+      "id": "cd7a9f40d5ae",
+      "date": "2026-04-24T07:28:15Z",
+      "summary": "chore: update release notes feed [skip ci]"
+    },
     {
       "id": "640fbb21179b",
       "date": "2026-04-24T17:25:48+10:00",
       "summary": "Lazy load pages and add startup diagnostics"
+    },
+    {
+      "id": "607c6d0f2393",
+      "date": "2026-04-24T05:38:19Z",
+      "summary": "chore: update release notes feed [skip ci]"
+    },
+    {
+      "id": "d601f12e48e5",
+      "date": "2026-04-24T15:36:09+10:00",
+      "summary": "Fix demographics module tracking for CI typecheck"
+    },
+    {
+      "id": "c03eadbabca5",
+      "date": "2026-04-24T14:11:59+10:00",
+      "summary": "Add postcode area demographics refresh workflow"
+    },
+    {
+      "id": "c0f8bb946c15",
+      "date": "2026-04-23T05:59:17Z",
+      "summary": "chore: update release notes feed [skip ci]"
+    },
+    {
+      "id": "2b6eec4709a6",
+      "date": "2026-04-23T15:57:38+10:00",
+      "summary": "Fix PDF sanitizer regex for showcase text"
+    },
+    {
+      "id": "80d92a21079b",
+      "date": "2026-04-23T15:48:05+10:00",
+      "summary": "Remove tracked temp artifacts and ignore local logs"
+    },
+    {
+      "id": "e19bacdf60eb",
+      "date": "2026-04-23T15:14:41+10:00",
+      "summary": "Remove large backup JSON files from the repo"
+    },
+    {
+      "id": "2eda7b3e4072",
+      "date": "2026-04-23T15:00:56+10:00",
+      "summary": "Stamp landed dates on inventory import"
+    },
+    {
+      "id": "574652d4897c",
+      "date": "2026-04-23T15:00:56+10:00",
+      "summary": "Improve pitching catalogue feature wrapping"
+    },
+    {
+      "id": "359944bb724f",
+      "date": "2026-04-22T06:36:39Z",
+      "summary": "chore: update release notes feed [skip ci]"
+    },
+    {
+      "id": "e81753d8ed1d",
+      "date": "2026-04-22T16:34:56+10:00",
+      "summary": "Fix mojibake sanitizer encoding guards"
+    },
+    {
+      "id": "0af106f2c040",
+      "date": "2026-04-22T16:26:00+10:00",
+      "summary": "Wrap pitching features and make missing filters clickable"
+    },
+    {
+      "id": "ade886abe392",
+      "date": "2026-04-22T15:26:38+10:00",
+      "summary": "Add release notes bell feed from CI commits"
+    },
+    {
+      "id": "3e77f7a0dee0",
+      "date": "2026-04-22T14:44:35+10:00",
+      "summary": "Add mojibake repair to CA imports and PDF generation"
+    },
+    {
+      "id": "5972b2ab3cf3",
+      "date": "2026-04-20T17:28:57+10:00",
+      "summary": "Fix lint errors and guard localStorage writes"
+    },
+    {
+      "id": "e00e8b4ea99c",
+      "date": "2026-04-20T16:45:29+10:00",
+      "summary": "Fix CI typecheck regressions across app"
     }
   ]
 }

@@ -5,6 +5,7 @@ import { isAdsEnabled } from './platformCapabilities';
 import { scaleMoneyInclTax } from './taxPolicy';
 import { VAT_MULTIPLIER } from '../constants';
 import { getCanonicalSku } from './skuNormalization';
+import { calcRevenue, calcProfit } from './metrics';
 
 export const safeCalculateMargin = (p: Product | undefined, price: number): number => {
     if (!p || !price || isNaN(price)) return 0;
@@ -49,7 +50,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
             safePriceHistory.forEach(l => {
                 // Use Canonical Mapping to catch variant sales (e.g. -A-UK, -B-UK)
                 if (getCanonicalSku(l.sku).toUpperCase() === targetMasterSku) {
-                    allTimeSales += (l.price * l.velocity);
+                    allTimeSales += calcRevenue(l);
                     allTimeQty += l.velocity;
                     transactions.push(l);
                 }
@@ -203,7 +204,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
 
         // Current Period Aggregation
         if (lTime >= startTime && lTime <= endTime) {
-            stats.revenue += (l.price * l.velocity);
+            stats.revenue += calcRevenue(l);
             stats.qty += l.velocity;
             
             // Organic Share Accumulation
@@ -220,18 +221,9 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
 
         // Previous Period Aggregation (For Trends)
         if (lTime >= prevStartTime && lTime < prevEndTime) {
-            stats.prevRevenue += (l.price * l.velocity);
+            stats.prevRevenue += calcRevenue(l);
             stats.prevQty += l.velocity;
-            
-            // Calculate Previous Profit
-            let logProfit = 0;
-            if (l.profit !== undefined) {
-                logProfit = l.profit;
-            } else {
-                const margin = l.margin || 0;
-                logProfit = l.price * l.velocity * (margin / 100);
-            }
-            stats.prevProfit += logProfit;
+            stats.prevProfit += calcProfit(l);
         }
     });
 
@@ -249,7 +241,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
 
         let margin = log.margin;
         let type = 'TRANSACTION';
-        const revenue = log.price * log.velocity;
+        const revenue = calcRevenue(log);
         const adsSpend = log.adsSpend !== undefined ? log.adsSpend : (product.adsFee || 0) * log.velocity;
 
         if (log.price === 0 && adsSpend > 0) {
@@ -282,7 +274,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
         const calculatedMetrics: any = {
             revenue, margin, adsSpend, tacos, 
             organicShare: organicShare !== null ? organicShare : 0,
-            profit: log.profit || (revenue * ((margin || 0)/100)),
+            profit: calcProfit(log),
             returnRate: product.returnRate || 0,
             periodReturnRate: periodReturnRate,
             stockLevel: product.stockLevel,

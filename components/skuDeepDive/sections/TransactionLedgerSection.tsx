@@ -1,5 +1,5 @@
-import React from 'react';
-import { Activity, Calendar, Search, Info, Rows, MapPin } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Activity, Calendar, Search, Info, Rows, MapPin, ChevronDown, ChevronRight } from 'lucide-react';
 import { SelectFilter } from '../../common/SelectFilter';
 import AuditPanel from '../../common/AuditPanel';
 import { formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
@@ -91,6 +91,101 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     adRedistributionSummary
 }) => {
     void product;
+    const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
+
+    const platformCostBreakdowns = useMemo(() => {
+        const getNum = (row: any, keys: string[]) => {
+            for (const key of keys) {
+                const value = row?.[key];
+                if (typeof value === 'number' && Number.isFinite(value)) return value;
+                if (typeof value === 'string') {
+                    const parsed = Number(value);
+                    if (Number.isFinite(parsed)) return parsed;
+                }
+            }
+            return 0;
+        };
+
+        const byPlatform = new Map<string, any[]>();
+        for (const row of filteredTransactions) {
+            const platform = String(row?.platform || 'Unknown');
+            if (!byPlatform.has(platform)) byPlatform.set(platform, []);
+            byPlatform.get(platform)?.push(row);
+        }
+
+        const result = new Map<string, {
+            revenue: number;
+            netProfit: number;
+            costs: Array<{ label: string; value: number }>;
+            reconciliation: number;
+            maxBarAbs: number;
+        }>();
+
+        const fallbackUnitCosts = {
+            cogs: Number(product.costPrice ?? product.costDetail?.cogs ?? 0),
+            sellingFee: Number(product.sellingFee ?? product.costDetail?.sellingFee ?? 0),
+            adsFee: Number(product.adsFee ?? product.costDetail?.adsFee ?? 0),
+            postage: Number(product.postage ?? product.costDetail?.postage ?? 0),
+            otherFee: Number(product.otherFee ?? product.costDetail?.otherFee ?? 0),
+            subscriptionFee: Number(product.subscriptionFee ?? product.costDetail?.subscriptionFee ?? 0),
+            wmsFee: Number(product.wmsFee ?? product.costDetail?.wmsFee ?? 0),
+            promoRebate: Number(product.costDetail?.promoRebate ?? 0)
+        };
+
+        for (const sub of platformSubtotals) {
+            const rows = byPlatform.get(sub.platform) || [];
+            const hasAnyField = (keys: string[]) => rows.some(row => keys.some(key => row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== ''));
+            const soldUnits = rows.reduce((sum, row) => {
+                const units = getNum(row, ['velocity']);
+                return sum + (units > 0 ? units : 0);
+            }, 0);
+
+            const promoRelRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['promo_rel', 'promoRel', 'promoRebate']), 0);
+            const cogsRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['cogs', 'costPrice']), 0);
+            const sellingRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['selling_fee', 'sellingFee']), 0);
+            const adsFeeRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['ads_fee', 'adsFee']), 0);
+            const postageRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['postage', 'realPostage']), 0);
+            const otherRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['other_fee', 'otherFee']), 0);
+            const subscriptionRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['subscription', 'subscriptionFee']), 0);
+            const wmsRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['wms_fee', 'wmsFee']), 0);
+
+            const promoRel = ((hasAnyField(['promoRel', 'promo_rel', 'promoRebate']) ? promoRelRowTotal : fallbackUnitCosts.promoRebate * soldUnits)) * VAT_MULTIPLIER;
+            const cogs = ((hasAnyField(['cogs', 'costPrice']) ? cogsRowTotal : fallbackUnitCosts.cogs * soldUnits)) * VAT_MULTIPLIER;
+            const sellingFee = ((hasAnyField(['sellingFee', 'selling_fee']) ? sellingRowTotal : fallbackUnitCosts.sellingFee * soldUnits)) * VAT_MULTIPLIER;
+            const adsFee = ((hasAnyField(['adsFee', 'ads_fee']) ? adsFeeRowTotal : fallbackUnitCosts.adsFee * soldUnits)) * VAT_MULTIPLIER;
+            const postage = ((hasAnyField(['postage', 'realPostage']) ? postageRowTotal : fallbackUnitCosts.postage * soldUnits)) * VAT_MULTIPLIER;
+            const otherFee = ((hasAnyField(['otherFee', 'other_fee']) ? otherRowTotal : fallbackUnitCosts.otherFee * soldUnits)) * VAT_MULTIPLIER;
+            const subscription = ((hasAnyField(['subscriptionFee', 'subscription']) ? subscriptionRowTotal : fallbackUnitCosts.subscriptionFee * soldUnits)) * VAT_MULTIPLIER;
+            const wmsFee = ((hasAnyField(['wmsFee', 'wms_fee']) ? wmsRowTotal : fallbackUnitCosts.wmsFee * soldUnits)) * VAT_MULTIPLIER;
+
+            const costs = [
+                { label: 'Promo Relief', value: promoRel },
+                { label: 'COGS', value: cogs },
+                { label: 'Selling Fee', value: sellingFee },
+                { label: 'Ads Fee', value: adsFee },
+                { label: 'Postage', value: postage },
+                { label: 'Other Fee', value: otherFee },
+                { label: 'Subscription', value: subscription },
+                { label: 'WMS Fee', value: wmsFee }
+            ].filter(item => Math.abs(item.value) > 0.0001);
+
+            const revenue = sub.revenue || 0;
+            const netProfit = sub.profit || 0;
+            const computedProfit = revenue - costs.reduce((sum, cost) => sum + cost.value, 0);
+            const reconciliation = netProfit - computedProfit;
+            const maxBarAbs = Math.max(
+                Math.abs(revenue),
+                Math.abs(netProfit),
+                ...costs.map(cost => Math.abs(cost.value)),
+                Math.abs(reconciliation)
+            );
+
+            result.set(sub.platform, { revenue, netProfit, costs, reconciliation, maxBarAbs });
+        }
+
+        return result;
+    }, [filteredTransactions, platformSubtotals, product]);
+
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -253,50 +348,182 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 </div>
                 <div className="divide-y divide-gray-100">
                     {platformSubtotals.map(sub => (
-                        <div key={sub.platform} className="flex items-center justify-between px-4 py-3.5 hover:bg-gray-50">
-                            <span className="font-bold text-sm text-gray-800 w-1/5">{sub.platform}</span>
-                            <div className="flex items-center justify-end gap-4 text-xs w-4/5">
-                                <div className="text-right w-20">
-                                    <div className="text-gray-400">Qty Sold</div>
-                                    <div className="font-mono font-bold text-gray-700">{formatNumber(sub.soldQty)}</div>
-                                </div>
-                                <div className="text-right w-24">
-                                    <div className="text-gray-400">Raw Ad</div>
-                                    <div className="font-mono font-bold text-gray-700">{formatSmartMoney(sub.rawAdSpend)}</div>
-                                </div>
-                                <div className="text-right w-24">
-                                    <div className="text-gray-400">Adj. Ad</div>
-                                    <div className="font-mono font-bold text-orange-600">{formatSmartMoney(sub.adjustedAdSpend)}</div>
-                                </div>
-                                <div className="text-right w-24">
-                                    <div className="text-gray-400">Ad Delta</div>
-                                    <div className={`font-mono font-bold ${sub.adDelta > 0 ? 'text-emerald-600' : sub.adDelta < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                                        {sub.adDelta > 0 ? '+' : ''}{formatSmartMoney(sub.adDelta)}
+                        <div key={sub.platform}>
+                            <button
+                                type="button"
+                                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 text-left"
+                                onClick={() => setExpandedPlatform(prev => prev === sub.platform ? null : sub.platform)}
+                            >
+                                <span className="font-bold text-sm text-gray-800 w-1/5 flex items-center gap-2">
+                                    {expandedPlatform === sub.platform ? <ChevronDown className="w-3.5 h-3.5 text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-500" />}
+                                    {sub.platform}
+                                </span>
+                                <div className="flex items-center justify-end gap-4 text-xs w-4/5">
+                                    <div className="text-right w-20">
+                                        <div className="text-gray-400">Qty Sold</div>
+                                        <div className="font-mono font-bold text-gray-700">{formatNumber(sub.soldQty)}</div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Raw Ad</div>
+                                        <div className="font-mono font-bold text-gray-700">{formatSmartMoney(sub.rawAdSpend)}</div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Adj. Ad</div>
+                                        <div className="font-mono font-bold text-orange-600">{formatSmartMoney(sub.adjustedAdSpend)}</div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Ad Delta</div>
+                                        <div className={`font-mono font-bold ${sub.adDelta > 0 ? 'text-emerald-600' : sub.adDelta < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                                            {sub.adDelta > 0 ? '+' : ''}{formatSmartMoney(sub.adDelta)}
+                                        </div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Revenue</div>
+                                        <div className="font-mono font-bold text-theme">{formatSmartMoney(sub.revenue)}</div>
+                                    </div>
+                                    <div className="text-right w-20">
+                                        <div className="text-gray-400">Sales Share %</div>
+                                        <div className="font-mono font-bold text-gray-700">
+                                            {'>'} {formatPct(sub.revenueSharePct, 1)}
+                                        </div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Profit</div>
+                                        <div className={`font-mono font-bold ${sub.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {formatSmartMoney(sub.profit)}
+                                        </div>
+                                    </div>
+                                    <div className="text-right w-20">
+                                        <div className="text-gray-400">Margin %</div>
+                                        <div className={`font-mono font-bold ${sub.margin !== null && sub.margin >= thresholds.marginBelowTargetPct ? 'text-emerald-600' : sub.margin !== null && sub.margin >= 0 ? 'text-amber-500' : 'text-red-600'}`}>
+                                            {formatPct(sub.margin)}
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="text-right w-24">
-                                    <div className="text-gray-400">Revenue</div>
-                                    <div className="font-mono font-bold text-theme">{formatSmartMoney(sub.revenue)}</div>
-                                </div>
-                                <div className="text-right w-20">
-                                    <div className="text-gray-400">Sales Share %</div>
-                                    <div className="font-mono font-bold text-gray-700">
-                                        {'>'} {formatPct(sub.revenueSharePct, 1)}
+                            </button>
+                            {expandedPlatform === sub.platform && (() => {
+                                const breakdown = platformCostBreakdowns.get(sub.platform);
+                                if (!breakdown) return null;
+                                const barBase = Math.max(1, breakdown.maxBarAbs);
+                                const waterfallSteps = [
+                                    { label: 'Revenue', amount: breakdown.revenue, running: breakdown.revenue, type: 'start' as const },
+                                    ...breakdown.costs.map((cost, idx) => {
+                                        const prev = idx === 0 ? breakdown.revenue : (breakdown.revenue - breakdown.costs.slice(0, idx).reduce((sum, item) => sum + item.value, 0));
+                                        const next = prev - cost.value;
+                                        return { label: cost.label, amount: cost.value, running: next, type: 'cost' as const };
+                                    }),
+                                    ...(Math.abs(breakdown.reconciliation) > 0.01 ? [{
+                                        label: 'Reconciliation',
+                                        amount: breakdown.reconciliation,
+                                        running: breakdown.netProfit,
+                                        type: 'recon' as const
+                                    }] : []),
+                                    { label: 'Net Profit', amount: breakdown.netProfit, running: breakdown.netProfit, type: 'end' as const }
+                                ];
+
+                                const maxRunning = Math.max(1, ...waterfallSteps.map(step => Math.abs(step.running)));
+                                return (
+                                    <div className="px-5 pb-4">
+                                        <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-3">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                                <div className="space-y-2">
+                                                    <div className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Waterfall Breakdown</div>
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-theme font-semibold">Revenue</span>
+                                                        <span className="font-mono font-bold text-theme">{formatSmartMoney(breakdown.revenue)}</span>
+                                                    </div>
+                                                    {breakdown.costs.map(cost => (
+                                                        <div key={cost.label} className="flex items-center justify-between text-xs">
+                                                            <span className="text-gray-600">{cost.label}</span>
+                                                            <span className="font-mono font-semibold text-red-600">-{formatSmartMoney(cost.value)}</span>
+                                                        </div>
+                                                    ))}
+                                                    {Math.abs(breakdown.reconciliation) > 0.01 && (
+                                                        <div className="flex items-center justify-between text-xs">
+                                                            <span className="text-gray-500">Reconciliation</span>
+                                                            <span className={`font-mono font-semibold ${breakdown.reconciliation >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                                {breakdown.reconciliation > 0 ? '+' : ''}{formatSmartMoney(breakdown.reconciliation)}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    <div className="pt-1 border-t border-gray-200 flex items-center justify-between text-sm">
+                                                        <span className="text-gray-700 font-bold">Net Profit</span>
+                                                        <span className={`font-mono font-bold ${breakdown.netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                            {formatSmartMoney(breakdown.netProfit)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <div className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Waterfall (Running Total)</div>
+                                                    <div className="overflow-x-auto">
+                                                        <div className="min-w-[460px]">
+                                                            <div className="relative h-48 rounded-lg border border-gray-200 bg-white p-3">
+                                                                {[0, 1, 2, 3, 4].map(grid => (
+                                                                    <div
+                                                                        key={`grid-${grid}`}
+                                                                        className="absolute left-3 right-3 border-t border-dashed border-gray-100"
+                                                                        style={{ top: `${12 + grid * 22}%` }}
+                                                                    />
+                                                                ))}
+                                                                <div className="absolute left-3 right-3 bottom-6 top-5 flex items-end gap-2">
+                                                                    {waterfallSteps.map((step, idx) => {
+                                                                        const prevRunning = idx === 0 ? 0 : waterfallSteps[idx - 1].running;
+                                                                        const currentRunning = step.running;
+                                                                        const high = Math.max(prevRunning, currentRunning);
+                                                                        const low = Math.min(prevRunning, currentRunning);
+                                                                        const barHeightPct = Math.max(3, (Math.abs(high - low) / maxRunning) * 100);
+                                                                        const bottomPct = (low / maxRunning) * 100;
+                                                                        const colorClass = step.type === 'start' || step.type === 'end'
+                                                                            ? 'bg-emerald-500'
+                                                                            : step.type === 'cost'
+                                                                                ? 'bg-red-400'
+                                                                                : step.amount >= 0
+                                                                                    ? 'bg-emerald-400'
+                                                                                    : 'bg-red-400';
+                                                                        return (
+                                                                            <div key={`${step.label}-${idx}`} className="relative flex-1 min-w-[44px] h-full">
+                                                                                {idx > 0 && (
+                                                                                    <div
+                                                                                        className="absolute border-t border-gray-300 border-dashed"
+                                                                                        style={{
+                                                                                            left: '-50%',
+                                                                                            right: '50%',
+                                                                                            bottom: `${(prevRunning / maxRunning) * 100}%`
+                                                                                        }}
+                                                                                    />
+                                                                                )}
+                                                                                <div
+                                                                                    className={`absolute left-1 right-1 rounded-sm ${colorClass}`}
+                                                                                    style={{
+                                                                                        bottom: `${Math.max(0, bottomPct)}%`,
+                                                                                        height: `${barHeightPct}%`
+                                                                                    }}
+                                                                                />
+                                                                                <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-mono text-gray-700 whitespace-nowrap">
+                                                                                    {step.type === 'start' || step.type === 'end'
+                                                                                        ? formatSmartMoney(step.running)
+                                                                                        : `${step.type === 'cost' ? '-' : step.amount > 0 ? '+' : ''}${formatSmartMoney(Math.abs(step.amount))}`}
+                                                                                </div>
+                                                                                <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-gray-500 whitespace-nowrap text-center max-w-[70px] truncate">
+                                                                                    {step.label}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                            <div className="mt-2 flex items-center gap-3 text-[10px] text-gray-500">
+                                                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500" />Total / positive step</span>
+                                                                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-400" />Cost decrease</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="text-right w-24">
-                                    <div className="text-gray-400">Profit</div>
-                                    <div className={`font-mono font-bold ${sub.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {formatSmartMoney(sub.profit)}
-                                    </div>
-                                </div>
-                                <div className="text-right w-20">
-                                    <div className="text-gray-400">Margin %</div>
-                                    <div className={`font-mono font-bold ${sub.margin !== null && sub.margin >= thresholds.marginBelowTargetPct ? 'text-emerald-600' : sub.margin !== null && sub.margin >= 0 ? 'text-amber-500' : 'text-red-600'}`}>
-                                        {formatPct(sub.margin)}
-                                    </div>
-                                </div>
-                            </div>
+                                );
+                            })()}
                         </div>
                     ))}
                     {platformSubtotals.length === 0 && (

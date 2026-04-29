@@ -318,6 +318,39 @@ const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
                                 profit-maximising price suggestions as confidence badges and tooltips in
                                 the Strategy table. The formulas below define how it works internally.
                             </p>
+                            <div className="p-4 bg-indigo-50/50 rounded-lg border border-indigo-100 mb-4">
+                                <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">Layman Explanation (Step by Step)</h4>
+                                <ol className="space-y-2 text-xs text-gray-700 list-decimal pl-4">
+                                    <li>Collect valid sales rows for this SKU (correct platform, valid price, valid quantity).</li>
+                                    <li>Group sales by observed price and estimate speed per price using median weekly units (then divide by 7). Example: weekly units [5, 6, 7, 6, 40] gives median 6, so daily velocity is 0.86/day.</li>
+                                    <li>For each observed price, calculate expected daily profit from margin and velocity.</li>
+                                    <li>Choose the best observed SKU price as the SKU-layer optimum, then calculate a cohort-layer optimum from similar SKUs (same category, same price bucket/bin).</li>
+                                    <li>Calculate confidence from sample size and price variation. High confidence means trust SKU history more; low confidence means trust cohort benchmark more.</li>
+                                    <li>Blend SKU optimum and cohort optimum using confidence as the weight.</li>
+                                    <li>Apply safety guardrails (cost floor, margin floor, max cap), then round to a customer-facing ending (X.99).</li>
+                                </ol>
+                            </div>
+                            <div className="p-4 bg-gray-50/50 rounded-lg border border-gray-100 mb-4">
+                                <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">Formula Chain (Compact)</h4>
+                                <div className="font-mono text-xs bg-white px-3 py-2 rounded border border-gray-200">
+                                    dailyVelocity = medianWeeklyUnits / 7
+                                </div>
+                                <div className="font-mono text-xs bg-white px-3 py-2 rounded border border-gray-200 mt-2">
+                                    dailyProfit(price) = (price - unitCost) * dailyVelocity
+                                </div>
+                                <div className="font-mono text-xs bg-white px-3 py-2 rounded border border-gray-200 mt-2">
+                                    skuOptimal = argmax(dailyProfit(observedPrice))
+                                </div>
+                                <div className="font-mono text-xs bg-white px-3 py-2 rounded border border-gray-200 mt-2">
+                                    cohortOptimal = bestPrice(category, priceBin)
+                                </div>
+                                <div className="font-mono text-xs bg-white px-3 py-2 rounded border border-gray-200 mt-2">
+                                    blended = confidence * skuOptimal + (1 - confidence) * cohortOptimal
+                                </div>
+                                <div className="font-mono text-xs bg-white px-3 py-2 rounded border border-gray-200 mt-2">
+                                    final = snapTo99(applyGuardrails(blended))
+                                </div>
+                            </div>
                             <div className="space-y-4">
                                 <div className="p-4 bg-gray-50/50 rounded-lg border border-gray-100">
                                     <h4 className="font-semibold text-gray-900 mb-2 text-xs uppercase">Daily Profit (per price point)</h4>

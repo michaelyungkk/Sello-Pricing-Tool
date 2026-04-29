@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { DollarSign, Tag, TrendingUp, TrendingDown, ArrowRight, Info, Users, Clock, LayoutGrid, ExternalLink } from 'lucide-react';
-import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, ReferenceArea, ReferenceLine, Tooltip as RechartsTooltip, Legend, BarChart, Bar, ComposedChart, Line } from 'recharts';
+import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, ReferenceArea, ReferenceLine, ReferenceDot, Tooltip as RechartsTooltip, Legend, BarChart, Bar, ComposedChart, Line } from 'recharts';
 import { PriceChangeHistoryPanel } from '../../strategy/PriceChangeHistoryPanel';
 import { OptimalPriceCard } from '../parts/OptimalPriceCard';
 import { Product, PriceLog, OptimalPriceResult, PricePoint } from '../../../types';
@@ -200,18 +200,63 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
         }).filter((d): d is NonNullable<typeof d> => d !== null);
 
         const hasNoData = pricePoints.length === 0;
+        const interpolateY = (series: Array<{ x: number; y: number }>, x: number): number | null => {
+            if (!series.length) return null;
+            const sorted = [...series].sort((a, b) => a.x - b.x);
+            if (x < sorted[0].x || x > sorted[sorted.length - 1].x) return null;
+            for (let i = 0; i < sorted.length; i++) {
+                const point = sorted[i];
+                if (Math.abs(point.x - x) < 0.0001) return point.y;
+                if (i < sorted.length - 1) {
+                    const next = sorted[i + 1];
+                    if (x >= point.x && x <= next.x) {
+                        const span = next.x - point.x;
+                        if (Math.abs(span) < 0.0001) return point.y;
+                        const ratio = (x - point.x) / span;
+                        return point.y + ratio * (next.y - point.y);
+                    }
+                }
+            }
+            return null;
+        };
+        const primaryCurve = curveData.length >= 2 ? curveData : cohortCurveData;
+        const currentProfitAtPrice = interpolateY(primaryCurve, cp);
+        const recommendedProfitAtPrice = interpolateY(primaryCurve, recommendedPrice);
+        const renderProfitLabel = (
+            text: string,
+            tone: 'neutral' | 'positive',
+            align: 'left' | 'right'
+        ) => (props: any) => {
+            const x = Number(props?.viewBox?.x ?? 0);
+            const y = Number(props?.viewBox?.y ?? 0);
+            const padX = 5;
+            const boxH = 16;
+            const approxW = Math.max(36, text.length * 6 + (padX * 2));
+            const dx = align === 'left' ? -(approxW + 8) : 8;
+            const dy = -20;
+            const bg = tone === 'positive' ? '#ecfdf5' : '#f3f4f6';
+            const stroke = tone === 'positive' ? '#86efac' : '#d1d5db';
+            const color = tone === 'positive' ? '#065f46' : '#374151';
+            return (
+                <g transform={`translate(${x + dx}, ${y + dy})`}>
+                    <rect x={0} y={0} rx={4} ry={4} width={approxW} height={boxH} fill={bg} stroke={stroke} />
+                    <text x={padX} y={11} fontSize={9} fontWeight={700} fill={color}>{text}</text>
+                </g>
+            );
+        };
 
         return (
-            <div className="relative w-full h-full">
-                {hasNoData && (
-                    <div className="absolute top-2 left-0 right-0 flex justify-center z-10 pointer-events-none">
-                        <span className="bg-gray-800/80 text-white text-[10px] px-3 py-1 rounded-full">
-                            No sales history — curve based on benchmark
-                        </span>
-                    </div>
-                )}
-                <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart margin={{ top: 24, right: 20, left: 10, bottom: 20 }}>
+            <div className="w-full h-full flex flex-col">
+                <div className="relative flex-1 min-h-0">
+                    {hasNoData && (
+                        <div className="absolute top-2 left-0 right-0 flex justify-center z-10 pointer-events-none">
+                            <span className="bg-gray-800/80 text-white text-[10px] px-3 py-1 rounded-full">
+                                No sales history — curve based on benchmark
+                            </span>
+                        </div>
+                    )}
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart margin={{ top: 24, right: 20, left: 10, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                         <XAxis type="number" dataKey="x" domain={[xMin, xMax]} tickFormatter={(v) => `£${Number(v).toFixed(0)}`} tick={{ fontSize: 10 }} label={{ value: 'Price (£)', position: 'insideBottom', offset: -8, fontSize: 10, fill: '#9ca3af' }} />
                         <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `£${Number(v).toFixed(2)}`} label={{ value: 'Daily Profit', angle: -90, position: 'insideLeft', offset: 10, fontSize: 10, fill: '#9ca3af' }} />
@@ -252,9 +297,54 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                                 />
                             );
                         })()}
+                        {currentProfitAtPrice !== null && (
+                            <ReferenceDot
+                                x={cp}
+                                y={currentProfitAtPrice}
+                                r={4}
+                                fill="#374151"
+                                stroke="#ffffff"
+                                strokeWidth={1.5}
+                                label={renderProfitLabel(formatSmartMoney(currentProfitAtPrice), 'neutral', 'left')}
+                            />
+                        )}
+                        {recommendedProfitAtPrice !== null && (
+                            <ReferenceDot
+                                x={recommendedPrice}
+                                y={recommendedProfitAtPrice}
+                                r={4}
+                                fill="#10b981"
+                                stroke="#ffffff"
+                                strokeWidth={1.5}
+                                label={renderProfitLabel(formatSmartMoney(recommendedProfitAtPrice), 'positive', 'right')}
+                            />
+                        )}
                         <ReferenceLine x={recommendedPrice} stroke="#10b981" strokeWidth={2} label={{ value: `Optimal ${formatSmartMoney(recommendedPrice)} ★`, position: 'top', fontSize: 9, fill: '#10b981' }} />
-                    </ComposedChart>
-                </ResponsiveContainer>
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className="mt-2 px-2">
+                    <div className="rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-[10px] text-gray-600 shadow-sm w-fit">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            <div className="flex items-center gap-2">
+                                <span className="inline-block w-5 border-t border-dashed border-gray-400"></span>
+                                <span>Peer benchmark curve</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="inline-block w-5 border-t-2 border-theme"></span>
+                                <span>SKU profit curve</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="inline-block h-3 border-l border-dashed border-gray-500"></span>
+                                <span>Current price</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="inline-block h-3 border-l-2 border-emerald-500"></span>
+                                <span>Recommended price</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     };

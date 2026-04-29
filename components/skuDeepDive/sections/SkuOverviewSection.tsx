@@ -26,8 +26,11 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
     hasTransactions,
     onScrollToSection
 }) => {
+    const latestCogs = Number(product.costPrice ?? product.costDetail?.cogs ?? 0);
+    const latestFreight = Number(product.postage ?? product.costDetail?.postage ?? 0);
+
     return (
-        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden backdrop-blur-custom p-6">
+        <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-visible backdrop-blur-custom p-6">
             <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
                 <div className="flex items-center gap-2">
                     <div className="p-2 bg-theme/10 text-theme rounded-lg">
@@ -104,10 +107,10 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                     </div>
                 </div>
 
-                <div className="flex-shrink-0 w-full xl:w-[600px]">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="flex-shrink-0 w-full xl:w-[700px]">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
                         
-                        <div className="space-y-1">
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom space-y-1">
                             <span className="text-[10px] font-medium text-gray-500 uppercase flex items-center gap-1">
                                 <Activity className="w-3 h-3"/> Velocity
                             </span>
@@ -116,7 +119,7 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                             </div>
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom space-y-1">
                             <span className="text-[10px] font-medium text-gray-500 uppercase flex items-center gap-1">
                                 <Warehouse className="w-3 h-3"/> On Hand
                             </span>
@@ -126,7 +129,7 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                         </div>
 
                         {/* INBOUND TOOLTIP */}
-                        <div className="space-y-1 group relative cursor-help">
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom space-y-1 group relative cursor-help">
                             <span className="text-[10px] font-medium text-gray-500 uppercase flex items-center gap-1">
                                 <Ship className="w-3 h-3"/> Inbound
                             </span>
@@ -149,7 +152,7 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                             )}
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom space-y-1">
                             <span className="text-[10px] font-medium text-gray-500 uppercase flex items-center gap-1">
                                 <Box className="w-3 h-3"/> Lifetime Qty
                             </span>
@@ -159,26 +162,40 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                         </div>
 
                         {/* Row 2 - Summary Statistics */}
-                        <div className="col-span-2 sm:col-span-1 p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
                             <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">CA Reference Price</span>
                             <div className="text-lg font-bold text-purple-600 font-mono">
                                 {formatSmartMoney(product.caPrice)}
                             </div>
                         </div>
 
-                        <div className="col-span-2 sm:col-span-1 p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
                             <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">All-Time Sales</span>
                             <div className="text-lg font-bold text-gray-800">
                                 {formatSmartMoney(allTimeSales)}
                             </div>
                         </div>
 
-                        <div className="col-span-2 sm:col-span-1 p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom group relative cursor-help">
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
+                            <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">COGS</span>
+                            <div className="text-lg font-bold text-gray-800 font-mono">
+                                {formatSmartMoney(latestCogs)}
+                            </div>
+                        </div>
+
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
+                            <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">Freight</span>
+                            <div className="text-lg font-bold text-gray-800 font-mono">
+                                {formatSmartMoney(latestFreight)}
+                            </div>
+                        </div>
+
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom group relative cursor-help">
                             <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">Lifetime Net Margin</span>
                             <div className={`text-lg font-bold ${allTimeMarginStats.pct >= 15 ? 'text-emerald-600' : allTimeMarginStats.pct > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                 {formatPct(allTimeMarginStats.pct, 1)}
                             </div>
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                            <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
                                 <div className="font-bold border-b border-gray-700 pb-1 mb-2">Calculation Detail (Inc VAT)</div>
                                 <div className="space-y-1 font-mono">
                                     <div className="flex justify-between"><span>Gross Sales:</span><span>{formatSmartMoney(allTimeMarginStats.grossSales)}</span></div>
@@ -194,7 +211,7 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                         </div>
 
                         {/* Return & Refund Stats - Stacked for column economy */}
-                        <div className="col-span-2 sm:col-span-1 p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom flex flex-col justify-between">
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom flex flex-col justify-between">
                             <div className="flex flex-col gap-1">
                                 <div className="flex justify-between items-center group relative cursor-help">
                                     <span className="text-[9px] text-gray-500 font-medium">Return QTY %</span>

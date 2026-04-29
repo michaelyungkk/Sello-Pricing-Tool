@@ -19,7 +19,7 @@ import { FilterBar } from '../common/FilterBar';
 import { Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
 import { formatSmartMoney, formatNumber, formatPct } from '../../utils/format';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, Bar, Line, BarChart, Cell } from 'recharts';
-import { resolveEffectiveVelocity } from '../../services/metrics';
+import { resolveEffectiveVelocity, calcRevenue, calcProfit, calcAdSpend } from '../../services/metrics';
 import { MetricValue } from '../common/MetricValue';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { ContextBar } from '../common/ContextBar';
@@ -197,11 +197,9 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
                 if (isDateKeyBetween(d, startKey, endKey)) {
                     curUnits += l.velocity;
-                    curRev += (l.velocity * l.price);
-                    const dailyAds = l.adsSpend !== undefined ? l.adsSpend : (p.adsFee || 0) * l.velocity;
-                    curAdSpend += dailyAds;
-                    if (l.profit !== undefined) curProfit += l.profit;
-                    else curProfit += (l.velocity * l.price * ((l.margin || 0) / 100));
+                    curRev += calcRevenue(l);
+                    curAdSpend += calcAdSpend(l);
+                    curProfit += calcProfit(l);
                 } else if (isDateKeyBetween(d, prevStartKey, prevEndKey)) {
                     prevUnits += l.velocity;
                 }
@@ -485,10 +483,9 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 const dKey = l.date.split('T')[0];
                 const agg = dailyAggs.get(dKey);
                 if (agg) {
-                    agg.rev += (l.price * l.velocity);
-                    agg.ads += (l.adsSpend !== undefined ? l.adsSpend : (p.adsFee || 0) * l.velocity);
-                    if (l.profit !== undefined) agg.profit += l.profit;
-                    else agg.profit += (l.velocity * l.price * ((l.margin || 0) / 100));
+                    agg.rev += calcRevenue(l);
+                    agg.ads += calcAdSpend(l);
+                    agg.profit += calcProfit(l);
                 }
             });
         });

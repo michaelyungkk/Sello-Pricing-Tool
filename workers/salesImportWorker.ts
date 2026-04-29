@@ -196,6 +196,13 @@ const processRows = (
         logisticService?: string;
         totalPostage: number;
         totalExtraFreight: number;
+        totalCogs: number;
+        totalSellingFee: number;
+        totalAdsFee: number;
+        totalOtherFee: number;
+        totalSubscriptionFee: number;
+        totalWmsFee: number;
+        totalPromoRel: number;
     }> = {};
 
     const discoveredPlatforms = new Set<string>();
@@ -288,11 +295,17 @@ const processRows = (
             if (idx === -1 || row[idx] === undefined || row[idx] === null || row[idx] === '') return 0;
             const val = row[idx];
             if (typeof val === 'number') {
+                // Guard against Excel date-serial values accidentally mapped into % columns
+                if (Math.abs(val) > 200) return 0;
                 if (Math.abs(val) > 0 && Math.abs(val) <= 1.0) return val * 100;
                 return val;
             }
+            if (val instanceof Date) return 0;
+            const raw = String(val).trim();
+            if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) return 0;
             const str = String(val).replace('%', '').replace(/[^\d.-]/g, '').trim();
             const v = parseFloat(str);
+            if (!isNaN(v) && Math.abs(v) > 200) return 0;
             return isNaN(v) ? 0 : v;
         };
 
@@ -405,7 +418,14 @@ const processRows = (
                     logisticPartner: partner || undefined,
                     logisticService: serviceName || undefined,
                     totalPostage: 0,
-                    totalExtraFreight: 0
+                    totalExtraFreight: 0,
+                    totalCogs: 0,
+                    totalSellingFee: 0,
+                    totalAdsFee: 0,
+                    totalOtherFee: 0,
+                    totalSubscriptionFee: 0,
+                    totalWmsFee: 0,
+                    totalPromoRel: 0
                 };
             }
             if (!isAdOnly) {
@@ -413,6 +433,13 @@ const processRows = (
                 dailyAggregated[dailyKey].totalRevenue += rev;
                 dailyAggregated[dailyKey].totalPostage += postageCost;
                 dailyAggregated[dailyKey].totalExtraFreight += extraFreightInc;
+                dailyAggregated[dailyKey].totalCogs += parseVal(cogsIdx);
+                dailyAggregated[dailyKey].totalSellingFee += parseVal(sellingIdx);
+                dailyAggregated[dailyKey].totalAdsFee += adsCost;
+                dailyAggregated[dailyKey].totalOtherFee += parseVal(otherIdx);
+                dailyAggregated[dailyKey].totalSubscriptionFee += parseVal(subIdx);
+                dailyAggregated[dailyKey].totalWmsFee += parseVal(wmsIdx);
+                dailyAggregated[dailyKey].totalPromoRel += 0;
 
                 const dailyWeight = Math.abs(qty) || 0;
                 dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);
@@ -462,7 +489,15 @@ const processRows = (
                 logisticService: bucket.logisticService,
                 adsSpend: Number(bucket.totalAds.toFixed(4)),
                 realPostage: Number(bucket.totalPostage.toFixed(4)),
-                realExtraFreight: Number(bucket.totalExtraFreight.toFixed(4))
+                realExtraFreight: Number(bucket.totalExtraFreight.toFixed(4)),
+                cogs: Number(bucket.totalCogs.toFixed(4)),
+                sellingFee: Number(bucket.totalSellingFee.toFixed(4)),
+                adsFee: Number(bucket.totalAdsFee.toFixed(4)),
+                postage: Number(bucket.totalPostage.toFixed(4)),
+                otherFee: Number(bucket.totalOtherFee.toFixed(4)),
+                subscriptionFee: Number(bucket.totalSubscriptionFee.toFixed(4)),
+                wmsFee: Number(bucket.totalWmsFee.toFixed(4)),
+                promoRel: Number(bucket.totalPromoRel.toFixed(4))
             };
             if (!isNaN(finalMargin)) payload.margin = Number(finalMargin.toFixed(4));
             if (profitIdx !== -1) payload.profit = Number(bucket.totalProfit.toFixed(4));
