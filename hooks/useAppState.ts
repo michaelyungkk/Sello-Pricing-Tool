@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     VAT_MULTIPLIER,
@@ -1256,8 +1256,8 @@ export const useAppState = () => {
 
         // Keep existing records that are NOT superseded by the new upload
         const keptExisting = (refundHistory || []).filter(r => {
-            if (newIds.has(r.id)) return false; // exact match — replace
-            if (r.orderId && newOrderSkuKeys.has(`${r.orderId}|${r.sku}`)) return false; // same order+sku — replace
+            if (newIds.has(r.id)) return false; // exact match â€” replace
+            if (r.orderId && newOrderSkuKeys.has(`${r.orderId}|${r.sku}`)) return false; // same order+sku â€” replace
             return true;
         });
 
@@ -1507,7 +1507,7 @@ export const useAppState = () => {
             const totalInDb = latestRes.totalRows;
 
             // Step 2: Determine which transactions to push.
-            // Use row count as the primary signal — if local has more rows than DB,
+            // Use row count as the primary signal â€” if local has more rows than DB,
             // push ALL local transactions (ON CONFLICT DO UPDATE handles deduplication).
             // Date-only filtering was unreliable: it skipped records with dates before
             // the DB's latest date that were never pushed (late imports, backdated entries).
@@ -1518,7 +1518,7 @@ export const useAppState = () => {
             const localPriceChangeCount = priceChangeHistory?.length || 0;
             const localCostChangeCount = costChangeHistory?.length || 0;
             const localInventoryChangeCount = inventoryChangeHistory?.length || 0;
-            // Always use date-based incremental filter — ON CONFLICT DO UPDATE deduplicates boundary rows.
+            // Always use date-based incremental filter â€” ON CONFLICT DO UPDATE deduplicates boundary rows.
             // We no longer fall back to full push when localTotal > totalInDb;
             // that triggered 70k+ row pushes every sync because local always grows faster than DB count.
             const newTransactions = (totalInDb === 0 || !latestDateInDb)
@@ -1574,7 +1574,7 @@ export const useAppState = () => {
                 setPushProgress(i + 2); // +2 because snapshot = step 1
             }
 
-            console.log(`[push] complete — pushed ${newTransactions.length} transactions`);
+            console.log(`[push] complete â€” pushed ${newTransactions.length} transactions`);
 
             // Push refunds and shipments (delta only: new/changed rows by id+signature)
             const localRefunds = refundHistory || [];
@@ -1637,7 +1637,7 @@ export const useAppState = () => {
                     return;
                 }
             }
-            console.log(`[push] promotions pushed — ${promotionsToPush.length} campaigns`);
+            console.log(`[push] promotions pushed â€” ${promotionsToPush.length} campaigns`);
 
             // Push ad campaign data to separate table
             const adPushRes = await pushAdData(
@@ -1649,7 +1649,7 @@ export const useAppState = () => {
             if (!adPushRes.success) {
                 console.warn('[push] ad data push failed (non-fatal):', adPushRes.error);
             } else {
-                console.log(`[push] ad data pushed — ${adSnapshots?.length || 0} snapshots`);
+                console.log(`[push] ad data pushed â€” ${adSnapshots?.length || 0} snapshots`);
             }
 
             setPushProgress(0);
@@ -1661,7 +1661,7 @@ export const useAppState = () => {
 
             // Keep local cache after push; clients rely on version checks + incremental pulls.
             // Clearing cache here forces expensive full transaction re-downloads.
-            console.log('[push] cache preserved — next sync can stay incremental');
+            console.log('[push] cache preserved â€” next sync can stay incremental');
         } catch (e) {
             console.error('[push] error:', e);
             setSyncStatus('error');
@@ -1765,6 +1765,7 @@ export const useAppState = () => {
         setSyncProgress(0);
         setSyncTotal(0);
         try {
+            const FORCE_FULL_PULL_TOKEN_KEY = 'sello_last_force_full_pull_token';
             let promotionsForCache: PromotionEvent[] = normalizePromotionStatuses(promotions || []);
             const lastKnownSnapshotUpdatedAt = localStorage.getItem('sello_snapshot_updated_at') || undefined;
             const masterRes = await pullSnapshotIfUpdated(lastKnownSnapshotUpdatedAt);
@@ -1798,7 +1799,7 @@ export const useAppState = () => {
                     return;
                 }
             } else {
-                setSyncStep('Snapshot unchanged — checking transactions...');
+                setSyncStep('Snapshot unchanged â€” checking transactions...');
                 // Even when metadata says unchanged, pull full snapshot to ensure
                 // history slices (price/cost/inventory changes) stay in sync locally.
                 const fullSnapshotRes = await pullSnapshot();
@@ -1815,7 +1816,15 @@ export const useAppState = () => {
                 }
             }
 
-            // Incremental pull — only fetch rows newer than what's already in local cache
+            const remoteForceToken = String((incoming as any)?.sync_control?.forceFullPullToken || '').trim();
+            const localForceToken = localStorage.getItem(FORCE_FULL_PULL_TOKEN_KEY) || '';
+            const forceImportantRefresh = Boolean(remoteForceToken && remoteForceToken !== localForceToken);
+            if (forceImportantRefresh) {
+                console.log(`[sync] important refresh token detected: ${remoteForceToken}`);
+                setSyncStep('Important refresh detected - running full data pull...');
+            }
+
+            // Incremental pull â€” only fetch rows newer than what's already in local cache
             setSyncStep('Checking for new transactions...');
             const PAGE_SIZE = 2000;
             let allTransactions: PriceLog[] = [];
@@ -1825,11 +1834,11 @@ export const useAppState = () => {
             const localDates = cachedTransactions.map((t: PriceLog) => t.date).filter(Boolean).sort();
             const localNewestDate = localDates.length > 0 ? localDates[localDates.length - 1] : null;
             console.log(
-                `[sync] transactions mode: ${localNewestDate && cachedTransactions.length > 0 ? 'incremental' : 'full'} ` +
+                `[sync] transactions mode: ${!forceImportantRefresh && localNewestDate && cachedTransactions.length > 0 ? 'incremental' : 'full'} ` +
                 `(cached=${cachedTransactions.length}, newest=${localNewestDate || 'none'})`
             );
 
-            if (localNewestDate && cachedTransactions.length > 0) {
+            if (!forceImportantRefresh && localNewestDate && cachedTransactions.length > 0) {
                 // Incremental: only pull rows after the local newest date
                 setSyncStep(`Checking for new data after ${localNewestDate}...`);
                 const firstPage = await pullTransactionPageSince(localNewestDate, 0, PAGE_SIZE);
@@ -1842,8 +1851,8 @@ export const useAppState = () => {
                 const totalNew = firstPage.totalRows || 0;
 
                 if (totalNew === 0) {
-                    // Nothing new — reuse local cache
-                    setSyncStep('No new transactions — using cached data');
+                    // Nothing new â€” reuse local cache
+                    setSyncStep('No new transactions â€” using cached data');
                     allTransactions = cachedTransactions;
                 } else {
                     // Pull remaining pages of new rows
@@ -1873,7 +1882,7 @@ export const useAppState = () => {
                     setSyncStep(`Merged ${deduped.length.toLocaleString()} new rows with ${cachedTransactions.length.toLocaleString()} cached`);
                 }
             } else {
-                // No local cache — full pull
+                // No local cache â€” full pull
                 setSyncStep('Loading transactions (first sync)...');
                 const firstPage = await pullTransactionPage(0, PAGE_SIZE);
                 if (!firstPage.success) { setSyncStatus('error'); setSyncStep(''); return; }
@@ -1901,7 +1910,9 @@ export const useAppState = () => {
 
             // Pull refunds (incremental when cursor exists)
             const refundCursorKey = 'sello_refunds_updated_at';
-            const lastRefundUpdatedAt = localStorage.getItem(refundCursorKey) || undefined;
+            const lastRefundUpdatedAt = forceImportantRefresh
+                ? undefined
+                : (localStorage.getItem(refundCursorKey) || undefined);
             const refundRes = await pullRefundsAndShipments(lastRefundUpdatedAt);
             const keepLocalIfRemoteEmpty = <T,>(label: string, remote: any, local: T[]): T[] => {
                 const remoteSafe = Array.isArray(remote) ? remote as T[] : [];
@@ -1969,7 +1980,7 @@ export const useAppState = () => {
                     setAdBudgets(nextBudgets);
                     try { localStorage.setItem('sello_ad_budgets', JSON.stringify(nextBudgets)); } catch { /* ignore localStorage write failures */ }
                 }
-                console.log(`[sync] ad data loaded — ${(Array.isArray(adRes.adSnapshots) ? adRes.adSnapshots.length : 0)} snapshots`);
+                console.log(`[sync] ad data loaded â€” ${(Array.isArray(adRes.adSnapshots) ? adRes.adSnapshots.length : 0)} snapshots`);
             } else {
                 console.warn('[sync] ad data pull failed (non-fatal):', adRes.error);
             }
@@ -1994,7 +2005,7 @@ export const useAppState = () => {
                 const nextPromotions = normalizePromotionStatuses(nextPromotionsRaw);
                 setPromotions(nextPromotions);
                 promotionsForCache = nextPromotions;
-                console.log(`[sync] promotions loaded — ${nextPromotions.length} campaigns`);
+                console.log(`[sync] promotions loaded â€” ${nextPromotions.length} campaigns`);
                 if (promoRes.latestUpdatedAt) {
                     localStorage.setItem(promoCursorKey, promoRes.latestUpdatedAt);
                 }
@@ -2035,7 +2046,11 @@ export const useAppState = () => {
             };
             await saveToCache(snapshotForCache, allTransactions, refunds, [], version);
 
-            console.log(`[sync] complete — cached version: ${version}`);
+            if (forceImportantRefresh && remoteForceToken) {
+                localStorage.setItem(FORCE_FULL_PULL_TOKEN_KEY, remoteForceToken);
+                console.log(`[sync] important refresh token consumed: ${remoteForceToken}`);
+            }
+            console.log(`[sync] complete â€” cached version: ${version}`);
             setSyncProgress(0);
             setSyncTotal(0);
             setSyncStep('');
@@ -2080,7 +2095,7 @@ export const useAppState = () => {
 
             // Step 2: If versions match, load from local cache instantly
             if (dbVersion && localVersion && dbVersion === localVersion) {
-                console.log('[init] versions match — loading from cache');
+                console.log('[init] versions match â€” loading from cache');
                 setSyncStatus('syncing');
                 const cache = await loadFromCache();
                 if (cache) {
@@ -2118,7 +2133,7 @@ export const useAppState = () => {
                 }
             }
 
-            // Step 3: Versions don't match or no cache — full sync
+            // Step 3: Versions don't match or no cache â€” full sync
             console.log('[init] syncing from database');
             handleSync();
         };
@@ -2429,10 +2444,10 @@ export const useAppState = () => {
         }
     }, [benchmarkUpdateNotices, learnedAliases, products, salesHistory, priceChangeHistory, pricingRules, promotions, cohortSnapshot, optimalPriceResults]);
 
-    // ── Dirty-tracking wrappers ──────────────────────────────────────────────
+    // â”€â”€ Dirty-tracking wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // These replace the raw setters exported to consumers so that any in-app
     // edit (new promotion, saved template, rule change, etc.) automatically
-    // marks the app dirty and prompts a DB push — same as file uploads do.
+    // marks the app dirty and prompts a DB push â€” same as file uploads do.
     const updatePromotions = useCallback((v: React.SetStateAction<PromotionEvent[]>) => {
         setPromotions(prev => {
             const nextRaw = typeof v === 'function' ? (v as (prev: PromotionEvent[]) => PromotionEvent[])(prev) : v;

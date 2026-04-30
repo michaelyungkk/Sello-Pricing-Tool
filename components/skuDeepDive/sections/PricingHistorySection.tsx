@@ -226,7 +226,8 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
             text: string,
             tone: 'neutral' | 'positive',
             align: 'left' | 'right'
-        ) => (props: any) => {
+        ) => {
+            function ProfitLabelRenderer(props: any): React.ReactElement {
             const x = Number(props?.viewBox?.x ?? 0);
             const y = Number(props?.viewBox?.y ?? 0);
             const padX = 5;
@@ -243,6 +244,8 @@ export const PricingHistorySection: React.FC<PricingHistorySectionProps> = ({
                     <text x={padX} y={11} fontSize={9} fontWeight={700} fill={color}>{text}</text>
                 </g>
             );
+            }
+            return ProfitLabelRenderer;
         };
 
         return (
