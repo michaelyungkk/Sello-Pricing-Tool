@@ -1,5 +1,12 @@
 #!/usr/bin/env sh
 set -e
 
+echo "[pre-commit] encoding check"
+npm run lint:encoding
+
+echo "[pre-commit] typecheck"
+npm run typecheck
+
+echo "[pre-commit] update release notes"
 node scripts/generate-release-notes.js
 git add public/release-notes.json

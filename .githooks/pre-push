@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -e
+
+echo "[pre-push] encoding check"
+npm run lint:encoding
+
+echo "[pre-push] typecheck"
+npm run typecheck
+
+echo "[pre-push] lint"
+npm run lint

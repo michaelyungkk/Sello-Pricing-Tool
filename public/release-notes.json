@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-04-30T01:09:33.415Z",
+  "generatedAt": "2026-04-30T01:57:56.949Z",
   "items": [
+    {
+      "id": "5e1d436d7fe0",
+      "date": "2026-04-30T11:09:32+10:00",
+      "summary": "Fix pricing history labels and important sync refresh"
+    },
     {
       "id": "b138dc06b90e",
       "date": "2026-04-29T15:53:56+10:00",
@@ -95,11 +100,6 @@
       "id": "3e77f7a0dee0",
       "date": "2026-04-22T14:44:35+10:00",
       "summary": "Add mojibake repair to CA imports and PDF generation"
-    },
-    {
-      "id": "5972b2ab3cf3",
-      "date": "2026-04-20T17:28:57+10:00",
-      "summary": "Fix lint errors and guard localStorage writes"
     }
   ]
 }
