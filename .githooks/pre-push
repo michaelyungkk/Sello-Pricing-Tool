@@ -7,5 +7,8 @@ npm run lint:encoding
 echo "[pre-push] typecheck"
 npm run typecheck
 
+echo "[pre-push] recent regression guards"
+npm run test:recent-guards
+
 echo "[pre-push] lint"
 npm run lint

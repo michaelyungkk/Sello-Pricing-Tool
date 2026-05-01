@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-04-30T01:57:56.949Z",
+  "generatedAt": "2026-05-01T04:43:35.112Z",
   "items": [
+    {
+      "id": "c1243a50383c",
+      "date": "2026-04-30T11:57:23+10:00",
+      "summary": "Add Git hooks to enforce encoding and type checks"
+    },
     {
       "id": "5e1d436d7fe0",
       "date": "2026-04-30T11:09:32+10:00",
@@ -95,11 +100,6 @@
       "id": "ade886abe392",
       "date": "2026-04-22T15:26:38+10:00",
       "summary": "Add release notes bell feed from CI commits"
-    },
-    {
-      "id": "3e77f7a0dee0",
-      "date": "2026-04-22T14:44:35+10:00",
-      "summary": "Add mojibake repair to CA imports and PDF generation"
     }
   ]
 }

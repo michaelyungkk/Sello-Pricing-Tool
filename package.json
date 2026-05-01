@@ -12,6 +12,7 @@
     "lint": "eslint . --ext .ts,.tsx",
     "lint:encoding": "node scripts/check-mojibake.js",
     "typecheck": "tsc --noEmit",
+    "test:recent-guards": "node scripts/test-recent-sync-and-label-guards.js",
     "validate": "npm run typecheck && npm run lint && npm run build",
     "build:ci": "npm run validate"
   },
