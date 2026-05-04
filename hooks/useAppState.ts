@@ -2075,6 +2075,7 @@ export const useAppState = () => {
             await saveToCache(snapshotForCache, allTransactions, refunds, [], version);
 
             if (forceImportantRefresh && remoteForceToken) {
+                localStorage.setItem(FORCE_FULL_PULL_TOKEN_KEY, remoteForceToken);
                 console.log(`[sync] important refresh token consumed: ${remoteForceToken}`);
             }
             console.log(`[sync] complete  -  cached version: ${version}`);

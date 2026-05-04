@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-04T07:30:51.300Z",
+  "generatedAt": "2026-05-04T07:32:37.444Z",
   "items": [
+    {
+      "id": "9374c137bde4",
+      "date": "2026-05-04T17:30:30+10:00",
+      "summary": "Add token-aware silent client cache reset on important refresh"
+    },
     {
       "id": "f1c4e2f2b8e1",
       "date": "2026-05-04T15:38:06+10:00",
@@ -95,11 +100,6 @@
       "id": "2eda7b3e4072",
       "date": "2026-04-23T15:00:56+10:00",
       "summary": "Stamp landed dates on inventory import"
-    },
-    {
-      "id": "574652d4897c",
-      "date": "2026-04-23T15:00:56+10:00",
-      "summary": "Improve pitching catalogue feature wrapping"
     }
   ]
 }
