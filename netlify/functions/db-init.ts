@@ -31,6 +31,14 @@ export default async (req: Request) => {
                 logistic_service TEXT,
                 real_postage NUMERIC,
                 real_extra_freight NUMERIC,
+                cogs NUMERIC,
+                selling_fee NUMERIC,
+                ads_fee NUMERIC,
+                postage NUMERIC,
+                other_fee NUMERIC,
+                subscription_fee NUMERIC,
+                wms_fee NUMERIC,
+                promo_rel NUMERIC,
                 dedup_key TEXT UNIQUE NOT NULL,
                 updated_at TIMESTAMPTZ DEFAULT NOW()
             )

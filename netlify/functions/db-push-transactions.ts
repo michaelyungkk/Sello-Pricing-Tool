@@ -33,6 +33,16 @@ export default async (req: Request) => {
 
         const sql = neon(dbUrl);
 
+        // Backward-safe schema guard for older environments.
+        await sql`ALTER TABLE transaction_history ADD COLUMN IF NOT EXISTS cogs NUMERIC`;
+        await sql`ALTER TABLE transaction_history ADD COLUMN IF NOT EXISTS selling_fee NUMERIC`;
+        await sql`ALTER TABLE transaction_history ADD COLUMN IF NOT EXISTS ads_fee NUMERIC`;
+        await sql`ALTER TABLE transaction_history ADD COLUMN IF NOT EXISTS postage NUMERIC`;
+        await sql`ALTER TABLE transaction_history ADD COLUMN IF NOT EXISTS other_fee NUMERIC`;
+        await sql`ALTER TABLE transaction_history ADD COLUMN IF NOT EXISTS subscription_fee NUMERIC`;
+        await sql`ALTER TABLE transaction_history ADD COLUMN IF NOT EXISTS wms_fee NUMERIC`;
+        await sql`ALTER TABLE transaction_history ADD COLUMN IF NOT EXISTS promo_rel NUMERIC`;
+
         if (clearAll === true) {
             await sql`DELETE FROM transaction_history`;
             return new Response(
@@ -81,20 +91,31 @@ export default async (req: Request) => {
                 logistic_service: tx.logisticService ?? null,
                 real_postage: tx.realPostage ?? null,
                 real_extra_freight: tx.realExtraFreight ?? null,
+                cogs: tx.cogs ?? null,
+                selling_fee: tx.sellingFee ?? null,
+                ads_fee: tx.adsFee ?? null,
+                postage: tx.postage ?? null,
+                other_fee: tx.otherFee ?? null,
+                subscription_fee: tx.subscriptionFee ?? null,
+                wms_fee: tx.wmsFee ?? null,
+                promo_rel: tx.promoRel ?? null,
                 dedup_key: dedupKey
             };
         });
 
         const placeholders = rows.map((_: any, i: number) => {
-            const b = i * 17;
-            return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15},$${b + 16},$${b + 17},NOW())`;
+            const b = i * 25;
+            return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15},$${b + 16},$${b + 17},$${b + 18},$${b + 19},$${b + 20},$${b + 21},$${b + 22},$${b + 23},$${b + 24},$${b + 25},NOW())`;
         }).join(',');
 
         const flatValues = rows.flatMap((r: any) => [
             r.id, r.sku, r.date, r.price, r.velocity, r.margin, r.profit,
             r.ads_spend, r.raw_ads_spend, r.platform, r.order_id,
             r.postcode, r.logistic_partner, r.logistic_service,
-            r.real_postage, r.real_extra_freight, r.dedup_key
+            r.real_postage, r.real_extra_freight,
+            r.cogs, r.selling_fee, r.ads_fee, r.postage, r.other_fee,
+            r.subscription_fee, r.wms_fee, r.promo_rel,
+            r.dedup_key
         ]);
 
         await sql.query(`
@@ -102,7 +123,10 @@ export default async (req: Request) => {
                 id, sku, date, price, velocity, margin, profit,
                 ads_spend, raw_ads_spend, platform, order_id,
                 postcode, logistic_partner, logistic_service,
-                real_postage, real_extra_freight, dedup_key, updated_at
+                real_postage, real_extra_freight,
+                cogs, selling_fee, ads_fee, postage, other_fee,
+                subscription_fee, wms_fee, promo_rel,
+                dedup_key, updated_at
             ) VALUES ${placeholders}
             ON CONFLICT (dedup_key) DO UPDATE SET
                 id = EXCLUDED.id,
@@ -118,6 +142,14 @@ export default async (req: Request) => {
                 logistic_service = EXCLUDED.logistic_service,
                 real_postage = EXCLUDED.real_postage,
                 real_extra_freight = EXCLUDED.real_extra_freight,
+                cogs = EXCLUDED.cogs,
+                selling_fee = EXCLUDED.selling_fee,
+                ads_fee = EXCLUDED.ads_fee,
+                postage = EXCLUDED.postage,
+                other_fee = EXCLUDED.other_fee,
+                subscription_fee = EXCLUDED.subscription_fee,
+                wms_fee = EXCLUDED.wms_fee,
+                promo_rel = EXCLUDED.promo_rel,
                 updated_at = NOW()
         `, flatValues);
 

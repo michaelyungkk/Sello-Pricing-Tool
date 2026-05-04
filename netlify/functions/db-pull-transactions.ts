@@ -38,7 +38,9 @@ export default async (req: Request) => {
                 SELECT id, sku, date, price, velocity, margin, profit,
                        ads_spend, raw_ads_spend, platform, order_id,
                        postcode, logistic_partner, logistic_service,
-                       real_postage, real_extra_freight
+                       real_postage, real_extra_freight,
+                       cogs, selling_fee, ads_fee, postage, other_fee,
+                       subscription_fee, wms_fee, promo_rel
                 FROM transaction_history
                 WHERE date > ${since}
                 ORDER BY date DESC, id DESC
@@ -48,7 +50,9 @@ export default async (req: Request) => {
                 SELECT id, sku, date, price, velocity, margin, profit,
                        ads_spend, raw_ads_spend, platform, order_id,
                        postcode, logistic_partner, logistic_service,
-                       real_postage, real_extra_freight
+                       real_postage, real_extra_freight,
+                       cogs, selling_fee, ads_fee, postage, other_fee,
+                       subscription_fee, wms_fee, promo_rel
                 FROM transaction_history
                 ORDER BY date DESC, id DESC
                 LIMIT ${pageSize} OFFSET ${offset}
@@ -71,7 +75,15 @@ export default async (req: Request) => {
             logisticService: r.logistic_service ?? undefined,
             realPostage: r.real_postage != null ? Number(r.real_postage) : undefined,
             realExtraFreight: r.real_extra_freight != null
-                ? Number(r.real_extra_freight) : undefined
+                ? Number(r.real_extra_freight) : undefined,
+            cogs: r.cogs != null ? Number(r.cogs) : undefined,
+            sellingFee: r.selling_fee != null ? Number(r.selling_fee) : undefined,
+            adsFee: r.ads_fee != null ? Number(r.ads_fee) : undefined,
+            postage: r.postage != null ? Number(r.postage) : undefined,
+            otherFee: r.other_fee != null ? Number(r.other_fee) : undefined,
+            subscriptionFee: r.subscription_fee != null ? Number(r.subscription_fee) : undefined,
+            wmsFee: r.wms_fee != null ? Number(r.wms_fee) : undefined,
+            promoRel: r.promo_rel != null ? Number(r.promo_rel) : undefined
         }));
 
         return new Response(
