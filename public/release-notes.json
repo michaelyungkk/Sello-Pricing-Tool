@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-04T23:21:12.843Z",
+  "generatedAt": "2026-05-04T23:42:10.521Z",
   "items": [
+    {
+      "id": "5db32917e348",
+      "date": "2026-05-05T09:20:52+10:00",
+      "summary": "Fix db-pull force token extraction from parsed snapshot"
+    },
     {
       "id": "bea676c7085a",
       "date": "2026-05-04T17:32:23+10:00",
@@ -95,11 +100,6 @@
       "id": "80d92a21079b",
       "date": "2026-04-23T15:48:05+10:00",
       "summary": "Remove tracked temp artifacts and ignore local logs"
-    },
-    {
-      "id": "e19bacdf60eb",
-      "date": "2026-04-23T15:14:41+10:00",
-      "summary": "Remove large backup JSON files from the repo"
     }
   ]
 }

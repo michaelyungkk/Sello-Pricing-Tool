@@ -147,3 +147,16 @@ See `.agent/workflows/code-generation.md` for complete Antigravity rules.
   - Do not commit ETL helper scripts unless explicitly instructed.
   - If asked to refresh, run ETL locally, then update only the compact lookup used by app code.
   - Log coverage after refresh: total area rows, and non-`Unknown` coverage for income/household/IMD/rural-urban.
+
+---
+
+## End-to-End Verification Rule (No Layer-by-Layer Handoff)
+- For sync/cache/database fixes, verify the full chain before claiming "fixed":
+  1. source data read/parsing
+  2. server write path
+  3. server read path
+  4. client cache/state update path
+  5. final UI output for the same scoped sample
+- Do not hand off intermediate partial fixes as final.
+- If any stage cannot be directly verified in this environment, state exactly which stage is unverified and label status as "partial", not "fixed".
+- Prefer one end-to-end validation checklist run over multiple incremental claims.
