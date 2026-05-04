@@ -75,6 +75,10 @@ import {
 } from '../services/dbService';
 import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
 
+const FORCE_FULL_PULL_TOKEN_KEY = 'sello_last_force_full_pull_token';
+const REFUND_CURSOR_KEY = 'sello_refunds_updated_at';
+const PROMO_CURSOR_KEY = 'sello_promotions_updated_at';
+
 // Helper for recalculation
 const recalculateProductMetrics = (
     products: Product[],
@@ -1773,13 +1777,22 @@ export const useAppState = () => {
         }
     }, [velocityLookback, thresholds]);
 
+    const clearClientDataForImportantRefresh = useCallback(async (token: string) => {
+        await clearCache();
+        localStorage.removeItem(REFUND_CURSOR_KEY);
+        localStorage.removeItem(PROMO_CURSOR_KEY);
+        localStorage.removeItem('sello_snapshot_updated_at');
+        localStorage.removeItem('sello_last_synced_at');
+        localStorage.setItem(FORCE_FULL_PULL_TOKEN_KEY, token);
+        console.log(`[sync] important refresh cache reset complete: ${token}`);
+    }, []);
+
     const handleSync = useCallback(async () => {
         setSyncStatus('syncing');
         setSyncStep('Connecting...');
         setSyncProgress(0);
         setSyncTotal(0);
         try {
-            const FORCE_FULL_PULL_TOKEN_KEY = 'sello_last_force_full_pull_token';
             let promotionsForCache: PromotionEvent[] = normalizePromotionStatuses(promotions || []);
             const lastKnownSnapshotUpdatedAt = localStorage.getItem('sello_snapshot_updated_at') || undefined;
             const masterRes = await pullSnapshotIfUpdated(lastKnownSnapshotUpdatedAt);
@@ -1836,6 +1849,7 @@ export const useAppState = () => {
             if (forceImportantRefresh) {
                 console.log(`[sync] important refresh token detected: ${remoteForceToken}`);
                 setSyncStep('Important refresh detected - running full data pull...');
+                await clearClientDataForImportantRefresh(remoteForceToken);
             }
 
             // Incremental pull  -  only fetch rows newer than what's already in local cache
@@ -1923,10 +1937,9 @@ export const useAppState = () => {
             setSyncStep('Applying data...');
 
             // Pull refunds (incremental when cursor exists)
-            const refundCursorKey = 'sello_refunds_updated_at';
             const lastRefundUpdatedAt = forceImportantRefresh
                 ? undefined
-                : (localStorage.getItem(refundCursorKey) || undefined);
+                : (localStorage.getItem(REFUND_CURSOR_KEY) || undefined);
             const refundRes = await pullRefundsAndShipments(lastRefundUpdatedAt);
             const keepLocalIfRemoteEmpty = <T,>(label: string, remote: any, local: T[]): T[] => {
                 const remoteSafe = Array.isArray(remote) ? remote as T[] : [];
@@ -1966,7 +1979,7 @@ export const useAppState = () => {
             if (!refundRes.success) {
                 console.warn('[sync] refunds pull failed (non-fatal):', refundRes.error);
             } else if (refundRes.latestUpdatedAt) {
-                localStorage.setItem(refundCursorKey, refundRes.latestUpdatedAt);
+                localStorage.setItem(REFUND_CURSOR_KEY, refundRes.latestUpdatedAt);
             }
 
             // Pull ad campaign data from separate table
@@ -2000,8 +2013,9 @@ export const useAppState = () => {
             }
 
             // Pull promotions from separate table (incremental when cursor exists)
-            const promoCursorKey = 'sello_promotions_updated_at';
-            const lastPromoUpdatedAt = localStorage.getItem(promoCursorKey) || undefined;
+            const lastPromoUpdatedAt = forceImportantRefresh
+                ? undefined
+                : (localStorage.getItem(PROMO_CURSOR_KEY) || undefined);
             let promoRes = await pullPromotionsSince(lastPromoUpdatedAt);
             if (promoRes.success && Array.isArray(promoRes.promotions)) {
                 const localPromotions = promotions || [];
@@ -2021,7 +2035,7 @@ export const useAppState = () => {
                 promotionsForCache = nextPromotions;
                 console.log(`[sync] promotions loaded  -  ${nextPromotions.length} campaigns`);
                 if (promoRes.latestUpdatedAt) {
-                    localStorage.setItem(promoCursorKey, promoRes.latestUpdatedAt);
+                    localStorage.setItem(PROMO_CURSOR_KEY, promoRes.latestUpdatedAt);
                 }
             } else {
                 console.warn('[sync] promotions pull failed (non-fatal):', promoRes.error);
@@ -2061,7 +2075,6 @@ export const useAppState = () => {
             await saveToCache(snapshotForCache, allTransactions, refunds, [], version);
 
             if (forceImportantRefresh && remoteForceToken) {
-                localStorage.setItem(FORCE_FULL_PULL_TOKEN_KEY, remoteForceToken);
                 console.log(`[sync] important refresh token consumed: ${remoteForceToken}`);
             }
             console.log(`[sync] complete  -  cached version: ${version}`);
@@ -2077,6 +2090,7 @@ export const useAppState = () => {
             setSyncTotal(0);
         }
     }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, salesHistory, pricingRules, brandMap, categoryMap, getSharedSnapshot, pullSnapshot,
+        clearClientDataForImportantRefresh,
         refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets]);
 
     const resolveConflicts = useCallback(async (keepLocal: boolean) => {
@@ -2104,11 +2118,20 @@ export const useAppState = () => {
             const versionRes = await checkVersion();
             const dbVersion = versionRes.success ? versionRes.lastPushAt : null;
             const localVersion = getCachedVersion();
+            const lastKnownSnapshotUpdatedAt = localStorage.getItem('sello_snapshot_updated_at') || undefined;
+            const masterRes = await pullSnapshotIfUpdated(lastKnownSnapshotUpdatedAt);
+            const remoteForceToken = String((masterRes as any)?.forceFullPullToken || '').trim();
+            const localForceToken = localStorage.getItem(FORCE_FULL_PULL_TOKEN_KEY) || '';
+            const forceImportantRefresh = Boolean(remoteForceToken && remoteForceToken !== localForceToken);
+            if (forceImportantRefresh) {
+                console.log(`[init] important refresh token detected: ${remoteForceToken}`);
+                await clearClientDataForImportantRefresh(remoteForceToken);
+            }
 
             console.log(`[init] DB version: ${dbVersion}, local version: ${localVersion}`);
 
             // Step 2: If versions match, load from local cache instantly
-            if (dbVersion && localVersion && dbVersion === localVersion) {
+            if (!forceImportantRefresh && dbVersion && localVersion && dbVersion === localVersion) {
                 console.log('[init] versions match  -  loading from cache');
                 setSyncStatus('syncing');
                 const cache = await loadFromCache();
@@ -2154,7 +2177,7 @@ export const useAppState = () => {
 
         initApp();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [clearClientDataForImportantRefresh]);
 
     // --- OPTIMAL PRICING: RECALCULATE BENCHMARKS ---
     const handleCancelBenchmarkRecalculation = useCallback(() => {

@@ -28,12 +28,13 @@ export default async (req: Request) => {
                 { status: 404, headers: CORS }
             );
         const { data, updated_at } = rows[0];
+        const forceFullPullToken = String((data as any)?.sync_control?.forceFullPullToken || '').trim();
         if (ifUpdatedSince && updated_at) {
             const clientTs = new Date(ifUpdatedSince);
             const serverTs = new Date(updated_at);
             if (!Number.isNaN(clientTs.getTime()) && !Number.isNaN(serverTs.getTime()) && serverTs <= clientTs) {
                 return new Response(
-                    JSON.stringify({ success: true, unchanged: true, lastUpdatedAt: updated_at }),
+                    JSON.stringify({ success: true, unchanged: true, lastUpdatedAt: updated_at, forceFullPullToken }),
                     { status: 200, headers: CORS }
                 );
             }

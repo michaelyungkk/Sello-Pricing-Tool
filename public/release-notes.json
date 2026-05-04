@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-04T05:38:36.566Z",
+  "generatedAt": "2026-05-04T07:30:51.300Z",
   "items": [
+    {
+      "id": "f1c4e2f2b8e1",
+      "date": "2026-05-04T15:38:06+10:00",
+      "summary": "Align ledger refund date basis and refund impact waterfall labeling"
+    },
     {
       "id": "3afdbb7b7e62",
       "date": "2026-05-04T13:49:45+10:00",
@@ -95,11 +100,6 @@
       "id": "574652d4897c",
       "date": "2026-04-23T15:00:56+10:00",
       "summary": "Improve pitching catalogue feature wrapping"
-    },
-    {
-      "id": "359944bb724f",
-      "date": "2026-04-22T06:36:39Z",
-      "summary": "chore: update release notes feed [skip ci]"
     }
   ]
 }
