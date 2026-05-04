@@ -695,7 +695,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         return priceVolumeAnalysis.periodStats.filter(d => d.period === chartPeriod);
     }, [priceVolumeAnalysis, chartPeriod]);
 
-    const platformSubtotals = useMemo(() => {
+    const aggregatePlatformSubtotals = (list: any[]) => {
         const subtotals: Record<string, {
             platform: string;
             soldQty: number;
@@ -705,17 +705,10 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             profit: number;
         }> = {};
         let totalRevenueAllPlatforms = 0;
-        filteredTransactions.forEach(tx => {
+        list.forEach(tx => {
             const platform = tx.platform || 'Unknown';
             if (!subtotals[platform]) {
-                subtotals[platform] = {
-                    platform,
-                    soldQty: 0,
-                    rawAdSpend: 0,
-                    adjustedAdSpend: 0,
-                    revenue: 0,
-                    profit: 0
-                };
+                subtotals[platform] = { platform, soldQty: 0, rawAdSpend: 0, adjustedAdSpend: 0, revenue: 0, profit: 0 };
             }
             const group = subtotals[platform];
             const isRefund = (tx as any)._type === 'REFUND_LOG' || tx.velocity < 0;
@@ -738,7 +731,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             margin: marginPct(group.profit, group.revenue),
             revenueSharePct: totalRevenueAllPlatforms > 0 ? (group.revenue / totalRevenueAllPlatforms) * 100 : 0,
         })).sort((a, b) => b.revenue - a.revenue);
-    }, [filteredTransactions]);
+    };
+
+    const platformSubtotals = useMemo(() => aggregatePlatformSubtotals(filteredTransactions), [filteredTransactions]);
 
     const paginatedTransactions = useMemo(() => {
         return filteredTransactions.slice(0, txLimit);
@@ -763,6 +758,68 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         });
         return { salesRows, totalUnits, adOnlySpend, refundCount, refundValue };
     }, [filteredTransactions]);
+
+    const previousFilteredTransactions = useMemo(() => {
+        const prevEndKey = addDaysToDateKey(ledgerStartKey, -1);
+        const windowDays = Math.max(1, Math.round((new Date(ledgerEndKey).getTime() - new Date(ledgerStartKey).getTime()) / 86400000) + 1);
+        const prevStartKey = addDaysToDateKey(prevEndKey, -(windowDays - 1));
+        let list = sortedTransactions.filter(t => {
+            const dKey = asDateKey(t.date);
+            return dKey && isDateKeyBetween(dKey, prevStartKey, prevEndKey);
+        });
+        if (txFilterPlatform !== 'All') list = list.filter(t => t.platform === txFilterPlatform);
+        if (txFilterType !== 'All') {
+            list = list.filter(t => {
+                if (txFilterType === 'Sale') return t.velocity > 0;
+                if (txFilterType === 'Ad Cost') return t.price === 0 && (t.adsSpend || 0) > 0;
+                if (txFilterType === 'Refund') return t.velocity < 0;
+                return true;
+            });
+        }
+        if (txPostcodeArea !== 'All') {
+            list = list.filter(t => {
+                if ((t as any)._type !== 'SALE') return false;
+                const postcode = String((t as any).postcode || '').trim();
+                if (!postcode) return false;
+                const match = postcode.match(/^([A-Z]{1,2})/i);
+                return !!match && match[1].toUpperCase() === txPostcodeArea;
+            });
+        }
+        if (showRedistributedOnly) {
+            list = list.filter(t =>
+                t.rawAdsSpend !== undefined &&
+                t.rawAdsSpend !== null &&
+                Math.abs((t.adsSpend || 0) - (t.rawAdsSpend || 0)) > 0.0001
+            );
+        }
+        return list;
+    }, [sortedTransactions, ledgerStartKey, ledgerEndKey, txFilterPlatform, txFilterType, txPostcodeArea, showRedistributedOnly]);
+
+    const previousPlatformSubtotalsMap = useMemo(() => {
+        const map = new Map<string, any>();
+        aggregatePlatformSubtotals(previousFilteredTransactions).forEach(row => map.set(row.platform, row));
+        return map;
+    }, [previousFilteredTransactions]);
+
+    const previousLedgerStats = useMemo(() => {
+        let salesRows = 0;
+        let totalUnits = 0;
+        let adOnlySpend = 0;
+        let refundCount = 0;
+        let refundValue = 0;
+        previousFilteredTransactions.forEach(t => {
+            if (t.velocity > 0) {
+                salesRows++;
+                totalUnits += t.velocity;
+            } else if (t.price === 0 && (t.adsSpend || 0) > 0) {
+                adOnlySpend += ((t.adsSpend || 0) * VAT_MULTIPLIER);
+            } else if (t.velocity < 0 || t.price < 0) {
+                refundCount++;
+                refundValue += Math.abs(calcProfit(t) * VAT_MULTIPLIER);
+            }
+        });
+        return { salesRows, totalUnits, adOnlySpend, refundCount, refundValue };
+    }, [previousFilteredTransactions]);
 
     const promotionHistoryRows = useMemo(() => {
         const targetCanonicalSku = getCanonicalSku(product.sku);
@@ -1065,10 +1122,12 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             {/* 6. Transaction Ledger */}
             {sortedTransactions.length > 0 && (
                 <div ref={ledgerRef} className={`${band} bg-theme-10/40 border-y border-indigo-100/60`}>
-                    <TransactionLedgerSection
-                        ledgerStats={ledgerStats}
-                        platformSubtotals={platformSubtotals}
-                        paginatedTransactions={paginatedTransactions}
+                <TransactionLedgerSection
+                    ledgerStats={ledgerStats}
+                    previousLedgerStats={previousLedgerStats}
+                    platformSubtotals={platformSubtotals}
+                    previousPlatformSubtotalsMap={previousPlatformSubtotalsMap}
+                    paginatedTransactions={paginatedTransactions}
                         filteredTransactionsLength={filteredTransactions.length}
                         txLimit={txLimit}
                         setTxLimit={setTxLimit}

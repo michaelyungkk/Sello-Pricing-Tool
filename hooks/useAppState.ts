@@ -990,6 +990,20 @@ export const useAppState = () => {
                 wmsFee: h.wmsFee,
                 promoRel: h.promoRel
             }));
+            const rowsWithWaterfallCosts = newLogs.filter(l =>
+                l.cogs !== undefined ||
+                l.sellingFee !== undefined ||
+                l.adsFee !== undefined ||
+                l.postage !== undefined ||
+                l.otherFee !== undefined ||
+                l.subscriptionFee !== undefined ||
+                l.wmsFee !== undefined ||
+                l.promoRel !== undefined
+            ).length;
+            console.log(
+                `[sales-import] mapped ${newLogs.length} logs; ` +
+                `${rowsWithWaterfallCosts} rows include waterfall cost fields`
+            );
             const transactionKeys = new Set<string>(); const dailyActivityKeys = new Set<string>(); newLogs.forEach(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { transactionKeys.add(`${l.sku}|${l.orderId}`); } dailyActivityKeys.add(`${l.sku}|${d}|${p}`); });
             const keptHistory = (salesHistory || []).filter(l => { const d = l.date.split('T')[0]; const p = l.platform || 'General'; if (l.orderId) { const txKey = `${l.sku}|${l.orderId}`; if (transactionKeys.has(txKey)) return false; return true; } const dailyKey = `${l.sku}|${d}|${p}`; if (dailyActivityKeys.has(dailyKey)) return false; return true; });
             updatedPriceHistory = [...newLogs, ...keptHistory]; setSalesHistory(updatedPriceHistory);

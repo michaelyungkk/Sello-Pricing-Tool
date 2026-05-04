@@ -9,6 +9,7 @@ import { formatSmartMoney, formatPct } from '../../../utils/format';
 import { PlatformFeesRoi, PlatformSortKey } from '../platformManagement.types';
 import { PricingRules } from '../../../types';
 import AuditPanel from '../../common/AuditPanel';
+import { getPopComparison } from '../../../services/popComparison';
 
 interface FeesAndRoiTabProps {
     roiData: PlatformFeesRoi[];
@@ -19,9 +20,13 @@ interface FeesAndRoiTabProps {
     startKey?: string;
     endKey?: string;
     isAuditVisible: boolean;
+    popByPlatform?: Map<string, Record<string, ReturnType<typeof getPopComparison>>>;
 }
 
-export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRules, themeColor, sort, setSort, startKey = '', endKey = '', isAuditVisible }) => {
+export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRules, themeColor, sort, setSort, startKey = '', endKey = '', isAuditVisible, popByPlatform = new Map() }) => {
+    const [showPop, setShowPop] = React.useState(false);
+    const formatPopPct = (v: number | null) => v === null ? 'N/A' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+    const formatPopAbs = (v: number) => `${v >= 0 ? '+' : ''}${formatSmartMoney(v)}`;
     const totalAdSpend = roiData.reduce((sum: number, d: any) => sum + d.adSpend, 0);
     const totalRevenueForAds = roiData.reduce((sum: number, d: any) => (d.dataQuality.hasAdData && d.revenue > 0) ? sum + d.revenue : sum, 0);
     const avgTacos = totalRevenueForAds > 0 ? (totalAdSpend / totalRevenueForAds) * 100 : 0;
@@ -49,18 +54,22 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <MetricCard title="Total Ad Spend" value={formatSmartMoney(totalAdSpend)} icon={Megaphone} color="orange" />
+                <MetricCard title="Total Ad Spend" value={formatSmartMoney(totalAdSpend)} icon={Megaphone} color="orange" metricKey="totalAdSpend" metricWindowLabel="Current platform period" />
                 <MetricCard
                     title="Average TACoS"
                     value={<span className={avgTacos > 15 ? 'text-red-500' : 'text-gray-800'}>{formatPct(avgTacos)}</span>}
                     icon={PieChart}
                     color="indigo"
+                    metricKey="tacos"
+                    metricWindowLabel="Current platform period"
                 />
                 <MetricCard
                     title="Global Ad ROI"
                     value={<span className={avgRoi < 0 ? 'text-red-500' : 'text-emerald-600'}>{avgRoi.toFixed(2)}x</span>}
                     icon={Zap}
                     color="green"
+                    metricKey="globalAdRoi"
+                    metricWindowLabel="Current platform period"
                 />
             </div>
 
@@ -162,6 +171,12 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-hidden">
                 <div className="p-4 border-b border-custom-glass bg-gray-50/50 flex justify-between items-center">
                     <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Coins className="w-4 h-4 text-amber-500" />Fees Table</h3>
+                    <button
+                        onClick={() => setShowPop(v => !v)}
+                        className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${showPop ? 'bg-theme-10 text-theme border-theme-20' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                    >
+                        PoP
+                    </button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="tbl w-full text-left text-sm whitespace-nowrap">
@@ -175,11 +190,20 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">TACoS %</th>
                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right bg-green-50/30">Net Profit</th>
                                 <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right bg-green-50/30">ROI After Ads</th>
+                                {showPop && (
+                                    <>
+                                        <th className="px-3 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide text-right pop-col-current">PoP Revenue</th>
+                                        <th className="px-3 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide text-right pop-col-delta-pct">PoP Margin</th>
+                                        <th className="px-3 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide text-right pop-col-prev">PoP Ad Spend</th>
+                                        <th className="px-3 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide text-right pop-col-delta">PoP Net Profit</th>
+                                    </>
+                                )}
                             </tr>
                         </thead>
                         <tbody>
                             {sortRows(roiData, sort as any, (row: any, key: string) => row[key] || 0).map((d: any) => {
                                 const isCostBased = pricingRules[d.platform]?.pricingControl === 'PLATFORM_COST_BASED';
+                                const pop = popByPlatform.get(d.platform);
                                 return (
                                     <tr key={d.platform} className="">
                                         <td className="p-4 font-bold text-gray-900">{d.platform}</td>
@@ -193,6 +217,14 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
                                         <td className="p-4 text-right text-gray-600">{formatPct(d.tacosPct)}</td>
                                         <td className="p-4 text-right font-bold text-green-700">{formatSmartMoney(d.netAfterAds)}</td>
                                         <td className="p-4 text-right font-bold text-theme">{d.roiAfterAds?.toFixed(2)}x</td>
+                                        {showPop && (
+                                            <>
+                                                <td className="p-3 text-right font-mono text-xs pop-col-current">{formatPopAbs(pop?.revenue?.delta ?? 0)}</td>
+                                                <td className="p-3 text-right font-mono text-xs pop-col-delta-pct">{formatPopPct(pop?.margin?.deltaPct ?? null)}</td>
+                                                <td className="p-3 text-right font-mono text-xs pop-col-prev">{formatPopAbs(pop?.adSpend?.delta ?? 0)}</td>
+                                                <td className="p-3 text-right font-mono text-xs pop-col-delta">{formatPopAbs(pop?.netProfit?.delta ?? 0)}</td>
+                                            </>
+                                        )}
                                     </tr>
                                 );
                             })}

@@ -17,6 +17,7 @@ import { FeesAndRoiTab } from './tabs/FeesAndRoiTab';
 import { PerformanceTrendTab } from './tabs/PerformanceTrendTab';
 import { AdGroupsTab } from './tabs/AdGroupsTab';
 import { TabSwitcher } from '../common/TabSwitcher';
+import { getPopComparison } from '../../services/popComparison';
 const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps> = ({
   products = [],
   priceHistoryMap = new Map<string, PriceLog[]>(),
@@ -136,6 +137,33 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
       return dKey && isDateKeyBetween(dKey, startKey, endKey);
     });
   }, [refundHistory, dateWindow, returnDateBasis, orderDateMap]);
+
+  const previousDateWindow = useMemo(() => {
+    const prevEndKey = addDaysToDateKey(dateWindow.startKey, -1);
+    const prevStartKey = addDaysToDateKey(prevEndKey, -(dateWindow.expectedDays - 1));
+    return { startKey: prevStartKey, endKey: prevEndKey };
+  }, [dateWindow.startKey, dateWindow.expectedDays]);
+
+  const filteredPrevPriceHistoryMap = useMemo(() => {
+    const filteredMap = new Map<string, PriceLog[]>();
+    const { startKey, endKey } = previousDateWindow;
+    priceHistoryMap.forEach((logs, sku) => {
+      const filteredLogs = logs.filter(log => {
+        const dKey = asDateKey(log.date);
+        return dKey && isDateKeyBetween(dKey, startKey, endKey);
+      });
+      if (filteredLogs.length > 0) filteredMap.set(sku, filteredLogs);
+    });
+    return filteredMap;
+  }, [priceHistoryMap, previousDateWindow]);
+
+  const filteredPrevRefunds = useMemo(() => {
+    const { startKey, endKey } = previousDateWindow;
+    return refundHistory.filter(r => {
+      const dKey = getReturnDateKey(r, returnDateBasis, orderDateMap);
+      return dKey && isDateKeyBetween(dKey, startKey, endKey);
+    });
+  }, [refundHistory, previousDateWindow, returnDateBasis, orderDateMap]);
 
   // Full history for trends (needs context outside window)
   const allPriceLogs = useMemo(() => Array.from(priceHistoryMap.values()).flat(), [priceHistoryMap]);
@@ -311,6 +339,107 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
       };
     });
   }, [filteredPriceHistoryMap, pricingRules, filteredRefunds, deductRefunds]);
+
+  const previousByPlatform = useMemo(() => {
+    const map = new Map<string, {
+      revenue: number;
+      grossProfit: number;
+      netProfit: number;
+      marginPct: number | null;
+      units: number;
+      adSpend: number;
+      tacosPct: number | null;
+      roiAfterAds: number | null;
+    }>();
+
+    const dataMap: Record<string, {
+      revenue: number;
+      profit: number;
+      units: number;
+      adSpend: number;
+      adRowsCount: number;
+    }> = {};
+
+    filteredPrevPriceHistoryMap.forEach((logs) => {
+      logs.forEach((log) => {
+        const pKey = log.platform || 'Unknown';
+        if (!dataMap[pKey]) {
+          dataMap[pKey] = { revenue: 0, profit: 0, units: 0, adSpend: 0, adRowsCount: 0 };
+        }
+        dataMap[pKey].revenue += calcRevenue(log);
+        dataMap[pKey].profit += calcProfit(log);
+        dataMap[pKey].units += calcUnits(log);
+        dataMap[pKey].adSpend += calcAdSpend(log);
+        if (log.adsSpend !== undefined && log.adsSpend !== null) dataMap[pKey].adRowsCount += 1;
+      });
+    });
+
+    if (deductRefunds) {
+      filteredPrevRefunds.forEach(r => {
+        const pKey = r.platform || 'Unknown';
+        if (dataMap[pKey]) {
+          const refundAmount = Number(r.amount) || 0;
+          const freightAmount = Number(r.freightAmount) || 0;
+          dataMap[pKey].profit -= (refundAmount + freightAmount);
+        }
+      });
+    }
+
+    Object.entries(dataMap).forEach(([platform, stats]) => {
+      const revenue = stats.revenue * VAT_MULTIPLIER;
+      const adSpend = stats.adSpend * VAT_MULTIPLIER;
+      const netProfit = stats.profit * VAT_MULTIPLIER;
+      const grossProfit = netProfit + adSpend;
+      const hasAdData = stats.adRowsCount > 0;
+      const marginPctVal = revenue > 0 ? (netProfit / revenue) * 100 : null;
+      const tacosPctVal = (revenue > 0 && hasAdData) ? (adSpend / revenue) * 100 : null;
+      const roiAfterAds = adSpend > 0 ? (netProfit / adSpend) : null;
+      map.set(platform, {
+        revenue,
+        grossProfit,
+        netProfit,
+        marginPct: marginPctVal,
+        units: stats.units,
+        adSpend,
+        tacosPct: tacosPctVal,
+        roiAfterAds
+      });
+    });
+
+    return map;
+  }, [filteredPrevPriceHistoryMap, filteredPrevRefunds, deductRefunds]);
+
+  const platformPopByKey = useMemo(() => {
+    const out = new Map<string, Record<string, ReturnType<typeof getPopComparison>>>();
+    platformSummaries.forEach(row => {
+      const prev = previousByPlatform.get(row.platform);
+      out.set(row.platform, {
+        revenue: getPopComparison(row.revenue, prev?.revenue ?? 0),
+        grossProfit: getPopComparison(row.profit, prev?.grossProfit ?? 0),
+        netProfit: getPopComparison(row.netProfit, prev?.netProfit ?? 0),
+        margin: getPopComparison(row.marginPct ?? 0, prev?.marginPct ?? 0),
+        units: getPopComparison(row.units ?? 0, prev?.units ?? 0)
+      });
+    });
+    return out;
+  }, [platformSummaries, previousByPlatform]);
+
+  const roiPopByKey = useMemo(() => {
+    const out = new Map<string, Record<string, ReturnType<typeof getPopComparison>>>();
+    roiData.forEach(row => {
+      const prev = previousByPlatform.get(row.platform);
+      out.set(row.platform, {
+        revenue: getPopComparison(row.revenue, prev?.revenue ?? 0),
+        grossProfit: getPopComparison(row.profit ?? 0, prev?.grossProfit ?? 0),
+        margin: getPopComparison(row.marginPct ?? 0, prev?.marginPct ?? 0),
+        adSpend: getPopComparison(row.adSpend ?? 0, prev?.adSpend ?? 0),
+        tacos: getPopComparison(row.tacosPct ?? 0, prev?.tacosPct ?? 0),
+        netProfit: getPopComparison(row.netAfterAds ?? 0, prev?.netProfit ?? 0),
+        roi: getPopComparison(row.roiAfterAds ?? 0, prev?.roiAfterAds ?? 0)
+      });
+    });
+    return out;
+  }, [roiData, previousByPlatform]);
 
   // Trend Data for Comparison Cards
   const trendData = useMemo(() => {
@@ -733,6 +862,7 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
             startKey={dateWindow.startKey}
             endKey={dateWindow.endKey}
             isAuditVisible={isAuditVisible}
+            popByPlatform={platformPopByKey}
           />
         )}
         {activeTab === 'roi' && (
@@ -745,6 +875,7 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
             startKey={dateWindow.startKey}
             endKey={dateWindow.endKey}
             isAuditVisible={isAuditVisible}
+            popByPlatform={roiPopByKey}
           />
         )}
         {activeTab === 'ad-groups' && (

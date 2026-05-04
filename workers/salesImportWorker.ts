@@ -17,6 +17,7 @@ interface ColumnMapping {
     platformLevel2?: string;
     category?: string;
     cogs?: string;
+    promoRebate?: string;
     sellingFee?: string;
     adsFee?: string;
     postage?: string;
@@ -94,6 +95,7 @@ const autoDetectMapping = (headers: string[]): ColumnMapping => {
         platformLevel2: findMappedHeader(headers, ['platformnamelevel2', 'fulfillment', 'subsource']),
         category: findMappedHeader(headers, ['category', 'maincategory']),
         cogs: findMappedHeader(headers, ['cogs', 'cost', 'unitcost']),
+        promoRebate: findMappedHeader(headers, ['promo_rebate', 'promorebate', 'promotion_rebate', 'discount_amount']),
         sellingFee: findMappedHeader(headers, ['sellingfee', 'commission', 'referralfee']),
         adsFee: findMappedHeader(headers, ['adsfee', 'adspend', 'ppc', 'sponsored']),
         postage: findMappedHeader(headers, ['postage', 'shipping', 'freight', 'delivery']),
@@ -153,6 +155,7 @@ const processRows = (
     const plat2Idx = getIdx(mapping.platformLevel2);
 
     const cogsIdx = getIdx(mapping.cogs);
+    const promoRebateIdx = getIdx(mapping.promoRebate);
     const catIdx = getIdx(mapping.category);
     const sellingIdx = getIdx(mapping.sellingFee);
     const adsIdx = getIdx(mapping.adsFee);
@@ -439,7 +442,7 @@ const processRows = (
                 dailyAggregated[dailyKey].totalOtherFee += parseVal(otherIdx);
                 dailyAggregated[dailyKey].totalSubscriptionFee += parseVal(subIdx);
                 dailyAggregated[dailyKey].totalWmsFee += parseVal(wmsIdx);
-                dailyAggregated[dailyKey].totalPromoRel += 0;
+                dailyAggregated[dailyKey].totalPromoRel += parseVal(promoRebateIdx);
 
                 const dailyWeight = Math.abs(qty) || 0;
                 dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);

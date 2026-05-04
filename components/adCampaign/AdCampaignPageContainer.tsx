@@ -1378,30 +1378,30 @@ const AdCampaignPageContainerInner: React.FC<AdCampaignPageProps> = ({
                 {/* ── KPI BAR ── */}
                 {totals && (
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-                        <MetricCard title="Total Spend" value={fmtGBP(totals.spend)} icon={DollarSign} color="orange" />
-                        <MetricCard title="Ad Sales" value={fmtGBP(totals.sales)} icon={TrendingUp} color="blue"
+                        <MetricCard title="Total Spend" value={fmtGBP(totals.spend)} icon={DollarSign} color="orange" metricKey="totalAdSpend" metricWindowLabel="Selected campaign period" />
+                        <MetricCard title="Ad Sales" value={fmtGBP(totals.sales)} icon={TrendingUp} color="blue" metricKey="adSales" metricWindowLabel="Selected campaign period"
                             desc="Campaign attributed sales" />
                         <MetricCard
                             title="Broad ROAS"
                             value={<span className={roasColor(totals.broadRoas)}>{fmt(totals.broadRoas)}</span>}
-                            icon={BarChart3} color="emerald"
+                            icon={BarChart3} color="emerald" metricKey="broadRoas" metricWindowLabel="Selected campaign period"
                             desc={`Direct: ${fmt(totals.directRoas)}`}
                         />
                         <MetricCard
                             title="Direct ROAS"
                             value={<span className={roasColor(totals.directRoas)}>{fmt(totals.directRoas)}</span>}
-                            icon={Target} color="purple"
+                            icon={Target} color="purple" metricKey="directRoas" metricWindowLabel="Selected campaign period"
                         />
                         <MetricCard
                             title="Spend / Sales"
                             value={<span className={totals.spendRatio <= 0.05 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(totals.spendRatio)}</span>}
-                            icon={Percent} color={totals.spendRatio <= 0.05 ? 'emerald' : 'red'}
+                            icon={Percent} color={totals.spendRatio <= 0.05 ? 'emerald' : 'red'} metricKey="spendSalesRatio" metricWindowLabel="Selected campaign period"
                             desc="Target: ≤ 5%"
                         />
                         <MetricCard
                             title="Avg Utilisation"
                             value={<span className={utilColor(totals.utilAvg)}>{fmtPct(totals.utilAvg)}</span>}
-                            icon={Gauge} color="indigo"
+                            icon={Gauge} color="indigo" metricKey="avgUtilisation" metricWindowLabel="Selected campaign period"
                         />
                     </div>
                 )}

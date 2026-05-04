@@ -48,18 +48,22 @@ export const FeesAndRoiTab: React.FC<FeesAndRoiTabProps> = ({ roiData, pricingRu
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <MetricCard title="Total Ad Spend" value={formatSmartMoney(totalAdSpend)} icon={Megaphone} color="orange" />
+                <MetricCard title="Total Ad Spend" value={formatSmartMoney(totalAdSpend)} icon={Megaphone} color="orange" metricKey="totalAdSpend" metricWindowLabel="Current platform period" />
                 <MetricCard
                     title="Average TACoS"
                     value={<span className={avgTacos > 15 ? 'text-red-500' : 'text-gray-800'}>{formatPct(avgTacos)}</span>}
                     icon={PieChart}
                     color="indigo"
+                    metricKey="tacos"
+                    metricWindowLabel="Current platform period"
                 />
                 <MetricCard
                     title="Global Ad ROI"
                     value={<span className={avgRoi < 0 ? 'text-red-500' : 'text-emerald-600'}>{avgRoi.toFixed(2)}x</span>}
                     icon={Zap}
                     color="green"
+                    metricKey="globalAdRoi"
+                    metricWindowLabel="Current platform period"
                 />
             </div>
 

@@ -34,6 +34,7 @@ interface ColumnMapping {
     // Extended ERP Columns
     category?: string;
     cogs?: string;
+    promoRebate?: string;
     sellingFee?: string;
     adsFee?: string;
     postage?: string;
@@ -444,6 +445,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                         <MappingSelect label="Selling Fee" value={mapping.sellingFee} onChange={(v: string) => mapField('sellingFee', v)} options={rawHeaders} />
                                         <MappingSelect label="Ad Spend / PPC" value={mapping.adsFee} onChange={(v: string) => mapField('adsFee', v)} options={rawHeaders} />
                                         <MappingSelect label="Postage Cost" value={mapping.postage} onChange={(v: string) => mapField('postage', v)} options={rawHeaders} />
+                                        <MappingSelect label="Promo Rebate" value={mapping.promoRebate} onChange={(v: string) => mapField('promoRebate', v)} options={rawHeaders} />
                                         <MappingSelect label="Logistics Name (Service)" value={mapping.logisticsService} onChange={(v: string) => mapField('logisticsService', v)} options={rawHeaders} />
                                         <MappingSelect label="WMS Fee" value={mapping.wmsFee} onChange={(v: string) => mapField('wmsFee', v)} options={rawHeaders} />
                                         <MappingSelect label="Extra Freight (Income)" value={mapping.extraFreight} onChange={(v: string) => mapField('extraFreight', v)} options={rawHeaders} />

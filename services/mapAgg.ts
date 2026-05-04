@@ -36,10 +36,13 @@ export interface AreaData {
     topSkus: { sku: string; name: string; profit: number; volume: number; revenue: number }[];
     prevRevenue: number;
     prevVolume: number;
+    prevProfit: number;
     revenueDelta: number;
     volumeDelta: number;
+    profitDelta: number;
     revenueDeltaPct: number;
     volumeDeltaPct: number;
+    profitDeltaPct: number;
     districtBreakdown: DistrictData[];
     // Guardrail: Explicit flag to indicate monetary values are tax-inclusive
     moneyIsTaxInclusive?: boolean;
@@ -305,6 +308,7 @@ export const aggregateUkMapData = (
         const adSpendInclTax = scaleMoneyInclTax(stats.totalAdSpend);
         const totalPostageInclTax = scaleMoneyInclTax(stats.totalPostage);
         const prevRevenueInclTax = scaleMoneyInclTax(stats.prevRevenue);
+        const prevProfitInclTax = scaleMoneyInclTax(stats.prevProfit);
 
         const platformBreakdown = Object.entries(stats.platforms)
             .map(([platform, data]) => ({ 
@@ -328,6 +332,7 @@ export const aggregateUkMapData = (
 
         const revenueDelta = revenueInclTax - prevRevenueInclTax;
         const volumeDelta = stats.volume - stats.prevVolume;
+        const profitDelta = profitInclTax - prevProfitInclTax;
         
         const districtBreakdown = Object.entries(districtStats)
           .filter(([districtCode]) => {
@@ -371,10 +376,13 @@ export const aggregateUkMapData = (
             topSkus,
             prevRevenue: prevRevenueInclTax,
             prevVolume: stats.prevVolume,
+            prevProfit: prevProfitInclTax,
             revenueDelta,
             volumeDelta,
+            profitDelta,
             revenueDeltaPct: prevRevenueInclTax > 0 ? (revenueDelta / prevRevenueInclTax) * 100 : (revenueDelta > 0 ? Infinity : 0),
             volumeDeltaPct: stats.prevVolume > 0 ? (volumeDelta / stats.prevVolume) * 100 : (volumeDelta > 0 ? Infinity : 0),
+            profitDeltaPct: prevProfitInclTax > 0 ? (profitDelta / prevProfitInclTax) * 100 : (profitDelta > 0 ? Infinity : 0),
             districtBreakdown,
             moneyIsTaxInclusive: true
         };

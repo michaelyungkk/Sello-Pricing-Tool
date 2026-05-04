@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { formatSmartMoney } from '../../../utils/format';
 import { TrendingUp, TrendingDown, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 import { OptimalPriceResult } from '../../../types';
+import { MetricDefinitionTooltip } from '../../common/MetricDefinitionTooltip';
+import { getMetricDefinition } from '../../../services/metricDefinitions';
 
 // ── Confidence Badge (inline)
 const ConfidenceBadge: React.FC<{ confidence: number; source: string }> = ({ confidence, source }) => {
@@ -41,6 +43,7 @@ interface OptimalPriceCardProps {
 
 export const OptimalPriceCard: React.FC<OptimalPriceCardProps> = ({ result, currentPrice, optimalPrice }) => {
     const [reasoningExpanded, setReasoningExpanded] = useState(false);
+    const optimalDef = getMetricDefinition('optimalPriceTarget');
 
     // Legacy fallback — bare number
     if (!result) {
@@ -51,7 +54,10 @@ export const OptimalPriceCard: React.FC<OptimalPriceCardProps> = ({ result, curr
         const isDecrease = diff < -0.02;
         return (
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm animate-in fade-in slide-in-from-top-2">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Optimal Price Target</div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 inline-flex items-center gap-1">
+                    Optimal Price Target
+                    <MetricDefinitionTooltip title={optimalDef.title} formula={optimalDef.formula} source={optimalDef.source} windowLabel={optimalDef.windowLabel} />
+                </div>
                 <div className="flex items-end justify-between">
                     <div className="text-3xl font-bold text-gray-900 tracking-tight">{formatSmartMoney(optimalPrice)}</div>
                     {isIncrease && <div className="text-right"><div className="flex items-center gap-1 text-sm font-bold text-green-600"><TrendingUp className="w-4 h-4" />+{diffPct.toFixed(1)}%</div><div className="text-[10px] text-gray-400">Target</div></div>}
@@ -87,7 +93,10 @@ export const OptimalPriceCard: React.FC<OptimalPriceCardProps> = ({ result, curr
     return (
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm animate-in fade-in slide-in-from-top-2 space-y-3">
             {/* Header */}
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Optimal Price Target</div>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider inline-flex items-center gap-1">
+                Optimal Price Target
+                <MetricDefinitionTooltip title={optimalDef.title} formula={optimalDef.formula} source={optimalDef.source} windowLabel={optimalDef.windowLabel} />
+            </div>
 
             {/* Price + direction */}
             <div className="flex items-end justify-between">

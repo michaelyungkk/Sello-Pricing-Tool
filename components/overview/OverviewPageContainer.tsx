@@ -94,6 +94,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const [itemsPerPage, setItemsPerPage] = useState(25);
     const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
     const [sort, setSort] = useState<SortState<SortKey> | null>(null);
+    const [showWorkbenchPop, setShowWorkbenchPop] = useState(false);
 
     const [deductRefunds, setDeductRefunds] = React.useState<boolean>(() => {
         const saved = localStorage.getItem('sello_deduct_refunds_overview');
@@ -591,7 +592,17 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                     </h3>
                                     <span className="text-xs text-gray-500">{workbenchData.length} items requiring action</span>
                                 </div>
-                                <button onClick={() => { }} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"><Download className="w-4 h-4" /></button>
+                                <div className="flex items-center gap-2">
+                                    {selectedAlert === 'velocity' && (
+                                        <button
+                                            onClick={() => setShowWorkbenchPop(v => !v)}
+                                            className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${showWorkbenchPop ? 'bg-theme-10 text-theme border-theme-20' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                                        >
+                                            PoP
+                                        </button>
+                                    )}
+                                    <button onClick={() => { }} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"><Download className="w-4 h-4" /></button>
+                                </div>
                             </div>
                             <div className="sello-table-scroll">
                                 <table className="sello-table">
@@ -636,6 +647,14 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 <th className="r">Hist. Price</th>
                                                 <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
                                                 <SortableHeader label="Price Adj." sortKey="priceChanges" sort={sort} onChange={setSort} align="center" />
+                                                {showWorkbenchPop && (
+                                                    <>
+                                                        <th className="r text-[10px] pop-col-current">Current</th>
+                                                        <th className="r text-[10px] pop-col-prev">Previous</th>
+                                                        <th className="r text-[10px] pop-col-delta">Delta</th>
+                                                        <th className="r text-[10px] pop-col-delta-pct">Delta %</th>
+                                                    </>
+                                                )}
                                                 <th className="r">CTA / Justification</th>
                                             </tr>
                                         ) : selectedAlert === 'stock' ? (
@@ -769,6 +788,14 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                 )}
                                                             </div>
                                                         </td>
+                                                        {showWorkbenchPop && (
+                                                            <>
+                                                                <td className="r font-mono text-xs pop-col-current">{formatNumber(p.periodUnits, 0)}</td>
+                                                                <td className="r font-mono text-xs pop-col-prev">{formatNumber(p.prevPeriodUnits, 0)}</td>
+                                                                <td className="r font-mono text-xs pop-col-delta">{p.volumeDropAbs > 0 ? '+' : ''}{formatNumber(p.volumeDropAbs, 0)}</td>
+                                                                <td className="r font-mono text-xs pop-col-delta-pct">{Number.isFinite(p.volumeDropPct) ? `${p.volumeDropPct > 0 ? '+' : ''}${p.volumeDropPct.toFixed(1)}%` : 'N/A'}</td>
+                                                            </>
+                                                        )}
 
                                                         <td className="r">
                                                             <div className="flex flex-col items-end">
@@ -964,14 +991,18 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                 value={<span className={financialStats.totalProfit >= 0 ? 'text-emerald-600' : 'text-red-500'}>{financialStats.totalProfit < 0 ? '-' : ''}£{Math.abs(financialStats.totalProfit).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>}
                                 icon={Coins}
                                 color={financialStats.totalProfit >= 0 ? "green" : "red"}
+                                metricKey="trueNetProfit"
+                                metricWindowLabel={periodLabel}
                             />
-                            <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={Megaphone} color="purple" desc="Includes Ad-Only Transactions" />
+                            <MetricCard title="Total Ad Spend" value={`£${financialStats.totalAdSpend.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} icon={Megaphone} color="purple" desc="Includes Ad-Only Transactions" metricKey="totalAdSpend" metricWindowLabel={periodLabel} />
                             <MetricCard
                                 title="TACoS %"
                                 value={<span className={financialStats.tacos > 20 ? 'text-amber-500' : 'text-gray-800'}>{financialStats.tacos.toFixed(1)}%</span>}
                                 icon={BarChart2}
                                 color="orange"
                                 desc="Total Advertising Cost of Sales"
+                                metricKey="tacos"
+                                metricWindowLabel={periodLabel}
                             />
                         </div>
                         <div className="bg-custom-glass p-5 rounded-xl border border-custom-glass shadow-sm flex flex-col h-[500px]">

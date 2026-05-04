@@ -10,6 +10,7 @@ import { PricingRules } from '../../../types';
 import { PlatformMetricCard } from '../parts/PlatformMetricCard';
 import AuditPanel from '../../common/AuditPanel';
 import { FilterBar } from '../../common/FilterBar';
+import { getPopComparison } from '../../../services/popComparison';
 
 interface PlatformOverviewTabProps {
     sortedSummaries: PlatformSummary[];
@@ -25,6 +26,7 @@ interface PlatformOverviewTabProps {
     startKey?: string;
     endKey?: string;
     isAuditVisible: boolean;
+    popByPlatform?: Map<string, Record<string, ReturnType<typeof getPopComparison>>>;
 }
 
 export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
@@ -41,7 +43,12 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
     startKey = '',
     endKey = '',
     isAuditVisible,
+    popByPlatform = new Map(),
 }) => {
+    const [showPop, setShowPop] = useState(false);
+    const formatPopPct = (v: number | null) => v === null ? 'N/A' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+    const formatPopAbs = (v: number) => `${v >= 0 ? '+' : ''}${formatSmartMoney(v)}`;
+    const formatPopNum = (v: number) => `${v >= 0 ? '+' : ''}${formatNumber(v)}`;
     return (
         <div className="space-y-6">
             {isAuditVisible && (
@@ -81,7 +88,15 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
                             <Globe className="w-4 h-4 text-theme" />Performance Matrix
                         </h3>
-                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded border border-gray-100">{TAX_NOTE_SHORT}</div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setShowPop(v => !v)}
+                                className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${showPop ? 'bg-theme-10 text-theme border-theme-20' : 'bg-white/70 text-gray-500 border-gray-200 hover:bg-white'}`}
+                            >
+                                PoP
+                            </button>
+                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded border border-gray-100">{TAX_NOTE_SHORT}</div>
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="tbl w-full text-left text-sm whitespace-nowrap">
@@ -95,6 +110,14 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                     <SortableHeader label="Net Profit" sortKey="netProfit" sort={sort} onChange={setSort as any} themeColor={themeColor} align="right" className="bg-green-50/20" />
                                     <SortableHeader label="Margin %" sortKey="margin" sort={sort} onChange={setSort as any} themeColor={themeColor} align="right" />
                                     <SortableHeader label="Units" sortKey="velocity" sort={sort} onChange={setSort as any} themeColor={themeColor} align="right" />
+                                    {showPop && (
+                                        <>
+                                            <th className="px-3 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide text-right pop-col-current">PoP Revenue</th>
+                                            <th className="px-3 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide text-right pop-col-delta">PoP Profit</th>
+                                            <th className="px-3 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide text-right pop-col-delta-pct">PoP Margin</th>
+                                            <th className="px-3 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide text-right pop-col-prev">PoP Units</th>
+                                        </>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody>
@@ -102,6 +125,7 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                     const rule = pricingRules[summary.platform];
                                     const isSelected = selectedPlatformKey === summary.platform;
                                     const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
+                                    const pop = popByPlatform.get(summary.platform);
                                     return (
                                         <tr key={summary.platform} className={`cursor-pointer ${isSelected ? 'bg-theme-10/50' : ''}`} onClick={() => setSelectedPlatformKey(isSelected ? null : summary.platform)}>
                                             <td className="p-4">
@@ -120,6 +144,14 @@ export const PlatformOverviewTab: React.FC<PlatformOverviewTabProps> = ({
                                             <td className="p-4 text-right font-bold text-emerald-600 bg-emerald-50/10">{formatSmartMoney(summary.netProfit)}</td>
                                             <td className="p-4 text-right"><span className={`font-bold ${summary.marginPct >= 15 ? 'text-emerald-600' : summary.marginPct >= 0 ? 'text-amber-500' : 'text-red-500'}`}>{formatPct(summary.marginPct)}</span></td>
                                             <td className="p-4 text-right text-gray-500">{formatNumber(summary.units)}</td>
+                                            {showPop && (
+                                                <>
+                                                    <td className="p-3 text-right font-mono text-xs pop-col-current">{formatPopAbs(pop?.revenue?.delta ?? 0)}</td>
+                                                    <td className="p-3 text-right font-mono text-xs pop-col-delta">{formatPopAbs(pop?.netProfit?.delta ?? 0)}</td>
+                                                    <td className="p-3 text-right font-mono text-xs pop-col-delta-pct">{formatPopPct(pop?.margin?.deltaPct ?? null)}</td>
+                                                    <td className="p-3 text-right font-mono text-xs pop-col-prev">{formatPopNum(pop?.units?.delta ?? 0)}</td>
+                                                </>
+                                            )}
                                         </tr>
                                     );
                                 })}

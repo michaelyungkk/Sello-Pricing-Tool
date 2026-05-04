@@ -1,9 +1,12 @@
 
-import React from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Package, Activity, Warehouse, Ship, Box, BarChart2, History, FileText, RotateCcw, Tag } from 'lucide-react';
 import { Product } from '../../../types';
 import { GradeBadge } from '../../common/GradeBadge';
 import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
+import { createPortal } from 'react-dom';
+import { MetricDefinitionTooltip } from '../../common/MetricDefinitionTooltip';
+import { getMetricDefinition } from '../../../services/metricDefinitions';
 
 interface SkuOverviewSectionProps {
     product: Product;
@@ -15,6 +18,93 @@ interface SkuOverviewSectionProps {
     hasTransactions: boolean;
     onScrollToSection: (section: 'analysis' | 'pricing' | 'promotion' | 'ledger' | 'refunds') => void;
 }
+
+interface CompactMetricTooltipProps {
+    title: string;
+    lines: Array<{ label: string; value: string }>;
+    formula?: string;
+}
+
+const CompactMetricTooltip: React.FC<CompactMetricTooltipProps> = ({ title, lines, formula }) => {
+    const [open, setOpen] = useState(false);
+    const buttonRef = useRef<HTMLButtonElement | null>(null);
+    const popRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDocClick = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (buttonRef.current?.contains(target) || popRef.current?.contains(target)) return;
+            setOpen(false);
+        };
+        const onEsc = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setOpen(false);
+        };
+        document.addEventListener('mousedown', onDocClick);
+        document.addEventListener('keydown', onEsc);
+        return () => {
+            document.removeEventListener('mousedown', onDocClick);
+            document.removeEventListener('keydown', onEsc);
+        };
+    }, [open]);
+
+    const popStyle = useMemo(() => {
+        if (!open || !buttonRef.current) return null;
+        const rect = buttonRef.current.getBoundingClientRect();
+        const width = 280;
+        const margin = 8;
+        let left = rect.right - width;
+        left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+        let top = rect.bottom + 8;
+        const estimatedHeight = 170;
+        if (top + estimatedHeight > window.innerHeight - margin) {
+            top = rect.top - estimatedHeight - 8;
+        }
+        return { position: 'fixed' as const, top, left, width };
+    }, [open]);
+
+    return (
+        <span className="inline-flex items-center">
+            <button
+                ref={buttonRef}
+                type="button"
+                className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-300 text-[10px] font-bold text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+                onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setOpen(prev => !prev);
+                }}
+                aria-label={`Explain ${title}`}
+                title={`Explain ${title}`}
+            >
+                ?
+            </button>
+            {open && popStyle && createPortal(
+                <div
+                    ref={popRef}
+                    style={popStyle}
+                    className="z-[9999] rounded-xl border border-gray-200 bg-white p-3 text-left text-[11px] leading-4 text-gray-700 shadow-xl"
+                >
+                    <div className="mb-1.5 font-bold text-gray-900">{title}</div>
+                    <div className="space-y-1">
+                        {lines.map((line) => (
+                            <div key={`${line.label}-${line.value}`} className="flex justify-between gap-3">
+                                <span className="text-gray-500">{line.label}</span>
+                                <span className="font-semibold text-gray-900 text-right">{line.value}</span>
+                            </div>
+                        ))}
+                    </div>
+                    {formula && (
+                        <div className="mt-2 border-t border-gray-100 pt-2 text-[10px] text-gray-500">
+                            {formula}
+                        </div>
+                    )}
+                </div>,
+                document.body
+            )}
+        </span>
+    );
+};
 
 export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
     product,
@@ -28,6 +118,9 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
 }) => {
     const latestCogs = Number(product.costPrice ?? product.costDetail?.cogs ?? 0);
     const latestFreight = Number(product.postage ?? product.costDetail?.postage ?? 0);
+    const marginDef = getMetricDefinition('lifetimeNetMargin');
+    const returnQtyDef = getMetricDefinition('returnQtyRate');
+    const returnAmtDef = getMetricDefinition('returnAmountRate');
 
     return (
         <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-visible backdrop-blur-custom p-6">
@@ -128,28 +221,22 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                             </div>
                         </div>
 
-                        {/* INBOUND TOOLTIP */}
-                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom space-y-1 group relative cursor-help">
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom space-y-1">
                             <span className="text-[10px] font-medium text-gray-500 uppercase flex items-center gap-1">
                                 <Ship className="w-3 h-3"/> Inbound
+                                {product.shipments && product.shipments.length > 0 && (
+                                    <CompactMetricTooltip
+                                        title="Active Shipments"
+                                        lines={product.shipments.map((shipment: any) => ({
+                                            label: shipment.containerId || 'Container',
+                                            value: shipment.eta || 'TBA'
+                                        }))}
+                                    />
+                                )}
                             </span>
                             <div className="text-xl font-bold text-gray-800">
                                 {formatNumber(product.incomingStock)} <span className="text-xs font-normal text-gray-400">units</span>
                             </div>
-                            
-                            {product.shipments && product.shipments.length > 0 && (
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50">
-                                    <div className="font-bold border-b border-gray-700 pb-1 mb-1">Active Shipments</div>
-                                    <div className="space-y-1">
-                                        {product.shipments.map((s, i) => (
-                                            <div key={i} className="flex justify-between gap-2">
-                                                <span className="truncate">{s.containerId}</span>
-                                                <span className="font-bold text-indigo-300">{s.eta || 'TBA'}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom space-y-1">
@@ -190,62 +277,33 @@ export const SkuOverviewSection: React.FC<SkuOverviewSectionProps> = ({
                             </div>
                         </div>
 
-                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom group relative cursor-help">
-                            <span className="text-[10px] font-medium text-gray-500 uppercase block mb-1">Lifetime Net Margin</span>
+                        <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom">
+                            <span className="text-[10px] font-medium text-gray-500 uppercase mb-1 inline-flex items-center gap-1">Lifetime Net Margin
+                                <MetricDefinitionTooltip title={marginDef.title} formula={marginDef.formula} source={marginDef.source} windowLabel={marginDef.windowLabel} />
+                            </span>
                             <div className={`text-lg font-bold ${allTimeMarginStats.pct >= 15 ? 'text-emerald-600' : allTimeMarginStats.pct > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                 {formatPct(allTimeMarginStats.pct, 1)}
-                            </div>
-                            <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
-                                <div className="font-bold border-b border-gray-700 pb-1 mb-2">Calculation Detail (Inc VAT)</div>
-                                <div className="space-y-1 font-mono">
-                                    <div className="flex justify-between"><span>Gross Sales:</span><span>{formatSmartMoney(allTimeMarginStats.grossSales)}</span></div>
-                                    <div className="flex justify-between text-green-400"><span>Tx Profit:</span><span>{formatSmartMoney(allTimeMarginStats.rawProfit)}</span></div>
-                                    <div className="flex justify-between text-red-400"><span>Refunds:</span><span>-{formatSmartMoney(allTimeMarginStats.refundVal)}</span></div>
-                                    <div className="border-t border-gray-700 pt-1 mt-1 flex justify-between font-bold"><span>Net Profit:</span><span>{formatSmartMoney(allTimeMarginStats.netProfit)}</span></div>
-                                    <div className="flex justify-between font-bold"><span>Net Sales:</span><span>{formatSmartMoney(allTimeMarginStats.netSales)}</span></div>
-                                    <div className="border-t border-gray-700 pt-1 mt-1 text-center text-gray-400 italic">
-                                        (Net Profit / Net Sales) * 100
-                                    </div>
-                                </div>
                             </div>
                         </div>
 
                         {/* Return & Refund Stats - Stacked for column economy */}
                         <div className="p-3 bg-custom-glass rounded-xl border border-custom-glass backdrop-blur-custom flex flex-col justify-between">
                             <div className="flex flex-col gap-1">
-                                <div className="flex justify-between items-center group relative cursor-help">
-                                    <span className="text-[9px] text-gray-500 font-medium">Return QTY %</span>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[9px] text-gray-500 font-medium inline-flex items-center gap-1">Return QTY %
+                                        <MetricDefinitionTooltip title={returnQtyDef.title} formula={returnQtyDef.formula} source={returnQtyDef.source} windowLabel={returnQtyDef.windowLabel} />
+                                    </span>
                                     <span className={`text-sm font-bold ${allTimeReturnStats.returnRate > thresholds.returnRatePct ? 'text-red-500' : 'text-gray-700'}`}>
                                         {formatPct(allTimeReturnStats.returnRate)}
                                     </span>
-                                    {/* Tooltip for Qty% */}
-                                    <div className="absolute bottom-full right-0 mb-2 w-56 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
-                                        <div className="font-bold border-b border-gray-700 pb-1 mb-2">Return Qty Math</div>
-                                        <div className="space-y-1 font-mono text-right">
-                                            <div className="flex justify-between"><span>Total Returns:</span><span>{formatNumber(allTimeReturnStats.totalRefundQty)}</span></div>
-                                            <div className="flex justify-between"><span>Lifetime Sold:</span><span>{formatNumber(allTimeQty)}</span></div>
-                                            <div className="border-t border-gray-700 pt-1 mt-1 text-center text-gray-400 italic">
-                                                (Returns / Sales) * 100
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center border-t border-gray-100 pt-1 group relative cursor-help">
-                                    <span className="text-[9px] text-gray-500 font-medium">Return AMT %</span>
+                                <div className="flex justify-between items-center border-t border-gray-100 pt-1">
+                                    <span className="text-[9px] text-gray-500 font-medium inline-flex items-center gap-1">Return AMT %
+                                        <MetricDefinitionTooltip title={returnAmtDef.title} formula={returnAmtDef.formula} source={returnAmtDef.source} windowLabel={returnAmtDef.windowLabel} />
+                                    </span>
                                     <span className="text-sm font-bold text-gray-700">
                                         {formatPct(allTimeReturnStats.refundRate)}
                                     </span>
-                                    {/* Tooltip for Amt% */}
-                                    <div className="absolute bottom-full right-0 mb-2 w-56 p-3 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
-                                        <div className="font-bold border-b border-gray-700 pb-1 mb-2">Return Value Math (Inc VAT)</div>
-                                        <div className="space-y-1 font-mono text-right">
-                                            <div className="flex justify-between"><span>Total Returns Val:</span><span>{formatSmartMoney(allTimeReturnStats.totalRefundVal)}</span></div>
-                                            <div className="flex justify-between"><span>Lifetime Gross:</span><span>{formatSmartMoney(allTimeSales)}</span></div>
-                                            <div className="border-t border-gray-700 pt-1 mt-1 text-center text-gray-400 italic">
-                                                (Returns Val / Gross Sales) * 100
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>

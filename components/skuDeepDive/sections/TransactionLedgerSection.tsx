@@ -9,7 +9,9 @@ import { Product } from '../../../types';
 
 interface TransactionLedgerSectionProps {
     ledgerStats: any;
+    previousLedgerStats?: any;
     platformSubtotals: any[];
+    previousPlatformSubtotalsMap?: Map<string, any>;
     paginatedTransactions: any[];
     filteredTransactionsLength: number;
     txLimit: number;
@@ -55,7 +57,9 @@ interface TransactionLedgerSectionProps {
 
 export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> = ({
     ledgerStats,
+    previousLedgerStats = {},
     platformSubtotals,
+    previousPlatformSubtotalsMap = new Map(),
     paginatedTransactions,
     filteredTransactionsLength,
     txLimit,
@@ -92,6 +96,12 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
 }) => {
     void product;
     const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
+    const [showPop, setShowPop] = useState(false);
+    const popAvailable = ledgerWindowPreset !== 'all';
+
+    React.useEffect(() => {
+        if (!popAvailable && showPop) setShowPop(false);
+    }, [popAvailable, showPop]);
 
     const platformCostBreakdowns = useMemo(() => {
         const getNum = (row: any, keys: string[]) => {
@@ -298,6 +308,11 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     Postcode filter is active ({txPostcodeArea}). This filtered view includes sales rows with matching postcode area.
                 </p>
             )}
+            {!popAvailable && (
+                <p className="text-xs text-gray-500 -mt-2">
+                    PoP is unavailable for All Time. Select 7/14/30/90 days or Custom.
+                </p>
+            )}
 
             {isAuditPanelVisible && (
                 <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm animate-in fade-in zoom-in-95 duration-200">
@@ -319,10 +334,12 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium">Sales Rows</span>
                     <div className="text-xl font-bold text-gray-800">{ledgerStats.salesRows}</div>
+                    {showPop && popAvailable && <div className="text-[10px] text-gray-500 mt-1">PoP {ledgerStats.salesRows - (previousLedgerStats.salesRows || 0) >= 0 ? '+' : ''}{formatNumber((ledgerStats.salesRows - (previousLedgerStats.salesRows || 0)))}</div>}
                 </div>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium">Total Units</span>
                     <div className="text-xl font-bold text-emerald-600">{ledgerStats.totalUnits}</div>
+                    {showPop && popAvailable && <div className="text-[10px] text-gray-500 mt-1">PoP {ledgerStats.totalUnits - (previousLedgerStats.totalUnits || 0) >= 0 ? '+' : ''}{formatNumber((ledgerStats.totalUnits - (previousLedgerStats.totalUnits || 0)))}</div>}
                 </div>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium flex items-center gap-1">
@@ -332,6 +349,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                         </span>
                     </span>
                     <div className="text-xl font-bold text-amber-500">{formatSmartMoney(ledgerStats.adOnlySpend)}</div>
+                    {showPop && popAvailable && <div className="text-[10px] text-gray-500 mt-1">PoP {(ledgerStats.adOnlySpend - (previousLedgerStats.adOnlySpend || 0)) >= 0 ? '+' : ''}{formatSmartMoney((ledgerStats.adOnlySpend - (previousLedgerStats.adOnlySpend || 0)))}</div>}
                 </div>
                 <div className="flex flex-col">
                     <span className="text-xs text-gray-500 uppercase font-medium">Refunds (Detected)</span>
@@ -339,12 +357,20 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                         {ledgerStats.refundCount}
                         {ledgerStats.refundValue > 0 && <span className="text-sm font-medium opacity-70">(-{formatSmartMoney(ledgerStats.refundValue)})</span>}
                     </div>
+                    {showPop && popAvailable && <div className="text-[10px] text-gray-500 mt-1">PoP {(ledgerStats.refundCount - (previousLedgerStats.refundCount || 0)) >= 0 ? '+' : ''}{formatNumber((ledgerStats.refundCount - (previousLedgerStats.refundCount || 0)))}</div>}
                 </div>
             </div>
 
             <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden animate-in fade-in">
-                <div className="p-3 bg-white/10 border-b border-custom-glass">
+                <div className="p-3 bg-white/10 border-b border-custom-glass flex items-center justify-between">
                     <h4 className="text-xs font-bold text-gray-500 uppercase">Platform Subtotals (for period)</h4>
+                    <button
+                        onClick={() => popAvailable && setShowPop(v => !v)}
+                        disabled={!popAvailable}
+                        className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${!popAvailable ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : showPop ? 'bg-theme-10 text-theme border-theme-20' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                    >
+                        PoP
+                    </button>
                 </div>
                 <div className="divide-y divide-gray-100">
                     {platformSubtotals.map(sub => (
@@ -399,6 +425,28 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                             {formatPct(sub.margin)}
                                         </div>
                                     </div>
+                                    {showPop && popAvailable && (() => {
+                                        const prev = previousPlatformSubtotalsMap.get(sub.platform) || {};
+                                        const revenueDelta = sub.revenue - (prev.revenue || 0);
+                                        const unitDelta = sub.soldQty - (prev.soldQty || 0);
+                                        const marginDelta = (sub.margin || 0) - (prev.margin || 0);
+                                        return (
+                                            <>
+                                                <div className="text-right w-24 pop-col-current rounded px-2 py-1">
+                                                    <div className="text-gray-400">PoP Revenue</div>
+                                                    <div className="font-mono font-bold text-gray-700">{revenueDelta >= 0 ? '+' : ''}{formatSmartMoney(revenueDelta)}</div>
+                                                </div>
+                                                <div className="text-right w-20 pop-col-prev rounded px-2 py-1">
+                                                    <div className="text-gray-400">PoP Units</div>
+                                                    <div className="font-mono font-bold text-gray-700">{unitDelta >= 0 ? '+' : ''}{formatNumber(unitDelta)}</div>
+                                                </div>
+                                                <div className="text-right w-20 pop-col-delta-pct rounded px-2 py-1">
+                                                    <div className="text-gray-400">PoP Margin</div>
+                                                    <div className="font-mono font-bold text-gray-700">{marginDelta >= 0 ? '+' : ''}{marginDelta.toFixed(1)}%</div>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </button>
                             {expandedPlatform === sub.platform && (() => {

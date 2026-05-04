@@ -80,6 +80,7 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
   const [hoveredArea, setHoveredArea] = useState<MapMarkerData | null>(null);
   const [pinnedArea, setPinnedArea] = useState<MapMarkerData | null>(null);
   const [tableSort, setTableSort] = useState<TableSortState>({ key: 'revenue', direction: 'desc' });
+  const [showRegionalPop, setShowRegionalPop] = useState(false);
 
   // Sync with external config (e.g. jumping from Returns tab)
   useEffect(() => {
@@ -1110,7 +1111,13 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col mt-6">
             <div className="p-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
                 <h4 className="text-xs font-bold text-gray-600 uppercase">Regional Detail Table</h4>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                    <button
+                        onClick={() => setShowRegionalPop(v => !v)}
+                        className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${showRegionalPop ? 'bg-theme-10 text-theme border-theme-20' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                    >
+                        PoP
+                    </button>
                     {(selectedCategory !== 'All' || selectedSubcategory !== 'All') && (
                         <div className="flex items-center gap-1 text-[10px] font-medium bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-600">
                             <Layers className="w-3 h-3 text-theme" />
@@ -1144,6 +1151,14 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                             <SortableHeader label="TACoS %" sortKey="tacos" align="right"/>
                             <SortableHeader label="Total Ship" sortKey="totalShippingCost" align="right"/>
                             <SortableHeader label="Avg Ship" sortKey="avgShippingCost" align="right"/>
+                            {showRegionalPop && (
+                                <>
+                                    <th className="r text-[10px] pop-col-prev">PoP Units</th>
+                                    <th className="r text-[10px] pop-col-current">PoP Revenue</th>
+                                    <th className="r text-[10px] pop-col-delta">PoP Profit</th>
+                                    <th className="r text-[10px] pop-col-delta-pct">PoP % (Units)</th>
+                                </>
+                            )}
                             <th className="c" style={{ width: 48 }}>Action</th>
                         </tr>
                     </thead>
@@ -1170,6 +1185,14 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                         <td className={`r font-mono ${d.tacos > 15 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{d.tacos.toFixed(1)}%</td>
                                         <td className="r font-mono text-gray-600">{formatSmartMoney(d.totalShippingCost)}</td>
                                         <td className={`r font-mono ${d.avgShippingCost > 7 ? 'text-red-600' : d.avgShippingCost > 4 ? 'text-amber-600' : 'text-gray-600'}`}>{formatSmartMoney(d.avgShippingCost)}</td>
+                                        {showRegionalPop && (
+                                            <>
+                                                <td className="r font-mono text-xs pop-col-prev">{d.volumeDelta > 0 ? '+' : ''}{formatNumber(d.volumeDelta)}</td>
+                                                <td className="r font-mono text-xs pop-col-current">{d.revenueDelta > 0 ? '+' : ''}{formatSmartMoney(d.revenueDelta)}</td>
+                                                <td className="r font-mono text-xs pop-col-delta">{d.profitDelta > 0 ? '+' : ''}{formatSmartMoney(d.profitDelta)}</td>
+                                                <td className="r font-mono text-xs pop-col-delta-pct">{Number.isFinite(d.volumeDeltaPct) ? `${d.volumeDeltaPct > 0 ? '+' : ''}${d.volumeDeltaPct.toFixed(1)}%` : 'N/A'}</td>
+                                            </>
+                                        )}
                                         <td className="c">
                                             <button 
                                                 onClick={(e) => {
@@ -1205,6 +1228,14 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
                                                 <td className="c text-gray-300">-</td>
                                                 <td className="r font-mono text-gray-600">{formatSmartMoney(district.totalShippingCost)}</td>
                                                 <td className="r font-mono text-gray-600">{formatSmartMoney(district.avgShippingCost)}</td>
+                                                {showRegionalPop && (
+                                                    <>
+                                                        <td className="r text-gray-300">-</td>
+                                                        <td className="r text-gray-300">-</td>
+                                                        <td className="r text-gray-300">-</td>
+                                                        <td className="r text-gray-300">-</td>
+                                                    </>
+                                                )}
                                                 <td className="c"></td>
                                             </tr>
                                         ))

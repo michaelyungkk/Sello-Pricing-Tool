@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-01T04:43:35.112Z",
+  "generatedAt": "2026-05-04T03:34:18.331Z",
   "items": [
+    {
+      "id": "5789916ecc07",
+      "date": "2026-05-01T14:43:21+10:00",
+      "summary": "Add recent regression guard checks to pre-push"
+    },
     {
       "id": "c1243a50383c",
       "date": "2026-04-30T11:57:23+10:00",
@@ -95,11 +100,6 @@
       "id": "0af106f2c040",
       "date": "2026-04-22T16:26:00+10:00",
       "summary": "Wrap pitching features and make missing filters clickable"
-    },
-    {
-      "id": "ade886abe392",
-      "date": "2026-04-22T15:26:38+10:00",
-      "summary": "Add release notes bell feed from CI commits"
     }
   ]
 }

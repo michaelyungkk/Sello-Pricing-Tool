@@ -1,4 +1,6 @@
 import React from 'react';
+import { MetricDefinitionTooltip } from './MetricDefinitionTooltip';
+import { getMetricDefinition, MetricDefinitionKey } from '../../services/metricDefinitions';
 
 /**
  * MetricCard — Canonical KPI / Summary Card
@@ -15,12 +17,14 @@ import React from 'react';
  *                      red | amber | gray | indigo  (default: gray)
  * desc?   string       Optional descriptor beneath value (uppercase, tiny)
  */
-export const MetricCard = ({ title, value, icon: Icon, color, desc }: {
+export const MetricCard = ({ title, value, icon: Icon, color, desc, metricKey, metricWindowLabel }: {
     title: string;
     value: React.ReactNode;
     icon: React.ElementType;
     color?: string;
     desc?: string;
+    metricKey?: MetricDefinitionKey;
+    metricWindowLabel?: string;
 }) => {
     const iconColors: Record<string, string> = {
         blue:    'text-blue-500',
@@ -40,11 +44,22 @@ export const MetricCard = ({ title, value, icon: Icon, color, desc }: {
         valueStr.length > 10 ? 'text-xl'  :
         valueStr.length > 7  ? 'text-2xl' :
                                 'text-3xl';
+    const metricDef = metricKey ? getMetricDefinition(metricKey, metricWindowLabel) : null;
 
     return (
         <div className="p-3 rounded-xl shadow-sm bg-custom-glass backdrop-blur-custom border border-custom-glass flex flex-col items-start">
             <div className="flex justify-between w-full items-start mb-2">
-                <span className="text-sm font-bold text-gray-500">{title}</span>
+                <span className="text-sm font-bold text-gray-500 inline-flex items-center gap-1">
+                    {title}
+                    {metricDef && (
+                        <MetricDefinitionTooltip
+                            title={metricDef.title}
+                            formula={metricDef.formula}
+                            source={metricDef.source}
+                            windowLabel={metricDef.windowLabel}
+                        />
+                    )}
+                </span>
                 <Icon className={`w-5 h-5 ${iconColors[color ?? 'gray'] ?? iconColors.gray}`} />
             </div>
             <div className={`${valueSizeClass} font-bold text-gray-800 mb-1`}>{value}</div>

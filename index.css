@@ -743,6 +743,12 @@
 .focus\:ring-theme:focus      { --tw-ring-color: var(--theme) !important; }
 .focus\:border-theme:focus    { border-color: var(--theme) !important; }
 
+/* Shared PoP column tints */
+.pop-col-current { background: rgba(15, 23, 42, 0.035) !important; }
+.pop-col-prev { background: rgba(15, 23, 42, 0.035) !important; }
+.pop-col-delta { background: rgba(15, 23, 42, 0.035) !important; }
+.pop-col-delta-pct { background: rgba(15, 23, 42, 0.035) !important; }
+
 
 /* ═══════════════════════════════════════════════════════
    LEGACY CLASSES — migrated from App.tsx inline style

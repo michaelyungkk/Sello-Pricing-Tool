@@ -1,9 +1,11 @@
 
 import React from 'react';
-import { Trophy, ChevronRight, Hash, Database, Wallet, Info } from 'lucide-react';
-import { formatMoney, formatSmartMoney, formatPct, formatNumber } from '../../../utils/format';
+import { Trophy, ChevronRight, Hash, Database, Wallet } from 'lucide-react';
+import { formatSmartMoney, formatPct, formatNumber } from '../../../utils/format';
 import { PlatformSummary } from '../platformManagement.types';
 import { PlatformConfig } from '../../../types';
+import { MetricDefinitionTooltip } from '../../common/MetricDefinitionTooltip';
+import { getMetricDefinition } from '../../../services/metricDefinitions';
 
 interface PlatformMetricCardProps {
     summary: PlatformSummary;
@@ -16,6 +18,8 @@ interface PlatformMetricCardProps {
 
 export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary, isTop, isSelected, onSelect, rule, themeColor }) => {
     const isCostBased = rule?.pricingControl === 'PLATFORM_COST_BASED';
+    const marginDef = getMetricDefinition('lifetimeNetMargin');
+    const tacosDef = getMetricDefinition('tacos');
 
     return (
         <div 
@@ -65,13 +69,19 @@ export const PlatformMetricCard: React.FC<PlatformMetricCardProps> = ({ summary,
 
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
                     <div className="space-y-0.5">
-                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Margin %</span>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide inline-flex items-center gap-1">
+                            Margin %
+                            <MetricDefinitionTooltip title={marginDef.title} formula={marginDef.formula} source={marginDef.source} windowLabel="Current platform period" />
+                        </span>
                         <div className={`text-sm font-bold ${summary.marginPct >= 15 ? 'text-green-600' : summary.marginPct >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
                             {formatPct(summary.marginPct)}
                         </div>
                     </div>
                     <div className="space-y-0.5 text-right">
-                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">TACoS %</span>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide inline-flex items-center gap-1">
+                            TACoS %
+                            <MetricDefinitionTooltip title={tacosDef.title} formula={tacosDef.formula} source={tacosDef.source} windowLabel="Current platform period" />
+                        </span>
                         <div className={`text-sm font-bold ${summary.tacosPct !== null ? (summary.tacosPct > 15 ? 'text-red-600' : 'text-gray-800') : 'text-gray-400'}`}>
                             {formatPct(summary.tacosPct)}
                         </div>
