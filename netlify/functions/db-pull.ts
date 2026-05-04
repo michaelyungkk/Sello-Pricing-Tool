@@ -28,7 +28,10 @@ export default async (req: Request) => {
                 { status: 404, headers: CORS }
             );
         const { data, updated_at } = rows[0];
-        const forceFullPullToken = String((data as any)?.sync_control?.forceFullPullToken || '').trim();
+        let parsed = {};
+        try { parsed = typeof data === 'string' ? JSON.parse(data) : data; }
+        catch { parsed = {}; }
+        const forceFullPullToken = String((parsed as any)?.sync_control?.forceFullPullToken || '').trim();
         if (ifUpdatedSince && updated_at) {
             const clientTs = new Date(ifUpdatedSince);
             const serverTs = new Date(updated_at);
@@ -39,11 +42,8 @@ export default async (req: Request) => {
                 );
             }
         }
-        let parsed = {};
-        try { parsed = typeof data === 'string' ? JSON.parse(data) : data; }
-        catch { parsed = {}; }
         return new Response(
-            JSON.stringify({ success: true, snapshot: parsed, unchanged: false, lastUpdatedAt: updated_at }),
+            JSON.stringify({ success: true, snapshot: parsed, unchanged: false, lastUpdatedAt: updated_at, forceFullPullToken }),
             { status: 200, headers: CORS }
         );
     } catch (error: any) {

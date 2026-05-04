@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-04T07:32:37.444Z",
+  "generatedAt": "2026-05-04T23:21:12.843Z",
   "items": [
+    {
+      "id": "bea676c7085a",
+      "date": "2026-05-04T17:32:23+10:00",
+      "summary": "Persist important refresh token after forced sync"
+    },
     {
       "id": "9374c137bde4",
       "date": "2026-05-04T17:30:30+10:00",
@@ -95,11 +100,6 @@
       "id": "e19bacdf60eb",
       "date": "2026-04-23T15:14:41+10:00",
       "summary": "Remove large backup JSON files from the repo"
-    },
-    {
-      "id": "2eda7b3e4072",
-      "date": "2026-04-23T15:00:56+10:00",
-      "summary": "Stamp landed dates on inventory import"
     }
   ]
 }
