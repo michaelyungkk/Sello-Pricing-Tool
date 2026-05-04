@@ -226,18 +226,21 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             // Consistency Fix: profit must be scaled by VAT since transactions.profit from searchExecution is scaled.
             profit: -((Number(r.amount || 0) + Number(r.freightAmount || 0))),
             _type: 'REFUND_LOG',
+            _returnFilterDate: getReturnDateKey(r, returnDateBasis, orderDateMap) || asDateKey(r.date),
             reason: r.reason
         } as unknown as PriceLog));
 
         return [...sales, ...refundLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [transactions, refunds]);
+    }, [transactions, refunds, returnDateBasis, orderDateMap]);
 
     const filteredTransactions = useMemo(() => {
         let list = sortedTransactions;
 
         // Date Filter
         list = list.filter(t => {
-            const dKey = asDateKey(t.date);
+            const dKey = (t as any)._type === 'REFUND_LOG'
+                ? ((t as any)._returnFilterDate || asDateKey(t.date))
+                : asDateKey(t.date);
             return dKey && isDateKeyBetween(dKey, ledgerStartKey, ledgerEndKey);
         });
 
@@ -764,7 +767,9 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         const windowDays = Math.max(1, Math.round((new Date(ledgerEndKey).getTime() - new Date(ledgerStartKey).getTime()) / 86400000) + 1);
         const prevStartKey = addDaysToDateKey(prevEndKey, -(windowDays - 1));
         let list = sortedTransactions.filter(t => {
-            const dKey = asDateKey(t.date);
+            const dKey = (t as any)._type === 'REFUND_LOG'
+                ? ((t as any)._returnFilterDate || asDateKey(t.date))
+                : asDateKey(t.date);
             return dKey && isDateKeyBetween(dKey, prevStartKey, prevEndKey);
         });
         if (txFilterPlatform !== 'All') list = list.filter(t => t.platform === txFilterPlatform);
@@ -1139,6 +1144,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                         setLedgerCustomStart={setLedgerCustomStart}
                         ledgerCustomEnd={ledgerCustomEnd}
                         setLedgerCustomEnd={setLedgerCustomEnd}
+                        returnDateBasis={returnDateBasis}
+                        setReturnDateBasis={setReturnDateBasis}
                         txFilterPlatform={txFilterPlatform}
                 setTxFilterPlatform={setTxFilterPlatform}
                 txFilterType={txFilterType}

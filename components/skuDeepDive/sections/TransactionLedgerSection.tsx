@@ -6,6 +6,7 @@ import { formatSmartMoney, formatNumber, formatPct } from '../../../utils/format
 import { asDateKey } from '../../../services/dateUtils';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { Product } from '../../../types';
+import { ReturnDateBasis } from '../../../types';
 
 interface TransactionLedgerSectionProps {
     ledgerStats: any;
@@ -24,6 +25,8 @@ interface TransactionLedgerSectionProps {
     setLedgerCustomStart: (value: string) => void;
     ledgerCustomEnd: string;
     setLedgerCustomEnd: (value: string) => void;
+    returnDateBasis: ReturnDateBasis;
+    setReturnDateBasis: (b: ReturnDateBasis) => void;
     txFilterPlatform: string;
     setTxFilterPlatform: (s: string) => void;
     txFilterType: string;
@@ -72,6 +75,8 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     setLedgerCustomStart,
     ledgerCustomEnd,
     setLedgerCustomEnd,
+    returnDateBasis,
+    setReturnDateBasis,
     txFilterPlatform,
     setTxFilterPlatform,
     txFilterType,
@@ -128,6 +133,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             netProfit: number;
             costs: Array<{ label: string; value: number }>;
             reconciliation: number;
+            reconciliationLabel: string;
             maxBarAbs: number;
         }>();
 
@@ -149,6 +155,11 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 const units = getNum(row, ['velocity']);
                 return sum + (units > 0 ? units : 0);
             }, 0);
+            const refundImpact = rows.reduce((sum, row) => {
+                const isRefund = row?._type === 'REFUND_LOG' || (getNum(row, ['velocity']) < 0);
+                if (!isRefund) return sum;
+                return sum + Math.abs(getNum(row, ['profit']) * VAT_MULTIPLIER);
+            }, 0);
 
             const promoRelRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['promo_rel', 'promoRel', 'promoRebate']), 0);
             const cogsRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['cogs', 'costPrice']), 0);
@@ -156,7 +167,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             const adsFeeRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['ads_fee', 'adsFee']), 0);
             const postageRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['postage', 'realPostage']), 0);
             const otherRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['other_fee', 'otherFee']), 0);
-            const subscriptionRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['subscription', 'subscriptionFee']), 0);
+            const subscriptionRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['subscription_fee', 'subscription', 'subscriptionFee']), 0);
             const wmsRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['wms_fee', 'wmsFee']), 0);
 
             const promoRel = ((hasAnyField(['promoRel', 'promo_rel', 'promoRebate']) ? promoRelRowTotal : fallbackUnitCosts.promoRebate * soldUnits)) * VAT_MULTIPLIER;
@@ -165,7 +176,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             const adsFee = ((hasAnyField(['adsFee', 'ads_fee']) ? adsFeeRowTotal : fallbackUnitCosts.adsFee * soldUnits)) * VAT_MULTIPLIER;
             const postage = ((hasAnyField(['postage', 'realPostage']) ? postageRowTotal : fallbackUnitCosts.postage * soldUnits)) * VAT_MULTIPLIER;
             const otherFee = ((hasAnyField(['otherFee', 'other_fee']) ? otherRowTotal : fallbackUnitCosts.otherFee * soldUnits)) * VAT_MULTIPLIER;
-            const subscription = ((hasAnyField(['subscriptionFee', 'subscription']) ? subscriptionRowTotal : fallbackUnitCosts.subscriptionFee * soldUnits)) * VAT_MULTIPLIER;
+            const subscription = ((hasAnyField(['subscription_fee', 'subscriptionFee', 'subscription']) ? subscriptionRowTotal : fallbackUnitCosts.subscriptionFee * soldUnits)) * VAT_MULTIPLIER;
             const wmsFee = ((hasAnyField(['wmsFee', 'wms_fee']) ? wmsRowTotal : fallbackUnitCosts.wmsFee * soldUnits)) * VAT_MULTIPLIER;
 
             const costs = [
@@ -176,21 +187,27 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 { label: 'Postage', value: postage },
                 { label: 'Other Fee', value: otherFee },
                 { label: 'Subscription', value: subscription },
-                { label: 'WMS Fee', value: wmsFee }
+                { label: 'WMS Fee', value: wmsFee },
+                { label: 'Refund Impact', value: refundImpact }
             ].filter(item => Math.abs(item.value) > 0.0001);
 
             const revenue = sub.revenue || 0;
             const netProfit = sub.profit || 0;
-            const computedProfit = revenue - costs.reduce((sum, cost) => sum + cost.value, 0);
-            const reconciliation = netProfit - computedProfit;
+            const isRefundOnlyPlatform = soldUnits <= 0.0001 && Math.abs(revenue) <= 0.0001 && netProfit < -0.0001;
+            const normalizedCosts = isRefundOnlyPlatform
+                ? (costs.some(c => c.label === 'Refund Impact') ? costs : [...costs, { label: 'Refund Impact', value: Math.abs(netProfit) }])
+                : costs;
+            const computedProfit = revenue - normalizedCosts.reduce((sum, cost) => sum + cost.value, 0);
+            const reconciliation = isRefundOnlyPlatform ? 0 : (netProfit - computedProfit);
+            const reconciliationLabel = refundImpact > 0.0001 ? 'Residual Adjustment' : 'Reconciliation';
             const maxBarAbs = Math.max(
                 Math.abs(revenue),
                 Math.abs(netProfit),
-                ...costs.map(cost => Math.abs(cost.value)),
+                ...normalizedCosts.map(cost => Math.abs(cost.value)),
                 Math.abs(reconciliation)
             );
 
-            result.set(sub.platform, { revenue, netProfit, costs, reconciliation, maxBarAbs });
+            result.set(sub.platform, { revenue, netProfit, costs: normalizedCosts, reconciliation, reconciliationLabel, maxBarAbs });
         }
 
         return result;
@@ -364,13 +381,29 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             <div className="bg-custom-glass backdrop-blur-custom rounded-xl border border-custom-glass shadow-sm overflow-hidden animate-in fade-in">
                 <div className="p-3 bg-white/10 border-b border-custom-glass flex items-center justify-between">
                     <h4 className="text-xs font-bold text-gray-500 uppercase">Platform Subtotals (for period)</h4>
-                    <button
-                        onClick={() => popAvailable && setShowPop(v => !v)}
-                        disabled={!popAvailable}
-                        className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${!popAvailable ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : showPop ? 'bg-theme-10 text-theme border-theme-20' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
-                    >
-                        PoP
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            <button
+                                onClick={() => setReturnDateBasis('refundDate')}
+                                className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Refund Date
+                            </button>
+                            <button
+                                onClick={() => setReturnDateBasis('orderDate')}
+                                className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Order Date
+                            </button>
+                        </div>
+                        <button
+                            onClick={() => popAvailable && setShowPop(v => !v)}
+                            disabled={!popAvailable}
+                            className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors ${!popAvailable ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : showPop ? 'bg-theme-10 text-theme border-theme-20' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                        >
+                            PoP
+                        </button>
+                    </div>
                 </div>
                 <div className="divide-y divide-gray-100">
                     {platformSubtotals.map(sub => (
@@ -461,7 +494,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                         return { label: cost.label, amount: cost.value, running: next, type: 'cost' as const };
                                     }),
                                     ...(Math.abs(breakdown.reconciliation) > 0.01 ? [{
-                                        label: 'Reconciliation',
+                                        label: breakdown.reconciliationLabel,
                                         amount: breakdown.reconciliation,
                                         running: breakdown.netProfit,
                                         type: 'recon' as const
@@ -488,7 +521,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                                     ))}
                                                     {Math.abs(breakdown.reconciliation) > 0.01 && (
                                                         <div className="flex items-center justify-between text-xs">
-                                                            <span className="text-gray-500">Reconciliation</span>
+                                                            <span className="text-gray-500">{breakdown.reconciliationLabel}</span>
                                                             <span className={`font-mono font-semibold ${breakdown.reconciliation >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                                                 {breakdown.reconciliation > 0 ? '+' : ''}{formatSmartMoney(breakdown.reconciliation)}
                                                             </span>
