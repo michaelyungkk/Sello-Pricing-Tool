@@ -969,14 +969,18 @@ export const useAppState = () => {
         if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
         let updatedPriceHistory = [...(salesHistory || [])];
         if (historyPayload && historyPayload.length > 0) {
-            const newLogs: PriceLog[] = historyPayload.map(h => ({
+            const newLogs: PriceLog[] = historyPayload.map(h => {
+                const adsSpend = h.adsSpend ?? h.adsFee ?? 0;
+                const isAdOnly = (h.price ?? 0) === 0 && adsSpend > 0;
+                const normalizedProfit = (h.profit ?? 0) === 0 && isAdOnly ? -adsSpend : h.profit;
+                return ({
                 id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 sku: h.sku,
                 date: h.date,
                 price: h.price,
                 velocity: h.velocity,
                 margin: h.margin,
-                profit: h.profit,
+                profit: normalizedProfit,
                 adsSpend: h.adsSpend,
                 platform: h.platform,
                 orderId: h.orderId,
@@ -993,7 +997,7 @@ export const useAppState = () => {
                 subscriptionFee: h.subscriptionFee,
                 wmsFee: h.wmsFee,
                 promoRel: h.promoRel
-            }));
+            })});
             const rowsWithWaterfallCosts = newLogs.filter(l =>
                 l.cogs !== undefined ||
                 l.sellingFee !== undefined ||
@@ -1013,9 +1017,8 @@ export const useAppState = () => {
             updatedPriceHistory = [...newLogs, ...keptHistory]; setSalesHistory(updatedPriceHistory);
         }
         const mergedProducts = (products || []).map(p => { const update = (updatedProductsFromImport || []).find(u => u.id === p.id); return update ? update : p; });
-        const redistributed = redistributeAdSpend(updatedPriceHistory, adGroups);
-        const finalProducts = recalculateProductMetrics(mergedProducts, redistributed, velocityLookback, getThresholdConfig(), pricingRules, brandMap, categoryMap);
-        setSalesHistory(redistributed);
+        const finalProducts = recalculateProductMetrics(mergedProducts, updatedPriceHistory, velocityLookback, getThresholdConfig(), pricingRules, brandMap, categoryMap);
+        setSalesHistory(updatedPriceHistory);
         setProducts(finalProducts);
         if (discoveredPlatforms && discoveredPlatforms.length > 0) { setPricingRules(prev => { const newRules = { ...(prev || {}) }; let changed = false; discoveredPlatforms.forEach(p => { if (!newRules[p]) { newRules[p] = { markup: 0, commission: 15, manager: 'Unassigned', color: '#6b7280', pricingControl: 'MERCHANT', feeModel: 'COMMISSION_PCT', adsEnabled: false }; changed = true; } }); return changed ? newRules : prev; }); }
         updateTimestamp('Sales'); setIsSalesImportModalOpen(false);
@@ -1045,7 +1048,7 @@ export const useAppState = () => {
 
                 const result = calculateOptimalPrice({
                     sku: product,
-                    priceHistory: redistributed,
+                    priceHistory: updatedPriceHistory,
                     priceChangeLog: priceChangeHistory,
                     promotions,
                     pricingRules,
@@ -1745,11 +1748,10 @@ export const useAppState = () => {
             saveThresholdConfig(m.thresholds);
         }
         const adGroupsToUse = Array.isArray(m.adGroups) ? m.adGroups : [];
-        const redistributed = redistributeAdSpend(transactions, adGroupsToUse);
-        setSalesHistory(redistributed);
+        setSalesHistory(transactions);
         const finalProducts = recalculateProductMetrics(
             Array.isArray(m.products) ? m.products : [],
-            redistributed,
+            transactions,
             velocityLookback,
             m.thresholds || thresholds,
             m.pricingRules,
@@ -2045,11 +2047,10 @@ export const useAppState = () => {
                 applyLoadedState(incoming, allTransactions, refunds);
             } else {
                 setRefundHistory(Array.isArray(refunds) ? refunds : []);
-                const redistributed = redistributeAdSpend(allTransactions, adGroups);
-                setSalesHistory(redistributed);
+                setSalesHistory(allTransactions);
                 const finalProducts = recalculateProductMetrics(
                     products,
-                    redistributed,
+                    allTransactions,
                     velocityLookback,
                     thresholds,
                     pricingRules,

@@ -726,7 +726,13 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             const adjustedAd = calcAdSpend(tx) * VAT_MULTIPLIER;
             group.rawAdSpend += rawAd;
             group.adjustedAdSpend += adjustedAd;
-            group.profit += calcProfit(tx) * VAT_MULTIPLIER;
+            const txProfitInc = calcProfit(tx) * VAT_MULTIPLIER;
+            // Fact-based alignment: ad-only rows must reduce profit by ad spend when source profit is zero/missing.
+            if (isAdRow && Math.abs(txProfitInc) <= 0.0001) {
+                group.profit += -adjustedAd;
+            } else {
+                group.profit += txProfitInc;
+            }
         });
         return Object.values(subtotals).map(group => ({
             ...group,

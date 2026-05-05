@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-04T23:42:10.521Z",
+  "generatedAt": "2026-05-05T02:05:05.640Z",
   "items": [
+    {
+      "id": "191ba1f2d543",
+      "date": "2026-05-05T09:41:45+10:00",
+      "summary": "Add end-to-end verification rule to AGENTS"
+    },
     {
       "id": "5db32917e348",
       "date": "2026-05-05T09:20:52+10:00",
@@ -95,11 +100,6 @@
       "id": "2b6eec4709a6",
       "date": "2026-04-23T15:57:38+10:00",
       "summary": "Fix PDF sanitizer regex for showcase text"
-    },
-    {
-      "id": "80d92a21079b",
-      "date": "2026-04-23T15:48:05+10:00",
-      "summary": "Remove tracked temp artifacts and ignore local logs"
     }
   ]
 }

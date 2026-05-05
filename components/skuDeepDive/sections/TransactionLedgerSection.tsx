@@ -103,6 +103,12 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
     const [showPop, setShowPop] = useState(false);
     const popAvailable = ledgerWindowPreset !== 'all';
+    const formatAxisLabel = (label: string) => {
+        if (label === 'Profit Before Refund') return 'Profit Before\nRefund';
+        if (label === 'Residual Adjustment') return 'Residual\nAdjustment';
+        if (label === 'Refund Impact') return 'Refund\nImpact';
+        return label;
+    };
 
     React.useEffect(() => {
         if (!popAvailable && showPop) setShowPop(false);
@@ -137,17 +143,6 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             maxBarAbs: number;
         }>();
 
-        const fallbackUnitCosts = {
-            cogs: Number(product.costPrice ?? product.costDetail?.cogs ?? 0),
-            sellingFee: Number(product.sellingFee ?? product.costDetail?.sellingFee ?? 0),
-            adsFee: Number(product.adsFee ?? product.costDetail?.adsFee ?? 0),
-            postage: Number(product.postage ?? product.costDetail?.postage ?? 0),
-            otherFee: Number(product.otherFee ?? product.costDetail?.otherFee ?? 0),
-            subscriptionFee: Number(product.subscriptionFee ?? product.costDetail?.subscriptionFee ?? 0),
-            wmsFee: Number(product.wmsFee ?? product.costDetail?.wmsFee ?? 0),
-            promoRebate: Number(product.costDetail?.promoRebate ?? 0)
-        };
-
         for (const sub of platformSubtotals) {
             const rows = byPlatform.get(sub.platform) || [];
             const hasAnyField = (keys: string[]) => rows.some(row => keys.some(key => row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== ''));
@@ -164,20 +159,24 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
             const promoRelRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['promo_rel', 'promoRel', 'promoRebate']), 0);
             const cogsRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['cogs', 'costPrice']), 0);
             const sellingRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['selling_fee', 'sellingFee']), 0);
-            const adsFeeRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['ads_fee', 'adsFee']), 0);
+            const adsFeeRowTotal = rows.reduce((sum, row) => {
+                const rawAdSpend = getNum(row, ['rawAdsSpend', 'adsSpend']);
+                return sum + rawAdSpend;
+            }, 0);
             const postageRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['postage', 'realPostage']), 0);
             const otherRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['other_fee', 'otherFee']), 0);
             const subscriptionRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['subscription_fee', 'subscription', 'subscriptionFee']), 0);
             const wmsRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['wms_fee', 'wmsFee']), 0);
 
-            const promoRel = ((hasAnyField(['promoRel', 'promo_rel', 'promoRebate']) ? promoRelRowTotal : fallbackUnitCosts.promoRebate * soldUnits)) * VAT_MULTIPLIER;
-            const cogs = ((hasAnyField(['cogs', 'costPrice']) ? cogsRowTotal : fallbackUnitCosts.cogs * soldUnits)) * VAT_MULTIPLIER;
-            const sellingFee = ((hasAnyField(['sellingFee', 'selling_fee']) ? sellingRowTotal : fallbackUnitCosts.sellingFee * soldUnits)) * VAT_MULTIPLIER;
-            const adsFee = ((hasAnyField(['adsFee', 'ads_fee']) ? adsFeeRowTotal : fallbackUnitCosts.adsFee * soldUnits)) * VAT_MULTIPLIER;
-            const postage = ((hasAnyField(['postage', 'realPostage']) ? postageRowTotal : fallbackUnitCosts.postage * soldUnits)) * VAT_MULTIPLIER;
-            const otherFee = ((hasAnyField(['otherFee', 'other_fee']) ? otherRowTotal : fallbackUnitCosts.otherFee * soldUnits)) * VAT_MULTIPLIER;
-            const subscription = ((hasAnyField(['subscription_fee', 'subscriptionFee', 'subscription']) ? subscriptionRowTotal : fallbackUnitCosts.subscriptionFee * soldUnits)) * VAT_MULTIPLIER;
-            const wmsFee = ((hasAnyField(['wmsFee', 'wms_fee']) ? wmsRowTotal : fallbackUnitCosts.wmsFee * soldUnits)) * VAT_MULTIPLIER;
+            const hasRowPromoRelief = hasAnyField(['promoRel', 'promo_rel', 'promoRebate']);
+            const promoRel = (hasRowPromoRelief ? promoRelRowTotal : 0) * VAT_MULTIPLIER;
+            const cogs = (hasAnyField(['cogs', 'costPrice']) ? cogsRowTotal : 0) * VAT_MULTIPLIER;
+            const sellingFee = (hasAnyField(['sellingFee', 'selling_fee']) ? sellingRowTotal : 0) * VAT_MULTIPLIER;
+            const adsFee = (hasAnyField(['rawAdsSpend', 'adsSpend']) ? adsFeeRowTotal : 0) * VAT_MULTIPLIER;
+            const postage = (hasAnyField(['postage', 'realPostage']) ? postageRowTotal : 0) * VAT_MULTIPLIER;
+            const otherFee = (hasAnyField(['otherFee', 'other_fee']) ? otherRowTotal : 0) * VAT_MULTIPLIER;
+            const subscription = (hasAnyField(['subscription_fee', 'subscriptionFee', 'subscription']) ? subscriptionRowTotal : 0) * VAT_MULTIPLIER;
+            const wmsFee = (hasAnyField(['wmsFee', 'wms_fee']) ? wmsRowTotal : 0) * VAT_MULTIPLIER;
 
             const costs = [
                 { label: 'Promo Relief', value: promoRel },
@@ -406,18 +405,22 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                     </div>
                 </div>
                 <div className="divide-y divide-gray-100">
-                    {platformSubtotals.map(sub => (
+                    {platformSubtotals.map(sub => {
+                        const rowBreakdown = platformCostBreakdowns.get(sub.platform);
+                        const rowRefundImpact = rowBreakdown?.costs.find(cost => cost.label === 'Refund Impact')?.value || 0;
+                        const rowProfitBeforeRefund = (sub.profit || 0) + rowRefundImpact;
+                        return (
                         <div key={sub.platform}>
                             <button
                                 type="button"
                                 className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 text-left"
                                 onClick={() => setExpandedPlatform(prev => prev === sub.platform ? null : sub.platform)}
                             >
-                                <span className="font-bold text-sm text-gray-800 w-1/5 flex items-center gap-2">
+                                <span className="font-bold text-sm text-gray-800 w-[14%] flex items-center gap-2">
                                     {expandedPlatform === sub.platform ? <ChevronDown className="w-3.5 h-3.5 text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-500" />}
                                     {sub.platform}
                                 </span>
-                                <div className="flex items-center justify-end gap-4 text-xs w-4/5">
+                                <div className="flex items-center justify-end gap-3 text-xs w-[86%]">
                                     <div className="text-right w-20">
                                         <div className="text-gray-400">Qty Sold</div>
                                         <div className="font-mono font-bold text-gray-700">{formatNumber(sub.soldQty)}</div>
@@ -447,7 +450,13 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                         </div>
                                     </div>
                                     <div className="text-right w-24">
-                                        <div className="text-gray-400">Profit</div>
+                                        <div className="text-gray-400">Profit B4 Refund</div>
+                                        <div className="font-mono font-bold text-sky-600">
+                                            {formatSmartMoney(rowProfitBeforeRefund)}
+                                        </div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Net Profit</div>
                                         <div className={`font-mono font-bold ${sub.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                             {formatSmartMoney(sub.profit)}
                                         </div>
@@ -485,14 +494,23 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                             {expandedPlatform === sub.platform && (() => {
                                 const breakdown = platformCostBreakdowns.get(sub.platform);
                                 if (!breakdown) return null;
-                                const barBase = Math.max(1, breakdown.maxBarAbs);
+                                const refundCost = breakdown.costs.find(cost => cost.label === 'Refund Impact');
+                                const nonRefundCosts = breakdown.costs.filter(cost => cost.label !== 'Refund Impact');
+                                const preRefundProfit = breakdown.revenue - nonRefundCosts.reduce((sum, cost) => sum + cost.value, 0);
                                 const waterfallSteps = [
                                     { label: 'Revenue', amount: breakdown.revenue, running: breakdown.revenue, type: 'start' as const },
-                                    ...breakdown.costs.map((cost, idx) => {
-                                        const prev = idx === 0 ? breakdown.revenue : (breakdown.revenue - breakdown.costs.slice(0, idx).reduce((sum, item) => sum + item.value, 0));
+                                    ...nonRefundCosts.map((cost, idx) => {
+                                        const prev = idx === 0 ? breakdown.revenue : (breakdown.revenue - nonRefundCosts.slice(0, idx).reduce((sum, item) => sum + item.value, 0));
                                         const next = prev - cost.value;
                                         return { label: cost.label, amount: cost.value, running: next, type: 'cost' as const };
                                     }),
+                                    { label: 'Profit Before Refund', amount: preRefundProfit, running: preRefundProfit, type: 'checkpoint' as const },
+                                    ...(refundCost ? [{
+                                        label: 'Refund Impact',
+                                        amount: refundCost.value,
+                                        running: preRefundProfit - refundCost.value,
+                                        type: 'cost' as const
+                                    }] : []),
                                     ...(Math.abs(breakdown.reconciliation) > 0.01 ? [{
                                         label: breakdown.reconciliationLabel,
                                         amount: breakdown.reconciliation,
@@ -502,23 +520,45 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                     { label: 'Net Profit', amount: breakdown.netProfit, running: breakdown.netProfit, type: 'end' as const }
                                 ];
 
-                                const maxRunning = Math.max(1, ...waterfallSteps.map(step => Math.abs(step.running)));
+                                const runningPoints: number[] = [0];
+                                waterfallSteps.forEach((step, idx) => {
+                                    const prevRunning = idx === 0 ? 0 : waterfallSteps[idx - 1].running;
+                                    runningPoints.push(prevRunning, step.running);
+                                });
+                                const domainMin = Math.min(...runningPoints);
+                                const domainMax = Math.max(...runningPoints);
+                                const domainSpan = Math.max(1, domainMax - domainMin);
+                                const toYPct = (value: number) => ((value - domainMin) / domainSpan) * 100;
+                                const zeroYPct = toYPct(0);
+                                const showZeroLine = zeroYPct >= 0 && zeroYPct <= 100;
                                 return (
                                     <div className="px-5 pb-4">
                                         <div className="rounded-lg border border-gray-100 bg-gray-50/70 p-3">
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                 <div className="space-y-2">
                                                     <div className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Waterfall Breakdown</div>
                                                     <div className="flex items-center justify-between text-xs">
                                                         <span className="text-theme font-semibold">Revenue</span>
                                                         <span className="font-mono font-bold text-theme">{formatSmartMoney(breakdown.revenue)}</span>
                                                     </div>
-                                                    {breakdown.costs.map(cost => (
+                                                    {nonRefundCosts.map(cost => (
                                                         <div key={cost.label} className="flex items-center justify-between text-xs">
                                                             <span className="text-gray-600">{cost.label}</span>
                                                             <span className="font-mono font-semibold text-red-600">-{formatSmartMoney(cost.value)}</span>
                                                         </div>
                                                     ))}
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-gray-700 font-semibold">Profit Before Refund</span>
+                                                        <span className="font-mono font-semibold text-sky-600">
+                                                            {formatSmartMoney(preRefundProfit)}
+                                                        </span>
+                                                    </div>
+                                                    {refundCost && (
+                                                        <div className="flex items-center justify-between text-xs">
+                                                            <span className="text-gray-600">Refund Impact</span>
+                                                            <span className="font-mono font-semibold text-red-600">-{formatSmartMoney(refundCost.value)}</span>
+                                                        </div>
+                                                    )}
                                                     {Math.abs(breakdown.reconciliation) > 0.01 && (
                                                         <div className="flex items-center justify-between text-xs">
                                                             <span className="text-gray-500">{breakdown.reconciliationLabel}</span>
@@ -536,9 +576,9 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                                 </div>
                                                 <div className="space-y-2">
                                                     <div className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Waterfall (Running Total)</div>
-                                                    <div className="overflow-x-auto">
-                                                        <div className="min-w-[460px]">
-                                                            <div className="relative h-48 rounded-lg border border-gray-200 bg-white p-3">
+                                                    <div>
+                                                        <div>
+                                                            <div className="relative h-56 rounded-lg border border-gray-200 bg-white p-3">
                                                                 {[0, 1, 2, 3, 4].map(grid => (
                                                                     <div
                                                                         key={`grid-${grid}`}
@@ -546,47 +586,61 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                                                         style={{ top: `${12 + grid * 22}%` }}
                                                                     />
                                                                 ))}
-                                                                <div className="absolute left-3 right-3 bottom-6 top-5 flex items-end gap-2">
+                                                                {showZeroLine && (
+                                                                    <div className="absolute left-3 right-3 bottom-10 top-5 pointer-events-none">
+                                                                        <div
+                                                                            className="absolute left-0 right-0 border-t-2 border-gray-400"
+                                                                            style={{ bottom: `${zeroYPct}%` }}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                <div className="absolute left-3 right-3 bottom-10 top-5 flex items-end gap-2">
                                                                     {waterfallSteps.map((step, idx) => {
                                                                         const prevRunning = idx === 0 ? 0 : waterfallSteps[idx - 1].running;
                                                                         const currentRunning = step.running;
                                                                         const high = Math.max(prevRunning, currentRunning);
                                                                         const low = Math.min(prevRunning, currentRunning);
-                                                                        const barHeightPct = Math.max(3, (Math.abs(high - low) / maxRunning) * 100);
-                                                                        const bottomPct = (low / maxRunning) * 100;
+                                                                        const topPct = toYPct(high);
+                                                                        const bottomPct = toYPct(low);
+                                                                        const barHeightPct = Math.max(2, topPct - bottomPct);
                                                                         const colorClass = step.type === 'start' || step.type === 'end'
                                                                             ? 'bg-emerald-500'
+                                                                            : step.type === 'checkpoint'
+                                                                                ? 'bg-sky-500'
                                                                             : step.type === 'cost'
                                                                                 ? 'bg-red-400'
                                                                                 : step.amount >= 0
                                                                                     ? 'bg-emerald-400'
                                                                                     : 'bg-red-400';
                                                                         return (
-                                                                            <div key={`${step.label}-${idx}`} className="relative flex-1 min-w-[44px] h-full">
+                                                                            <div key={`${step.label}-${idx}`} className="relative flex-1 min-w-[30px] h-full">
                                                                                 {idx > 0 && (
                                                                                     <div
                                                                                         className="absolute border-t border-gray-300 border-dashed"
                                                                                         style={{
                                                                                             left: '-50%',
                                                                                             right: '50%',
-                                                                                            bottom: `${(prevRunning / maxRunning) * 100}%`
+                                                                                            bottom: `${toYPct(prevRunning)}%`
                                                                                         }}
                                                                                     />
                                                                                 )}
                                                                                 <div
                                                                                     className={`absolute left-1 right-1 rounded-sm ${colorClass}`}
                                                                                     style={{
-                                                                                        bottom: `${Math.max(0, bottomPct)}%`,
+                                                                                        bottom: `${bottomPct}%`,
                                                                                         height: `${barHeightPct}%`
                                                                                     }}
                                                                                 />
                                                                                 <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-mono text-gray-700 whitespace-nowrap">
-                                                                                    {step.type === 'start' || step.type === 'end'
+                                                                                    {step.type === 'start' || step.type === 'end' || step.type === 'checkpoint'
                                                                                         ? formatSmartMoney(step.running)
                                                                                         : `${step.type === 'cost' ? '-' : step.amount > 0 ? '+' : ''}${formatSmartMoney(Math.abs(step.amount))}`}
                                                                                 </div>
-                                                                                <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-gray-500 whitespace-nowrap text-center max-w-[70px] truncate">
-                                                                                    {step.label}
+                                                                                <div
+                                                                                    className="absolute -bottom-9 left-1/2 -translate-x-1/2 text-[9px] leading-tight text-gray-500 text-center whitespace-pre-line"
+                                                                                    style={{ width: '72px' }}
+                                                                                >
+                                                                                    {formatAxisLabel(step.label)}
                                                                                 </div>
                                                                             </div>
                                                                         );
@@ -606,7 +660,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 );
                             })()}
                         </div>
-                    ))}
+                    )})}
                     {platformSubtotals.length === 0 && (
                         <div className="p-4 text-center text-gray-400 text-xs italic">No breakdown available.</div>
                     )}
