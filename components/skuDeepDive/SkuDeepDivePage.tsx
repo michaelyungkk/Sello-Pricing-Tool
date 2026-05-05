@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Info, AlertTriangle, Package, RotateCcw, Megaphone, DollarSign, TrendingDown, TrendingUp, ExternalLink } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules, OptimalPriceResult, PromotionEvent, NavigationIntent } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
-import { calcProfit, calcRevenue, calcAdSpend, marginPct, calcTACoSPct, calcUnits } from '../../services/metrics';
+import { calcProfit, calcRevenue, calcAdSpend, calcNetProfitFact, marginPct, calcTACoSPct, calcUnits } from '../../services/metrics';
 import { buildWindow } from '../../services/dateWindow';
 import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, getYesterdayKeyMelbourne, getReturnDateKey, addDaysToDateKey } from '../../services/dateUtils';
 import { VAT_MULTIPLIER } from '../../constants';
@@ -344,7 +344,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         transactions.forEach(t => {
             // calcProfit uses t.profit if present. 
             // Since we reverted scaling in searchExecution for DEEP_DIVE, t.profit is Ex-VAT raw.
-            rawProfit += calcProfit(t);
+            rawProfit += calcNetProfitFact(t);
         });
 
         // Scale rawProfit to Inc-VAT once for comparison
@@ -726,13 +726,8 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             const adjustedAd = calcAdSpend(tx) * VAT_MULTIPLIER;
             group.rawAdSpend += rawAd;
             group.adjustedAdSpend += adjustedAd;
-            const txProfitInc = calcProfit(tx) * VAT_MULTIPLIER;
-            // Fact-based alignment: ad-only rows must reduce profit by ad spend when source profit is zero/missing.
-            if (isAdRow && Math.abs(txProfitInc) <= 0.0001) {
-                group.profit += -adjustedAd;
-            } else {
-                group.profit += txProfitInc;
-            }
+            const txProfitInc = calcNetProfitFact(tx) * VAT_MULTIPLIER;
+            group.profit += txProfitInc;
         });
         return Object.values(subtotals).map(group => ({
             ...group,
@@ -1168,7 +1163,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                         thresholds={thresholds}
                         calcRevenue={calcRevenue}
                         calcUnits={calcUnits}
-                        calcProfit={calcProfit}
+                        calcProfit={calcNetProfitFact}
                         calcAdSpend={calcAdSpend}
                         marginPct={marginPct}
                         product={product}

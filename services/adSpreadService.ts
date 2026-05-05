@@ -18,8 +18,22 @@ export function redistributeAdSpend(salesHistory: PriceLog[], adGroups: AdGroup[
         return salesHistory.map(log => ({ ...log }));
     }
 
-    // Create a new array to maintain purity
-    const results = salesHistory.map(log => ({ ...log }));
+    // Create a new array to maintain purity and keep a stable raw baseline.
+    const results = salesHistory.map(log => {
+        const baseline = (log.rawAdsSpend ?? log.adsSpend ?? 0);
+        return {
+            ...log,
+            rawAdsSpend: baseline
+        };
+    });
+
+    // Fact-based reset: with no groups, revert adjusted spend back to raw baseline.
+    if (!adGroups || adGroups.length === 0) {
+        return results.map(log => ({
+            ...log,
+            adsSpend: log.rawAdsSpend ?? log.adsSpend ?? 0
+        }));
+    }
 
     /**
      * Helper to group indices by date for a specific platform and set of SKUs.
@@ -73,7 +87,7 @@ export function redistributeAdSpend(salesHistory: PriceLog[], adGroups: AdGroup[
             const activeSkuCount = indicesBySku.size;
             if (activeSkuCount === 0) return;
 
-            const totalPooledSpend = indices.reduce((sum, idx) => sum + (results[idx].adsSpend || 0), 0);
+            const totalPooledSpend = indices.reduce((sum, idx) => sum + (results[idx].rawAdsSpend || 0), 0);
 
             if (totalPooledSpend <= 0) return;
 
@@ -81,7 +95,7 @@ export function redistributeAdSpend(salesHistory: PriceLog[], adGroups: AdGroup[
             const skuShare = totalPooledSpend / activeSkuCount;
 
             indicesBySku.forEach((skuIndices) => {
-                const rowValues = skuIndices.map(idx => results[idx].adsSpend || 0);
+                const rowValues = skuIndices.map(idx => results[idx].rawAdsSpend || 0);
                 const skuCurrentTotal = rowValues.reduce((sum, value) => sum + value, 0);
                 const weights = skuCurrentTotal > 0
                     ? rowValues.map(value => value / skuCurrentTotal)
@@ -90,10 +104,6 @@ export function redistributeAdSpend(salesHistory: PriceLog[], adGroups: AdGroup[
                 let allocated = 0;
                 skuIndices.forEach((idx, position) => {
                     const log = results[idx];
-                    if (log.rawAdsSpend === undefined || log.rawAdsSpend === null) {
-                        log.rawAdsSpend = log.adsSpend || 0;
-                    }
-
                     if (position === skuIndices.length - 1) {
                         // Apply remainder on final row so per-SKU sum stays exact.
                         log.adsSpend = skuShare - allocated;

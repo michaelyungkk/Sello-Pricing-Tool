@@ -212,6 +212,34 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
         return result;
     }, [filteredTransactions, platformSubtotals, product]);
 
+    const platformSubtotalTotals = useMemo(() => {
+        const totals = platformSubtotals.reduce((acc, sub) => {
+            const breakdown = platformCostBreakdowns.get(sub.platform);
+            const refundImpact = breakdown?.costs.find(cost => cost.label === 'Refund Impact')?.value || 0;
+            const profitBeforeRefund = (sub.profit || 0) + refundImpact;
+            acc.soldQty += (sub.soldQty || 0);
+            acc.rawAdSpend += (sub.rawAdSpend || 0);
+            acc.adjustedAdSpend += (sub.adjustedAdSpend || 0);
+            acc.revenue += (sub.revenue || 0);
+            acc.netProfit += (sub.profit || 0);
+            acc.profitBeforeRefund += profitBeforeRefund;
+            return acc;
+        }, {
+            soldQty: 0,
+            rawAdSpend: 0,
+            adjustedAdSpend: 0,
+            revenue: 0,
+            netProfit: 0,
+            profitBeforeRefund: 0
+        });
+
+        return {
+            ...totals,
+            adDelta: totals.adjustedAdSpend - totals.rawAdSpend,
+            margin: marginPct(totals.netProfit, totals.revenue)
+        };
+    }, [platformSubtotals, platformCostBreakdowns, marginPct]);
+
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -661,6 +689,75 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                             })()}
                         </div>
                     )})}
+                    {platformSubtotals.length > 0 && (
+                        <div className="bg-gray-50">
+                            <div className="w-full flex items-center justify-between px-4 py-3.5 border-t border-gray-200">
+                                <span className="font-bold text-sm text-gray-900 w-[14%] flex items-center gap-2">
+                                    Total
+                                </span>
+                                <div className="flex items-center justify-end gap-3 text-xs w-[86%]">
+                                    <div className="text-right w-20">
+                                        <div className="text-gray-400">Qty Sold</div>
+                                        <div className="font-mono font-bold text-gray-800">{formatNumber(platformSubtotalTotals.soldQty)}</div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Raw Ad</div>
+                                        <div className="font-mono font-bold text-gray-800">{formatSmartMoney(platformSubtotalTotals.rawAdSpend)}</div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Adj. Ad</div>
+                                        <div className="font-mono font-bold text-orange-600">{formatSmartMoney(platformSubtotalTotals.adjustedAdSpend)}</div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Ad Delta</div>
+                                        <div className={`font-mono font-bold ${platformSubtotalTotals.adDelta > 0 ? 'text-emerald-600' : platformSubtotalTotals.adDelta < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                                            {platformSubtotalTotals.adDelta > 0 ? '+' : ''}{formatSmartMoney(platformSubtotalTotals.adDelta)}
+                                        </div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Revenue</div>
+                                        <div className="font-mono font-bold text-theme">{formatSmartMoney(platformSubtotalTotals.revenue)}</div>
+                                    </div>
+                                    <div className="text-right w-20">
+                                        <div className="text-gray-400">Sales Share %</div>
+                                        <div className="font-mono font-bold text-gray-700">{formatPct(platformSubtotals.length > 0 ? 100 : 0, 1)}</div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Profit B4 Refund</div>
+                                        <div className="font-mono font-bold text-sky-600">{formatSmartMoney(platformSubtotalTotals.profitBeforeRefund)}</div>
+                                    </div>
+                                    <div className="text-right w-24">
+                                        <div className="text-gray-400">Net Profit</div>
+                                        <div className={`font-mono font-bold ${platformSubtotalTotals.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {formatSmartMoney(platformSubtotalTotals.netProfit)}
+                                        </div>
+                                    </div>
+                                    <div className="text-right w-20">
+                                        <div className="text-gray-400">Margin %</div>
+                                        <div className={`font-mono font-bold ${platformSubtotalTotals.margin !== null && platformSubtotalTotals.margin >= thresholds.marginBelowTargetPct ? 'text-emerald-600' : platformSubtotalTotals.margin !== null && platformSubtotalTotals.margin >= 0 ? 'text-amber-500' : 'text-red-600'}`}>
+                                            {formatPct(platformSubtotalTotals.margin)}
+                                        </div>
+                                    </div>
+                                    {showPop && popAvailable && (
+                                        <>
+                                            <div className="text-right w-24 pop-col-current rounded px-2 py-1">
+                                                <div className="text-gray-400">PoP Revenue</div>
+                                                <div className="font-mono font-bold text-gray-500">-</div>
+                                            </div>
+                                            <div className="text-right w-20 pop-col-prev rounded px-2 py-1">
+                                                <div className="text-gray-400">PoP Units</div>
+                                                <div className="font-mono font-bold text-gray-500">-</div>
+                                            </div>
+                                            <div className="text-right w-20 pop-col-delta-pct rounded px-2 py-1">
+                                                <div className="text-gray-400">PoP Margin</div>
+                                                <div className="font-mono font-bold text-gray-500">-</div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {platformSubtotals.length === 0 && (
                         <div className="p-4 text-center text-gray-400 text-xs italic">No breakdown available.</div>
                     )}

@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-05T06:25:55.085Z",
+  "generatedAt": "2026-05-05T06:55:15.746Z",
   "items": [
+    {
+      "id": "ba55266fdd30",
+      "date": "2026-05-05T16:25:33+10:00",
+      "summary": "Refresh search sessions after redistribution and sync loads"
+    },
     {
       "id": "ad900b13d695",
       "date": "2026-05-05T16:12:04+10:00",
@@ -95,11 +100,6 @@
       "id": "d601f12e48e5",
       "date": "2026-04-24T15:36:09+10:00",
       "summary": "Fix demographics module tracking for CI typecheck"
-    },
-    {
-      "id": "c03eadbabca5",
-      "date": "2026-04-24T14:11:59+10:00",
-      "summary": "Add postcode area demographics refresh workflow"
     }
   ]
 }

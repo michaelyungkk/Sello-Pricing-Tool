@@ -5,7 +5,7 @@ import { isAdsEnabled } from './platformCapabilities';
 import { scaleMoneyInclTax } from './taxPolicy';
 import { VAT_MULTIPLIER } from '../constants';
 import { getCanonicalSku } from './skuNormalization';
-import { calcRevenue, calcProfit } from './metrics';
+import { calcRevenue, calcProfit, calcNetProfitFact } from './metrics';
 
 export const safeCalculateMargin = (p: Product | undefined, price: number): number => {
     if (!p || !price || isNaN(price)) return 0;
@@ -208,8 +208,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
             stats.qty += l.velocity;
             
             // Organic Share Accumulation
-            const p = productMap.get(canonicalSku);
-            const adsSpend = l.adsSpend !== undefined ? l.adsSpend : (p?.adsFee || 0) * l.velocity;
+            const adsSpend = l.adsSpend !== undefined ? l.adsSpend : 0;
             
             if (isAdsEnabled(l.platform || '')) {
                 stats.adEnabledQty += l.velocity;
@@ -223,7 +222,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
         if (lTime >= prevStartTime && lTime < prevEndTime) {
             stats.prevRevenue += calcRevenue(l);
             stats.prevQty += l.velocity;
-            stats.prevProfit += calcProfit(l);
+            stats.prevProfit += calcNetProfitFact(l);
         }
     });
 
@@ -242,7 +241,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
         let margin = log.margin;
         let type = 'TRANSACTION';
         const revenue = calcRevenue(log);
-        const adsSpend = log.adsSpend !== undefined ? log.adsSpend : (product.adsFee || 0) * log.velocity;
+        const adsSpend = log.adsSpend !== undefined ? log.adsSpend : 0;
 
         if (log.price === 0 && adsSpend > 0) {
             type = 'AD_COST';
@@ -274,7 +273,7 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
         const calculatedMetrics: any = {
             revenue, margin, adsSpend, tacos, 
             organicShare: organicShare !== null ? organicShare : 0,
-            profit: calcProfit(log),
+            profit: calcNetProfitFact(log),
             returnRate: product.returnRate || 0,
             periodReturnRate: periodReturnRate,
             stockLevel: product.stockLevel,
@@ -288,10 +287,6 @@ export const processDataForSearch = (intent: SearchIntent, products: Product[], 
             revenueChangePct: revenueChangePct,
             marginChange: marginChange // Add for sorting limit
         };
-
-        if (log.price === 0 && adsSpend > 0) {
-            calculatedMetrics.profit = -adsSpend;
-        }
 
         const pass = intent.filters.every(f => {
             let val: any = (log as any)[f.field];

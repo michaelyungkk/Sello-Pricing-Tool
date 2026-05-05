@@ -85,6 +85,20 @@ export const calcProfit = (log: PriceLog): number => {
     return revenue * (margin / 100);
 };
 
+/**
+ * Fact-based net profit helper for transaction rows.
+ * For ad-only rows, if source profit is missing/zero, treat net profit as -adSpend.
+ */
+export const calcNetProfitFact = (log: PriceLog): number => {
+    const profit = calcProfit(log);
+    const adSpend = calcAdSpend(log);
+    const isAdOnly = toNumber(log.price) === 0 && adSpend > 0;
+    if (isAdOnly && Math.abs(profit) <= 0.0001) {
+        return -adSpend;
+    }
+    return profit;
+};
+
 // --- SUM FUNCTIONS ---
 
 export const sumRevenue = (rows: PriceLog[]): number => {

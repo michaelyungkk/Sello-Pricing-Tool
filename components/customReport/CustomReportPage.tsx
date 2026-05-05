@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Product, PriceLog, RefundLog, PricingRules } from '../../types';
 import { getReportLayouts, saveReportLayout, ReportLayout } from '../../services/persistenceService';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne } from '../../services/dateUtils';
+import { calcRevenue, calcAdSpend, calcUnits, calcNetProfitFact } from '../../services/metrics';
 import {
     Layout,
     Plus,
@@ -1086,10 +1087,10 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                     const sales = filtered.filter(l => l._type === 'SALE');
                     const refunds = filtered.filter(l => l._type === 'REFUND');
 
-                    const units = sales.reduce((sum, l) => sum + (l.velocity || 0), 0);
-                    const rev = sales.reduce((sum, l) => sum + ((l.price || 0) * (l.velocity || 0)), 0);
-                    const prof = sales.reduce((sum, l) => sum + (l.profit || 0), 0);
-                    const ads = sales.reduce((sum, l) => sum + (l.adsSpend || 0), 0);
+                    const units = sales.reduce((sum, l) => sum + calcUnits(l), 0);
+                    const rev = sales.reduce((sum, l) => sum + calcRevenue(l), 0);
+                    const prof = sales.reduce((sum, l) => sum + calcNetProfitFact(l), 0);
+                    const ads = sales.reduce((sum, l) => sum + calcAdSpend(l), 0);
 
                     const refundQty = refunds.reduce((sum, l) => sum + (l.quantity || 0), 0);
                     const refundVal = refunds.reduce((sum, l) => sum + (l.amount || 0), 0);
@@ -1184,10 +1185,10 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                         });
                         const prevSales = prevFiltered.filter(l => l._type === 'SALE');
                         const prevRefunds = prevFiltered.filter(l => l._type === 'REFUND');
-                        const prevUnits = prevSales.reduce((s, l) => s + (l.velocity || 0), 0);
-                        const prevRev   = prevSales.reduce((s, l) => s + ((l.price || 0) * (l.velocity || 0)), 0);
-                        const prevProf  = prevSales.reduce((s, l) => s + (l.profit || 0), 0);
-                        const prevAds   = prevSales.reduce((s, l) => s + (l.adsSpend || 0), 0);
+                        const prevUnits = prevSales.reduce((s, l) => s + calcUnits(l), 0);
+                        const prevRev   = prevSales.reduce((s, l) => s + calcRevenue(l), 0);
+                        const prevProf  = prevSales.reduce((s, l) => s + calcNetProfitFact(l), 0);
+                        const prevAds   = prevSales.reduce((s, l) => s + calcAdSpend(l), 0);
                         const prevRefundQty = prevRefunds.reduce((s, l) => s + (l.quantity || 0), 0);
                         const prevRefundVal = prevRefunds.reduce((s, l) => s + (l.amount || 0), 0);
                         const getPrevBase = (mId: string): number => {

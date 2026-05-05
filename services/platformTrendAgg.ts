@@ -1,6 +1,6 @@
 
 import { PriceLog, RefundLog, ReturnDateBasis } from '../types';
-import { calcRevenue, calcProfit, calcUnits, calcAdSpend, getReturnDateKey } from './metrics';
+import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcNetProfitFact, getReturnDateKey } from './metrics';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey } from './dateUtils';
 import { scaleMoneyInclTax } from './taxPolicy';
 import { VAT_MULTIPLIER } from '../constants';
@@ -107,7 +107,7 @@ export const aggregatePlatformTrends = (
 
     // Accumulate Raw Metrics
     targetBucket.revenue += calcRevenue(log);
-    targetBucket.netProfit += calcProfit(log); // calcProfit is Net After Ads
+    targetBucket.netProfit += calcNetProfitFact(log); // net profit after ads, fact-based for ad-only rows
     targetBucket.adSpend += calcAdSpend(log);
     targetBucket.units += calcUnits(log);
 

@@ -1,6 +1,6 @@
 
 import { PriceLog, RefundLog, Product, ReturnDateBasis } from '../types';
-import { calcRevenue, calcProfit, calcUnits, calcAdSpend, getReturnDateKey } from './metrics';
+import { calcRevenue, calcProfit, calcUnits, calcAdSpend, calcNetProfitFact, getReturnDateKey } from './metrics';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey } from './dateUtils';
 import { scaleMoneyInclTax } from './taxPolicy';
 import { VAT_MULTIPLIER } from '../constants';
@@ -93,13 +93,11 @@ export const aggregateProductTrends = (
     if (!isCurrent && !isPrior) continue;
 
     const target = isCurrent ? bucketPair.current : bucketPair.prior;
-    const p = skuInfoMap.get(log.sku);
-
     target.revenue += calcRevenue(log);
-    target.netProfit += calcProfit(log);
+    target.netProfit += calcNetProfitFact(log);
     target.units += calcUnits(log);
     
-    const ads = log.adsSpend !== undefined ? log.adsSpend : (p?.adsFee || 0) * log.velocity;
+    const ads = log.adsSpend !== undefined ? log.adsSpend : 0;
     target.adSpend += ads;
     if (log.adsSpend !== undefined) target.adRowsCount++;
   }
