@@ -717,6 +717,24 @@ export const useAppState = () => {
         });
     }, [navigateToEntity, currentView]);
 
+    const refreshSearchSessions = useCallback((
+        nextProducts: Product[],
+        nextSalesHistory: PriceLog[],
+        nextPricingRules: PricingRules,
+        nextRefundHistory: RefundLog[]
+    ) => {
+        setSearchSessions(prev => (prev || []).map(session => {
+            const { results, timeLabel } = processDataForSearch(
+                session.params,
+                nextProducts,
+                nextSalesHistory,
+                nextPricingRules,
+                nextRefundHistory
+            );
+            return { ...session, results, timeLabel };
+        }));
+    }, []);
+
     const handleRefineSearch = useCallback((sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, salesHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel }; } return s; })); setIsSearchLoading(false); }, 150); }, [products, salesHistory, pricingRules, refundHistory]);
     const deleteSearchSession = useCallback((id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } }, [activeSearchId]);
     const handleViewElasticity = useCallback((product: Product) => { setSelectedElasticityProduct(product); }, []);
@@ -768,10 +786,16 @@ export const useAppState = () => {
         );
         setProducts(finalProducts);
         setLastRecalculationSummary(summary);
+        refreshSearchSessions(
+            finalProducts,
+            redistributed,
+            customRules || pricingRules,
+            refundHistory
+        );
 
         if (isAdminMode) setIsDirty(true);
         return summary;
-    }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, isAdminMode]);
+    }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, isAdminMode, refundHistory, refreshSearchSessions]);
 
     const getSharedSnapshot = useCallback(() => ({
         products,
@@ -1749,18 +1773,25 @@ export const useAppState = () => {
         }
         const adGroupsToUse = Array.isArray(m.adGroups) ? m.adGroups : [];
         const redistributedTransactions = redistributeAdSpend(transactions, adGroupsToUse);
+        const pricingRulesToUse = m.pricingRules || DEFAULT_PRICING_RULES;
         setSalesHistory(redistributedTransactions);
         const finalProducts = recalculateProductMetrics(
             Array.isArray(m.products) ? m.products : [],
             redistributedTransactions,
             velocityLookback,
             m.thresholds || thresholds,
-            m.pricingRules,
+            pricingRulesToUse,
             m.brandMap,
             m.categoryMap
         );
         setProducts(finalProducts);
         setAdGroups(adGroupsToUse);
+        refreshSearchSessions(
+            finalProducts,
+            redistributedTransactions,
+            pricingRulesToUse,
+            Array.isArray(refunds) ? refunds : []
+        );
 
         // Restore optimal pricing state if present in snapshot
         if (m.cohortSnapshot) {
@@ -1778,7 +1809,7 @@ export const useAppState = () => {
         if (m.benchmarkUpdateNotices) {
             setBenchmarkUpdateNotices(m.benchmarkUpdateNotices);
         }
-    }, [velocityLookback, thresholds]);
+    }, [velocityLookback, thresholds, refreshSearchSessions]);
 
     const clearClientDataForImportantRefresh = useCallback(async (token: string) => {
         await clearCache();
@@ -2060,6 +2091,12 @@ export const useAppState = () => {
                     categoryMap
                 );
                 setProducts(finalProducts);
+                refreshSearchSessions(
+                    finalProducts,
+                    redistributedTransactions,
+                    pricingRules,
+                    Array.isArray(refunds) ? refunds : []
+                );
             }
 
             const time = masterRes.lastUpdatedAt || new Date().toISOString();

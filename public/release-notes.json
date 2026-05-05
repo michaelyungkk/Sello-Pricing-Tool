@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-05T06:12:26.896Z",
+  "generatedAt": "2026-05-05T06:25:55.085Z",
   "items": [
+    {
+      "id": "ad900b13d695",
+      "date": "2026-05-05T16:12:04+10:00",
+      "summary": "Apply ad redistribution on loaded and synced transactions"
+    },
     {
       "id": "c61a24adc8ae",
       "date": "2026-05-05T12:04:42+10:00",
@@ -95,11 +100,6 @@
       "id": "c03eadbabca5",
       "date": "2026-04-24T14:11:59+10:00",
       "summary": "Add postcode area demographics refresh workflow"
-    },
-    {
-      "id": "c0f8bb946c15",
-      "date": "2026-04-23T05:59:17Z",
-      "summary": "chore: update release notes feed [skip ci]"
     }
   ]
 }
