@@ -123,6 +123,8 @@ const App: React.FC = () => {
         setLearnedAliases,
         inventoryTemplates,
         setInventoryTemplates,
+        customReportPresets,
+        setCustomReportPresets,
         priceCheckTemplates,
         handleSavePriceCheckTemplates,
         pricingRules,
@@ -1364,6 +1366,9 @@ const App: React.FC = () => {
                                 priceHistory={salesHistory}
                                 refundHistory={refundHistory}
                                 pricingRules={pricingRules}
+                                customReportPresets={customReportPresets}
+                                setCustomReportPresets={setCustomReportPresets}
+                                isAdminMode={isAdminMode}
                             />
                         </div>)}
                         {mountedPages.has('settings') && (

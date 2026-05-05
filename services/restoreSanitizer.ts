@@ -174,6 +174,7 @@ export const normalizeRestoredState = (db: any): any => {
     // Standardize metadata and config
     learnedAliases: toObject(d.learnedAliases),
     inventoryTemplates: toArray(d.inventoryTemplates),
+    customReportPresets: toArray(d.customReportPresets),
     pricingRules: toObject(d.pricingRules, DEFAULT_PRICING_RULES),
     logisticsRules: toArray(d.logisticsRules).length > 0 ? d.logisticsRules : DEFAULT_LOGISTICS_RULES,
     strategyRules: toObject(d.strategyRules, DEFAULT_STRATEGY_RULES),

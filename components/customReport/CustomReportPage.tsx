@@ -42,6 +42,9 @@ interface CustomReportPageProps {
     priceHistory: PriceLog[];
     refundHistory: RefundLog[];
     pricingRules: PricingRules;
+    customReportPresets?: ReportLayout[];
+    setCustomReportPresets?: React.Dispatch<React.SetStateAction<ReportLayout[]>>;
+    isAdminMode?: boolean;
 }
 
 /** Derive a badge style from a hex colour stored in pricingRules */
@@ -542,6 +545,9 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
     priceHistory,
     refundHistory,
     pricingRules,
+    customReportPresets = [],
+    setCustomReportPresets,
+    isAdminMode = false,
 }) => {
     // --- STATE ---
 
@@ -584,7 +590,9 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
     const [cmFormula, setCmFormula] = useState<'arithmetic' | 'share_of_total'>('arithmetic');
 
     const [savedLayouts, setSavedLayouts] = useState<ReportLayout[]>(getReportLayouts());
+    const [presetLayouts, setPresetLayouts] = useState<ReportLayout[]>(customReportPresets || []);
     const [isSaveNaming, setIsSaveNaming] = useState(false);
+    const [saveTarget, setSaveTarget] = useState<'local' | 'preset'>('local');
     const [saveNameInput, setSaveNameInput] = useState('');
     const saveNameRef = React.useRef<HTMLInputElement>(null);
     const [activePopover, setActivePopover] = useState<string | null>(null);
@@ -646,6 +654,10 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
             localStorage.setItem('sello_custom_report_draft', JSON.stringify(draft));
         } catch { /* ignore localStorage write failures */ }
     }, [rowDims, colDims, pendingMetrics, pendingFilters, reportName, sortRules]);
+
+    useEffect(() => {
+        setPresetLayouts(customReportPresets || []);
+    }, [customReportPresets]);
 
 
 
@@ -768,18 +780,38 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
         }
     };
 
-    const handleSave = (nameOverride?: string) => {
-        const name = (nameOverride || saveNameInput || reportName || 'My Report').trim();
-        const layout: any = {
+    const buildLayoutPayload = (name: string): ReportLayout => {
+        const payload: any = {
             id: Math.random().toString(36).substr(2, 9),
             name,
             rowDims,
             colDims,
             metrics: pendingMetrics,
+            filters: pendingFilters,
+            customMetrics,
+            sortRules,
             updatedAt: new Date().toISOString()
         };
+        return payload as ReportLayout;
+    };
+
+    const handleSave = (nameOverride?: string) => {
+        const name = (nameOverride || saveNameInput || reportName || 'My Report').trim();
+        const layout = buildLayoutPayload(name);
         saveReportLayout(layout);
         setSavedLayouts(getReportLayouts());
+        setReportName(name);
+        setIsSaveNaming(false);
+        setSaveNameInput('');
+    };
+
+    const handleSavePreset = (nameOverride?: string) => {
+        if (!setCustomReportPresets) return;
+        const name = (nameOverride || saveNameInput || reportName || 'Preset Template').trim();
+        const layout = buildLayoutPayload(name);
+        const next = [...presetLayouts, layout];
+        setPresetLayouts(next);
+        setCustomReportPresets(next);
         setReportName(name);
         setIsSaveNaming(false);
         setSaveNameInput('');
@@ -1761,15 +1793,29 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                         {/* Load template */}
-                        {savedLayouts.length > 0 && (
+                        {(savedLayouts.length > 0 || presetLayouts.length > 0) && (
                             <div className="relative group">
                                 <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all" style={{borderColor:'rgba(209,213,219,0.8)'}}>
                                     <FolderOpen className="w-3.5 h-3.5" /> Load
                                 </button>
-                                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-[9999] p-2 opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all">
-                                    {savedLayouts.map(layout => (
-                                        <button key={layout.id} onClick={() => handleLoadLayout(layout)} className="w-full text-left px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded truncate">{layout.name}</button>
-                                    ))}
+                                <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-gray-100 rounded-lg shadow-xl z-[9999] p-2 opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all">
+                                    {presetLayouts.length > 0 && (
+                                        <>
+                                            <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Preset Templates</div>
+                                            {presetLayouts.map(layout => (
+                                                <button key={`preset-${layout.id}`} onClick={() => handleLoadLayout(layout)} className="w-full text-left px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded truncate">{layout.name}</button>
+                                            ))}
+                                        </>
+                                    )}
+                                    {savedLayouts.length > 0 && (
+                                        <>
+                                            {presetLayouts.length > 0 && <div className="my-1 border-t border-gray-100" />}
+                                            <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">My Templates</div>
+                                            {savedLayouts.map(layout => (
+                                                <button key={`local-${layout.id}`} onClick={() => handleLoadLayout(layout)} className="w-full text-left px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded truncate">{layout.name}</button>
+                                            ))}
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1783,7 +1829,10 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                     value={saveNameInput}
                                     onChange={e => setSaveNameInput(e.target.value)}
                                     onKeyDown={e => {
-                                        if (e.key === 'Enter') handleSave();
+                                        if (e.key === 'Enter') {
+                                            if (saveTarget === 'preset') handleSavePreset();
+                                            else handleSave();
+                                        }
                                         if (e.key === 'Escape') { setIsSaveNaming(false); setSaveNameInput(''); }
                                     }}
                                     placeholder="Template name…"
@@ -1792,7 +1841,10 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                     style={{borderColor:'rgba(var(--theme-rgb),0.4)',boxShadow:'0 0 0 2px rgba(var(--theme-rgb),0.08)'}}
                                 />
                                 <button
-                                    onClick={() => handleSave()}
+                                    onClick={() => {
+                                        if (saveTarget === 'preset') handleSavePreset();
+                                        else handleSave();
+                                    }}
                                     disabled={!saveNameInput.trim()}
                                     className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white bg-theme disabled:opacity-40 transition-all"
                                 >Save</button>
@@ -1802,14 +1854,37 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                 ><X className="w-3.5 h-3.5" /></button>
                             </div>
                         ) : (
-                            <button
-                                onClick={() => { setIsSaveNaming(true); setSaveNameInput(reportName !== 'New Custom Report' ? reportName : ''); }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all"
-                                style={{borderColor:'rgba(209,213,219,0.8)'}}
-                            >
-                                <Save className="w-3.5 h-3.5" /> Save Template
-                            </button>
+                            <>
+                                <button
+                                    onClick={() => {
+                                        setSaveTarget('local');
+                                        setIsSaveNaming(true);
+                                        setSaveNameInput(reportName !== 'New Custom Report' ? reportName : '');
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all"
+                                    style={{borderColor:'rgba(209,213,219,0.8)'}}
+                                >
+                                    <Save className="w-3.5 h-3.5" /> Save Template
+                                </button>
+                                {isAdminMode && (
+                                    <button
+                                        onClick={() => {
+                                            setSaveTarget('preset');
+                                            setIsSaveNaming(true);
+                                            setSaveNameInput(reportName !== 'New Custom Report' ? reportName : '');
+                                        }}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-indigo-700 bg-white hover:bg-indigo-50 shadow-sm transition-all"
+                                        style={{borderColor:'rgba(99,102,241,0.35)'}}
+                                    >
+                                        <Save className="w-3.5 h-3.5" /> Save Preset
+                                    </button>
+                                )}
+                            </>
                         )}
+
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 whitespace-nowrap">
+                            All values Ex VAT
+                        </span>
 
                         {/* Export */}
                         <div className="relative">

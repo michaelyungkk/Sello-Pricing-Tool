@@ -41,6 +41,7 @@ import {
 import { analyzePriceAdjustment, parseSearchQuery, createTextFallbackIntent, SearchIntent } from '../services/searchIntentService';
 import { processDataForSearch } from '../services/searchExecution';
 import { getThresholdConfig, ThresholdConfig, saveThresholdConfig } from '../services/thresholdsConfig';
+import { ReportLayout } from '../services/persistenceService';
 import { migrateRestoredDatabase, auditRestoredDatabase } from '../services/migrationService';
 import { normalizeRestoredState, repairMojibakeText } from '../services/restoreSanitizer';
 import { hexToRgb, extractFirstHex } from '../utils/color';
@@ -363,6 +364,7 @@ export const useAppState = () => {
     const [promotions, setPromotions] = useState<PromotionEvent[]>([]);
     const [learnedAliases, setLearnedAliases] = useState<Record<string, string>>({});
     const [inventoryTemplates, setInventoryTemplates] = useState<InventoryTemplate[]>([]);
+    const [customReportPresets, setCustomReportPresets] = useState<ReportLayout[]>([]);
     const [priceCheckTemplates, setPriceCheckTemplates] = useState<PriceCheckTemplate[]>(() => {
         try { return JSON.parse(localStorage.getItem('sello_price_check_templates') || '[]'); } catch { return []; }
     });
@@ -813,6 +815,7 @@ export const useAppState = () => {
         skuFamilies,
         adGroups,
         inventoryTemplates,
+        customReportPresets,
         priceCheckTemplates,
         freightRates,
         cohortSnapshot: cohortSnapshot ? {
@@ -828,6 +831,7 @@ export const useAppState = () => {
         pricingRules, logisticsRules, strategyRules, searchConfig,
         thresholds, brandMap, categoryMap, skuFamilies, adGroups,
         inventoryTemplates, priceCheckTemplates, freightRates,
+        customReportPresets,
         cohortSnapshot, optimalPriceResults, benchmarkUpdateNotices]);
 
     // --- AD CAMPAIGN HANDLERS ---
@@ -914,6 +918,7 @@ export const useAppState = () => {
                     searchConfig: migrated.searchConfig || DEFAULT_SEARCH_CONFIG,
                     userProfile: migrated.userProfile && typeof migrated.userProfile === 'object' ? migrated.userProfile : {},
                     inventoryTemplates: Array.isArray(migrated.inventoryTemplates) ? migrated.inventoryTemplates : [],
+                    customReportPresets: Array.isArray(migrated.customReportPresets) ? migrated.customReportPresets : [],
                     priceCheckTemplates: Array.isArray(migrated.priceCheckTemplates) ? migrated.priceCheckTemplates : [],
                     uploadTimestamps: migrated.uploadTimestamps && typeof migrated.uploadTimestamps === 'object' ? migrated.uploadTimestamps : {},
                     thresholds: hasThresholds ? migrated.thresholds : null,
@@ -938,6 +943,7 @@ export const useAppState = () => {
                 setStrategyRules(restored.strategyRules);
                 setSearchConfig(restored.searchConfig);
                 setInventoryTemplates(restored.inventoryTemplates);
+                setCustomReportPresets(restored.customReportPresets);
                 if (Array.isArray(restored.priceCheckTemplates)) setPriceCheckTemplates(restored.priceCheckTemplates);
                 setUploadTimestamps(restored.uploadTimestamps);
                 setBrandMap(restored.brandMap);
@@ -1764,6 +1770,7 @@ export const useAppState = () => {
         setInventoryTemplates(
             Array.isArray(m.inventoryTemplates) ? m.inventoryTemplates : []
         );
+        setCustomReportPresets(Array.isArray(m.customReportPresets) ? m.customReportPresets : []);
         setBrandMap(m.brandMap || {});
         setCategoryMap(m.categoryMap || {});
         setSkuFamilies(Array.isArray(m.skuFamilies) ? m.skuFamilies : []);
@@ -2539,6 +2546,11 @@ export const useAppState = () => {
         if (isAdminMode) setIsDirty(true);
     }, [isAdminMode]);
 
+    const updateCustomReportPresets = useCallback((v: React.SetStateAction<ReportLayout[]>) => {
+        setCustomReportPresets(v);
+        if (isAdminMode) setIsDirty(true);
+    }, [isAdminMode]);
+
     const updatePricingRules = useCallback((v: React.SetStateAction<PricingRules>) => {
         setPricingRules(v);
         if (isAdminMode) setIsDirty(true);
@@ -2605,6 +2617,8 @@ export const useAppState = () => {
         setLearnedAliases: updateLearnedAliases,
         inventoryTemplates,
         setInventoryTemplates: updateInventoryTemplates,
+        customReportPresets,
+        setCustomReportPresets: updateCustomReportPresets,
         priceCheckTemplates,
         handleSavePriceCheckTemplates,
         pricingRules,

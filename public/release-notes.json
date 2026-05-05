@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-05T06:55:15.746Z",
+  "generatedAt": "2026-05-05T07:25:29.367Z",
   "items": [
+    {
+      "id": "1f500faa0960",
+      "date": "2026-05-05T16:54:46+10:00",
+      "summary": "Update agent instructions for the pricing tool"
+    },
     {
       "id": "ba55266fdd30",
       "date": "2026-05-05T16:25:33+10:00",
@@ -95,11 +100,6 @@
       "id": "607c6d0f2393",
       "date": "2026-04-24T05:38:19Z",
       "summary": "chore: update release notes feed [skip ci]"
-    },
-    {
-      "id": "d601f12e48e5",
-      "date": "2026-04-24T15:36:09+10:00",
-      "summary": "Fix demographics module tracking for CI typecheck"
     }
   ]
 }
