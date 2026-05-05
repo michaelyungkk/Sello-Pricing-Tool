@@ -1748,10 +1748,11 @@ export const useAppState = () => {
             saveThresholdConfig(m.thresholds);
         }
         const adGroupsToUse = Array.isArray(m.adGroups) ? m.adGroups : [];
-        setSalesHistory(transactions);
+        const redistributedTransactions = redistributeAdSpend(transactions, adGroupsToUse);
+        setSalesHistory(redistributedTransactions);
         const finalProducts = recalculateProductMetrics(
             Array.isArray(m.products) ? m.products : [],
-            transactions,
+            redistributedTransactions,
             velocityLookback,
             m.thresholds || thresholds,
             m.pricingRules,
@@ -2047,10 +2048,11 @@ export const useAppState = () => {
                 applyLoadedState(incoming, allTransactions, refunds);
             } else {
                 setRefundHistory(Array.isArray(refunds) ? refunds : []);
-                setSalesHistory(allTransactions);
+                const redistributedTransactions = redistributeAdSpend(allTransactions, adGroups);
+                setSalesHistory(redistributedTransactions);
                 const finalProducts = recalculateProductMetrics(
                     products,
-                    allTransactions,
+                    redistributedTransactions,
                     velocityLookback,
                     thresholds,
                     pricingRules,

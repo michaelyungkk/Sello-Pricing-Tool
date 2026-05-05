@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-05T02:05:05.640Z",
+  "generatedAt": "2026-05-05T06:12:26.896Z",
   "items": [
+    {
+      "id": "c61a24adc8ae",
+      "date": "2026-05-05T12:04:42+10:00",
+      "summary": "Fix waterfall profit before refund display"
+    },
     {
       "id": "191ba1f2d543",
       "date": "2026-05-05T09:41:45+10:00",
@@ -95,11 +100,6 @@
       "id": "c0f8bb946c15",
       "date": "2026-04-23T05:59:17Z",
       "summary": "chore: update release notes feed [skip ci]"
-    },
-    {
-      "id": "2b6eec4709a6",
-      "date": "2026-04-23T15:57:38+10:00",
-      "summary": "Fix PDF sanitizer regex for showcase text"
     }
   ]
 }
