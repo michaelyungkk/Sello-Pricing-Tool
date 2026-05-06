@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-05T07:25:29.367Z",
+  "generatedAt": "2026-05-06T03:34:11.238Z",
   "items": [
+    {
+      "id": "52db604bc3ec",
+      "date": "2026-05-05T17:24:56+10:00",
+      "summary": "Add preset custom report templates and VAT badge"
+    },
     {
       "id": "1f500faa0960",
       "date": "2026-05-05T16:54:46+10:00",
@@ -95,11 +100,6 @@
       "id": "640fbb21179b",
       "date": "2026-04-24T17:25:48+10:00",
       "summary": "Lazy load pages and add startup diagnostics"
-    },
-    {
-      "id": "607c6d0f2393",
-      "date": "2026-04-24T05:38:19Z",
-      "summary": "chore: update release notes feed [skip ci]"
     }
   ]
 }

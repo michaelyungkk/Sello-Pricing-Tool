@@ -446,8 +446,10 @@ const processRows = (
 
                 const dailyWeight = Math.abs(qty) || 0;
                 dailyAggregated[dailyKey].netPmSum += (netPm * dailyWeight);
-
-                if (profit === 0 && netPm !== 0 && rev !== 0) dailyAggregated[dailyKey].totalProfit += rev * (netPm / 100);
+            }
+            // Keep ad_only profit facts from upload (profit_excl_rn) instead of dropping to zero.
+            if (profitIdx !== -1) {
+                if (!isAdOnly && profit === 0 && netPm !== 0 && rev !== 0) dailyAggregated[dailyKey].totalProfit += rev * (netPm / 100);
                 else dailyAggregated[dailyKey].totalProfit += profit;
             }
             dailyAggregated[dailyKey].totalAds += adsCost;

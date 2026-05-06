@@ -626,8 +626,13 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                                                     {waterfallSteps.map((step, idx) => {
                                                                         const prevRunning = idx === 0 ? 0 : waterfallSteps[idx - 1].running;
                                                                         const currentRunning = step.running;
-                                                                        const high = Math.max(prevRunning, currentRunning);
-                                                                        const low = Math.min(prevRunning, currentRunning);
+                                                                        const isTotalBar = step.type === 'start' || step.type === 'checkpoint' || step.type === 'end';
+                                                                        const high = isTotalBar
+                                                                            ? Math.max(0, currentRunning)
+                                                                            : Math.max(prevRunning, currentRunning);
+                                                                        const low = isTotalBar
+                                                                            ? Math.min(0, currentRunning)
+                                                                            : Math.min(prevRunning, currentRunning);
                                                                         const topPct = toYPct(high);
                                                                         const bottomPct = toYPct(low);
                                                                         const barHeightPct = Math.max(2, topPct - bottomPct);
