@@ -46,7 +46,7 @@ interface OverviewPageContainerProps {
 }
 
 type DateRange = 'yesterday' | '7d' | '14d' | '30d' | '90d' | 'custom';
-type AlertType = 'margin' | 'velocity' | 'stock' | 'dead' | null;
+type AlertType = 'margin' | 'velocity' | 'returns' | 'stock' | 'dead' | null;
 type OverviewTab = 'actions' | 'financials' | 'inventory' | 'map' | 'categories';
 
 type SortKey = 'sku' | 'price' | 'caPrice' | 'qtySold' | 'revenue' | 'profit' | 'margin' | 'inventory' | 'prevQty' | 'change' | 'runway' | 'volumeDrop' | 'priceChanges' | 'leadTime' | 'inventoryValue' | 'daysSinceLastSale';
@@ -88,8 +88,8 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [platformScope, setPlatformScope] = useState<string[]>([]);
-    // Default to 'margin' (Fix Margin)
-    const [selectedAlert, setSelectedAlert] = useState<AlertType>('margin');
+    // Default to Executive Workbench summary (no specific alert selected)
+    const [selectedAlert, setSelectedAlert] = useState<AlertType | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(25);
     const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
@@ -140,6 +140,8 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             setSort({ key: 'margin', dir: 'asc' });
         } else if (selectedAlert === 'velocity') {
             setSort({ key: 'volumeDrop', dir: 'asc' });
+        } else if (selectedAlert === 'returns') {
+            setSort({ key: 'margin', dir: 'asc' });
         } else if (selectedAlert === 'stock') {
             setSort({ key: 'runway', dir: 'asc' });
         } else if (selectedAlert === 'dead') {
@@ -190,7 +192,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             });
 
             let curUnits = 0; let curRev = 0; let curProfit = 0; let curAdSpend = 0;
-            let prevUnits = 0;
+            let prevUnits = 0; let prevProfit = 0;
 
             scopeLogs.forEach(l => {
                 const d = asDateKey(l.date);
@@ -203,6 +205,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                     curProfit += calcProfit(l);
                 } else if (isDateKeyBetween(d, prevStartKey, prevEndKey)) {
                     prevUnits += l.velocity;
+                    prevProfit += calcProfit(l);
                 }
             });
 
@@ -353,6 +356,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 periodAdSpend: curAdSpend * VAT_MULTIPLIER,
                 periodMargin: netMargin,
                 prevPeriodUnits: prevUnits,
+                prevPeriodProfit: prevProfit * VAT_MULTIPLIER,
                 velocityChange,
                 periodDailyVelocity: globalDailyVelocity,
                 periodRunway: globalRunway,
@@ -415,6 +419,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const alerts = useMemo(() => ({
         margin: processedDataWithToggle.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
         velocity: processedDataWithToggle.filter(p => p.isVolumeDropCandidate),
+        returns: processedDataWithToggle.filter(p => p.periodUnits > 0 && p.refundRateValue > thresholds.returnRatePct),
         // STOCK ALERTS: Updated logic - only alert if we HAVE an incoming shipment (Lead Time < 999) and runway is tight
         stock: processedDataWithToggle.filter(p => p.stockLevel > 2 && p.effectiveAlertLeadTime < 999 && p.periodRunway < (p.effectiveAlertLeadTime * 1.2)),
         // DEAD STOCK BUCKET: Updated logic per requirements
@@ -422,7 +427,16 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     }), [processedData, processedDataWithToggle, expectedDays]);
 
     const workbenchData = useMemo(() => {
-        const data = !selectedAlert ? processedData.filter(p => p.periodRevenue > 0) : alerts[selectedAlert];
+        const defaultCandidates = processedData.filter(p =>
+            p.periodRevenue > 0 && (
+                alerts.margin.some(x => x.sku === p.sku) ||
+                alerts.velocity.some(x => x.sku === p.sku) ||
+                alerts.returns.some(x => x.sku === p.sku) ||
+                alerts.stock.some(x => x.sku === p.sku) ||
+                alerts.dead.some(x => x.sku === p.sku)
+            )
+        );
+        const data = !selectedAlert ? defaultCandidates : alerts[selectedAlert];
         const getValue = (row: any, key: string) => {
             switch (key) {
                 case 'sku': return row.sku;
@@ -448,6 +462,22 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
         if (sort) {
             return sortRows(data, sort, getValue);
+        }
+
+        if (!selectedAlert) {
+            const problemCount = (row: any) => (
+                (alerts.margin.some(x => x.sku === row.sku) ? 1 : 0) +
+                (alerts.velocity.some(x => x.sku === row.sku) ? 1 : 0) +
+                (alerts.returns.some(x => x.sku === row.sku) ? 1 : 0) +
+                (alerts.stock.some(x => x.sku === row.sku) ? 1 : 0) +
+                (alerts.dead.some(x => x.sku === row.sku) ? 1 : 0)
+            );
+
+            return [...data].sort((a, b) => {
+                const countDiff = problemCount(b) - problemCount(a);
+                if (countDiff !== 0) return countDiff;
+                return (b.periodRevenue || 0) - (a.periodRevenue || 0);
+            });
         }
 
         return [...data].sort((a, b) => (b.periodRevenue || 0) - (a.periodRevenue || 0));
@@ -566,9 +596,10 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             <div className="flex-1 min-h-0 relative">
                 {activeTab === 'actions' && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <AlertCard title="Fix Margin" count={alerts.margin.length} icon={DollarSign} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc={`Net PM% < 5%`} />
                             <AlertCard title="Volume Drop" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`PoP drop ≥ ${Math.abs(thresholds.velocityDropPct)}% with reliable baseline`} />
+                            <AlertCard title="Return Spike" count={alerts.returns.length} icon={RotateCcw} color="green" isActive={selectedAlert === 'returns'} onClick={() => setSelectedAlert(selectedAlert === 'returns' ? null : 'returns')} desc={`Return rate > ${thresholds.returnRatePct}%`} />
                             <AlertCard title="Prevent Stockout" count={alerts.stock.length} icon={Ship} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Only Items with Arriving Stock" />
                             <AlertCard title="Clear Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc={`>£200 Value, 0 Sales`} />
                         </div>
@@ -580,6 +611,8 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                             <><DollarSign className="w-4 h-4 text-red-600" /> Fix Margin Workbench</>
                                         ) : selectedAlert === 'velocity' ? (
                                             <><TrendingDown className="w-4 h-4 text-amber-600" /> Volume Drop Workbench</>
+                                        ) : selectedAlert === 'returns' ? (
+                                            <><RotateCcw className="w-4 h-4 text-green-600" /> Return Spike Workbench</>
                                         ) : selectedAlert === 'stock' ? (
                                             <><Ship className="w-4 h-4 text-purple-600" /> Prevent Stockout Workbench</>
                                         ) : selectedAlert === 'dead' ? (
@@ -657,6 +690,16 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 )}
                                                 <th className="r">CTA / Justification</th>
                                             </tr>
+                                        ) : selectedAlert === 'returns' ? (
+                                        <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
+                                                <th className="c">Detail</th>
+                                                <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
+                                                <SortableHeader label="Return Rate %" sortKey="margin" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Refund Impact" sortKey="profit" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Units" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
+                                                <th className="r">Action</th>
+                                            </tr>
                                         ) : selectedAlert === 'stock' ? (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
                                                 <th className="c">Detail</th>
@@ -692,13 +735,13 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                             </tr>
                                         ) : (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
-                                                <th className="c">Action</th>
+                                                <th className="c">Detail</th>
                                                 <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} />
-                                                <th>Signals</th>
-                                                <SortableHeader label="Price (Inc VAT)" sortKey="price" sort={sort} onChange={setSort} align="right" />
-                                                <SortableHeader label="Sales" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
-                                                <SortableHeader label="Net Margin %" sortKey="margin" sort={sort} onChange={setSort} align="right" />
-                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
+                                                <th className="r bg-red-50/60">Fix Margin</th>
+                                                <th className="r bg-amber-50/60">Volume Drop</th>
+                                                <th className="r bg-emerald-50/70">Return Spike</th>
+                                                <th className="r bg-purple-50/60">Prevent Stockout</th>
+                                                <th className="r bg-slate-100/70">Clear Dead Stock</th>
                                             </tr>
                                         )}
                                     </thead>
@@ -855,6 +898,38 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 );
                                             }
 
+                                            if (selectedAlert === 'returns') {
+                                                const refundImpact = p.periodRevenue > 0 ? (p.periodRevenue * (p.refundRateValue / 100)) : 0;
+                                                const cta = p.refundRateValue > (thresholds.returnRatePct * 1.5) ? "Urgent QA Check" : "Review Return Reasons";
+                                                return (
+                                                    <tr key={p.id} className="group text-sm">
+                                                        <td className="c">
+                                                            <button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors">
+                                                                <Search className="w-4 h-4" />
+                                                            </button>
+                                                        </td>
+                                                        <td>
+                                                            <div className="font-bold text-gray-900 flex items-center">
+                                                                {p.sku}
+                                                                <GradeBadge gradeLevel={p.gradeLevel} />
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
+                                                        </td>
+                                                        <td className="r">
+                                                            <MetricValue value={p.refundRateValue} type="percent" />
+                                                        </td>
+                                                        <td className="r">
+                                                            <MetricValue value={-refundImpact} type="currency" />
+                                                        </td>
+                                                        <td className="r text-gray-700 font-semibold">{formatSmartMoney(p.periodRevenue)}</td>
+                                                        <td className="r text-gray-700 font-semibold">{formatNumber(p.periodUnits, 0)}</td>
+                                                        <td className="r">
+                                                            <span className="text-[11px] font-black uppercase text-orange-700 tracking-wider bg-orange-50 px-2 py-0.5 rounded border border-orange-100 shadow-sm">{cta}</span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            }
+
                                             if (selectedAlert === 'dead') {
                                                 let cta = "Clearance Promo";
                                                 if (p.inventoryValue > 1000) cta = "Liquidate";
@@ -966,11 +1041,33 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                         <>
                                                             <td className="c"><button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors"><Search className="w-4 h-4" /></button></td>
                                                             <td><div className="font-medium text-gray-900 group-hover:text-theme transition-colors flex items-center">{p.sku}<GradeBadge gradeLevel={p.gradeLevel} /></div><div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div></td>
-                                                            <td><div className="flex flex-wrap gap-1 max-w-[140px]">{p.signals.slice(0, 2).map((id: string) => { const meta = getDiagnosisMeta(id as CanonicalDiagnosisId); return <span key={id} onClick={() => onDeepDive(p.sku)} className={`text-[10px] px-1.5 py-0.5 rounded border font-medium cursor-pointer hover:opacity-80 ${meta.priority === 'High' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`} title={meta.description}>{meta.shortLabel}</span> })}</div></td>
-                                                            <td className="r text-gray-700">{formatSmartMoney((p.displayPrice * VAT_MULTIPLIER))}</td>
-                                                            <td className="r text-gray-600">{formatSmartMoney(p.periodRevenue)}</td>
-                                                            <td className="r"><span className={`font-medium ${p.periodMargin < thresholds.marginBelowTargetPct ? 'text-red-600' : 'text-green-600'}`}>{p.periodMargin.toFixed(1)}%</span></td>
-                                                            <td className="r font-medium text-gray-800">{p.stockLevel}</td>
+                                                            <td className="r bg-red-50/30">
+                                                                {alerts.margin.some(x => x.sku === p.sku) ? (
+                                                                    <span className="font-medium text-gray-800">
+                                                                        {formatPct(p.periodMargin)}
+                                                                    </span>
+                                                                ) : '—'}
+                                                            </td>
+                                                            <td className="r bg-amber-50/30">
+                                                                {alerts.velocity.some(x => x.sku === p.sku) ? (
+                                                                    <span className="font-medium text-gray-800">
+                                                                        {`${p.volumeDropPct > 0 ? '+' : ''}${p.volumeDropPct.toFixed(1)}%`} ({formatNumber(Math.max(0, (p.baselineQty || 0) - (p.periodUnits || 0)), 0)} qty)
+                                                                    </span>
+                                                                ) : '—'}
+                                                            </td>
+                                                            <td className="r bg-emerald-50/30">
+                                                                {alerts.returns.some(x => x.sku === p.sku) ? (
+                                                                    <span className="font-medium text-gray-800">
+                                                                        {p.refundRateValue.toFixed(1)}% ({formatSmartMoney(-(p.periodRevenue * (p.refundRateValue / 100)))})
+                                                                    </span>
+                                                                ) : '—'}
+                                                            </td>
+                                                            <td className="r bg-purple-50/30 font-medium text-gray-800">
+                                                                {alerts.stock.some(x => x.sku === p.sku) ? `${formatNumber(p.stockLevel)} (${p.periodRunway.toFixed(1)}d)` : '—'}
+                                                            </td>
+                                                            <td className="r bg-slate-100/50 font-medium text-gray-800">
+                                                                {alerts.dead.some(x => x.sku === p.sku) ? `${formatNumber(p.stockLevel)} (${p.periodRunway.toFixed(1)}d)` : '—'}
+                                                            </td>
                                                         </>
                                                     )}
                                                 </tr>

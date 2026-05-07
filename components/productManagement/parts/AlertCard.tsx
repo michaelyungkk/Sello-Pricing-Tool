@@ -4,6 +4,7 @@ export const AlertCard = ({ title, count, icon: Icon, color, isActive, onClick, 
     const activeBorderStyles = {
         red: '!border-l-red-500',
         amber: '!border-l-amber-500',
+        green: '!border-l-emerald-500',
         purple: '!border-l-purple-500',
         gray: '!border-l-gray-400',
     };
@@ -11,6 +12,7 @@ export const AlertCard = ({ title, count, icon: Icon, color, isActive, onClick, 
     const activeIconStyles = {
         red: 'text-red-500',
         amber: 'text-amber-500',
+        green: 'text-emerald-500',
         purple: 'text-purple-500',
         gray: 'text-gray-500',
     };
@@ -41,4 +43,3 @@ export const AlertCard = ({ title, count, icon: Icon, color, isActive, onClick, 
         </button>
     );
 };
-

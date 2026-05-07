@@ -79,6 +79,7 @@ import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../ser
 const FORCE_FULL_PULL_TOKEN_KEY = 'sello_last_force_full_pull_token';
 const REFUND_CURSOR_KEY = 'sello_refunds_updated_at';
 const PROMO_CURSOR_KEY = 'sello_promotions_updated_at';
+const PROMO_BASELINE_COMPLETE_KEY = 'sello_promotions_baseline_complete';
 
 // Helper for recalculation
 const recalculateProductMetrics = (
@@ -1822,6 +1823,7 @@ export const useAppState = () => {
         await clearCache();
         localStorage.removeItem(REFUND_CURSOR_KEY);
         localStorage.removeItem(PROMO_CURSOR_KEY);
+        localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
         localStorage.removeItem('sello_snapshot_updated_at');
         localStorage.removeItem('sello_last_synced_at');
         localStorage.setItem(FORCE_FULL_PULL_TOKEN_KEY, token);
@@ -2054,9 +2056,11 @@ export const useAppState = () => {
             }
 
             // Pull promotions from separate table (incremental when cursor exists)
-            const lastPromoUpdatedAt = forceImportantRefresh
-                ? undefined
-                : (localStorage.getItem(PROMO_CURSOR_KEY) || undefined);
+            const promoBaselineComplete = !forceImportantRefresh
+                && localStorage.getItem(PROMO_BASELINE_COMPLETE_KEY) === '1';
+            const lastPromoUpdatedAt = promoBaselineComplete
+                ? (localStorage.getItem(PROMO_CURSOR_KEY) || undefined)
+                : undefined;
             let promoRes = await pullPromotionsSince(lastPromoUpdatedAt);
             if (promoRes.success && Array.isArray(promoRes.promotions)) {
                 const localPromotions = promotions || [];
@@ -2075,11 +2079,15 @@ export const useAppState = () => {
                 setPromotions(nextPromotions);
                 promotionsForCache = nextPromotions;
                 console.log(`[sync] promotions loaded  -  ${nextPromotions.length} campaigns`);
+                if (!promoBaselineComplete) {
+                    localStorage.setItem(PROMO_BASELINE_COMPLETE_KEY, '1');
+                }
                 if (promoRes.latestUpdatedAt) {
                     localStorage.setItem(PROMO_CURSOR_KEY, promoRes.latestUpdatedAt);
                 }
             } else {
                 console.warn('[sync] promotions pull failed (non-fatal):', promoRes.error);
+                localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
             }
 
             if (incoming) {
@@ -2208,9 +2216,11 @@ export const useAppState = () => {
                             console.warn('[init] promotions pull returned empty; preserving cached ' + cachedPromotions.length);
                         }
                         setPromotions(nextPromotions);
+                        localStorage.setItem(PROMO_BASELINE_COMPLETE_KEY, '1');
                         console.log('[init] promotions loaded from DB - ' + nextPromotions.length + ' campaigns');
                     } else {
                         console.warn('[init] promotions pull failed on cache init (non-fatal):', promoRes.error);
+                        localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
                     }
                     setSyncStatus('idle');
                     console.log('[init] loaded from cache instantly');
@@ -2534,6 +2544,8 @@ export const useAppState = () => {
     // edit (new promotion, saved template, rule change, etc.) automatically
     // marks the app dirty and prompts a DB push  -  same as file uploads do.
     const updatePromotions = useCallback((v: React.SetStateAction<PromotionEvent[]>) => {
+        localStorage.removeItem(PROMO_CURSOR_KEY);
+        localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
         setPromotions(prev => {
             const nextRaw = typeof v === 'function' ? (v as (prev: PromotionEvent[]) => PromotionEvent[])(prev) : v;
             return normalizePromotionStatuses(nextRaw || []);

@@ -137,6 +137,8 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
         const result = new Map<string, {
             revenue: number;
             netProfit: number;
+            preRefundProfit: number;
+            refundImpact: number;
             costs: Array<{ label: string; value: number }>;
             reconciliation: number;
             reconciliationLabel: string;
@@ -146,10 +148,6 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
         for (const sub of platformSubtotals) {
             const rows = byPlatform.get(sub.platform) || [];
             const hasAnyField = (keys: string[]) => rows.some(row => keys.some(key => row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== ''));
-            const soldUnits = rows.reduce((sum, row) => {
-                const units = getNum(row, ['velocity']);
-                return sum + (units > 0 ? units : 0);
-            }, 0);
             const refundImpact = rows.reduce((sum, row) => {
                 const isRefund = row?._type === 'REFUND_LOG' || (getNum(row, ['velocity']) < 0);
                 if (!isRefund) return sum;
@@ -192,21 +190,23 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
 
             const revenue = sub.revenue || 0;
             const netProfit = sub.profit || 0;
-            const isRefundOnlyPlatform = soldUnits <= 0.0001 && Math.abs(revenue) <= 0.0001 && netProfit < -0.0001;
-            const normalizedCosts = isRefundOnlyPlatform
-                ? (costs.some(c => c.label === 'Refund Impact') ? costs : [...costs, { label: 'Refund Impact', value: Math.abs(netProfit) }])
-                : costs;
+            const normalizedCosts = costs;
+            const nonRefundCostTotal = normalizedCosts
+                .filter(cost => cost.label !== 'Refund Impact')
+                .reduce((sum, cost) => sum + cost.value, 0);
+            const preRefundProfit = revenue - nonRefundCostTotal;
             const computedProfit = revenue - normalizedCosts.reduce((sum, cost) => sum + cost.value, 0);
-            const reconciliation = isRefundOnlyPlatform ? 0 : (netProfit - computedProfit);
+            const reconciliation = netProfit - computedProfit;
             const reconciliationLabel = refundImpact > 0.0001 ? 'Residual Adjustment' : 'Reconciliation';
             const maxBarAbs = Math.max(
                 Math.abs(revenue),
+                Math.abs(preRefundProfit),
                 Math.abs(netProfit),
                 ...normalizedCosts.map(cost => Math.abs(cost.value)),
                 Math.abs(reconciliation)
             );
 
-            result.set(sub.platform, { revenue, netProfit, costs: normalizedCosts, reconciliation, reconciliationLabel, maxBarAbs });
+            result.set(sub.platform, { revenue, netProfit, preRefundProfit, refundImpact, costs: normalizedCosts, reconciliation, reconciliationLabel, maxBarAbs });
         }
 
         return result;
@@ -215,8 +215,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     const platformSubtotalTotals = useMemo(() => {
         const totals = platformSubtotals.reduce((acc, sub) => {
             const breakdown = platformCostBreakdowns.get(sub.platform);
-            const refundImpact = breakdown?.costs.find(cost => cost.label === 'Refund Impact')?.value || 0;
-            const profitBeforeRefund = (sub.profit || 0) + refundImpact;
+            const profitBeforeRefund = breakdown?.preRefundProfit || 0;
             acc.soldQty += (sub.soldQty || 0);
             acc.rawAdSpend += (sub.rawAdSpend || 0);
             acc.adjustedAdSpend += (sub.adjustedAdSpend || 0);
@@ -435,8 +434,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                 <div className="divide-y divide-gray-100">
                     {platformSubtotals.map(sub => {
                         const rowBreakdown = platformCostBreakdowns.get(sub.platform);
-                        const rowRefundImpact = rowBreakdown?.costs.find(cost => cost.label === 'Refund Impact')?.value || 0;
-                        const rowProfitBeforeRefund = (sub.profit || 0) + rowRefundImpact;
+                        const rowProfitBeforeRefund = rowBreakdown?.preRefundProfit || 0;
                         return (
                         <div key={sub.platform}>
                             <button
@@ -524,7 +522,7 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
                                 if (!breakdown) return null;
                                 const refundCost = breakdown.costs.find(cost => cost.label === 'Refund Impact');
                                 const nonRefundCosts = breakdown.costs.filter(cost => cost.label !== 'Refund Impact');
-                                const preRefundProfit = breakdown.revenue - nonRefundCosts.reduce((sum, cost) => sum + cost.value, 0);
+                                const preRefundProfit = breakdown.preRefundProfit;
                                 const waterfallSteps = [
                                     { label: 'Revenue', amount: breakdown.revenue, running: breakdown.revenue, type: 'start' as const },
                                     ...nonRefundCosts.map((cost, idx) => {
