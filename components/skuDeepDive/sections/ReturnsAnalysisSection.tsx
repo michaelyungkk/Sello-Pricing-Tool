@@ -1,11 +1,12 @@
 
 import React from 'react';
-import { RotateCcw, Calendar, Brain, CloudOff, Sparkles, Smile, MessageSquare, AlertTriangle, Hash, ExternalLink, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { RotateCcw, Calendar, Brain, CloudOff, Sparkles, Smile, MessageSquare, AlertTriangle, Hash, ExternalLink, Clock } from 'lucide-react';
 import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { parseReturnsReason } from '../../../services/returnsReasonCodes';
 import ReturnsReasonTimelineChart from '../returns/ReturnsReasonTimelineChart';
 import { KeywordCloud } from '../parts/KeywordCloud';
 import { SortableHeader } from '../../common/SortableHeader';
+import { TablePagination } from '../../common/TablePagination';
 import { getReturnDateKey } from '../../../services/dateUtils';
 import { ReturnDateBasis } from '../../../types';
 
@@ -26,13 +27,40 @@ interface ReturnsAnalysisSectionProps {
     paginatedRefunds: any[];
     filteredRefundsLength: number;
     refundPage: number;
-    setRefundPage: (fn: (prev: number) => number) => void;
+    setRefundPage: (page: number | ((prev: number) => number)) => void;
     totalRefundPages: number;
     refundItemsPerPage: number;
+    setRefundItemsPerPage: (n: number) => void;
     themeColor: string;
     orderDateMap: Map<string, string>;
     thresholds: any;
 }
+
+const cleanDisplayCommentValue = (value?: string): string => (
+    String(value || '').replace(/\u807D/g, ' ').replace(/\s+/g, ' ').trim()
+);
+
+const hasCjkText = (value?: string): boolean => /[\u3400-\u9FFF]/.test(cleanDisplayCommentValue(value).replace(/\u807D/g, ''));
+
+const looksLikeMojibake = (value?: string): boolean => {
+    const text = value || '';
+    return !hasCjkText(text) && /[\u00C3\u00C2\uFFFD]|(?:[\u00E6\u00E8\u00E5\u00E7][\u0080-\u00FF\u0152\u0153])/.test(text);
+};
+
+const getRefundDisplayComment = (refund: any): string => {
+    const candidates = [
+        refund.commentCn,
+        refund.comments,
+        refund.customerReason,
+        refund.commentEn,
+        refund.remarks
+    ].map((value) => cleanDisplayCommentValue(value)).filter(Boolean);
+
+    return candidates.find(hasCjkText)
+        || candidates.find(value => !looksLikeMojibake(value))
+        || candidates[0]
+        || '-';
+};
 
 export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
     refundAnalysis,
@@ -54,6 +82,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
     setRefundPage,
     totalRefundPages,
     refundItemsPerPage,
+    setRefundItemsPerPage,
     themeColor,
     orderDateMap,
     thresholds
@@ -275,6 +304,7 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                             const reasonMeta = parseReturnsReason(r.platformReason || r.reason);
                                             // Value stored is Ex-VAT, display Inc-VAT. Include freight here for total transaction value.
                                             const displayAmount = (Number(r.amount || 0) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER;
+                                            const displayComment = getRefundDisplayComment(r);
                                             
                                             // Determine Date to show based on basis
                                             const displayDateKey = getReturnDateKey(r, returnDateBasis, orderDateMap);
@@ -307,8 +337,8 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                                             <span className="text-[10px] text-gray-400">{reasonMeta.full}</span>
                                                         </div>
                                                     </td>
-                                                    <td className="r text-gray-400 italic whitespace-normal min-w-[200px] break-words" title={r.commentEn || r.comments || r.customerReason}>
-                                                        {r.commentEn || r.comments || r.customerReason || '—'}
+                                                    <td className="r text-gray-400 italic whitespace-normal min-w-[200px] break-words" title={displayComment}>
+                                                        {displayComment}
                                                     </td>
                                                 </tr>
                                             );
@@ -321,29 +351,14 @@ export const ReturnsAnalysisSection: React.FC<ReturnsAnalysisSectionProps> = ({
                                 </tbody>
                             </table>
                         </div>
-                        {totalRefundPages > 1 && (
-                            <div className="bg-white/10 px-4 py-2.5 border-t border-custom-glass flex items-center justify-between">
-                                <span className="text-[10px] text-gray-400 font-bold uppercase">
-                                    Page {refundPage} of {totalRefundPages} ({filteredRefundsLength} items)
-                                </span>
-                                <div className="flex gap-1">
-                                    <button 
-                                        onClick={() => setRefundPage((p: number) => Math.max(1, p - 1))} 
-                                        disabled={refundPage === 1}
-                                        className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-30"
-                                    >
-                                        <ChevronLeft className="w-4 h-4" />
-                                    </button>
-                                    <button 
-                                        onClick={() => setRefundPage((p: number) => Math.min(totalRefundPages, p + 1))} 
-                                        disabled={refundPage === totalRefundPages}
-                                        className="p-1 border border-gray-300 rounded hover:bg-white disabled:opacity-30"
-                                    >
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+                        <TablePagination
+                            currentPage={refundPage}
+                            itemsPerPage={refundItemsPerPage}
+                            totalCount={filteredRefundsLength}
+                            totalPages={totalRefundPages}
+                            setCurrentPage={setRefundPage}
+                            setItemsPerPage={setRefundItemsPerPage}
+                        />
                         </div>
                         
                         <div className="text-right text-[10px] text-gray-400 italic mt-2">

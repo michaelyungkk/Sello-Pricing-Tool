@@ -3,10 +3,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, PricingRules, PromotionEvent } from '../../../types';
 import { TagSearchInput } from '../../common/TagSearchInput';
-import { Download, Info, DollarSign, Activity, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
+import { Download, Info, DollarSign, Activity, Tag } from 'lucide-react';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { getTodayKeyMelbourne } from '../../../services/dateUtils';
 import { formatSmartMoney, localDateStamp} from '../../../utils/format';
+import { TablePagination } from '../../common/TablePagination';
 
 interface PriceMatrixTabProps {
     products: Product[];
@@ -329,39 +330,14 @@ export const PriceMatrixTab: React.FC<PriceMatrixTabProps> = ({ products, pricin
                         ))}
                     </tbody>
                 </table>
-                {filtered.length > itemsPerPage && (
-                    <div className="sello-table-footer" style={{ position: 'sticky', bottom: 0 }}>
-                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                            <div className="flex items-center gap-4">
-                                <p className="text-sm text-gray-700">
-                                    Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filtered.length)}</span> of <span className="font-medium">{filtered.length}</span> results
-                                </p>
-                                <select
-                                    value={itemsPerPage}
-                                    onChange={(e) => {
-                                        setItemsPerPage(Number(e.target.value));
-                                        setCurrentPage(1);
-                                    }}
-                                    className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"
-                                >
-                                    <option value={10}>10</option>
-                                    <option value={25}>25</option>
-                                    <option value={50}>50</option>
-                                    <option value={100}>100</option>
-                                </select>
-                            </div>
-                            <div>
-                                {totalPages > 1 && (
-                                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                                        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button>
-                                        <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {currentPage} of {totalPages}</span>
-                                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button>
-                                    </nav>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <TablePagination
+                    currentPage={currentPage}
+                    itemsPerPage={itemsPerPage}
+                    totalCount={filtered.length}
+                    totalPages={totalPages}
+                    setCurrentPage={setCurrentPage}
+                    setItemsPerPage={setItemsPerPage}
+                />
             </div>
         </div>
     );

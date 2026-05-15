@@ -115,25 +115,6 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
     }, [popAvailable, showPop]);
 
     const platformCostBreakdowns = useMemo(() => {
-        const getNum = (row: any, keys: string[]) => {
-            for (const key of keys) {
-                const value = row?.[key];
-                if (typeof value === 'number' && Number.isFinite(value)) return value;
-                if (typeof value === 'string') {
-                    const parsed = Number(value);
-                    if (Number.isFinite(parsed)) return parsed;
-                }
-            }
-            return 0;
-        };
-
-        const byPlatform = new Map<string, any[]>();
-        for (const row of filteredTransactions) {
-            const platform = String(row?.platform || 'Unknown');
-            if (!byPlatform.has(platform)) byPlatform.set(platform, []);
-            byPlatform.get(platform)?.push(row);
-        }
-
         const result = new Map<string, {
             revenue: number;
             netProfit: number;
@@ -146,76 +127,24 @@ export const TransactionLedgerSection: React.FC<TransactionLedgerSectionProps> =
         }>();
 
         for (const sub of platformSubtotals) {
-            const rows = byPlatform.get(sub.platform) || [];
-            const hasAnyField = (keys: string[]) => rows.some(row => keys.some(key => row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== ''));
-            const refundImpact = rows.reduce((sum, row) => {
-                const isRefund = row?._type === 'REFUND_LOG' || (getNum(row, ['velocity']) < 0);
-                if (!isRefund) return sum;
-                return sum + Math.abs(getNum(row, ['profit']) * VAT_MULTIPLIER);
-            }, 0);
-
-            const promoRelRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['promo_rel', 'promoRel', 'promoRebate']), 0);
-            const cogsRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['cogs', 'costPrice']), 0);
-            const sellingRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['selling_fee', 'sellingFee']), 0);
-            const adsFeeRowTotal = rows.reduce((sum, row) => {
-                const rawAdSpend = getNum(row, ['rawAdsSpend', 'adsSpend']);
-                return sum + rawAdSpend;
-            }, 0);
-            const postageRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['postage', 'realPostage']), 0);
-            const otherRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['other_fee', 'otherFee']), 0);
-            const subscriptionRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['subscription_fee', 'subscription', 'subscriptionFee']), 0);
-            const wmsRowTotal = rows.reduce((sum, row) => sum + getNum(row, ['wms_fee', 'wmsFee']), 0);
-
-            const hasRowPromoRelief = hasAnyField(['promoRel', 'promo_rel', 'promoRebate']);
-            const promoRel = (hasRowPromoRelief ? promoRelRowTotal : 0) * VAT_MULTIPLIER;
-            const cogs = (hasAnyField(['cogs', 'costPrice']) ? cogsRowTotal : 0) * VAT_MULTIPLIER;
-            const sellingFee = (hasAnyField(['sellingFee', 'selling_fee']) ? sellingRowTotal : 0) * VAT_MULTIPLIER;
-            const adsFee = (hasAnyField(['rawAdsSpend', 'adsSpend']) ? adsFeeRowTotal : 0) * VAT_MULTIPLIER;
-            const postage = (hasAnyField(['postage', 'realPostage']) ? postageRowTotal : 0) * VAT_MULTIPLIER;
-            const otherFee = (hasAnyField(['otherFee', 'other_fee']) ? otherRowTotal : 0) * VAT_MULTIPLIER;
-            const subscription = (hasAnyField(['subscription_fee', 'subscriptionFee', 'subscription']) ? subscriptionRowTotal : 0) * VAT_MULTIPLIER;
-            const wmsFee = (hasAnyField(['wmsFee', 'wms_fee']) ? wmsRowTotal : 0) * VAT_MULTIPLIER;
-
-            const costs = [
-                { label: 'Promo Relief', value: promoRel },
-                { label: 'COGS', value: cogs },
-                { label: 'Selling Fee', value: sellingFee },
-                { label: 'Ads Fee', value: adsFee },
-                { label: 'Postage', value: postage },
-                { label: 'Other Fee', value: otherFee },
-                { label: 'Subscription', value: subscription },
-                { label: 'WMS Fee', value: wmsFee },
-                { label: 'Refund Impact', value: refundImpact }
-            ].filter(item => Math.abs(item.value) > 0.0001);
-
-            const revenue = sub.revenue || 0;
-            const netProfit = sub.profit || 0;
-            const normalizedCosts = costs;
-            const nonRefundCostTotal = normalizedCosts
-                .filter(cost => cost.label !== 'Refund Impact')
-                .reduce((sum, cost) => sum + cost.value, 0);
-            const preRefundProfit = revenue - nonRefundCostTotal;
-            const computedProfit = revenue - normalizedCosts.reduce((sum, cost) => sum + cost.value, 0);
-            const reconciliation = netProfit - computedProfit;
-            const reconciliationLabel = refundImpact > 0.0001 ? 'Residual Adjustment' : 'Reconciliation';
-            const maxBarAbs = Math.max(
-                Math.abs(revenue),
-                Math.abs(preRefundProfit),
-                Math.abs(netProfit),
-                ...normalizedCosts.map(cost => Math.abs(cost.value)),
-                Math.abs(reconciliation)
-            );
-
-            result.set(sub.platform, { revenue, netProfit, preRefundProfit, refundImpact, costs: normalizedCosts, reconciliation, reconciliationLabel, maxBarAbs });
+            result.set(sub.platform, {
+                revenue: sub.revenue || 0,
+                netProfit: sub.netProfit ?? sub.profit ?? 0,
+                preRefundProfit: sub.profitBeforeRefund || 0,
+                refundImpact: sub.refundImpact || 0,
+                costs: sub.costs || [],
+                reconciliation: sub.reconciliation || 0,
+                reconciliationLabel: sub.reconciliationLabel || 'Reconciliation',
+                maxBarAbs: sub.maxBarAbs || 0
+            });
         }
 
         return result;
-    }, [filteredTransactions, platformSubtotals, product]);
+    }, [platformSubtotals]);
 
     const platformSubtotalTotals = useMemo(() => {
         const totals = platformSubtotals.reduce((acc, sub) => {
-            const breakdown = platformCostBreakdowns.get(sub.platform);
-            const profitBeforeRefund = breakdown?.preRefundProfit || 0;
+            const profitBeforeRefund = sub.profitBeforeRefund || 0;
             acc.soldQty += (sub.soldQty || 0);
             acc.rawAdSpend += (sub.rawAdSpend || 0);
             acc.adjustedAdSpend += (sub.adjustedAdSpend || 0);

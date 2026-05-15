@@ -16,7 +16,9 @@ export interface RefundSkuRow {
   platform: string;
   refundCount: number;
   refundQty: number; // Sum of physical units
+  matchedRefundQty: number; // Sum of matched physical units
   refundValue: number; // Total Value (Item + Freight) Inc VAT
+  matchedRefundValue: number; // Total matched value (Item + Freight) Inc VAT
   itemValue: number; // Item Only Value Inc VAT
   freightValue: number; // Freight Only Value Inc VAT
   logisticsFeeValue: number;
@@ -43,6 +45,12 @@ export interface RefundOverview {
     totalRefundCount: number;
     totalRefundQty: number;
     totalRefundValue: number;
+    matchedRefundCount: number;
+    unmatchedRefundCount: number;
+    matchedRefundQty: number;
+    unmatchedRefundQty: number;
+    matchedRefundValue: number;
+    unmatchedRefundValue: number;
     totalLogisticsFees: number;
     refundRateQty: number | null;
     refundRateValue: number | null;
@@ -63,6 +71,12 @@ export const buildRefundOverview = (
     totalRefundCount: 0,
     totalRefundQty: 0,
     totalRefundValue: 0,
+    matchedRefundCount: 0,
+    unmatchedRefundCount: 0,
+    matchedRefundQty: 0,
+    unmatchedRefundQty: 0,
+    matchedRefundValue: 0,
+    unmatchedRefundValue: 0,
     totalLogisticsFees: 0,
     refundRateQty: null as number | null,
     refundRateValue: null as number | null,
@@ -71,7 +85,9 @@ export const buildRefundOverview = (
   const skuMap = new Map<string, {
     count: number;
     qty: number;
+    matchedQty: number;
     value: number;
+    matchedValue: number;
     itemVal: number;
     freight: number;
     logistics: number;
@@ -116,7 +132,9 @@ export const buildRefundOverview = (
       skuMap.set(sku, {
         count: 0,
         qty: 0,
+        matchedQty: 0,
         value: 0,
+        matchedValue: 0,
         itemVal: 0,
         freight: 0,
         logistics: 0,
@@ -131,6 +149,31 @@ export const buildRefundOverview = (
     entry.value += totalIncVat;
     entry.itemVal += itemIncVat;
     entry.freight += freightIncVat;
+
+    // Match against sales orders to separate true return-rate numerator from unmatched rows.
+    const orderDateMap = opts.orderDateMap;
+    const orderId = row.orderId || '';
+    const resendBase = row.resendBaseOrderId || '';
+    const strippedResend = orderId ? orderId.replace(/[-_]resend$/i, '') : '';
+    const isMatched = Boolean(
+      orderDateMap && (
+        (orderId && orderDateMap.has(orderId)) ||
+        (resendBase && orderDateMap.has(resendBase)) ||
+        (strippedResend && orderDateMap.has(strippedResend))
+      )
+    );
+
+    if (isMatched) {
+      entry.matchedQty += quantity;
+      entry.matchedValue += totalIncVat;
+      kpis.matchedRefundCount += 1;
+      kpis.matchedRefundQty += quantity;
+      kpis.matchedRefundValue += totalIncVat;
+    } else {
+      kpis.unmatchedRefundCount += 1;
+      kpis.unmatchedRefundQty += quantity;
+      kpis.unmatchedRefundValue += totalIncVat;
+    }
 
     // --- Timeline Aggregation ---
     const dateBasis = opts.dateBasis || 'refundDate';
@@ -201,14 +244,14 @@ export const buildRefundOverview = (
     if (opts.salesMap && opts.salesMap.has(sku)) {
       const sales = opts.salesMap.get(sku) || 0;
       if (sales > 0) {
-        refundRate = (data.qty / sales) * 100;
+        refundRate = (data.matchedQty / sales) * 100;
         if (refundRate > 10) flags.push("High Rate");
       }
     }
     if (opts.revenueMap && opts.revenueMap.has(sku)) {
         const revenue = opts.revenueMap.get(sku) || 0;
         if (revenue > 0) {
-            refundRateValue = (data.value / revenue) * 100;
+            refundRateValue = (data.matchedValue / revenue) * 100;
         }
     }
 
@@ -224,7 +267,9 @@ export const buildRefundOverview = (
       platform: data.platform,
       refundCount: data.count,
       refundQty: data.qty,
+      matchedRefundQty: data.matchedQty,
       refundValue: data.value,
+      matchedRefundValue: data.matchedValue,
       itemValue: data.itemVal,
       freightValue: data.freight,
       logisticsFeeValue: data.logistics,
@@ -240,7 +285,7 @@ export const buildRefundOverview = (
     let totalUnitsSold = 0;
     for (const val of opts.salesMap.values()) totalUnitsSold += val;
     if (totalUnitsSold > 0) {
-      kpis.refundRateQty = (kpis.totalRefundQty / totalUnitsSold) * 100;
+      kpis.refundRateQty = (kpis.matchedRefundQty / totalUnitsSold) * 100;
     }
   }
 
@@ -248,7 +293,7 @@ export const buildRefundOverview = (
     let totalRevenueSold = 0;
     for (const val of opts.revenueMap.values()) totalRevenueSold += val;
     if (totalRevenueSold > 0) {
-      kpis.refundRateValue = (kpis.totalRefundValue / totalRevenueSold) * 100;
+      kpis.refundRateValue = (kpis.matchedRefundValue / totalRevenueSold) * 100;
     }
   }
 

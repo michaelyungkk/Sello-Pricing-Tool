@@ -64,8 +64,25 @@ export default async (req: Request) => {
                         status, logistic_partner, updated_at
                     ) VALUES ${placeholders}
                     ON CONFLICT (id) DO UPDATE SET
+                        sku = EXCLUDED.sku,
                         amount = EXCLUDED.amount,
                         quantity = EXCLUDED.quantity,
+                        raw_sku = EXCLUDED.raw_sku,
+                        date = EXCLUDED.date,
+                        freight_amount = EXCLUDED.freight_amount,
+                        platform = EXCLUDED.platform,
+                        reason = EXCLUDED.reason,
+                        customer_reason = EXCLUDED.customer_reason,
+                        platform_reason = EXCLUDED.platform_reason,
+                        comments = EXCLUDED.comments,
+                        comment_en = EXCLUDED.comment_en,
+                        comment_cn = EXCLUDED.comment_cn,
+                        remarks = EXCLUDED.remarks,
+                        order_id = EXCLUDED.order_id,
+                        order_type = EXCLUDED.order_type,
+                        resend_base_order_id = EXCLUDED.resend_base_order_id,
+                        status = EXCLUDED.status,
+                        logistic_partner = EXCLUDED.logistic_partner,
                         updated_at = NOW()
                 `, values);
             }

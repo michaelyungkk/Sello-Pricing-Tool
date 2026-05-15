@@ -478,6 +478,7 @@ export interface HistoryPayload {
     margin?: number;
     profit?: number;
     adsSpend?: number;
+    rawAdsSpend?: number;
     platform?: string;
     orderId?: string;
     postcode?: string;

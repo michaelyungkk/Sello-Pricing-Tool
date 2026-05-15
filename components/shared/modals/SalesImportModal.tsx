@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { formatSmartMoney } from '../../../utils/format';
-import { Product, PricingRules, HistoryPayload } from '../../../types';
+import { Product, PricingRules, HistoryPayload, PriceLog } from '../../../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search, Hash } from 'lucide-react';
 import { asDateKeyNaive } from '../../../services/dateUtils';
 import { getCanonicalSku } from '../../../services/skuNormalization';
@@ -11,6 +11,7 @@ export type { HistoryPayload };
 interface SalesImportModalProps {
     products: Product[];
     pricingRules: PricingRules;
+    salesHistory?: PriceLog[];
     learnedAliases?: Record<string, string>;
     onClose: () => void;
     onResetData?: () => void;
@@ -20,7 +21,8 @@ interface SalesImportModalProps {
         historyPayload?: HistoryPayload[],
         shipmentLogs?: any[],
         discoveredPlatforms?: string[],
-        newlyLearnedAliases?: Record<string, string>
+        newlyLearnedAliases?: Record<string, string>,
+        importDirective?: { salesPushMode: 'incremental' | 'full_snapshot'; reason: string }
     ) => void | Promise<void>;
 }
 
@@ -51,7 +53,7 @@ interface ColumnMapping {
     logisticPartner?: string; // New: Logistic Partner (label_provider)
 }
 
-const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRules, learnedAliases = {}, onClose, onResetData, onConfirm }) => {
+const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRules, salesHistory = [], learnedAliases = {}, onClose, onResetData, onConfirm }) => {
     const [step, setStep] = useState<'upload' | 'mapping' | 'resolution' | 'preview'>('upload');
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -68,6 +70,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
     const [showAdvancedMapping, setShowAdvancedMapping] = useState(false);
 
     const [previewData, setPreviewData] = useState<any>(null);
+    const [selectedSalesPushMode, setSelectedSalesPushMode] = useState<'incremental' | 'full_snapshot'>('incremental');
     const [unknownSkus, setUnknownSkus] = useState<Record<string, { count: number, revenue: number, masterSku: string | null }>>({});
     const [resolvedAliases, setResolvedAliases] = useState<Record<string, string>>({});
 
@@ -83,6 +86,119 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         if (len >= 10) return 'text-lg';
         return 'text-2xl';
     }, [revenueDisplay]);
+    const toDateKey = (value: unknown): string => {
+        const key = asDateKeyNaive(value);
+        return key || '';
+    };
+    const toFixedNum = (value: unknown, dp = 4): string => {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return '0';
+        return n.toFixed(dp);
+    };
+    const salesRowKey = (row: any): string => {
+        const date = toDateKey(row?.date);
+        const sku = String(row?.sku || '').trim().toUpperCase();
+        const platform = String(row?.platform || 'General').trim();
+        const orderId = String(row?.orderId || '').trim();
+        return orderId ? `${sku}|${date}|${platform}|${orderId}` : `${sku}|${date}|${platform}`;
+    };
+    const salesRowSig = (row: any): string => {
+        return [
+            toFixedNum(row?.price, 4),
+            toFixedNum(row?.velocity, 4),
+            toFixedNum(row?.margin, 4),
+            toFixedNum(row?.profit, 4),
+            toFixedNum(row?.adsSpend, 4),
+            toFixedNum(row?.cogs, 4),
+            toFixedNum(row?.sellingFee, 4),
+            toFixedNum(row?.adsFee, 4),
+            toFixedNum(row?.postage, 4),
+            toFixedNum(row?.otherFee, 4),
+            toFixedNum(row?.subscriptionFee, 4),
+            toFixedNum(row?.wmsFee, 4),
+            toFixedNum(row?.promoRel, 4),
+            String(row?.postcode || '').trim().toUpperCase(),
+            String(row?.logisticPartner || '').trim(),
+            String(row?.logisticService || '').trim(),
+        ].join('|');
+    };
+    const syncRecommendation = useMemo(() => {
+        const imported = Array.isArray(previewData?.history) ? previewData.history : [];
+        const existing = Array.isArray(salesHistory) ? salesHistory : [];
+        if (imported.length === 0 || existing.length === 0) {
+            return {
+                mode: 'incremental' as const,
+                reason: 'No historical overlap baseline detected.',
+                label: 'Incremental push recommended'
+            };
+        }
+        const importMap = new Map<string, string>();
+        const existingMap = new Map<string, string>();
+        for (const row of imported) {
+            importMap.set(salesRowKey(row), salesRowSig(row));
+        }
+        for (const row of existing) {
+            existingMap.set(salesRowKey(row), salesRowSig(row));
+        }
+        const importDates = imported.map((r: any) => toDateKey(r?.date)).filter(Boolean);
+        const existingDates = existing.map((r: any) => toDateKey((r as any)?.date)).filter(Boolean);
+        if (importDates.length === 0 || existingDates.length === 0 || importMap.size === 0 || existingMap.size === 0) {
+            return {
+                mode: 'incremental' as const,
+                reason: 'Insufficient normalized baseline for detailed change detection.',
+                label: 'Incremental push recommended'
+            };
+        }
+        const importMin = importDates.reduce((a: string, b: string) => (a < b ? a : b));
+        const existingMax = existingDates.reduce((a: string, b: string) => (a > b ? a : b));
+
+        let added = 0;
+        let removed = 0;
+        let changed = 0;
+        let historicalAdded = 0;
+        let historicalRemoved = 0;
+        let historicalChanged = 0;
+
+        for (const [k, sig] of importMap.entries()) {
+            if (!existingMap.has(k)) {
+                added++;
+                const d = k.split('|')[1] || '';
+                if (d && d <= existingMax) historicalAdded++;
+                continue;
+            }
+            if (existingMap.get(k) !== sig) {
+                changed++;
+                const d = k.split('|')[1] || '';
+                if (d && d <= existingMax) historicalChanged++;
+            }
+        }
+        for (const k of existingMap.keys()) {
+            if (!importMap.has(k)) {
+                removed++;
+                const d = k.split('|')[1] || '';
+                if (d && d <= existingMax) historicalRemoved++;
+            }
+        }
+
+        const historicalMutations = historicalAdded + historicalRemoved + historicalChanged;
+        if (historicalMutations > 0) {
+            return {
+                mode: 'full_snapshot' as const,
+                reason: `Historical mutations detected (added:${historicalAdded}, removed:${historicalRemoved}, changed:${historicalChanged}) within existing date range up to ${existingMax}. Total delta: added ${added}, removed ${removed}, changed ${changed}.`,
+                label: 'Full sales snapshot publish recommended'
+            };
+        }
+        return {
+            mode: 'incremental' as const,
+            reason: `No historical mutations detected. Total delta: added ${added}, removed ${removed}, changed ${changed}. Import starts ${importMin}, existing ends ${existingMax}.`,
+            label: 'Incremental push recommended'
+        };
+    }, [previewData, salesHistory]);
+    React.useEffect(() => {
+        if (step === 'preview') {
+            setSelectedSalesPushMode(syncRecommendation.mode);
+        }
+    }, [step, syncRecommendation.mode]);
 
     const handleConfirmImport = async () => {
         if (!previewData || isConfirmingImport) return;
@@ -104,7 +220,8 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 previewData.history,
                 previewData.shipmentLogs,
                 previewData.stats.discoveredPlatforms,
-                resolvedAliases
+                resolvedAliases,
+                { salesPushMode: selectedSalesPushMode, reason: syncRecommendation.reason }
             ));
 
             setImportProgress(100);
@@ -329,7 +446,10 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         <div className="p-2 bg-theme-10 text-theme rounded-lg">
                             <FileBarChart className="w-5 h-5" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900">Import Sales Transaction Report</h2>
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900">Import Sales Transaction Report</h2>
+                            <p className="text-xs text-gray-500">This import replaces existing sales transaction history with the latest ERP snapshot.</p>
+                        </div>
                     </div>
                     <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
                 </div>
@@ -627,6 +747,22 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                         })}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className={`p-3 rounded-lg border ${syncRecommendation.mode === 'full_snapshot' ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                                <div className="text-xs font-bold mb-1">Sync Recommendation</div>
+                                <div className="text-xs text-gray-700 mb-2">{syncRecommendation.label}</div>
+                                <div className="text-[11px] text-gray-600 mb-2">{syncRecommendation.reason}</div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-medium text-gray-600">Sales Push Mode:</span>
+                                    <select
+                                        value={selectedSalesPushMode}
+                                        onChange={(e) => setSelectedSalesPushMode(e.target.value as 'incremental' | 'full_snapshot')}
+                                        className="border border-gray-300 rounded-md px-2 py-1 text-xs bg-white"
+                                    >
+                                        <option value="incremental">Incremental</option>
+                                        <option value="full_snapshot">Clean + Replace</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     )}

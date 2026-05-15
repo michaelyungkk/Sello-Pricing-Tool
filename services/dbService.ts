@@ -10,6 +10,40 @@ function sizeOf(obj: any): number {
     return new TextEncoder().encode(JSON.stringify(obj)).length;
 }
 
+function chunkUtf8String(input: string, maxBytes: number): string[] {
+    if (!input) return [''];
+    const encoder = new TextEncoder();
+    const chunks: string[] = [];
+    let start = 0;
+
+    while (start < input.length) {
+        let low = start + 1;
+        let high = input.length;
+        let bestEnd = start + 1;
+
+        while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            const candidate = input.slice(start, mid);
+            const candidateBytes = encoder.encode(candidate).length;
+            if (candidateBytes <= maxBytes) {
+                bestEnd = mid;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+
+        const chunk = input.slice(start, bestEnd);
+        if (!chunk) {
+            throw new Error('Failed to create non-empty snapshot chunk within byte limit');
+        }
+        chunks.push(chunk);
+        start = bestEnd;
+    }
+
+    return chunks;
+}
+
 function trimSnapshot(snapshot: Record<string, any>): Record<string, any> {
     const trimmed = { ...snapshot };
 
@@ -39,7 +73,8 @@ export async function pushSnapshot(password: string, snapshot: object):
         const safe = trimSnapshot(snapshot as Record<string, any>);
         const snapshotJson = JSON.stringify(safe);
         const bytes = new TextEncoder().encode(snapshotJson).length;
-        const totalChunks = Math.max(1, Math.ceil(bytes / SNAPSHOT_CHUNK_BYTES));
+        const snapshotChunks = chunkUtf8String(snapshotJson, SNAPSHOT_CHUNK_BYTES);
+        const totalChunks = snapshotChunks.length;
         const uploadId = `snapshot-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
         console.log(
             `[pushSnapshot] chunked upload start: ${(
@@ -56,9 +91,7 @@ export async function pushSnapshot(password: string, snapshot: object):
         if (!beginData.success) return beginData;
 
         for (let i = 0; i < totalChunks; i++) {
-            const start = i * SNAPSHOT_CHUNK_BYTES;
-            const end = start + SNAPSHOT_CHUNK_BYTES;
-            const chunkData = snapshotJson.slice(start, end);
+            const chunkData = snapshotChunks[i];
             const chunkBytes = new TextEncoder().encode(chunkData).length;
             console.log(
                 `[pushSnapshot] uploading chunk ${i + 1}/${totalChunks} (${(chunkBytes / 1024).toFixed(1)}KB)`

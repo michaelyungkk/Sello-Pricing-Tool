@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
 import { RefundLog, Product, PricingRules, PriceLog, ReturnDateBasis } from '../../../types';
 import { RotateCcw, DollarSign, Package, Info, ChevronDown, AlertTriangle, Truck as TruckIcon, Search, Layers, GitMerge, ChevronRight, Map as MapIcon, FileSearch } from 'lucide-react';
 import { FilterBar } from '../../common/FilterBar';
@@ -11,6 +11,7 @@ import { sortRows, SortState } from '../../../utils/tableSort';
 import { VAT_MULTIPLIER } from '../../../constants';
 import { parseReturnsReason } from '../../../services/returnsReasonCodes';
 import AuditPanel from '../../common/AuditPanel';
+import { TablePagination } from '../../common/TablePagination';
 
 interface ReturnsAndRefundsTabProps {
     refundHistory: RefundLog[];
@@ -44,6 +45,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     endDate,
     onAnalyzeCarrier
 }) => {
+    const deferredRefundHistory = useDeferredValue(refundHistory);
     // State for filters and view mode
     const [isAuditVisible, setIsAuditVisible] = useState(false);
     const [searchTags, setSearchTags] = useState<string[]>([]);
@@ -66,7 +68,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
     const [showSourceRecords, setShowSourceRecords] = useState<string | null>(null);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const productLookup = useMemo(() => new Map(products.map(p => [p.sku, p])), [products]);
 
@@ -189,7 +191,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
             return ctx || null;
         };
 
-        const filteredRefunds = refundHistory.filter(r => {
+        const filteredRefunds = deferredRefundHistory.filter(r => {
             const context = resolveOrderContext(r);
 
             let dKey: string | null = null;
@@ -309,7 +311,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
             byReason, byProduct, byPartner, triageOverview,
             topGripingPartner
         };
-    }, [refundHistory, startDate, endDate, platformScope, mainCategoryScope, subCategoryScope, productLookup, includeResends, returnDateBasis, orderContextMap, salesStats]);
+    }, [deferredRefundHistory, startDate, endDate, platformScope, mainCategoryScope, subCategoryScope, productLookup, includeResends, returnDateBasis, orderContextMap, salesStats]);
 
     // Data for the Detail Explorer view
     const currentTableData = useMemo(() => {
@@ -446,7 +448,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
 
             {/* Refund Triage KPI Section */}
             <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     <MetricCard
                         title="Refund Cases"
                         value={triageOverview.kpis.totalRefundCount.toLocaleString()}
@@ -461,6 +463,13 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         color="red"
                         desc="Inc VAT & Freight"
                     />
+                    <MetricCard
+                        title="Unmatched Refunds"
+                        value={triageOverview.kpis.unmatchedRefundCount.toLocaleString()}
+                        icon={Info}
+                        color="amber"
+                        desc="No sales order match"
+                    />
                     <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-bold text-gray-500 uppercase">Return Rate (Qty)</span>
@@ -469,7 +478,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         <div className="text-2xl font-bold text-gray-900">
                             {triageOverview.kpis.refundRateQty !== null ? formatPct(triageOverview.kpis.refundRateQty) : '—'}
                         </div>
-                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Units vs Sold</div>
+                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Matched Units vs Sold</div>
                     </div>
 
                     <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between">
@@ -480,7 +489,7 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         <div className="text-2xl font-bold text-gray-900">
                             {triageOverview.kpis.refundRateValue !== null ? formatPct(triageOverview.kpis.refundRateValue) : '—'}
                         </div>
-                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Value vs Revenue</div>
+                        <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tight">Matched Value vs Revenue</div>
                     </div>
 
                     <div className="bg-custom-glass backdrop-blur-custom p-4 rounded-xl border border-custom-glass shadow-sm flex flex-col justify-between group">
@@ -790,15 +799,14 @@ export const ReturnsAndRefundsTab: React.FC<ReturnsAndRefundsTabProps> = ({
                         </table>
                     </div>
                 </div>
-                {totalPages > 1 && (
-                    <div className="sello-table-footer" style={{ justifyContent: 'flex-end' }}>
-                        <div className="flex gap-1">
-                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 border rounded-lg bg-white text-xs font-bold disabled:opacity-50">Prev</button>
-                            <span className="px-3 py-1.5 text-xs text-gray-500 flex items-center">Page {currentPage} of {totalPages}</span>
-                            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 border rounded-lg bg-white text-xs font-bold disabled:opacity-50">Next</button>
-                        </div>
-                    </div>
-                )}
+                <TablePagination
+                    currentPage={currentPage}
+                    itemsPerPage={itemsPerPage}
+                    totalCount={currentTableData.length}
+                    totalPages={totalPages}
+                    setCurrentPage={setCurrentPage}
+                    setItemsPerPage={setItemsPerPage}
+                />
             </div>
         </div>
     );

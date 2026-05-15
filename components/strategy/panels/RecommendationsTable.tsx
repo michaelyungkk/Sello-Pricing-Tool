@@ -4,10 +4,11 @@ import { GradeBadge } from '../../common/GradeBadge';
 import { FilterBar } from '../../common/FilterBar';
 import { SortableHeader } from '../../common/SortableHeader';
 import { SortState } from '../../../utils/tableSort';
-import { Eye, EyeOff, AlertCircle, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Layers } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, ArrowUpRight, ArrowDownRight, Layers } from 'lucide-react';
 import { formatMoney, formatSmartMoney, formatNumber, formatPct } from '../../../utils/format';
 import { SkuFamily, Product, OptimalPriceResult } from '../../../types';
 import { VAT_MULTIPLIER } from '../../../constants';
+import { TablePagination } from '../../common/TablePagination';
 
 // ── Confidence Badge (inline — same pattern as Sessions 4 & 5)
 const ConfidenceBadge: React.FC<{ confidence: number; source: string }> = ({ confidence, source }) => {
@@ -331,50 +332,14 @@ export const RecommendationsTable: React.FC<RecommendationsTableProps> = ({
                 </table>
             </div>
 
-            {totalCount > 0 && (
-                <div className="sello-table-footer">
-                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-4">
-                            <p className="text-sm text-gray-700">
-                                Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="font-medium">{totalCount}</span> results
-                            </p>
-                            <select
-                                value={itemsPerPage}
-                                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                                className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-theme focus:border-theme"
-                            >
-                                <option value={10}>10</option>
-                                <option value={25}>25</option>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                            </select>
-                        </div>
-                        <div>
-                            {totalPages > 1 && (
-                                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                                    <button
-                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                        disabled={currentPage === 1}
-                                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                                    >
-                                        <ChevronLeft className="h-5 w-5" />
-                                    </button>
-                                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                                        Page {currentPage} of {totalPages}
-                                    </span>
-                                    <button
-                                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                        disabled={currentPage === totalPages}
-                                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                                    >
-                                        <ChevronRight className="h-5 w-5" />
-                                    </button>
-                                </nav>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
+            <TablePagination
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                totalCount={totalCount}
+                totalPages={totalPages}
+                setCurrentPage={setCurrentPage}
+                setItemsPerPage={setItemsPerPage}
+            />
         </div>
     );
 };

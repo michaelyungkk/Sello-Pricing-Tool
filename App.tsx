@@ -378,6 +378,7 @@ const App: React.FC = () => {
     // Admin mode local UI state
     const [showAdminModal, setShowAdminModal] = useState(false);
     const [showExitConfirm, setShowExitConfirm] = useState(false);
+    const [issueImportantRefresh, setIssueImportantRefresh] = useState(false);
     const [deductRefunds, setDeductRefunds] = useState(false);
     const [isReleaseNotesOpen, setIsReleaseNotesOpen] = useState(false);
     const [releaseNotes, setReleaseNotes] = useState<ReleaseNoteItem[]>([]);
@@ -648,29 +649,38 @@ const App: React.FC = () => {
                             );
                         })}
                         {searchSessions && searchSessions.length > 0 && (
-                            <div className="mt-4 pt-3 border-t border-gray-100/50">
-                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-2 flex items-center gap-2">
-                                    <History className="w-3 h-3" />
-                                    {t('active_searches')}
-                                </div>
+                            <div className={`mt-4 pt-3 border-t border-gray-100/50 ${sidebarCollapsed ? 'px-1' : ''}`}>
+                                {sidebarCollapsed ? (
+                                    <div className="flex justify-center mb-1 text-gray-400" title={t('active_searches')}>
+                                        <History className="w-3 h-3" />
+                                    </div>
+                                ) : (
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 px-2 flex items-center gap-2">
+                                        <History className="w-3 h-3" />
+                                        {t('active_searches')}
+                                    </div>
+                                )}
                                 <div className="space-y-0.5">
                                     {searchSessions.map(session => (
                                         <div key={session.id} className="group relative flex items-center">
                                             <button
                                                 onClick={() => { setActiveSearchId(session.id); setCurrentView('search'); }}
-                                                className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs font-medium transition-all text-left overflow-hidden ${activeSearchId === session.id && currentView === 'search' ? 'bg-white/40 shadow-sm' : 'text-gray-600 hover:bg-gray-100/50'}`}
+                                                className={`${sidebarCollapsed ? 'w-full h-8 justify-center px-0 py-0' : 'w-full gap-3 px-3 py-1.5 text-left'} flex items-center rounded-lg text-xs font-medium transition-all overflow-hidden ${activeSearchId === session.id && currentView === 'search' ? 'bg-white/40 shadow-sm' : 'text-gray-600 hover:bg-gray-100/50'}`}
                                                 style={activeSearchId === session.id && currentView === 'search' ? { backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor } : {}}
+                                                title={sidebarCollapsed ? session.query : undefined}
                                             >
                                                 <Search className={`w-3.5 h-3.5 flex-shrink-0 ${activeSearchId === session.id && currentView === 'search' ? '' : 'opacity-70'}`} />
-                                                <span className="truncate pr-4 block w-full">{session.query}</span>
+                                                {!sidebarCollapsed && <span className="truncate pr-4 block w-full">{session.query}</span>}
                                             </button>
-                                            <button
-                                                onClick={(e) => deleteSearchSession(session.id, e)}
-                                                className="absolute right-1 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10"
-                                                title="Close Search"
-                                            >
-                                                <X className="w-2.5 h-2.5" />
-                                            </button>
+                                            {!sidebarCollapsed && (
+                                                <button
+                                                    onClick={(e) => deleteSearchSession(session.id, e)}
+                                                    className="absolute right-1 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10"
+                                                    title="Close Search"
+                                                >
+                                                    <X className="w-2.5 h-2.5" />
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -852,7 +862,10 @@ const App: React.FC = () => {
                                     <div className="flex items-center gap-2">
                                         {/* Push to Database Button */}
                                         <button
-                                            onClick={handleAdminPush}
+                                            onClick={() => {
+                                                handleAdminPush(issueImportantRefresh);
+                                                if (issueImportantRefresh) setIssueImportantRefresh(false);
+                                            }}
                                             disabled={(!isDirty && syncStatus === 'idle') || syncStatus === 'pushing'}
                                             className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all border shadow-sm ${syncStatus === 'pushing'
                                                 ? 'bg-theme-10 text-theme border-theme-20 cursor-wait'
@@ -886,6 +899,15 @@ const App: React.FC = () => {
                                                 <><UploadCloud className="w-3.5 h-3.5" /> Push to Database</>
                                             )}
                                         </button>
+                                        <label className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-amber-200 bg-amber-50 text-[10px] font-bold text-amber-700">
+                                            <input
+                                                type="checkbox"
+                                                checked={issueImportantRefresh}
+                                                onChange={(e) => setIssueImportantRefresh(e.target.checked)}
+                                                className="w-3 h-3 accent-amber-600"
+                                            />
+                                            Reset Token
+                                        </label>
                                         {/* Admin Mode Pill */}
                                         <button
                                             onClick={() => {
@@ -1417,6 +1439,7 @@ const App: React.FC = () => {
                         <SalesImportModal
                             products={products}
                             pricingRules={pricingRules}
+                            salesHistory={salesHistory}
                             learnedAliases={learnedAliases}
                             onClose={() => setIsSalesImportModalOpen(false)}
                             onResetData={handleResetSalesData}

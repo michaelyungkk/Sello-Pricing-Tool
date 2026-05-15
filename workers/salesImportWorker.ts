@@ -493,6 +493,7 @@ const processRows = (
                 logisticPartner: bucket.logisticPartner,
                 logisticService: bucket.logisticService,
                 adsSpend: Number(bucket.totalAds.toFixed(4)),
+                rawAdsSpend: Number(bucket.totalAds.toFixed(4)),
                 realPostage: Number(bucket.totalPostage.toFixed(4)),
                 realExtraFreight: Number(bucket.totalExtraFreight.toFixed(4)),
                 cogs: Number(bucket.totalCogs.toFixed(4)),

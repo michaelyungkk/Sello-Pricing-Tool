@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-07T02:04:59.871Z",
+  "generatedAt": "2026-05-15T01:17:57.369Z",
   "items": [
+    {
+      "id": "eabccbbd9312",
+      "date": "2026-05-07T12:04:39+10:00",
+      "summary": "Add commit message generation guidance"
+    },
     {
       "id": "a385f8792361",
       "date": "2026-05-06T13:33:44+10:00",
@@ -95,11 +100,6 @@
       "id": "80894a086533",
       "date": "2026-04-27T16:06:02+10:00",
       "summary": "Refine velocity alerts and returns import parsing"
-    },
-    {
-      "id": "cd7a9f40d5ae",
-      "date": "2026-04-24T07:28:15Z",
-      "summary": "chore: update release notes feed [skip ci]"
     }
   ]
 }

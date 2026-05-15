@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Product, PriceLog, RefundLog, PricingRules } from '../../types';
 import { getReportLayouts, saveReportLayout, ReportLayout } from '../../services/persistenceService';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne } from '../../services/dateUtils';
-import { calcRevenue, calcAdSpend, calcUnits, calcNetProfitFact } from '../../services/metrics';
+import { aggregateTransactionLedger } from '../../services/metrics';
 import {
     Layout,
     Plus,
@@ -94,6 +94,7 @@ const GRADE_LABELS: Record<number, string> = { 1: 'G1', 2: 'G2', 3: 'G3', 4: 'G4
 
 const METRICS = [
     { id: 'revenue', label: 'Revenue', icon: BarChart3, type: 'currency' },
+    { id: 'cogs', label: 'COGS', icon: BarChart3, type: 'currency' },
     { id: 'profit', label: 'Profit', icon: BarChart3, type: 'currency' },
     { id: 'units', label: 'Units', icon: BarChart3, type: 'number' },
     { id: 'margin', label: 'Margin %', icon: BarChart3, type: 'percent' },
@@ -176,6 +177,37 @@ interface CustomMetric {
     shareMetricTime?: string;
     type: 'currency' | 'percent' | 'number';
 }
+
+const PLATFORM_COMPARISON_PRESET: ReportLayout = {
+    id: 'preset-platform-comparison',
+    name: 'Platform Comparison',
+    rowDims: ['sku'],
+    colDims: ['platform'],
+    metrics: [
+        { id: 'pc_units_30d', metricId: 'units', timeRange: '30d' },
+        { id: 'pc_units_share_30d', metricId: 'pc_units_share', timeRange: '30d' },
+        { id: 'pc_margin_30d', metricId: 'margin', timeRange: '30d' },
+        { id: 'pc_asp_30d', metricId: 'asp', timeRange: '30d' },
+        { id: 'pc_revenue_30d', metricId: 'revenue', timeRange: '30d' },
+        { id: 'pc_profit_30d', metricId: 'profit', timeRange: '30d' },
+    ],
+    filters: [],
+    customMetrics: [
+        {
+            id: 'pc_units_share',
+            label: 'Share %',
+            formulaType: 'share_of_total',
+            metricA: 'pc_units_30d',
+            operator: '/',
+            shareMetric: 'pc_units_30d',
+            type: 'percent',
+        }
+    ],
+    sortRules: [{ key: 'total_pc_units_30d', dir: 'desc' }],
+    updatedAt: '2026-05-08T00:00:00.000Z',
+} as unknown as ReportLayout;
+
+const BUILT_IN_REPORT_PRESETS: ReportLayout[] = [PLATFORM_COMPARISON_PRESET];
 
 // --- CUSTOM METRIC MODAL ---
 interface CustomMetricModalProps {
@@ -659,6 +691,12 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
         setPresetLayouts(customReportPresets || []);
     }, [customReportPresets]);
 
+    const availablePresetLayouts = useMemo(() => {
+        const builtInIds = new Set(BUILT_IN_REPORT_PRESETS.map(layout => layout.id));
+        const userPresets = (presetLayouts || []).filter(layout => !builtInIds.has(layout.id));
+        return [...BUILT_IN_REPORT_PRESETS, ...userPresets];
+    }, [presetLayouts]);
+
 
 
     // Auto-generate report when changes occur and report already exists
@@ -736,16 +774,24 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
         setPendingFilters(prev => [...prev, newFilter]);
     };
 
+    const isPreAggregationFilter = (filter: FilterRule): boolean => {
+        if (filter.type !== 'dim') return false;
+        if (filter.field === 'grade') return false;
+        if (colDims.includes(filter.field)) return true;
+        return !rowDims.includes(filter.field);
+    };
+
+    const getPreAggregationFilterSignature = (filterList: FilterRule[]): string => (
+        JSON.stringify(filterList.filter(isPreAggregationFilter))
+    );
+
     const applyFilters = () => {
         const newFilters = [...pendingFilters];
         const prevFilters = filtersRef.current;
         filtersRef.current = newFilters;
         setFilters(newFilters);
         setShowBuilder(false);
-        // Re-generate if dim filters changed in any way (added, removed, or value changed)
-        const prevHasDim = prevFilters.some(f => f.type === 'dim');
-        const newHasDim = newFilters.some(f => f.type === 'dim');
-        if (prevHasDim || newHasDim) {
+        if (getPreAggregationFilterSignature(prevFilters) !== getPreAggregationFilterSignature(newFilters)) {
             setTimeout(() => generateReport(undefined, undefined, newFilters), 0);
         }
     };
@@ -773,9 +819,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
         const prevFilters = filtersRef.current;
         filtersRef.current = updated;
         setFilters(updated);
-        const prevHasDim = prevFilters.some(f => f.type === 'dim');
-        const newHasDim = updated.some(f => f.type === 'dim');
-        if (prevHasDim || newHasDim) {
+        if (getPreAggregationFilterSignature(prevFilters) !== getPreAggregationFilterSignature(updated)) {
             setTimeout(() => generateReport(undefined, undefined, updated), 0);
         }
     };
@@ -990,7 +1034,11 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
             const rowMap = new Map<string, any>();
             const colValueSets = effectiveColDims.map(() => new Set<string>());
 
-            const dimFilters = effectiveFilters.filter(f => f.type === 'dim');
+            const dimFilters = effectiveFilters.filter(f => (
+                f.type === 'dim'
+                && f.field !== 'grade'
+                && (effectiveColDims.includes(f.field) || !effectiveRowDims.includes(f.field))
+            ));
 
             // Helper to process a record (Sale or Refund)
             const processRecord = (item: any, type: 'SALE' | 'REFUND') => {
@@ -1116,24 +1164,26 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                         return (!startKey || isDateKeyBetween(dk, startKey, endKey));
                     });
 
-                    const sales = filtered.filter(l => l._type === 'SALE');
-                    const refunds = filtered.filter(l => l._type === 'REFUND');
-
-                    const units = sales.reduce((sum, l) => sum + calcUnits(l), 0);
-                    const rev = sales.reduce((sum, l) => sum + calcRevenue(l), 0);
-                    const prof = sales.reduce((sum, l) => sum + calcNetProfitFact(l), 0);
-                    const ads = sales.reduce((sum, l) => sum + calcAdSpend(l), 0);
-
-                    const refundQty = refunds.reduce((sum, l) => sum + (l.quantity || 0), 0);
-                    const refundVal = refunds.reduce((sum, l) => sum + (l.amount || 0), 0);
+                    const ledger = aggregateTransactionLedger({
+                        priceLogs: filtered.filter(l => l._type === 'SALE'),
+                        refundLogs: filtered.filter(l => l._type === 'REFUND'),
+                        deductRefunds: true
+                    });
+                    const units = ledger.totals.units;
+                    const rev = ledger.totals.revenue;
+                    const prof = ledger.totals.netProfit;
+                    const ads = ledger.totals.adjustedAdSpend;
+                    const refundQty = ledger.totals.refundUnits;
+                    const refundVal = ledger.totals.refundImpact;
 
                     const getBaseValue = (mId: string): number => {
                         switch (mId) {
                             case 'units': return units;
                             case 'revenue': return rev;
+                            case 'cogs': return filtered.filter(l => l._type === 'SALE').reduce((sum, l) => sum + (Number(l.cogs) || 0), 0);
                             case 'profit': return prof;
                             case 'ad_spend': return ads;
-                            case 'margin': return rev > 0 ? (prof / rev) * 100 : 0;
+                            case 'margin': return ledger.totals.margin ?? 0;
                             case 'tacos': return rev > 0 ? (ads / rev) * 100 : 0;
                             case 'asp': return units > 0 ? rev / units : 0;
                             case 'roi': {
@@ -1215,21 +1265,25 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                             const dk = asDateKey(l.date) || '';
                             return isDateKeyBetween(dk, prevStartKey, prevEndKey);
                         });
-                        const prevSales = prevFiltered.filter(l => l._type === 'SALE');
-                        const prevRefunds = prevFiltered.filter(l => l._type === 'REFUND');
-                        const prevUnits = prevSales.reduce((s, l) => s + calcUnits(l), 0);
-                        const prevRev   = prevSales.reduce((s, l) => s + calcRevenue(l), 0);
-                        const prevProf  = prevSales.reduce((s, l) => s + calcNetProfitFact(l), 0);
-                        const prevAds   = prevSales.reduce((s, l) => s + calcAdSpend(l), 0);
-                        const prevRefundQty = prevRefunds.reduce((s, l) => s + (l.quantity || 0), 0);
-                        const prevRefundVal = prevRefunds.reduce((s, l) => s + (l.amount || 0), 0);
+                        const prevLedger = aggregateTransactionLedger({
+                            priceLogs: prevFiltered.filter(l => l._type === 'SALE'),
+                            refundLogs: prevFiltered.filter(l => l._type === 'REFUND'),
+                            deductRefunds: true
+                        });
+                        const prevUnits = prevLedger.totals.units;
+                        const prevRev = prevLedger.totals.revenue;
+                        const prevProf = prevLedger.totals.netProfit;
+                        const prevAds = prevLedger.totals.adjustedAdSpend;
+                        const prevRefundQty = prevLedger.totals.refundUnits;
+                        const prevRefundVal = prevLedger.totals.refundImpact;
                         const getPrevBase = (mId: string): number => {
                             switch (mId) {
                                 case 'units':       return prevUnits;
                                 case 'revenue':     return prevRev;
+                                case 'cogs':        return prevFiltered.filter(l => l._type === 'SALE').reduce((sum, l) => sum + (Number(l.cogs) || 0), 0);
                                 case 'profit':      return prevProf;
                                 case 'ad_spend':    return prevAds;
-                                case 'margin':      return prevRev > 0 ? (prevProf / prevRev) * 100 : 0;
+                                case 'margin':      return prevLedger.totals.margin ?? 0;
                                 case 'tacos':       return prevRev > 0 ? (prevAds / prevRev) * 100 : 0;
                                 case 'asp':         return prevUnits > 0 ? prevRev / prevUnits : 0;
                                 case 'roi':         { const cogs = prevRev - prevProf; return cogs > 0 ? (prevProf / cogs) * 100 : 0; }
@@ -1306,6 +1360,12 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                             const gradeStr = g != null ? (GRADE_LABELS[g] || `G${g}`) : 'No Grade';
                             const selected = Array.isArray(f.value) ? f.value : [f.value as string];
                             return selected.length === 0 || selected.includes(gradeStr);
+                        }
+                        const dimIdx = reportResult.rowHeaders.indexOf(f.field);
+                        if (dimIdx >= 0) {
+                            const val = row.rowKeyParts?.[dimIdx] ?? '';
+                            const selected = Array.isArray(f.value) ? f.value : [f.value as string];
+                            return selected.length === 0 || selected.includes(String(val));
                         }
                         return true;
                     }
@@ -1406,7 +1466,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
         const max = metricMaxValues[metricId];
         if (!max || max === 0 || absVal === 0) return undefined;
         const pct = Math.min(100, (absVal / max) * 100);
-        const barColor = ['revenue','ad_spend','asp'].includes(metricId)
+        const barColor = ['revenue','cogs','ad_spend','asp'].includes(metricId)
             ? 'rgba(147,197,253,0.35)'
             : ['profit','margin','roi'].includes(metricId)
                 ? 'rgba(110,231,183,0.35)'
@@ -1690,7 +1750,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
         // Colour per metric matches the on-screen table: blue=revenue/asp/ad_spend,
         // green=profit/margin/roi, red=refund_rate/refund_value, none=everything else
         const getMetricColor = (metricId: string): string | null => {
-            if (['revenue', 'ad_spend', 'asp'].includes(metricId)) return 'DBEAFE';        // blue-100
+        if (['revenue', 'cogs', 'ad_spend', 'asp'].includes(metricId)) return 'DBEAFE';        // blue-100
             if (['profit', 'margin', 'roi'].includes(metricId)) return 'D1FAE5';           // green-100
             if (['refund_rate', 'refund_value'].includes(metricId)) return 'FEE2E2';       // red-100
             return null;
@@ -1698,7 +1758,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
 
         // Header row colours (slightly darker shade for headers)
         const getHeaderColor = (metricId: string): string | null => {
-            if (['revenue', 'ad_spend', 'asp'].includes(metricId)) return 'BFDBFE';        // blue-200
+        if (['revenue', 'cogs', 'ad_spend', 'asp'].includes(metricId)) return 'BFDBFE';        // blue-200
             if (['profit', 'margin', 'roi'].includes(metricId)) return 'A7F3D0';           // green-200
             if (['refund_rate', 'refund_value'].includes(metricId)) return 'FECACA';       // red-200
             return null;
@@ -1793,23 +1853,23 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                         {/* Load template */}
-                        {(savedLayouts.length > 0 || presetLayouts.length > 0) && (
+                        {(savedLayouts.length > 0 || availablePresetLayouts.length > 0) && (
                             <div className="relative group">
                                 <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-all" style={{borderColor:'rgba(209,213,219,0.8)'}}>
                                     <FolderOpen className="w-3.5 h-3.5" /> Load
                                 </button>
                                 <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-gray-100 rounded-lg shadow-xl z-[9999] p-2 opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all">
-                                    {presetLayouts.length > 0 && (
+                                    {availablePresetLayouts.length > 0 && (
                                         <>
                                             <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Preset Templates</div>
-                                            {presetLayouts.map(layout => (
+                                            {availablePresetLayouts.map(layout => (
                                                 <button key={`preset-${layout.id}`} onClick={() => handleLoadLayout(layout)} className="w-full text-left px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded truncate">{layout.name}</button>
                                             ))}
                                         </>
                                     )}
                                     {savedLayouts.length > 0 && (
                                         <>
-                                            {presetLayouts.length > 0 && <div className="my-1 border-t border-gray-100" />}
+                                            {availablePresetLayouts.length > 0 && <div className="my-1 border-t border-gray-100" />}
                                             <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">My Templates</div>
                                             {savedLayouts.map(layout => (
                                                 <button key={`local-${layout.id}`} onClick={() => handleLoadLayout(layout)} className="w-full text-left px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded truncate">{layout.name}</button>
@@ -2008,7 +2068,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                             {METRICS.map(metric => {
                                 const inUse = pendingMetrics.some(m => m.metricId === metric.id);
                                 const isRed = ['refund_rate','refund_value'].includes(metric.id);
-                                const isGreen = ['revenue','profit','margin','roi'].includes(metric.id);
+                    const isGreen = ['revenue','cogs','profit','margin','roi'].includes(metric.id);
                                 return (
                                     <div
                                         key={metric.id}
@@ -2436,7 +2496,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                             <thead className="sticky top-0 z-20">
                                 <tr>
                                     {reportResult.rowHeaders.map((rh, idx) => (
-                                        <th key={rh} rowSpan={2} className="pin truncate" style={{ left: idx === 0 ? 0 : 220 + (idx - 1) * 160, width: idx === 0 ? 220 : 160, minWidth: idx === 0 ? 220 : 160, maxWidth: idx === 0 ? 220 : 160, cursor: 'pointer' }}
+                                        <th key={rh} rowSpan={2} className="pin truncate" style={{ left: idx === 0 ? 0 : 220 + (idx - 1) * 160, width: idx === 0 ? 220 : 160, minWidth: idx === 0 ? 220 : 160, maxWidth: idx === 0 ? 220 : 160, cursor: 'pointer', background: 'rgba(248,250,252,0.98)' }}
                                             onClick={() => handleSort(rh)}
                                         >
                                             <div className="flex items-center justify-between w-full">
@@ -2509,7 +2569,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                 <tr>
                                     {orderedColHeaders.map((ch: any, chIdx: number) => (
                                         metrics.map((m, mIdx) => {
-                                            const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
+                                    const colClass = m.metricId === 'revenue' || m.metricId === 'cogs' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
                                                 : m.metricId === 'profit' || m.metricId === 'margin' || m.metricId === 'roi' ? 'cg'
                                                 : m.metricId === 'refund_rate' || m.metricId === 'refund_value' ? 'cr'
                                                 : '';
@@ -2537,7 +2597,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                         })
                                     ))}
                                     {orderedColHeaders.length > 1 && metrics.map((m, mIdx) => {
-                                        const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
+                                const colClass = m.metricId === 'revenue' || m.metricId === 'cogs' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
                                             : m.metricId === 'profit' || m.metricId === 'margin' || m.metricId === 'roi' ? 'cg'
                                             : m.metricId === 'refund_rate' || m.metricId === 'refund_value' ? 'cr'
                                             : '';
@@ -2580,7 +2640,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
 
                                             if (dim === 'sku' && meta) {
                                                 return (
-                                                    <td key={pIdx} className="pin whitespace-nowrap" style={{ left: pIdx === 0 ? 0 : 220 + (pIdx - 1) * 160, width: pIdx === 0 ? 220 : 160, minWidth: pIdx === 0 ? 220 : 160, maxWidth: pIdx === 0 ? 220 : 160 }}>
+                                                    <td key={pIdx} className="pin whitespace-nowrap" style={{ left: pIdx === 0 ? 0 : 220 + (pIdx - 1) * 160, width: pIdx === 0 ? 220 : 160, minWidth: pIdx === 0 ? 220 : 160, maxWidth: pIdx === 0 ? 220 : 160, background: 'rgba(255,255,255,0.98)' }}>
                                                         <div className="flex items-center gap-2 truncate">
                                                             <span className="font-bold text-gray-900 font-mono text-xs truncate">{meta.sku}</span>
                                                             <GradeBadge gradeLevel={meta.gradeLevel} />
@@ -2591,7 +2651,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                             }
 
                                             return (
-                                                <td key={pIdx} className="pin text-xs font-bold text-gray-900 whitespace-nowrap truncate" style={{ left: pIdx === 0 ? 0 : 220 + (pIdx - 1) * 160, width: pIdx === 0 ? 220 : 160, minWidth: pIdx === 0 ? 220 : 160, maxWidth: pIdx === 0 ? 220 : 160 }}>
+                                                <td key={pIdx} className="pin text-xs font-bold text-gray-900 whitespace-nowrap truncate" style={{ left: pIdx === 0 ? 0 : 220 + (pIdx - 1) * 160, width: pIdx === 0 ? 220 : 160, minWidth: pIdx === 0 ? 220 : 160, maxWidth: pIdx === 0 ? 220 : 160, background: 'rgba(255,255,255,0.98)' }}>
                                                     {part}
                                                 </td>
                                             );
@@ -2600,7 +2660,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                             metrics.map((m, mIdx) => {
                                                 const val = row[`${ch.id}_${m.id}`];
                                                 const mConfig = getMetricConfig(m.metricId);
-                                                const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
+                                    const colClass = m.metricId === 'revenue' || m.metricId === 'cogs' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
                                                     : m.metricId === 'profit' || m.metricId === 'margin' || m.metricId === 'roi' ? 'cg'
                                                     : m.metricId === 'refund_rate' || m.metricId === 'refund_value' ? 'cr'
                                                     : '';
@@ -2627,7 +2687,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                         {orderedColHeaders.length > 1 && metrics.map((m, mIdx) => {
                                             const val = row[`total_${m.id}`];
                                             const mConfig = getMetricConfig(m.metricId);
-                                            const colClass = m.metricId === 'revenue' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
+                                const colClass = m.metricId === 'revenue' || m.metricId === 'cogs' || m.metricId === 'ad_spend' || m.metricId === 'asp' ? 'cb'
                                                 : m.metricId === 'profit' || m.metricId === 'margin' || m.metricId === 'roi' ? 'cg'
                                                 : m.metricId === 'refund_rate' || m.metricId === 'refund_value' ? 'cr'
                                                 : '';
@@ -2666,7 +2726,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                                 left: pIdx === 0 ? 0 : 220 + (pIdx - 1) * 160,
                                                 width: pIdx === 0 ? 220 : 160, minWidth: pIdx === 0 ? 220 : 160, maxWidth: pIdx === 0 ? 220 : 160,
                                                 fontWeight: 800, color: 'var(--theme)', fontSize: 11,
-                                                background: 'rgba(var(--theme-rgb), 0.04)',
+                                                background: 'rgba(248,250,252,0.98)',
                                                 backdropFilter: 'blur(8px)',
                                             }}>
                                                 {pIdx === 0 ? 'Grand Total' : ''}
@@ -2677,7 +2737,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                                 const key = `${ch.id}_${m.id}`;
                                                 const val = grandTotalRow[key];
                                                 const mConfig = getMetricConfig(m.metricId);
-                                                const colClass = ['revenue','ad_spend','asp'].includes(m.metricId) ? 'cb'
+                                    const colClass = ['revenue','cogs','ad_spend','asp'].includes(m.metricId) ? 'cb'
                                                     : ['profit','margin','roi'].includes(m.metricId) ? 'cg'
                                                     : ['refund_rate','refund_value'].includes(m.metricId) ? 'cr' : '';
                                                 const formatted = val === undefined ? '—'
@@ -2699,7 +2759,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
                                             const key = `total_${m.id}`;
                                             const val = grandTotalRow[key];
                                             const mConfig = getMetricConfig(m.metricId);
-                                            const colClass = ['revenue','ad_spend','asp'].includes(m.metricId) ? 'cb'
+                                const colClass = ['revenue','cogs','ad_spend','asp'].includes(m.metricId) ? 'cb'
                                                 : ['profit','margin','roi'].includes(m.metricId) ? 'cg'
                                                 : ['refund_rate','refund_value'].includes(m.metricId) ? 'cr' : '';
                                             const formatted = val === undefined ? '—'

@@ -1,35 +1,28 @@
-
 import React, { useState, useRef } from 'react';
 import { formatSmartMoney } from '../../../utils/format';
-import { Upload, X, Check, AlertCircle, Loader2, RotateCcw, Info, Link as LinkIcon, FileQuestion, Filter, Trash2, FileText, MessageSquare } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { X, Check, AlertCircle, Loader2, RotateCcw, Info, Link as LinkIcon, FileQuestion, Filter, Trash2, FileText, MessageSquare } from 'lucide-react';
 import { RefundLog } from '../../../types';
-import { VAT_MULTIPLIER } from '../../../constants';
-import { asDateKeyNaive } from '../../../services/dateUtils';
-import { getCanonicalSku } from '../../../services/skuNormalization';
 
 interface ReturnsUploadModalProps {
     onClose: () => void;
-    onConfirm: (refunds: RefundLog[]) => void;
+    onConfirm: (refunds: RefundLog[]) => Promise<void>;
     onReset?: () => void;
-    existingOrders?: Map<string, string>; // OrderID -> Platform
+    existingOrders?: Map<string, string>;
 }
 
 const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConfirm, onReset, existingOrders }) => {
     const [dragActive, setDragActive] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    // File states
     const [detailsFile, setDetailsFile] = useState<File | null>(null);
     const [commentsFile, setCommentsFile] = useState<File | null>(null);
-
     const [parsedRefunds, setParsedRefunds] = useState<RefundLog[] | null>(null);
     const [stats, setStats] = useState({ count: 0, totalValue: 0, matchedOrders: 0, orphans: 0 });
     const [debugInfo, setDebugInfo] = useState<{ unmatchedSamples: string[], dbSamples: string[], mappedColumn: string }>({ unmatchedSamples: [], dbSamples: [], mappedColumn: '' });
-
+    const [processingText, setProcessingText] = useState('Processing files...');
     const [importStrategy, setImportStrategy] = useState<'ALL' | 'MATCHED_ONLY'>('ALL');
     const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
 
     const detailsInputRef = useRef<HTMLInputElement>(null);
     const commentsInputRef = useRef<HTMLInputElement>(null);
@@ -37,11 +30,8 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
     const handleDrag = (e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        if (e.type === "dragenter" || e.type === "dragover") {
-            setDragActive(true);
-        } else if (e.type === "dragleave") {
-            setDragActive(false);
-        }
+        if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+        else if (e.type === 'dragleave') setDragActive(false);
     };
 
     const handleDrop = (e: React.DragEvent) => {
@@ -49,43 +39,27 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
         e.stopPropagation();
         setDragActive(false);
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            // For drop, we default to details if empty
             if (!detailsFile) setDetailsFile(e.dataTransfer.files[0]);
             else if (!commentsFile) setCommentsFile(e.dataTransfer.files[0]);
         }
     };
 
-    const parseRefundQty = (rawQty: unknown): number => {
-        if (rawQty === undefined || rawQty === null) return 1;
-        // Some ERP exports/coercions can surface qty as Date objects when cellDates is enabled.
-        if (rawQty instanceof Date) return 1;
-        const text = String(rawQty).trim();
-        if (!text) return 1;
-        const parsed = Number(text);
-        if (!Number.isFinite(parsed)) return 1;
-        return parsed > 0 ? parsed : 1;
-    };
-
-    const readExcel = (file: File): Promise<any[]> => {
+    const readFilePayload = (file: File): Promise<{ fileName: string; fileBuffer?: ArrayBuffer; fileText?: string }> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
                     const data = e.target?.result;
                     if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-                        // Keep raw scalar values for import parsing (avoid Date coercion on qty-like columns).
-                        const workbook = XLSX.read(data, { type: 'array', cellDates: false });
-                        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                        resolve(XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[]);
+                        resolve({ fileName: file.name, fileBuffer: data as ArrayBuffer });
                     } else {
-                        const text = data as string;
-                        resolve(text.split('\n').map(l => l.split(',')));
+                        resolve({ fileName: file.name, fileText: data as string });
                     }
                 } catch (err) {
                     reject(err);
                 }
             };
-            if (file.name.endsWith('.xlsx')) reader.readAsArrayBuffer(file);
+            if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) reader.readAsArrayBuffer(file);
             else reader.readAsText(file);
         });
     };
@@ -93,220 +67,86 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
     const processFiles = async () => {
         setIsProcessing(true);
         setError(null);
+        setProcessingText('Reading refund files...');
 
+        let worker: Worker | null = null;
         try {
-            if (!detailsFile || !commentsFile) throw new Error("Both files required for import");
-            const detailsRows = await readExcel(detailsFile);
-            const commentsRows = await readExcel(commentsFile);
-            analyzeV2Rows(detailsRows, commentsRows);
-        } catch (err: any) {
-            setError(err.message || "Failed to process files");
-            setIsProcessing(false);
-        }
-    };
+            if (!detailsFile || !commentsFile) throw new Error('Both files required for import');
 
-    // Helper to generate a deterministic ID based on row content
-    const generateRefundId = (sku: string, date: string, amount: number, qty: number, reason: string | undefined, orderId: string) => {
-        const safeReason = (reason || 'unknown').trim().toLowerCase().substring(0, 20);
-        const signature = `${sku.trim().toUpperCase()}|${orderId}|${date}|${amount.toFixed(2)}|${qty}|${safeReason}`;
+            const detailsPayload = await readFilePayload(detailsFile);
+            const commentsPayload = await readFilePayload(commentsFile);
 
-        let hash = 0;
-        for (let i = 0; i < signature.length; i++) {
-            const char = signature.charCodeAt(i);
-            hash = (hash << 5) - hash + char;
-            hash |= 0;
-        }
-        return `ref-${Math.abs(hash).toString(36)}`;
-    };
+            worker = new Worker(
+                new URL('../../../workers/refundImportWorker.ts', import.meta.url),
+                { type: 'module' }
+            );
 
-    const findColPriority = (headers: string[], terms: string[]) => {
-        for (const term of terms) {
-            const idx = headers.findIndex(h => h === term || h.includes(term));
-            if (idx !== -1) return idx;
-        }
-        return -1;
-    };
-
-    const analyzeV2Rows = (detailsRows: any[][], commentsRows: any[][]) => {
-        // 1. Map Comments by Order ID
-        const commentMap = new Map<string, { cn: string, en: string }>();
-        if (commentsRows.length > 1) {
-            const cHeaders = commentsRows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-/]/g, ''));
-            const cOrderIdx = findColPriority(cHeaders, ['outerorderid', 'orderid']);
-            const cnIdx = findColPriority(cHeaders, ['commentcn', 'chinesememo']);
-            const enIdx = findColPriority(cHeaders, ['commenten', 'englishmemo']);
-
-            if (cOrderIdx !== -1) {
-                for (let i = 1; i < commentsRows.length; i++) {
-                    const row = commentsRows[i];
-                    const oid = String(row[cOrderIdx] || '').trim();
-                    if (oid) {
-                        commentMap.set(oid, {
-                            cn: cnIdx !== -1 ? String(row[cnIdx] || '') : '',
-                            en: enIdx !== -1 ? String(row[enIdx] || '') : ''
-                        });
+            const result = await new Promise<{
+                refunds: RefundLog[];
+                stats: { count: number; totalValue: number; matchedOrders: number; orphans: number };
+                debugInfo: { unmatchedSamples: string[]; dbSamples: string[]; mappedColumn: string };
+            }>((resolve, reject) => {
+                if (!worker) {
+                    reject(new Error('Refund import worker failed to initialize.'));
+                    return;
+                }
+                worker.onmessage = (message) => {
+                    const payload = message.data;
+                    if (payload?.type === 'progress') {
+                        setProcessingText(payload.message || 'Processing refund files...');
+                        return;
                     }
-                }
-            }
-        }
-
-        // 2. Parse Details
-        if (detailsRows.length < 2) throw new Error("Details file empty");
-        const dHeaders = detailsRows[0].map(h => String(h).trim().toLowerCase().replace(/[\s_\-/]/g, ''));
-
-        const skuIdx = findColPriority(dHeaders, ['skucode', 'sku']);
-        const orderIdx = findColPriority(dHeaders, ['outerorderid', 'orderid']);
-        const amtIdx = findColPriority(dHeaders, ['returnamt', 'amount']);
-        const qtyIdx = findColPriority(dHeaders, ['returnqty', 'qty']);
-        const typeIdx = findColPriority(dHeaders, ['ordertype', 'type']);
-
-        // Look for reason detail first, then fallback to general reason
-        let reasonIdx = findColPriority(dHeaders, ['returnreasondetail', 'return_reason_detail']);
-        if (reasonIdx === -1) reasonIdx = findColPriority(dHeaders, ['returnreason', 'reason']);
-
-        // Update date columns to include order date and payment date candidates
-        const dateIdx = findColPriority(dHeaders, ['ordertime', 'time', 'orderdate', 'date', 'refundtime', 'refund_time']);
-        const platformIdx  = findColPriority(dHeaders, ['platformnamelevel1', 'platformname', 'platform']);
-        const platform2Idx = findColPriority(dHeaders, ['platformnamelevel2']);
-
-        const missingCols: string[] = [];
-        if (skuIdx === -1) missingCols.push("SKU (sku_code)");
-        if (orderIdx === -1) missingCols.push("Order ID (outer_order_id)");
-        if (amtIdx === -1) missingCols.push("Refund Amount (return_amt)");
-
-        if (missingCols.length > 0) {
-            throw new Error(`Missing required columns in Details file: ${missingCols.join(', ')}`);
-        }
-
-        // Group by Order ID to handle Freight aggregation
-        const orderGroups = new Map<string, { freight: number, items: any[] }>();
-
-        for (let i = 1; i < detailsRows.length; i++) {
-            const row = detailsRows[i];
-            const oid = String(row[orderIdx] || '').trim();
-            if (!oid) continue;
-
-            if (!orderGroups.has(oid)) orderGroups.set(oid, { freight: 0, items: [] });
-            const group = orderGroups.get(oid)!;
-
-            const rawSku = String(row[skuIdx] || '').trim();
-            const amt = parseFloat(String(row[amtIdx])) || 0; // V2 is Ex-VAT already
-
-            if (rawSku.toLowerCase() === 'freight') {
-                group.freight += amt;
-            } else {
-                const sku = getCanonicalSku(rawSku);
-                group.items.push({ row, sku, amt, rawSku });
-            }
-        }
-
-        const refunds: RefundLog[] = [];
-        let totalValue = 0;
-        let matchedOrders = 0;
-        let orphans = 0;
-        const unmatchedSamples: string[] = [];
-
-        orderGroups.forEach((group, oid) => {
-            // ERP now exports correct qty/amt per SKU line (fixed Mar 2026)
-            // No resend correction needed — each line already has its own qty and cost
-            const totalItemVal = group.items.reduce((sum, it) => sum + it.amt, 0);
-
-            group.items.forEach(it => {
-                const { row, sku, rawSku } = it;
-                const amt = it.amt;
-
-                let qty = 1;
-                if (qtyIdx !== -1) {
-                    qty = parseRefundQty(row[qtyIdx]);
-                }
-
-                // Allocate freight proportionally by item value
-                const allocatedFreight = totalItemVal > 0
-                    ? (amt / totalItemVal) * group.freight
-                    : (group.freight / group.items.length);
-
-                const oType = typeIdx !== -1 ? String(row[typeIdx]).toLowerCase() : 'refund';
-                const reason = reasonIdx !== -1 ? String(row[reasonIdx]) : undefined;
-
-                // Date
-                let dateStr = new Date().toISOString();
-                const rawDate = (dateIdx !== -1) ? row[dateIdx] : undefined;
-                if (rawDate) {
-                    const dKey = asDateKeyNaive(rawDate);
-                    if (dKey) dateStr = new Date(dKey).toISOString();
-                }
-
-                // Platform Match — use level2 if available (e.g. "Amazon(UK) FBA" not "Amazon(UK)")
-                // Same logic as salesImportWorker: prefer level2, fall back to level1
-                let finalPlatform: string | undefined = undefined;
-                if (platformIdx !== -1 || platform2Idx !== -1) {
-                    const p1 = platformIdx  !== -1 ? String(row[platformIdx]  || '').trim() : '';
-                    const p2 = platform2Idx !== -1 ? String(row[platform2Idx] || '').trim() : '';
-                    if (p2 && p2 !== '-' && p2.toLowerCase() !== 'unknown') {
-                        if (p1 && !p2.toLowerCase().includes(p1.toLowerCase()) && p2.length < 5) {
-                            finalPlatform = `${p1} ${p2}`;
-                        } else {
-                            finalPlatform = p2;
-                        }
-                    } else if (p1) {
-                        finalPlatform = p1;
+                    if (payload?.type === 'success') {
+                        resolve(payload);
+                        return;
                     }
-                }
-                if (existingOrders && existingOrders.size > 0) {
-                    if (existingOrders.has(oid)) {
-                        matchedOrders++;
-                        finalPlatform = existingOrders.get(oid);
-                    } else {
-                        orphans++;
-                        if (unmatchedSamples.length < 10) unmatchedSamples.push(`${oid} (SKU: ${sku})`);
+                    if (payload?.type === 'error') {
+                        reject(new Error(payload.error || 'Failed to process refund files'));
                     }
-                }
-
-                const comments = commentMap.get(oid);
-                const uniqueId = generateRefundId(rawSku, dateStr, amt, qty, reason, oid);
-
-                let resendBase = undefined;
-                if (oType.includes('resend') || oid.toLowerCase().includes('-resend')) {
-                    // Strip ALL -resend suffixes (handles double-resend like W123-1M-V-resend-resend)
-                    let base = oid;
-                    while (/-resend$/i.test(base)) base = base.replace(/-resend$/i, '');
-                    resendBase = base;
-                }
-
-                refunds.push({
-                    id: uniqueId,
-                    sku,
-                    rawSku,
-                    date: dateStr,
-                    amount: amt, // Ex-VAT
-                    freightAmount: allocatedFreight, // Ex-VAT
-                    quantity: qty,
-                    platform: finalPlatform,
-                    reason: reason,
-                    orderId: oid,
-                    orderType: oType as any,
-                    resendBaseOrderId: resendBase,
-                    commentCn: comments?.cn,
-                    commentEn: comments?.en
-                });
-
-                totalValue += ((amt + allocatedFreight) * VAT_MULTIPLIER); // Display Total Inc-VAT
+                };
+                worker.onerror = (workerError) => reject(workerError);
+                const transferList: Transferable[] = [];
+                if (detailsPayload.fileBuffer) transferList.push(detailsPayload.fileBuffer);
+                if (commentsPayload.fileBuffer) transferList.push(commentsPayload.fileBuffer);
+                worker.postMessage({
+                    detailsFileName: detailsPayload.fileName,
+                    detailsBuffer: detailsPayload.fileBuffer,
+                    detailsText: detailsPayload.fileText,
+                    commentsFileName: commentsPayload.fileName,
+                    commentsBuffer: commentsPayload.fileBuffer,
+                    commentsText: commentsPayload.fileText,
+                    existingOrdersEntries: existingOrders ? Array.from(existingOrders.entries()) : []
+                }, transferList);
             });
-        });
 
-        setParsedRefunds(refunds);
-        setStats({ count: refunds.length, totalValue, matchedOrders, orphans });
-        setDebugInfo({ unmatchedSamples, dbSamples: [], mappedColumn: 'outer_order_id' });
-        setIsProcessing(false);
+            setParsedRefunds(result.refunds);
+            setStats(result.stats);
+            setDebugInfo(result.debugInfo);
+            setIsProcessing(false);
+        } catch (err: any) {
+            setError(err.message || 'Failed to process files');
+            setIsProcessing(false);
+        } finally {
+            if (worker) worker.terminate();
+        }
     };
 
-    const handleConfirm = () => {
+    const handleConfirm = async () => {
         if (!parsedRefunds) return;
         let finalData = parsedRefunds;
         if (importStrategy === 'MATCHED_ONLY' && existingOrders) {
             finalData = parsedRefunds.filter(r => r.orderId && existingOrders.has(r.orderId));
         }
-        onConfirm(finalData);
+        setIsImporting(true);
+        setError(null);
+        try {
+            await onConfirm(finalData);
+            onClose();
+        } catch (err: any) {
+            setError(err?.message || 'Failed to import refunds');
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     const recordsToImport = importStrategy === 'ALL' ? stats.count : stats.matchedOrders;
@@ -314,8 +154,6 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col relative overflow-hidden max-h-[90vh]">
-
-                {/* RESET CONFIRMATION OVERLAY */}
                 {isResetConfirmOpen && (
                     <div className="absolute inset-0 z-10 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                         <div className="bg-red-50 p-4 rounded-full mb-6">
@@ -335,9 +173,9 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-red-100 rounded-lg text-red-600"><RotateCcw className="w-5 h-5" /></div>
-                        <div><h2 className="text-xl font-bold text-gray-900">Import Refunds &amp; Returns</h2><p className="text-xs text-gray-500">Upload the &quot;Return Details&quot; and &quot;Comments&quot; files from ERP.</p></div>
+                        <div><h2 className="text-xl font-bold text-gray-900">Import Refunds &amp; Returns</h2><p className="text-xs text-gray-500">Upload the &quot;Return Details&quot; and &quot;Comments&quot; files from ERP. This import replaces existing refund records with the latest ERP snapshot.</p></div>
                     </div>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
+                    <button onClick={onClose} disabled={isImporting}><X className="w-5 h-5 text-gray-500 hover:text-gray-700 disabled:opacity-50" /></button>
                 </div>
 
                 <div className="p-6 overflow-y-auto">
@@ -345,7 +183,10 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                         <div className="space-y-6">
                             <div
                                 className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all ${dragActive ? 'border-theme bg-theme-10' : 'border-gray-300 hover:border-gray-400 bg-gray-50/50'}`}
-                                onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                                onDragEnter={handleDrag}
+                                onDragLeave={handleDrag}
+                                onDragOver={handleDrag}
+                                onDrop={handleDrop}
                             >
                                 <div className="space-y-4 w-full max-w-sm">
                                     <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20" onClick={() => detailsInputRef.current?.click()}>
@@ -377,7 +218,7 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                                 disabled={isProcessing || !detailsFile || !commentsFile}
                                 className="w-full py-3 bg-theme text-white font-medium rounded-xl shadow-md hover:bg-theme disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
-                                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Process Files'}
+                                {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" />{processingText}</> : 'Process Files'}
                             </button>
                         </div>
                     ) : (
@@ -442,6 +283,15 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                                 </div>
                             )}
 
+                            {error && <div className="p-3 bg-red-50 text-red-700 border border-red-100 rounded-lg text-xs flex items-center gap-2"><AlertCircle className="w-4 h-4" />{error}</div>}
+
+                            {isImporting && (
+                                <div className="p-3 bg-theme-10 text-theme border border-theme-20 rounded-lg text-xs flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Importing refunds and applying the snapshot...
+                                </div>
+                            )}
+
                             <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 text-xs text-blue-800 text-left">
                                 <Info className="w-4 h-4 inline mr-1 mb-0.5" />
                                 <strong>VAT Handling:</strong> Values are stored Ex-VAT to align with ERP data. Displayed values are VAT-Inclusive. Freight costs have been allocated to items.
@@ -459,10 +309,10 @@ const ReturnsUploadModal: React.FC<ReturnsUploadModalProps> = ({ onClose, onConf
                         )}
                     </div>
                     <div className="flex gap-3">
-                        <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
+                            <button onClick={onClose} disabled={isImporting} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
                         {parsedRefunds && parsedRefunds.length > 0 && (
-                            <button onClick={handleConfirm} className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors flex items-center gap-2">
-                                <Check className="w-4 h-4" /> Import {recordsToImport} Refunds
+                            <button onClick={handleConfirm} disabled={isImporting} className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {isImporting ? 'Importing Refunds...' : `Import ${recordsToImport} Refunds`}
                             </button>
                         )}
                     </div>

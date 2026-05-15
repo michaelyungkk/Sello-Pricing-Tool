@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Info, AlertTriangle, Package, RotateCcw, Megaphone, DollarSign, TrendingDown, TrendingUp, ExternalLink } from 'lucide-react';
 import { Product, PriceLog, PriceChangeRecord, RefundLog, ReturnDateBasis, PricingRules, OptimalPriceResult, PromotionEvent, NavigationIntent } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
-import { calcProfit, calcRevenue, calcAdSpend, calcNetProfitFact, marginPct, calcTACoSPct, calcUnits } from '../../services/metrics';
+import { calcProfit, calcRevenue, calcAdSpend, calcNetProfitFact, marginPct, calcTACoSPct, calcUnits, aggregateTransactionLedger } from '../../services/metrics';
 import { buildWindow } from '../../services/dateWindow';
 import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, getYesterdayKeyMelbourne, getReturnDateKey, addDaysToDateKey } from '../../services/dateUtils';
 import { VAT_MULTIPLIER } from '../../constants';
@@ -57,6 +57,13 @@ const getActiveSectionFromUrl = () => {
     return params.get('section');
 };
 
+const getStrictReturnDateKey = (row: RefundLog, basis: ReturnDateBasis, orderDateMap: Map<string, string>) => {
+    if (basis !== 'orderDate') return asDateKey(row.date);
+    if (!row.orderId) return null;
+    const lookupKey = row.resendBaseOrderId || row.orderId.replace(/-resend$/i, '');
+    return asDateKey(orderDateMap.get(lookupKey));
+};
+
 const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     data, themeColor, onBack, priceChangeHistory = [], initialTimeWindow, focus, thresholds, pricingRules,
     promotions = [], skuFamilies, products, adGroups, priceHistoryMap, optimalPriceResults, navigateToEntity
@@ -94,7 +101,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
     // Refund Table Sorting & Pagination
     const [refundSort, setRefundSort] = useState<SortState<string>>({ key: 'date', dir: 'desc' });
     const [refundPage, setRefundPage] = useState(1);
-    const refundItemsPerPage = 10;
+    const [refundItemsPerPage, setRefundItemsPerPage] = useState(10);
 
     // Return Date Basis Toggle
     const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
@@ -226,7 +233,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
             // Consistency Fix: profit must be scaled by VAT since transactions.profit from searchExecution is scaled.
             profit: -((Number(r.amount || 0) + Number(r.freightAmount || 0))),
             _type: 'REFUND_LOG',
-            _returnFilterDate: getReturnDateKey(r, returnDateBasis, orderDateMap) || asDateKey(r.date),
+            _returnFilterDate: getStrictReturnDateKey(r, returnDateBasis, orderDateMap),
             reason: r.reason
         } as unknown as PriceLog));
 
@@ -239,7 +246,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         // Date Filter
         list = list.filter(t => {
             const dKey = (t as any)._type === 'REFUND_LOG'
-                ? ((t as any)._returnFilterDate || asDateKey(t.date))
+                ? (t as any)._returnFilterDate
                 : asDateKey(t.date);
             return dKey && isDateKeyBetween(dKey, ledgerStartKey, ledgerEndKey);
         });
@@ -400,7 +407,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
 
     const paginatedRefunds = useMemo(() => {
         return filteredRefundsForTable.slice((refundPage - 1) * refundItemsPerPage, refundPage * refundItemsPerPage);
-    }, [filteredRefundsForTable, refundPage]);
+    }, [filteredRefundsForTable, refundPage, refundItemsPerPage]);
 
     const totalRefundPages = Math.ceil(filteredRefundsForTable.length / refundItemsPerPage);
 
@@ -698,134 +705,89 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
         return priceVolumeAnalysis.periodStats.filter(d => d.period === chartPeriod);
     }, [priceVolumeAnalysis, chartPeriod]);
 
-    const aggregatePlatformSubtotals = (list: any[]) => {
-        const subtotals: Record<string, {
-            platform: string;
-            soldQty: number;
-            rawAdSpend: number;
-            adjustedAdSpend: number;
-            revenue: number;
-            profit: number;
-        }> = {};
-        let totalRevenueAllPlatforms = 0;
-        list.forEach(tx => {
-            const platform = tx.platform || 'Unknown';
-            if (!subtotals[platform]) {
-                subtotals[platform] = { platform, soldQty: 0, rawAdSpend: 0, adjustedAdSpend: 0, revenue: 0, profit: 0 };
-            }
-            const group = subtotals[platform];
-            const isRefund = (tx as any)._type === 'REFUND_LOG' || tx.velocity < 0;
-            const isAdRow = tx.price === 0 && calcAdSpend(tx) > 0 && !isRefund;
-            if (!isRefund && !isAdRow) {
-                const txRevenue = calcRevenue(tx) * VAT_MULTIPLIER;
-                group.soldQty += calcUnits(tx);
-                group.revenue += txRevenue;
-                totalRevenueAllPlatforms += txRevenue;
-            }
-            const rawAd = (tx.rawAdsSpend ?? tx.adsSpend ?? 0) * VAT_MULTIPLIER;
-            const adjustedAd = calcAdSpend(tx) * VAT_MULTIPLIER;
-            group.rawAdSpend += rawAd;
-            group.adjustedAdSpend += adjustedAd;
-            const txProfitInc = calcNetProfitFact(tx) * VAT_MULTIPLIER;
-            group.profit += txProfitInc;
-        });
-        return Object.values(subtotals).map(group => ({
-            ...group,
-            adDelta: group.adjustedAdSpend - group.rawAdSpend,
-            margin: marginPct(group.profit, group.revenue),
-            revenueSharePct: totalRevenueAllPlatforms > 0 ? (group.revenue / totalRevenueAllPlatforms) * 100 : 0,
-        })).sort((a, b) => b.revenue - a.revenue);
-    };
+    const ledgerAggregation = useMemo(() => aggregateTransactionLedger({
+        priceLogs: transactions,
+        refundLogs: refunds,
+        startKey: ledgerStartKey,
+        endKey: ledgerEndKey,
+        returnDateBasis,
+        orderDateMap,
+        deductRefunds: true,
+        platformFilter: txFilterPlatform,
+        typeFilter: txFilterType as any,
+        postcodeArea: txPostcodeArea,
+        showRedistributedOnly
+    }), [transactions, refunds, ledgerStartKey, ledgerEndKey, returnDateBasis, orderDateMap, txFilterPlatform, txFilterType, txPostcodeArea, showRedistributedOnly]);
 
-    const platformSubtotals = useMemo(() => aggregatePlatformSubtotals(filteredTransactions), [filteredTransactions]);
+    const toPlatformSubtotal = (row: ReturnType<typeof aggregateTransactionLedger>['platforms'][number]) => ({
+        ...row,
+        soldQty: row.units,
+        profit: row.netProfit,
+        margin: row.margin
+    });
+
+    const platformSubtotals = useMemo(() => ledgerAggregation.platforms.map(toPlatformSubtotal), [ledgerAggregation]);
 
     const paginatedTransactions = useMemo(() => {
         return filteredTransactions.slice(0, txLimit);
     }, [filteredTransactions, txLimit]);
 
-    const ledgerStats = useMemo(() => {
-        let salesRows = 0;
-        let totalUnits = 0;
-        let adOnlySpend = 0;
-        let refundCount = 0;
-        let refundValue = 0;
-        filteredTransactions.forEach(t => {
-            if (t.velocity > 0) {
-                salesRows++;
-                totalUnits += t.velocity;
-            } else if (t.price === 0 && (t.adsSpend || 0) > 0) {
-                adOnlySpend += ((t.adsSpend || 0) * VAT_MULTIPLIER);
-            } else if (t.velocity < 0 || t.price < 0) {
-                refundCount++;
-                refundValue += Math.abs(calcProfit(t) * VAT_MULTIPLIER);
-            }
-        });
-        return { salesRows, totalUnits, adOnlySpend, refundCount, refundValue };
-    }, [filteredTransactions]);
+    const ledgerStats = useMemo(() => ({
+        salesRows: ledgerAggregation.totals.salesRows,
+        totalUnits: ledgerAggregation.totals.units,
+        adOnlySpend: ledgerAggregation.totals.adOnlySpend,
+        refundCount: ledgerAggregation.totals.refundCount,
+        refundValue: ledgerAggregation.totals.refundImpact
+    }), [ledgerAggregation]);
 
-    const previousFilteredTransactions = useMemo(() => {
+    const previousDateRange = useMemo(() => {
         const prevEndKey = addDaysToDateKey(ledgerStartKey, -1);
         const windowDays = Math.max(1, Math.round((new Date(ledgerEndKey).getTime() - new Date(ledgerStartKey).getTime()) / 86400000) + 1);
         const prevStartKey = addDaysToDateKey(prevEndKey, -(windowDays - 1));
-        let list = sortedTransactions.filter(t => {
-            const dKey = (t as any)._type === 'REFUND_LOG'
-                ? ((t as any)._returnFilterDate || asDateKey(t.date))
-                : asDateKey(t.date);
-            return dKey && isDateKeyBetween(dKey, prevStartKey, prevEndKey);
-        });
-        if (txFilterPlatform !== 'All') list = list.filter(t => t.platform === txFilterPlatform);
-        if (txFilterType !== 'All') {
-            list = list.filter(t => {
-                if (txFilterType === 'Sale') return t.velocity > 0;
-                if (txFilterType === 'Ad Cost') return t.price === 0 && (t.adsSpend || 0) > 0;
-                if (txFilterType === 'Refund') return t.velocity < 0;
-                return true;
-            });
-        }
-        if (txPostcodeArea !== 'All') {
-            list = list.filter(t => {
-                if ((t as any)._type !== 'SALE') return false;
-                const postcode = String((t as any).postcode || '').trim();
-                if (!postcode) return false;
-                const match = postcode.match(/^([A-Z]{1,2})/i);
-                return !!match && match[1].toUpperCase() === txPostcodeArea;
-            });
-        }
-        if (showRedistributedOnly) {
-            list = list.filter(t =>
-                t.rawAdsSpend !== undefined &&
-                t.rawAdsSpend !== null &&
-                Math.abs((t.adsSpend || 0) - (t.rawAdsSpend || 0)) > 0.0001
-            );
-        }
-        return list;
-    }, [sortedTransactions, ledgerStartKey, ledgerEndKey, txFilterPlatform, txFilterType, txPostcodeArea, showRedistributedOnly]);
+        return { startKey: prevStartKey, endKey: prevEndKey };
+    }, [ledgerStartKey, ledgerEndKey]);
 
     const previousPlatformSubtotalsMap = useMemo(() => {
         const map = new Map<string, any>();
-        aggregatePlatformSubtotals(previousFilteredTransactions).forEach(row => map.set(row.platform, row));
+        const previousAggregation = aggregateTransactionLedger({
+            priceLogs: transactions,
+            refundLogs: refunds,
+            startKey: previousDateRange.startKey,
+            endKey: previousDateRange.endKey,
+            returnDateBasis,
+            orderDateMap,
+            deductRefunds: true,
+            platformFilter: txFilterPlatform,
+            typeFilter: txFilterType as any,
+            postcodeArea: txPostcodeArea,
+            showRedistributedOnly
+        });
+        previousAggregation.platforms.map(toPlatformSubtotal).forEach(row => map.set(row.platform, row));
         return map;
-    }, [previousFilteredTransactions]);
+    }, [transactions, refunds, previousDateRange, returnDateBasis, orderDateMap, txFilterPlatform, txFilterType, txPostcodeArea, showRedistributedOnly]);
 
     const previousLedgerStats = useMemo(() => {
-        let salesRows = 0;
-        let totalUnits = 0;
-        let adOnlySpend = 0;
-        let refundCount = 0;
-        let refundValue = 0;
-        previousFilteredTransactions.forEach(t => {
-            if (t.velocity > 0) {
-                salesRows++;
-                totalUnits += t.velocity;
-            } else if (t.price === 0 && (t.adsSpend || 0) > 0) {
-                adOnlySpend += ((t.adsSpend || 0) * VAT_MULTIPLIER);
-            } else if (t.velocity < 0 || t.price < 0) {
-                refundCount++;
-                refundValue += Math.abs(calcProfit(t) * VAT_MULTIPLIER);
-            }
+        const previousAggregation = aggregateTransactionLedger({
+            priceLogs: transactions,
+            refundLogs: refunds,
+            startKey: previousDateRange.startKey,
+            endKey: previousDateRange.endKey,
+            returnDateBasis,
+            orderDateMap,
+            deductRefunds: true,
+            platformFilter: txFilterPlatform,
+            typeFilter: txFilterType as any,
+            postcodeArea: txPostcodeArea,
+            showRedistributedOnly
         });
-        return { salesRows, totalUnits, adOnlySpend, refundCount, refundValue };
-    }, [previousFilteredTransactions]);
+        return {
+            salesRows: previousAggregation.totals.salesRows,
+            totalUnits: previousAggregation.totals.units,
+            adOnlySpend: previousAggregation.totals.adOnlySpend,
+            refundCount: previousAggregation.totals.refundCount,
+            refundValue: previousAggregation.totals.refundImpact
+        };
+    }, [transactions, refunds, previousDateRange, returnDateBasis, orderDateMap, txFilterPlatform, txFilterType, txPostcodeArea, showRedistributedOnly]);
 
     const promotionHistoryRows = useMemo(() => {
         const targetCanonicalSku = getCanonicalSku(product.sku);
@@ -1194,6 +1156,7 @@ const SkuDeepDivePage: React.FC<SkuDeepDivePageProps> = ({
                     setRefundPage={setRefundPage}
                     totalRefundPages={totalRefundPages}
                     refundItemsPerPage={refundItemsPerPage}
+                    setRefundItemsPerPage={setRefundItemsPerPage}
                     themeColor={themeColor}
                     orderDateMap={orderDateMap}
                     thresholds={thresholds}

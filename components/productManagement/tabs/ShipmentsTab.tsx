@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, InventoryChangeRecord } from '../../../types';
-import { Ship, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Ship, CheckCircle, AlertCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import { TagSearchInput } from '../../common/TagSearchInput';
+import { TablePagination } from '../../common/TablePagination';
 
 interface ShipmentsTabProps {
     products: Product[];
@@ -33,7 +34,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
     const [confirmDialog, setConfirmDialog] = useState<{ containerId: string; mode: 'INFERRED' | 'MANUAL'; items: ConfirmDialogItem[] } | null>(null);
     const [confirmSkuQtyInputs, setConfirmSkuQtyInputs] = useState<Record<string, string>>({});
     const [editDialog, setEditDialog] = useState<{ containerId: string; status: string; eta: string; items: EditDialogItem[] } | null>(null);
-    const itemsPerPage = 25;
+    const [itemsPerPage, setItemsPerPage] = useState(25);
     const searchTags = initialTags;
     const updateTags = (newTags: string[]) => { if (onTagsChange) onTagsChange(newTags); };
 
@@ -231,7 +232,7 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
 
     useEffect(() => { setCurrentPage(1); }, [searchTags, inputValue]);
 
-    const paginatedTableData = useMemo(() => filteredTableData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredTableData, currentPage]);
+    const paginatedTableData = useMemo(() => filteredTableData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredTableData, currentPage, itemsPerPage]);
     const totalPages = Math.ceil(filteredTableData.length / itemsPerPage);
 
     const foundTagsCount = useMemo(() => {
@@ -734,15 +735,14 @@ export const ShipmentsTab: React.FC<ShipmentsTabProps> = ({
                                 </tbody>
                             </table>
                         </div>
-                        {filteredTableData.length > 0 && totalPages > 1 && (
-                            <div className="sello-table-footer">
-                                <span style={{ fontSize: 12, color: '#6b7280' }}>Page {currentPage} of {totalPages}</span>
-                                <div className="sello-pagination">
-                                    <button className="sello-page-btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft style={{ width: 14, height: 14 }} /></button>
-                                    <button className="sello-page-btn" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight style={{ width: 14, height: 14 }} /></button>
-                                </div>
-                            </div>
-                        )}
+                        <TablePagination
+                            currentPage={currentPage}
+                            itemsPerPage={itemsPerPage}
+                            totalCount={filteredTableData.length}
+                            totalPages={totalPages}
+                            setCurrentPage={setCurrentPage}
+                            setItemsPerPage={setItemsPerPage}
+                        />
                     </div>
                 </div>
             ) : (

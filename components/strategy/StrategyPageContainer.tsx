@@ -5,7 +5,7 @@ import { ContextBar } from '../common/ContextBar';
 import { Product, StrategyConfig, PricingRules, PromotionEvent, PriceChangeRecord, VelocityLookback, CostChangeRecord, PriceLog, InventoryChangeRecord, RefundLog, SkuFamily, OptimalPriceResult } from '../../types';
 import { ThresholdConfig } from '../../services/thresholdsConfig';
 import { DEFAULT_STRATEGY_RULES, VAT_MULTIPLIER } from '../../constants';
-import { Activity, History, Coins, Database, Ship, Settings, Download, X, ArrowRight, RotateCcw, TrendingUp, TrendingDown, Save, Edit2, CheckCircle, Info, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Activity, History, Coins, Database, Ship, Settings, Download, X, ArrowRight, RotateCcw, TrendingUp, TrendingDown, Save, Edit2, CheckCircle, Info, Plus } from 'lucide-react';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../../services/dateUtils';
 import { formatSmartMoney, localDateStamp} from '../../utils/format';
 import { SortState, sortRows } from '../../utils/tableSort';
@@ -20,6 +20,7 @@ import { SortableHeader } from '../common/SortableHeader'; // For history tables
 import { TabSwitcher } from '../common/TabSwitcher';
 import ManualPriceChangeModal from '../shared/modals/ManualPriceChangeModal';
 import ManualCostChangeModal from '../shared/modals/ManualCostChangeModal';
+import { TablePagination } from '../common/TablePagination';
 
 interface StrategyPageContainerProps {
     products: Product[];
@@ -879,17 +880,14 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
                             </table>
                         </div>
                         {/* Pagination Footer */}
-                        {historyTableData.length > 0 && (
-                            <div className="sello-table-footer">
-                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <p className="text-sm text-gray-700">Showing <span className="font-medium">{(historyCurrentPage - 1) * historyItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(historyCurrentPage * historyItemsPerPage, historyTableData.length)}</span> of <span className="font-medium">{historyTableData.length}</span> results</p>
-                                        <select value={historyItemsPerPage} onChange={(e) => { setHistoryItemsPerPage(Number(e.target.value)); setHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-theme focus:border-theme"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
-                                    </div>
-                                    <div>{totalHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setHistoryCurrentPage(prev => Math.max(prev - 1, 1))} disabled={historyCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {historyCurrentPage} of {totalHistoryPages}</span><button onClick={() => setHistoryCurrentPage(prev => Math.min(totalHistoryPages, prev + 1))} disabled={historyCurrentPage === totalHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div>
-                                </div>
-                            </div>
-                        )}
+                        <TablePagination
+                            currentPage={historyCurrentPage}
+                            itemsPerPage={historyItemsPerPage}
+                            totalCount={historyTableData.length}
+                            totalPages={totalHistoryPages}
+                            setCurrentPage={setHistoryCurrentPage}
+                            setItemsPerPage={setHistoryItemsPerPage}
+                        />
                     </div>
                 </div>
             )}
@@ -949,17 +947,14 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
                             </table>
                         </div>
                         {/* Pagination */}
-                        {costHistoryTableData.length > 0 && (
-                            <div className="sello-table-footer">
-                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <p className="text-sm text-gray-700">Showing <span className="font-medium">{(costHistoryCurrentPage - 1) * costHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(costHistoryCurrentPage * costHistoryItemsPerPage, costHistoryTableData.length)}</span> of <span className="font-medium">{costHistoryTableData.length}</span> results</p>
-                                        <select value={costHistoryItemsPerPage} onChange={(e) => { setCostHistoryItemsPerPage(Number(e.target.value)); setCostHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-theme focus:border-theme"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
-                                    </div>
-                                    <div>{totalCostHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setCostHistoryCurrentPage(prev => Math.max(1, prev - 1))} disabled={costHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {costHistoryCurrentPage} of {totalCostHistoryPages}</span><button onClick={() => setCostHistoryCurrentPage(prev => Math.min(totalCostHistoryPages, prev + 1))} disabled={costHistoryCurrentPage === totalCostHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div>
-                                </div>
-                            </div>
-                        )}
+                        <TablePagination
+                            currentPage={costHistoryCurrentPage}
+                            itemsPerPage={costHistoryItemsPerPage}
+                            totalCount={costHistoryTableData.length}
+                            totalPages={totalCostHistoryPages}
+                            setCurrentPage={setCostHistoryCurrentPage}
+                            setItemsPerPage={setCostHistoryItemsPerPage}
+                        />
                     </div>
                 </div>
             )}
@@ -1029,17 +1024,14 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
                             </table>
                         </div>
                         {/* Pagination */}
-                        {inventoryHistoryTableData.length > 0 && (
-                            <div className="sello-table-footer">
-                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <p className="text-sm text-gray-700">Showing <span className="font-medium">{(inventoryHistoryCurrentPage - 1) * inventoryHistoryItemsPerPage + 1}</span> to <span className="font-medium">{Math.min(inventoryHistoryCurrentPage * inventoryHistoryItemsPerPage, inventoryHistoryTableData.length)}</span> of <span className="font-medium">{inventoryHistoryTableData.length}</span> results</p>
-                                        <select value={inventoryHistoryItemsPerPage} onChange={(e) => { setInventoryHistoryItemsPerPage(Number(e.target.value)); setInventoryHistoryCurrentPage(1); }} className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer focus:ring-theme focus:border-theme"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>
-                                    </div>
-                                    <div>{totalInventoryHistoryPages > 1 && (<nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"><button onClick={() => setInventoryHistoryCurrentPage(prev => Math.max(1, prev - 1))} disabled={inventoryHistoryCurrentPage === 1} className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronLeft className="h-5 w-5" /></button><span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">Page {inventoryHistoryCurrentPage} of {totalInventoryHistoryPages}</span><button onClick={() => setInventoryHistoryCurrentPage(prev => Math.min(totalInventoryHistoryPages, prev + 1))} disabled={inventoryHistoryCurrentPage === totalInventoryHistoryPages} className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"><ChevronRight className="h-5 w-5" /></button></nav>)}</div>
-                                </div>
-                            </div>
-                        )}
+                        <TablePagination
+                            currentPage={inventoryHistoryCurrentPage}
+                            itemsPerPage={inventoryHistoryItemsPerPage}
+                            totalCount={inventoryHistoryTableData.length}
+                            totalPages={totalInventoryHistoryPages}
+                            setCurrentPage={setInventoryHistoryCurrentPage}
+                            setItemsPerPage={setInventoryHistoryItemsPerPage}
+                        />
                     </div>
                 </div>
             )}

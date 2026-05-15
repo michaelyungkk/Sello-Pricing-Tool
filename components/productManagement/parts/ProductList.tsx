@@ -7,9 +7,10 @@ import { VAT_MULTIPLIER } from '../../../constants';
 import { getCanonicalSku } from '../../../services/skuNormalization';
 import { FilterBar } from '../../common/FilterBar';
 import { GradeBadge } from '../../common/GradeBadge';
-import { Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Download, ArrowRight, ChevronDown, Star, X, Layers, Tag, Info, GitMerge, User, Globe, CornerDownLeft, List, Ship, LineChart, Zap, Eye, CheckSquare, Square } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Download, ArrowRight, ChevronDown, Star, X, Layers, Tag, Info, GitMerge, User, Globe, CornerDownLeft, List, Ship, LineChart, Eye, CheckSquare, Square } from 'lucide-react';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { SortableHeader } from '../../common/SortableHeader';
+import { TablePagination } from '../../common/TablePagination';
 
 interface ProductListProps {
     products: Product[];
@@ -24,6 +25,23 @@ interface ProductListProps {
     priceHistoryMap: Map<string, PriceLog[]>;
     optimalPriceResults?: Map<string, OptimalPriceResult>;
 }
+
+const DATE_PRESENCE_OPTIONS = ['Has Date', 'Missing Date'];
+
+const formatCatalogueDate = (value?: string) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const matchesDatePresenceFilter = (value: string | undefined, filters: string[]) => {
+    if (!filters || filters.length === 0 || filters.length === DATE_PRESENCE_OPTIONS.length) return true;
+    const hasValue = Boolean(value);
+    const wantsHas = filters.includes('Has Date');
+    const wantsMissing = filters.includes('Missing Date');
+    return (wantsHas && hasValue) || (wantsMissing && !hasValue);
+};
 
 const RecommendationTooltip = ({ product, rect }: { product: Product, rect: DOMRect }) => {
     // Add Scroll Offset to ensure fixed position works correctly on scrolled pages
@@ -372,6 +390,12 @@ const ProductRow = React.memo(({
                 </div>
             </td>
             <td className="px-4 py-4 text-right">
+                <div className="text-gray-700 font-medium whitespace-nowrap">{formatCatalogueDate(product.landedAt)}</div>
+            </td>
+            <td className="px-4 py-4 text-right">
+                <div className="text-gray-700 font-medium whitespace-nowrap">{formatCatalogueDate(product.listingReadyAt)}</div>
+            </td>
+            <td className="px-4 py-4 text-right">
                 {product.returnRate !== undefined ? (
                     <div className={`flex items-center justify-end gap-1 font-medium ${isHighReturns ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
                         {isHighReturns && <CornerDownLeft className="w-3 h-3" />}
@@ -634,7 +658,7 @@ const FamilyGridView = ({
                                     </div>
                                 </div>
                             </td>
-                            <td colSpan={5} className="px-4 py-3 text-right">
+                            <td colSpan={7} className="px-4 py-3 text-right">
                                 <div className="flex flex-col items-end pr-4">
                                     <span className="text-[10px] uppercase text-gray-400">Last Synced</span>
                                     <span className="font-bold text-gray-700">{updateRange}</span>
@@ -667,7 +691,7 @@ const FamilyGridView = ({
                     <tr className="bg-gray-50 border-y border-gray-200 cursor-pointer"
                         onClick={() => toggleFamily('ungrouped')}
                     >
-                        <td className="px-4 py-3" colSpan={10}>
+                        <td className="px-4 py-3" colSpan={12}>
                             <div className="flex items-center gap-3">
                                 <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${collapsedFamilies.has('ungrouped') ? '-rotate-90' : ''}`} />
                                 <span className="font-bold text-gray-600 italic">Ungrouped ({familiesWithProducts.ungrouped.length} SKUs)</span>
@@ -706,6 +730,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
     const [statusFilters, setStatusFilters] = useState<string[]>([]);
     const [managerFilters, setManagerFilters] = useState<string[]>([]);
     const [platformFilters, setPlatformFilters] = useState<string[]>([]);
+    const [landedDateFilters, setLandedDateFilters] = useState<string[]>([]);
+    const [listDateFilters, setListDateFilters] = useState<string[]>([]);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
@@ -803,6 +829,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
             if (brandFilters.length > 0 && (!p.brand || !brandFilters.includes(p.brand))) return false;
             if (mainCatFilters.length > 0 && (!p.category || !mainCatFilters.includes(p.category))) return false;
             if (subCatFilters.length > 0 && (!p.subcategory || !subCatFilters.includes(p.subcategory))) return false;
+            if (!matchesDatePresenceFilter(p.landedAt, landedDateFilters)) return false;
+            if (!matchesDatePresenceFilter(p.listingReadyAt, listDateFilters)) return false;
             return true;
         });
 
@@ -899,11 +927,11 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
 
         return sortRows(aggregatedData, sortConfig, getValue);
 
-    }, [products, debouncedSearch, searchTags, statusFilters, managerFilters, platformFilters, brandFilters, mainCatFilters, subCatFilters, sortConfig, showInactive, showOOS, velocityFilter, getEffectiveManager]);
+    }, [products, debouncedSearch, searchTags, statusFilters, managerFilters, platformFilters, brandFilters, mainCatFilters, subCatFilters, landedDateFilters, listDateFilters, sortConfig, showInactive, showOOS, velocityFilter, getEffectiveManager]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, searchTags, statusFilters, managerFilters, platformFilters, brandFilters, mainCatFilters, subCatFilters, showInactive, showOOS, velocityFilter]);
+    }, [searchQuery, searchTags, statusFilters, managerFilters, platformFilters, brandFilters, mainCatFilters, subCatFilters, landedDateFilters, listDateFilters, showInactive, showOOS, velocityFilter]);
 
     useEffect(() => {
         setSubCatFilters([]);
@@ -914,12 +942,6 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
         (currentPage - 1) * itemsPerPage,
         currentPage * itemsPerPage
     );
-
-    const handlePageChange = (newPage: number) => {
-        if (newPage >= 1 && newPage <= totalPages) {
-            setCurrentPage(newPage);
-        }
-    };
 
     const handleMouseEnter = (id: string, event: React.MouseEvent) => {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -950,7 +972,9 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
             'Velocity (/day)',
             'Days Remaining',
             'Status',
-            'Return Rate'
+            'Return Rate',
+            'Landed Date',
+            'List Date'
         ];
 
         const rows: any[][] = [headers];
@@ -972,7 +996,9 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                 Number((p.averageDailySales || 0).toFixed(2)),
                 Number((p.daysRemaining || 0).toFixed(0)),
                 p.status || '',
-                (p.returnRate || 0) / 100
+                (p.returnRate || 0) / 100,
+                p.landedAt || '',
+                p.listingReadyAt || ''
             ];
 
             if (platform === 'All') {
@@ -1018,6 +1044,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
             { wch: 14 }, // Days
             { wch: 12 }, // Status
             { wch: 12 }, // Return rate
+            { wch: 14 }, // Landed date
+            { wch: 14 }, // List date
         ];
 
         ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
@@ -1213,6 +1241,20 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                 options: uniqueManagers,
                                 selected: managerFilters,
                                 onChange: (selected) => { setManagerFilters(selected); setCurrentPage(1); }
+                            },
+                            {
+                                key: 'landed-date',
+                                label: 'Landed Date',
+                                options: DATE_PRESENCE_OPTIONS,
+                                selected: landedDateFilters,
+                                onChange: (selected) => { setLandedDateFilters(selected); setCurrentPage(1); }
+                            },
+                            {
+                                key: 'list-date',
+                                label: 'List Date',
+                                options: DATE_PRESENCE_OPTIONS,
+                                selected: listDateFilters,
+                                onChange: (selected) => { setListDateFilters(selected); setCurrentPage(1); }
                             }
                         ]}
                         toggles={[
@@ -1267,8 +1309,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
             )}
 
             <div className="bg-custom-glass rounded-xl shadow-lg border border-custom-glass overflow-visible backdrop-blur-custom">
-                <div className="overflow-x-auto overflow-y-visible">
-                    <table className="tbl w-full text-left border-separate border-spacing-0">
+                <div className="sello-table-scroll overflow-y-visible">
+                    <table className="sello-table">
                         <thead className="sticky top-0">
                             <tr className="bg-gray-50/80 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-semibold backdrop-blur-sm shadow-sm">
                                 <th className="px-4 py-3 font-semibold text-center w-[80px] text-xs uppercase text-gray-600 tracking-wider">Actions</th>
@@ -1279,6 +1321,8 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                 <SortableHeader label="CA Price" sortKey="caPrice" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
                                 <SortableHeader label="Inventory" sortKey="stockLevel" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[120px]" />
                                 <SortableHeader label={isContextFiltered ? "Runway (Filt.)" : "Runway"} sortKey="daysRemaining" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[140px]" />
+                                <SortableHeader label="Landed Date" sortKey="landedAt" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[120px]" />
+                                <SortableHeader label="List Date" sortKey="listingReadyAt" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[120px]" />
                                 <SortableHeader label="Returns" sortKey="returnRate" sort={sortConfig} onChange={setSortConfig} themeColor={themeColor} align="right" className="w-[100px]" />
                                 <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider w-[120px]" title="All-time ad spend and ACOS. ACOS = Ad Spend / Revenue × 100. Hover each cell for raw vs adjusted ad details.">
                                     Ad Spend / ACOS
@@ -1306,7 +1350,7 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                                 )}
                                 {(!filteredProducts || filteredProducts.length === 0) && (
                                     <tr>
-                                        <td colSpan={10} className="p-8 text-center text-gray-500">
+                                        <td colSpan={12} className="p-8 text-center text-gray-500">
                                             <div className="flex flex-col items-center justify-center gap-2">
                                                 <p>No products found matching your filters.</p>
                                                 {products && products.length > 0 && !showInactive && (
@@ -1345,53 +1389,14 @@ const ProductList: React.FC<ProductListProps> = ({ products = [], skuFamilies = 
                     </table>
                 </div>
 
-                {filteredProducts && filteredProducts.length > 0 && (
-                    <div className="bg-gray-50/50 px-4 py-3 border-t border-gray-200/50 flex items-center justify-between sm:px-6">
-                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                            <div className="flex items-center gap-4">
-                                <p className="text-sm text-gray-700">
-                                    Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredProducts.length)}</span> of <span className="font-medium">{filteredProducts.length}</span> results
-                                </p>
-                                <select
-                                    value={itemsPerPage}
-                                    onChange={(e) => {
-                                        setItemsPerPage(Number(e.target.value));
-                                        setCurrentPage(1);
-                                    }}
-                                    className="text-sm border-gray-300 rounded-md shadow-sm bg-white py-1 pl-2 pr-6 cursor-pointer"
-                                >
-                                    <option value={10}>10</option>
-                                    <option value={25}>25</option>
-                                    <option value={50}>50</option>
-                                    <option value={100}>100</option>
-                                </select>
-                            </div>
-                            <div>
-                                {totalPages > 1 && (
-                                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                                        <button
-                                            onClick={() => handlePageChange(currentPage - 1)}
-                                            disabled={currentPage === 1}
-                                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                                        >
-                                            <ChevronLeft className="h-5 w-5" />
-                                        </button>
-                                        <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                                            Page {currentPage} of {totalPages}
-                                        </span>
-                                        <button
-                                            onClick={() => handlePageChange(currentPage + 1)}
-                                            disabled={currentPage === totalPages}
-                                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-700"
-                                        >
-                                            <ChevronRight className="h-5 w-5" />
-                                        </button>
-                                    </nav>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <TablePagination
+                    currentPage={currentPage}
+                    itemsPerPage={itemsPerPage}
+                    totalCount={filteredProducts.length}
+                    totalPages={totalPages}
+                    setCurrentPage={setCurrentPage}
+                    setItemsPerPage={setItemsPerPage}
+                />
             </div>
 
             {tooltipProduct && hoveredProduct && (

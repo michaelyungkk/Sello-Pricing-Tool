@@ -3,14 +3,13 @@ import React, { useState, useMemo } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice, SkuFamily, InventoryChangeRecord } from '../../types';
 import type { CohortShiftWarning } from '../../services/cohortAnalysis';
 
-import { List, Ship, RotateCcw, DollarSign, Activity, Columns, Layers, X } from 'lucide-react';
+import { List, Ship, RotateCcw, DollarSign, Activity, Layers, X } from 'lucide-react';
 
 import { MasterCatalogueTab } from './tabs/MasterCatalogueTab';
 import { ShipmentsTab } from './tabs/ShipmentsTab';
 import { ReturnsAndRefundsTab } from './tabs/ReturnsAndRefundsTab';
 import { PriceMatrixTab } from './tabs/PriceMatrixTab';
 import { ProductPerformanceTrendTab } from './tabs/ProductPerformanceTrendTab';
-import { PlatformComparisonTab } from './tabs/PlatformComparisonTab';
 import { FamilyGroupsTab } from './tabs/FamilyGroupsTab';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { AliasDrawer } from './parts/AliasDrawer';
@@ -68,7 +67,7 @@ interface ProductManagementPageContainerProps {
     onStampLandedAt?: (skus: string[], date: string) => void;
 }
 
-type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'comparison' | 'family-groups';
+type Tab = 'catalog' | 'performance' | 'pricing' | 'shipments' | 'returns' | 'family-groups';
 
 const ProductManagementPageContainerInner: React.FC<ProductManagementPageContainerProps> = ({
     products,
@@ -265,7 +264,6 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                         { key: 'shipments', label: 'Shipments', icon: Ship },
                         { key: 'returns', label: 'Returns Management', icon: RotateCcw },
                         { key: 'pricing', label: 'Price Matrix', icon: DollarSign },
-                        { key: 'comparison', label: 'Platform Comparison', icon: Columns },
                         { key: 'family-groups', label: 'Family Groups', icon: Layers },
                     ]}
                     activeTab={activeTab}
@@ -275,7 +273,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
             </div>
 
             {/* Global Context Control — only relevant for data-driven tabs */}
-            {(activeTab === 'performance' || activeTab === 'comparison' || activeTab === 'returns') && <ContextBar
+            {(activeTab === 'performance' || activeTab === 'returns') && <ContextBar
                 timeOptions={[
                     { key: 'YESTERDAY', label: 'Yesterday' },
                     { key: '7D', label: '7D' },
@@ -302,7 +300,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                         </div>
                     </label>
                 )}
-                {(activeTab === 'performance' || activeTab === 'comparison') && (
+                {activeTab === 'performance' && (
                     <button
                         onClick={() => setIsAuditVisible(v => !v)}
                         className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
@@ -384,19 +382,6 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
                         pricingRules={pricingRules}
                         promotions={promotions}
                         themeColor={themeColor}
-                    />
-                )}
-
-                {activeTab === 'comparison' && (
-                    <PlatformComparisonTab
-                        products={products}
-                        priceHistoryMap={priceHistoryMap}
-                        pricingRules={pricingRules}
-                        dateWindow={{ startKey: dateWindow.startKey, endKey: dateWindow.endKey }}
-                        themeColor={themeColor}
-                        deductRefunds={deductRefunds}
-                        refundHistory={refundHistory}
-                        isAuditVisible={isAuditVisible}
                     />
                 )}
 

@@ -4,9 +4,9 @@ import { Upload, FileCheck, AlertTriangle, CheckCircle, XCircle, ChevronDown, Ch
 import { PriceLog, RefundLog, PricingRules, Product } from '../../../types';
 import { asDateKeyNaive } from '../../../services/dateUtils';
 import { formatMoney } from '../../../utils/format';
-import { calcRevenue, calcProfit, calcAdSpend } from '../../../services/metrics';
+import { aggregateTransactionLedger } from '../../../services/metrics';
+import { VAT_MULTIPLIER } from '../../../constants';
 
-const VAT = 1.2;
 const TOLERANCE = 2; // % variance threshold for warning
 
 interface ERPCrossCheckToolProps {
@@ -64,20 +64,28 @@ function parseSalesFile(buffer: ArrayBuffer): ParsedSalesData | null {
 
         const headers = rows[0].map((h: any) => String(h || '').trim().toLowerCase().replace(/[^a-z0-9%]/g, ''));
         const idx = (name: string) => headers.indexOf(name);
+        const findIdx = (candidates: string[]) => {
+            for (const c of candidates) {
+                const i = idx(c);
+                if (i !== -1) return i;
+            }
+            return -1;
+        };
 
-        const dateI    = idx('ordertime') !== -1 ? idx('ordertime') : idx('time');
-        const l2I      = idx('platformnamelevel2');
+        const dateI    = findIdx(['ordertime', 'time', 'date', 'orderdate', 'created']);
+        const l2I      = findIdx(['platformnamelevel2', 'platformname']);
+        const l1I      = findIdx(['platformnamelevel1', 'platformname', 'platform', 'channel']);
         const typeI    = idx('ordertype');
-        const skuI     = idx('skucode') !== -1 ? idx('skucode') : idx('sku');
-        const qtyI     = idx('skuquantity');
-        const revI     = idx('salesamt');
-        const extraI   = idx('extrafreight');
-        const profitI  = idx('profitexclrn');
-        const resendI  = idx('resendamt');
-        const refundI  = idx('refundamt');
-        const adsI     = idx('adsfee');
+        const skuI     = findIdx(['skucode', 'sku']);
+        const qtyI     = findIdx(['skuquantity', 'soldqty', 'sold_qty', 'qty', 'quantity', 'units']);
+        const revI     = findIdx(['salesamt', 'revenue', 'totalprice', 'grosssales', 'price']);
+        const extraI   = findIdx(['extrafreight']);
+        const profitI  = findIdx(['profitexclrn', 'profit_excl_rn']);
+        const resendI  = findIdx(['resendamt']);
+        const refundI  = findIdx(['refundamt']);
+        const adsI     = findIdx(['adsfee', 'adspend', 'ads_spend']);
 
-        if (dateI === -1 || l2I === -1) return null;
+        if (dateI === -1 || (l2I === -1 && l1I === -1)) return null;
 
         const platforms: ParsedSalesData['platforms'] = {};
         const skuData: ParsedSalesData['skuData'] = {};
@@ -93,7 +101,9 @@ function parseSalesFile(buffer: ArrayBuffer): ParsedSalesData | null {
             if (!d) continue;
 
             const otype = typeI !== -1 ? String(row[typeI] || '').trim().toLowerCase() : '';
-            const plat  = String(row[l2I] || '').trim();
+            const p2 = l2I !== -1 ? String(row[l2I] || '').trim() : '';
+            const p1 = l1I !== -1 ? String(row[l1I] || '').trim() : '';
+            const plat = p2 || p1;
             if (!plat) continue;
 
             dates.push(d);
@@ -142,22 +152,27 @@ function parseReturnsFile(buffer: ArrayBuffer, startKey: string, endKey: string)
 
         const headers = rows[0].map((h: any) => String(h || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
         const idx = (name: string) => headers.indexOf(name);
+        const findIdx = (candidates: string[]) => {
+            for (const c of candidates) {
+                const i = idx(c);
+                if (i !== -1) return i;
+            }
+            return -1;
+        };
 
         // Return_Details columns
-        const dateI   = idx('ordertime') !== -1 ? idx('ordertime') : idx('day') !== -1 ? -1 : idx('time');
-        const l2I     = idx('platformnamelevel2') !== -1 ? idx('platformnamelevel2') : idx('platformname');
-        const amtI    = idx('returnamt') !== -1 ? idx('returnamt') : idx('amount');
-        const qtyI    = idx('returnqty') !== -1 ? idx('returnqty') : idx('qty');
-        const skuI    = idx('sku') !== -1 ? idx('sku') : idx('skucode');
-        const typeI   = idx('ordertype') !== -1 ? idx('ordertype') : idx('type');
-        const orderI  = idx('outerorderid') !== -1 ? idx('outerorderid') : idx('orderid');
+        const dateI   = findIdx(['ordertime', 'time', 'orderdate', 'date', 'refundtime', 'refund_time']);
+        const l2I     = findIdx(['platformnamelevel2', 'platformname']);
+        const amtI    = findIdx(['returnamt', 'amount']);
+        const qtyI    = findIdx(['returnqty', 'qty', 'quantity']);
+        const skuI    = findIdx(['sku', 'skucode']);
 
         if (l2I === -1 || amtI === -1) return null;
 
         // Try to use Year/Month/Day columns if ordertime not available
-        const yearI  = idx('year');
-        const monthI = idx('month');
-        const dayI   = idx('day');
+        const yearI  = findIdx(['year']);
+        const monthI = findIdx(['month']);
+        const dayI   = findIdx(['day']);
 
         // Single pass: ERP now exports correct qty/amt per SKU line (fixed Mar 2026)
         // The old two-pass correction for multi-SKU resend orders is no longer needed
@@ -183,7 +198,9 @@ function parseReturnsFile(buffer: ArrayBuffer, startKey: string, endKey: string)
             const plat = String(row[l2I] || '').trim();
             const sku  = skuI !== -1 ? String(row[skuI] || '').trim().toLowerCase() : '';
             const amt  = parseFloat(String(row[amtI] || 0)) || 0;
-            const qty  = parseFloat(String(row[qtyI] || 0)) || 0;
+            const qtyRaw = qtyI !== -1 ? row[qtyI] : 0;
+            const qtyParsed = parseFloat(String(qtyRaw || 0));
+            const qty = Number.isFinite(qtyParsed) && qtyParsed > 0 ? qtyParsed : 1;
 
             if (sku === 'freight' || sku === 'addfreight') continue;
             if (!plat || amt === 0) continue;
@@ -214,49 +231,31 @@ function parseReturnsFile(buffer: ArrayBuffer, startKey: string, endKey: string)
 function getAppAggregates(
     salesHistory: PriceLog[],
     refundHistory: RefundLog[],
-    uploadedReturns: ParsedReturnData | null,
+    _uploadedReturns: ParsedReturnData | null,
     startKey: string,
     endKey: string,
     deductReturns: boolean
 ): Record<string, { units: number; revenue: number; profit: number; ads: number }> {
     const result: Record<string, { units: number; revenue: number; profit: number; ads: number }> = {};
+    const ledger = aggregateTransactionLedger({
+        priceLogs: salesHistory,
+        refundLogs: refundHistory,
+        startKey,
+        endKey,
+        deductRefunds: deductReturns
+    });
 
-    for (const log of salesHistory) {
-        const d = (log.date || '').split('T')[0];
-        if (d < startKey || d > endKey) continue;
-        const plat = log.platform || 'Unknown';
-        if (!result[plat]) result[plat] = { units: 0, revenue: 0, profit: 0, ads: 0 };
-        result[plat].units   += log.velocity || 0;
-        result[plat].revenue += calcRevenue(log) * VAT;
-        result[plat].profit  += calcProfit(log) * VAT;
-        result[plat].ads     += calcAdSpend(log) * VAT;
-    }
-
-    if (deductReturns) {
-        if (uploadedReturns) {
-            // Use uploaded returns file — same source as ERP
-            for (const [plat, ret] of Object.entries(uploadedReturns.platforms)) {
-                if (result[plat]) {
-                    result[plat].profit -= ret.amt * VAT;
-                }
-            }
-        } else {
-            // Fall back to app stored refund history
-            for (const r of refundHistory) {
-                const d = (r.date || '').split('T')[0];
-                if (d < startKey || d > endKey) continue;
-                const plat = r.platform || 'Unknown';
-                if (result[plat]) {
-                    result[plat].profit -= (Number(r.amount) + Number(r.freightAmount || 0)) * VAT;
-                }
-            }
-        }
-    }
+    ledger.platforms.forEach(platform => {
+        result[platform.platform] = {
+            units: platform.units,
+            revenue: platform.revenue,
+            profit: platform.netProfit,
+            ads: platform.adjustedAdSpend
+        };
+    });
 
     return result;
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function classify(pct: number): 'ok' | 'warn' | 'error' {
     const abs = Math.abs(pct);
@@ -418,7 +417,7 @@ function exportUnknownSkus(
         if (!knownSkus.has(sku)) {
             unknown.push({
                 sku,
-                revenue: data.revenue * VAT,
+                revenue: data.revenue * VAT_MULTIPLIER,
                 units: data.units,
                 platforms: Array.from(data.platforms).join(', ')
             });
@@ -527,8 +526,8 @@ export const ERPCrossCheckTool: React.FC<ERPCrossCheckToolProps> = ({
     // Expensive: iterates all salesHistory/refundHistory — only re-runs when data or date range changes
     // deductReturns is intentionally excluded — it doesn't affect aggregation, only final assembly
     const appAgg = React.useMemo(() => {
-        return getAppAggregates(salesHistory, refundHistory, returnsData, startKey, endKey, true);
-    }, [salesHistory, refundHistory, returnsData, startKey, endKey]);
+        return getAppAggregates(salesHistory, refundHistory, returnsData, startKey, endKey, deductReturns);
+    }, [salesHistory, refundHistory, returnsData, startKey, endKey, deductReturns]);
 
     // Cheap: assembles rows from pre-computed aggregates — re-runs instantly on deductReturns toggle
     const rows: PlatformRow[] = React.useMemo(() => {
@@ -539,14 +538,14 @@ export const ERPCrossCheckTool: React.FC<ERPCrossCheckToolProps> = ({
             const f = salesData.platforms[plat];
             const a = appAgg[plat];
 
-            const file_revenue     = f ? (f.sales + f.extra) * VAT : 0;
-            const file_profit_excl = f ? f.profit_excl_rn * VAT : 0;
+            const file_revenue     = f ? (f.sales + f.extra) * VAT_MULTIPLIER : 0;
+            const file_profit_excl = f ? f.profit_excl_rn * VAT_MULTIPLIER : 0;
             // If returns file uploaded, use it; otherwise use embedded resend_amt/refund_amt from sales file
             const returns_deduction = (deductReturns && returnsData)
-                ? (returnsData.platforms[plat]?.amt || 0) * VAT
-                : f ? (f.resend_amt + f.refund_amt) * VAT : 0;
+                ? (returnsData.platforms[plat]?.amt || 0) * VAT_MULTIPLIER
+                : f ? (f.resend_amt + f.refund_amt) * VAT_MULTIPLIER : 0;
             const file_profit_incl = file_profit_excl - (deductReturns ? returns_deduction : 0);
-            const file_ads         = f ? f.ads * VAT : 0;
+            const file_ads         = f ? f.ads * VAT_MULTIPLIER : 0;
             const file_units       = f ? f.units : 0;
 
             const file_profit_compare = deductReturns ? file_profit_incl : file_profit_excl;

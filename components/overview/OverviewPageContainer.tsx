@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Product, PricingRules, PriceLog, RefundLog, PriceChangeRecord, SearchChip, PromotionEvent } from '../../types';
+import { Product, PricingRules, PriceLog, RefundLog, PriceChangeRecord, SearchChip, PromotionEvent, ReturnDateBasis } from '../../types';
 import { ThresholdConfig, getThresholdConfig } from '../../services/thresholdsConfig';
 import { getDiagnosisMeta, CanonicalDiagnosisId } from '../../services/diagnosisRegistry';
 import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../../services/dateUtils';
@@ -16,14 +16,15 @@ import { CategoryPerformanceSlide } from './tabs/CategoriesTab';
 import { aggregateCategoryData } from '../../services/categoryAgg';
 import AuditPanel from '../common/AuditPanel';
 import { FilterBar } from '../common/FilterBar';
-import { Activity, ChevronLeft, ChevronRight, Download, Search, Info, Package, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
+import { Activity, Download, Search, Info, Package, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
 import { formatSmartMoney, formatNumber, formatPct } from '../../utils/format';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, Bar, Line, BarChart, Cell } from 'recharts';
-import { resolveEffectiveVelocity, calcRevenue, calcProfit, calcAdSpend } from '../../services/metrics';
+import { resolveEffectiveVelocity, aggregateTransactionLedger } from '../../services/metrics';
 import { MetricValue } from '../common/MetricValue';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { ContextBar } from '../common/ContextBar';
 import { SelectFilter } from '../common/SelectFilter';
+import { TablePagination } from '../common/TablePagination';
 
 interface OverviewPageContainerProps {
     products: Product[];
@@ -49,7 +50,7 @@ type DateRange = 'yesterday' | '7d' | '14d' | '30d' | '90d' | 'custom';
 type AlertType = 'margin' | 'velocity' | 'returns' | 'stock' | 'dead' | null;
 type OverviewTab = 'actions' | 'financials' | 'inventory' | 'map' | 'categories';
 
-type SortKey = 'sku' | 'price' | 'caPrice' | 'qtySold' | 'revenue' | 'profit' | 'margin' | 'inventory' | 'prevQty' | 'change' | 'runway' | 'volumeDrop' | 'priceChanges' | 'leadTime' | 'inventoryValue' | 'daysSinceLastSale';
+type SortKey = 'sku' | 'price' | 'caPrice' | 'qtySold' | 'revenue' | 'profit' | 'margin' | 'returnRate' | 'returnRateDelta' | 'refundUnits' | 'refundUnitDelta' | 'refundCount' | 'inventory' | 'prevQty' | 'change' | 'runway' | 'volumeDrop' | 'priceChanges' | 'leadTime' | 'inventoryValue' | 'daysSinceLastSale';
 
 const getMedianVal = (vals: number[]) => {
     if (!vals.length) return 0;
@@ -95,6 +96,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const [isAuditPanelVisible, setIsAuditPanelVisible] = useState(false);
     const [sort, setSort] = useState<SortState<SortKey> | null>(null);
     const [showWorkbenchPop, setShowWorkbenchPop] = useState(false);
+    const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
 
     const [deductRefunds, setDeductRefunds] = React.useState<boolean>(() => {
         const saved = localStorage.getItem('sello_deduct_refunds_overview');
@@ -106,27 +108,20 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
     const thresholds = useMemo(() => propThresholds || getThresholdConfig(), [propThresholds]);
 
-    // Pre-compute refund totals per SKU for the selected window — same pattern as StrategyPageContainer
-    // Keeps deductRefunds toggle instant by avoiding re-running the full product loop
-    const refundTotalsBySku = useMemo(() => {
-        const map = new Map<string, number>();
-        const { startKey, endKey } = buildWindow({
-            mode: range === 'custom' ? 'custom' : 'days',
-            days: range === 'yesterday' ? 1 : range === '7d' ? 7 : range === '14d' ? 14 :
-                  range === '30d' ? 30 : range === '90d' ? 90 : 30,
-            startKey: customStart, endKey: customEnd, excludeToday: true
-        });
-        refundHistory.forEach(r => {
-            if (!r.sku || !r.date) return;
-            if (platformScope.length > 0 && !platformScope.includes(r.platform || '')) return;
-            const dKey = asDateKey(r.date);
-            if (!dKey || !isDateKeyBetween(dKey, startKey, endKey)) return;
-            const amt = (Number(r.amount) + Number(r.freightAmount || 0));
-            map.set(r.sku, (map.get(r.sku) || 0) + amt);
+    const orderDateMap = useMemo(() => {
+        const map = new Map<string, string>();
+        priceHistoryMap.forEach(logs => {
+            logs.forEach(log => {
+                if (!log.orderId) return;
+                const dKey = asDateKey(log.date);
+                if (dKey) map.set(log.orderId, dKey);
+            });
         });
         return map;
-    }, [refundHistory, range, customStart, customEnd, platformScope]);
+    }, [priceHistoryMap]);
 
+    // Pre-compute refund totals per SKU for the selected window — same pattern as StrategyPageContainer
+    // Keeps deductRefunds toggle instant by avoiding re-running the full product loop
     // Handle map jump state
     useEffect(() => {
         if (mapJumpState) {
@@ -141,7 +136,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         } else if (selectedAlert === 'velocity') {
             setSort({ key: 'volumeDrop', dir: 'asc' });
         } else if (selectedAlert === 'returns') {
-            setSort({ key: 'margin', dir: 'asc' });
+            setSort({ key: 'refundUnitDelta', dir: 'desc' });
         } else if (selectedAlert === 'stock') {
             setSort({ key: 'runway', dir: 'asc' });
         } else if (selectedAlert === 'dead') {
@@ -153,7 +148,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [selectedAlert, range, platformScope, sort, deductRefunds, activeTab]);
+    }, [selectedAlert, range, platformScope, sort, deductRefunds, activeTab, returnDateBasis]);
 
     const { processedData, periodLabel, dateRange, startKey, endKey, distinctDaysFound, expectedDays } = useMemo(() => {
         const { startKey, endKey, expectedDays } = buildWindow({
@@ -191,23 +186,40 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 return matchesScope;
             });
 
-            let curUnits = 0; let curRev = 0; let curProfit = 0; let curAdSpend = 0;
-            let prevUnits = 0; let prevProfit = 0;
-
-            scopeLogs.forEach(l => {
-                const d = asDateKey(l.date);
-                if (!d) return;
-
-                if (isDateKeyBetween(d, startKey, endKey)) {
-                    curUnits += l.velocity;
-                    curRev += calcRevenue(l);
-                    curAdSpend += calcAdSpend(l);
-                    curProfit += calcProfit(l);
-                } else if (isDateKeyBetween(d, prevStartKey, prevEndKey)) {
-                    prevUnits += l.velocity;
-                    prevProfit += calcProfit(l);
-                }
+            const scopeRefunds = refundHistory.filter(r => {
+                if (r.sku !== p.sku) return false;
+                const platform = r.platform || 'Unknown';
+                return platformScope.length === 0 || platformScope.some(p => platform === p || platform.includes(p));
             });
+            const currentLedger = aggregateTransactionLedger({
+                priceLogs: scopeLogs,
+                refundLogs: scopeRefunds,
+                startKey,
+                endKey,
+                returnDateBasis,
+                orderDateMap,
+                deductRefunds: true
+            });
+            const previousLedger = aggregateTransactionLedger({
+                priceLogs: scopeLogs,
+                refundLogs: scopeRefunds,
+                startKey: prevStartKey,
+                endKey: prevEndKey,
+                returnDateBasis,
+                orderDateMap,
+                deductRefunds: true
+            });
+
+            const curUnits = currentLedger.totals.units;
+            const curRev = currentLedger.totals.revenue / VAT_MULTIPLIER;
+            const curAdSpend = currentLedger.totals.adjustedAdSpend / VAT_MULTIPLIER;
+            const curProfitGross = currentLedger.totals.profitBeforeRefund / VAT_MULTIPLIER;
+            const refundLoss = currentLedger.totals.refundImpact / VAT_MULTIPLIER;
+            const refundUnits = currentLedger.totals.refundUnits;
+            const refundCount = currentLedger.totals.refundCount;
+            const prevUnits = previousLedger.totals.units;
+            const prevProfit = previousLedger.totals.netProfit / VAT_MULTIPLIER;
+            const prevRefundUnits = previousLedger.totals.refundUnits;
 
             // Days Since Last Sale calculation
             const saleLogs = logs.filter(l => l.velocity > 0).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -267,11 +279,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 isDateKeyBetween(asDateKey(c.date) || '', startKey, endKey)
             ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-            // Use pre-computed refundTotalsBySku — deductRefunds applied cheaply below
-            const refundLoss = refundTotalsBySku.get(p.sku) || 0;
-            const curProfitGross = curProfit; // before refund deduction
-
-            const netMargin = curRev > 0 ? (curProfit / curRev) * 100 : 0;
+            const netMargin = currentLedger.totals.margin ?? 0;
             const velocityChange = prevUnits > 0 ? ((curUnits - prevUnits) / prevUnits) * 100 : (curUnits > 0 ? 100 : 0);
 
             let displayPrice = p.currentPrice;
@@ -281,7 +289,12 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             }
 
             const tacos = curRev > 0 ? (curAdSpend / curRev) * 100 : 0;
-            const refundRateValue = curRev > 0 ? (refundLoss / curRev) * 100 : 0;
+            const refundRateValue = curUnits > 0 ? (refundUnits / curUnits) * 100 : null;
+            const previousRefundRateValue = prevUnits > 0 ? (prevRefundUnits / prevUnits) * 100 : null;
+            const refundRateDelta = refundRateValue !== null && previousRefundRateValue !== null
+                ? refundRateValue - previousRefundRateValue
+                : refundRateValue;
+            const refundUnitDelta = refundUnits - prevRefundUnits;
 
             // Primary Drag Logic
             let primaryDrag = "Healthy";
@@ -294,7 +307,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                     suggestedAction = "Optimize Ad Spend";
                     dragSeverity = 'high';
                 }
-                else if (refundRateValue > 10) {
+                else if ((refundRateValue ?? 0) > 10) {
                     primaryDrag = "Heavy Returns";
                     suggestedAction = "Investigate Quality";
                     dragSeverity = 'high';
@@ -303,7 +316,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                     primaryDrag = "Selling at a Loss";
                     suggestedAction = "Urgent: Increase Price";
                     dragSeverity = 'high';
-                } else if (refundRateValue > 5) {
+                } else if ((refundRateValue ?? 0) > 5) {
                     primaryDrag = "High Returns";
                     suggestedAction = "Investigate Returns";
                     dragSeverity = 'med';
@@ -367,6 +380,14 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 dragSeverity,
                 tacos,
                 refundRateValue,
+                previousRefundRateValue,
+                refundRateDelta,
+                refundImpact: currentLedger.totals.refundImpact,
+                refundUnits,
+                prevRefundUnits,
+                refundUnitDelta,
+                refundCount,
+                refundDateBasis: returnDateBasis,
                 volumeDropPct,
                 volumeDropAbs,
                 baselineQty,
@@ -402,7 +423,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         });
 
         return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, startKey, endKey, distinctDaysFound: distinctDaysSet.size, expectedDays };
-    }, [debouncedProducts, priceHistoryMap, refundTotalsBySku, range, customStart, customEnd, platformScope, thresholds, pricingRules, promotions, priceChangeHistory]);
+    }, [debouncedProducts, priceHistoryMap, refundHistory, range, customStart, customEnd, platformScope, thresholds, pricingRules, promotions, priceChangeHistory, returnDateBasis, orderDateMap]);
 
     // Cheap: apply deductRefunds toggle without re-running the full product loop
     const processedDataWithToggle = useMemo(() => {
@@ -419,12 +440,12 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const alerts = useMemo(() => ({
         margin: processedDataWithToggle.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
         velocity: processedDataWithToggle.filter(p => p.isVolumeDropCandidate),
-        returns: processedDataWithToggle.filter(p => p.periodUnits > 0 && p.refundRateValue > thresholds.returnRatePct),
+        returns: processedDataWithToggle.filter(p => p.refundUnits > 0 && (p.periodUnits === 0 || (p.refundRateValue ?? 0) > thresholds.returnRatePct || (p.refundRateDelta ?? 0) > 0)),
         // STOCK ALERTS: Updated logic - only alert if we HAVE an incoming shipment (Lead Time < 999) and runway is tight
         stock: processedDataWithToggle.filter(p => p.stockLevel > 2 && p.effectiveAlertLeadTime < 999 && p.periodRunway < (p.effectiveAlertLeadTime * 1.2)),
         // DEAD STOCK BUCKET: Updated logic per requirements
         dead: processedData.filter(p => p.inventoryValue > 200 && p.periodUnits === 0 && p.periodDailyVelocity < p.historicalMedianDemand)
-    }), [processedData, processedDataWithToggle, expectedDays]);
+    }), [processedData, processedDataWithToggle, expectedDays, thresholds]);
 
     const workbenchData = useMemo(() => {
         const defaultCandidates = processedData.filter(p =>
@@ -446,6 +467,11 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 case 'revenue': return row.periodRevenue;
                 case 'profit': return row.periodProfit;
                 case 'margin': return row.periodMargin;
+                case 'returnRate': return row.refundRateValue ?? -1;
+                case 'returnRateDelta': return row.refundRateDelta ?? -1;
+                case 'refundUnits': return row.refundUnits;
+                case 'refundUnitDelta': return row.refundUnitDelta;
+                case 'refundCount': return row.refundCount;
                 case 'inventory': return row.stockLevel;
                 case 'prevQty': return row.prevPeriodUnits;
                 case 'change': return row.velocityChange;
@@ -503,39 +529,36 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             days.push(new Date(d).toISOString().split('T')[0]);
         }
 
-        // Optimized Daily Aggregation to avoid O(days * products * logs) complexity
-        const dailyAggs = new Map<string, { rev: number, ads: number, profit: number }>();
-        days.forEach(day => dailyAggs.set(day, { rev: 0, ads: 0, profit: 0 }));
-
-        products.forEach(p => {
-            const logs = priceHistoryMap.get(p.sku) || [];
-            logs.forEach(l => {
-                if (!l.date) return;
-                const dKey = l.date.split('T')[0];
-                const agg = dailyAggs.get(dKey);
-                if (agg) {
-                    agg.rev += calcRevenue(l);
-                    agg.ads += calcAdSpend(l);
-                    agg.profit += calcProfit(l);
-                }
-            });
+        const scopedPriceLogs = products.flatMap(p => priceHistoryMap.get(p.sku) || []).filter(log => {
+            const platform = log.platform || 'Unknown';
+            return platformScope.length === 0 || platformScope.some(p => platform === p || platform.includes(p));
+        });
+        const scopedRefundLogs = refundHistory.filter(refund => {
+            const platform = refund.platform || 'Unknown';
+            return platformScope.length === 0 || platformScope.some(p => platform === p || platform.includes(p));
         });
 
-        // Profit deduction via deductRefunds already reflected in processedDataWithToggle.periodProfit
-
         const chartData = days.map(day => {
-            const agg = dailyAggs.get(day) || { rev: 0, ads: 0, profit: 0 };
+            const dayLedger = aggregateTransactionLedger({
+                priceLogs: scopedPriceLogs,
+                refundLogs: scopedRefundLogs,
+                startKey: day,
+                endKey: day,
+                returnDateBasis,
+                orderDateMap,
+                deductRefunds
+            });
             const displayDate = new Date(day).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
             return {
                 day: displayDate,
-                revenue: agg.rev * VAT_MULTIPLIER,
-                ads: agg.ads * VAT_MULTIPLIER,
-                profit: agg.profit * VAT_MULTIPLIER
+                revenue: dayLedger.totals.revenue,
+                ads: dayLedger.totals.adjustedAdSpend,
+                profit: dayLedger.totals.netProfit
             };
         });
 
         return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
-    }, [processedDataWithToggle, dateRange, priceHistoryMap, products, pricingRules, platformScope]);
+    }, [processedDataWithToggle, dateRange, priceHistoryMap, products, refundHistory, pricingRules, platformScope, deductRefunds, returnDateBasis, orderDateMap]);
 
     return (
         <div className="space-y-6 pb-20 max-w-[1600px] mx-auto min-h-full flex flex-col">
@@ -612,7 +635,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                         ) : selectedAlert === 'velocity' ? (
                                             <><TrendingDown className="w-4 h-4 text-amber-600" /> Volume Drop Workbench</>
                                         ) : selectedAlert === 'returns' ? (
-                                            <><RotateCcw className="w-4 h-4 text-green-600" /> Return Spike Workbench</>
+                                            <><RotateCcw className="w-4 h-4 text-red-600" /> Return Spike Workbench</>
                                         ) : selectedAlert === 'stock' ? (
                                             <><Ship className="w-4 h-4 text-purple-600" /> Prevent Stockout Workbench</>
                                         ) : selectedAlert === 'dead' ? (
@@ -634,6 +657,22 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                             PoP
                                         </button>
                                     )}
+                                    {selectedAlert === 'returns' && (
+                                        <div className="flex items-center rounded-lg border border-gray-200 bg-white p-0.5">
+                                            <button
+                                                onClick={() => setReturnDateBasis('refundDate')}
+                                                className={`px-2 py-1 text-[10px] font-bold rounded-md transition-colors ${returnDateBasis === 'refundDate' ? 'bg-red-50 text-red-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                                            >
+                                                Issue Date
+                                            </button>
+                                            <button
+                                                onClick={() => setReturnDateBasis('orderDate')}
+                                                className={`px-2 py-1 text-[10px] font-bold rounded-md transition-colors ${returnDateBasis === 'orderDate' ? 'bg-red-50 text-red-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                                            >
+                                                Order Date
+                                            </button>
+                                        </div>
+                                    )}
                                     <button onClick={() => { }} className="p-2 hover:bg-gray-200/50 rounded-lg text-gray-500 hover:text-gray-700 transition-colors border border-transparent hover:border-gray-200"><Download className="w-4 h-4" /></button>
                                 </div>
                             </div>
@@ -644,24 +683,25 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
                                                 <th className="c">Detail</th>
                                                 <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
-                                                <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} tint="ca" align="right" />
                                                 <SortableHeader label="Actual Margin" sortKey="margin" sort={sort} onChange={setSort} align="right" />
-                                                <SortableHeader label="Recent Qty" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
-                                                <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
                                                 <SortableHeader label="Net Profit" sortKey="profit" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Sold Units" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Price" sortKey="price" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="CA Price" sortKey="caPrice" sort={sort} onChange={setSort} tint="ca" align="right" />
                                                 <th>Cause</th>
-                                                <th className="r">Recommend</th>
+                                                <th className="r">Action</th>
                                             </tr>
                                         ) : selectedAlert === 'velocity' ? (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
                                                 <th className="c">Detail</th>
                                                 <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
-                                                <SortableHeader label="Drop #" sortKey="volumeDrop" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Unit Drop" sortKey="volumeDrop" sort={sort} onChange={setSort} align="right" />
                                                 <SortableHeader label="Drop %" sortKey="volumeDrop" sort={sort} onChange={setSort} align="right" />
-                                                <SortableHeader label="Period Qty" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Sold Units" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
                                                 <th className="r relative group/header">
                                                     <div className="flex items-center justify-end gap-1 cursor-help">
-                                                        Baseline Qty
+                                                        Baseline Units
                                                         <Info className="w-3 h-3 text-gray-400" />
                                                     </div>
                                                     <div className="absolute top-full right-0 mt-2 w-64 bg-gray-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-lg hidden group-hover/header:block z-50 border border-gray-700 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -676,10 +716,10 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                         </div>
                                                     </div>
                                                 </th>
+                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
                                                 <SortableHeader label="Price" sortKey="price" sort={sort} onChange={setSort} align="right" />
                                                 <th className="r">Hist. Price</th>
-                                                <SortableHeader label="Inventory" sortKey="inventory" sort={sort} onChange={setSort} align="right" />
-                                                <SortableHeader label="Price Adj." sortKey="priceChanges" sort={sort} onChange={setSort} align="center" />
+                                                <SortableHeader label="Price Changes" sortKey="priceChanges" sort={sort} onChange={setSort} align="center" />
                                                 {showWorkbenchPop && (
                                                     <>
                                                         <th className="r text-[10px] pop-col-current">Current</th>
@@ -688,16 +728,18 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                         <th className="r text-[10px] pop-col-delta-pct">Delta %</th>
                                                     </>
                                                 )}
-                                                <th className="r">CTA / Justification</th>
+                                                <th className="r">Action / Reason</th>
                                             </tr>
                                         ) : selectedAlert === 'returns' ? (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
                                                 <th className="c">Detail</th>
                                                 <SortableHeader label="SKU / Title" sortKey="sku" sort={sort} onChange={setSort} />
-                                                <SortableHeader label="Return Rate %" sortKey="margin" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Return Delta" sortKey="refundUnitDelta" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Returned" sortKey="refundUnits" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Return Rate %" sortKey="returnRate" sort={sort} onChange={setSort} align="right" />
                                                 <SortableHeader label="Refund Impact" sortKey="profit" sort={sort} onChange={setSort} align="right" />
                                                 <SortableHeader label="Revenue" sortKey="revenue" sort={sort} onChange={setSort} align="right" />
-                                                <SortableHeader label="Units" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
+                                                <SortableHeader label="Sold Units" sortKey="qtySold" sort={sort} onChange={setSort} align="right" />
                                                 <th className="r">Action</th>
                                             </tr>
                                         ) : selectedAlert === 'stock' ? (
@@ -736,12 +778,37 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                         ) : (
                                         <tr className="bg-gray-50/80 border-b border-gray-200/50 text-xs uppercase tracking-wider text-gray-600 font-semibold backdrop-blur-sm shadow-sm">
                                                 <th className="c">Detail</th>
-                                                <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} />
-                                                <th className="r bg-red-50/60">Fix Margin</th>
-                                                <th className="r bg-amber-50/60">Volume Drop</th>
-                                                <th className="r bg-emerald-50/70">Return Spike</th>
-                                                <th className="r bg-purple-50/60">Prevent Stockout</th>
-                                                <th className="r bg-slate-100/70">Clear Dead Stock</th>
+                                                <SortableHeader label="Product" sortKey="sku" sort={sort} onChange={setSort} className="min-w-[360px]" />
+                                                <th className="r bg-red-50/60">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <DollarSign className="w-3 h-3 text-gray-400" />
+                                                        <span>Fix Margin</span>
+                                                    </div>
+                                                </th>
+                                                <th className="r bg-amber-50/60">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <TrendingDown className="w-3 h-3 text-gray-400" />
+                                                        <span>Volume Drop</span>
+                                                    </div>
+                                                </th>
+                                                <th className="r bg-emerald-50/70">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <RotateCcw className="w-3 h-3 text-emerald-500" />
+                                                        <span>Return Spike</span>
+                                                    </div>
+                                                </th>
+                                                <th className="r bg-purple-50/60">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Ship className="w-3 h-3 text-gray-400" />
+                                                        <span>Prevent Stockout</span>
+                                                    </div>
+                                                </th>
+                                                <th className="r bg-slate-100/70">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Package className="w-3 h-3 text-gray-400" />
+                                                        <span>Clear Dead Stock</span>
+                                                    </div>
+                                                </th>
                                             </tr>
                                         )}
                                     </thead>
@@ -793,13 +860,13 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                         </td>
                                                         <td className="r text-gray-700 font-semibold">{formatNumber(p.periodUnits)}</td>
                                                         <td className="r text-gray-400 font-medium">{formatNumber(p.baselineQty, 0)}</td>
+                                                        <td className={`r ${p.stockLevel < thresholds.minAbsoluteFloor ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}`}>{formatNumber(p.stockLevel)}</td>
                                                         <td className="r">
                                                             <span className={isPriceHigh ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}>
                                                                 <MetricValue value={p.displayPrice} type="currency" neutral />
                                                             </span>
                                                         </td>
                                                         <td className="r text-gray-400 font-medium">{formatSmartMoney(p.historicalMedianPrice)}</td>
-                                                        <td className={`r ${p.stockLevel < thresholds.minAbsoluteFloor ? 'text-amber-500 font-semibold' : 'text-gray-700 font-semibold'}`}>{formatNumber(p.stockLevel)}</td>
 
                                                         {/* Price Changes Column - Tooltip restricted to hover on this badge only */}
                                                         <td className="c">
@@ -872,7 +939,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                             <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
                                                         </td>
                                                         <td className="r">
-                                                            <span className={`font-semibold text-sm px-2 py-1 rounded ${p.periodRunway < p.effectiveAlertLeadTime ? 'bg-red-100 text-red-500 border border-red-200' : 'bg-amber-100 text-amber-500 border border-amber-200'}`}>
+                                                            <span className={`font-semibold ${p.periodRunway < p.effectiveAlertLeadTime ? 'text-red-500' : 'text-gray-700'}`}>
                                                                 {p.periodRunway.toFixed(0)} Days
                                                             </span>
                                                         </td>
@@ -899,8 +966,12 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                             }
 
                                             if (selectedAlert === 'returns') {
-                                                const refundImpact = p.periodRevenue > 0 ? (p.periodRevenue * (p.refundRateValue / 100)) : 0;
-                                                const cta = p.refundRateValue > (thresholds.returnRatePct * 1.5) ? "Urgent QA Check" : "Review Return Reasons";
+                                                const refundImpact = p.refundImpact || 0;
+                                                const hasReturnRate = p.refundRateValue !== null && p.refundRateValue !== undefined;
+                                                const refundRateValue = hasReturnRate ? p.refundRateValue : null;
+                                                const rateDelta = p.refundRateDelta;
+                                                const unitDelta = p.refundUnitDelta || 0;
+                                                const cta = (p.refundRateValue ?? 0) > (thresholds.returnRatePct * 1.5) || p.periodUnits === 0 ? "Urgent QA Check" : "Review Return Reasons";
                                                 return (
                                                     <tr key={p.id} className="group text-sm">
                                                         <td className="c">
@@ -916,7 +987,29 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                             <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
                                                         </td>
                                                         <td className="r">
-                                                            <MetricValue value={p.refundRateValue} type="percent" />
+                                                            <span className={`font-semibold ${unitDelta > 0 ? 'text-red-600' : 'text-gray-700'}`}>
+                                                                {unitDelta > 0 ? '+' : ''}{formatNumber(unitDelta, 0)}
+                                                            </span>
+                                                        </td>
+                                                        <td className="r">
+                                                            <div className="font-semibold text-gray-700">{formatNumber(p.refundUnits || 0, 0)}</div>
+                                                            <div className="text-[10px] text-gray-400">{formatNumber(p.refundCount || 0, 0)} rows</div>
+                                                        </td>
+                                                        <td className="r">
+                                                            {hasReturnRate ? (
+                                                                <div className="flex flex-col items-end">
+                                                                    <span className="font-medium text-gray-700">
+                                                                        +{refundRateValue!.toFixed(1)}%
+                                                                    </span>
+                                                                    {rateDelta !== null && rateDelta !== undefined && (
+                                                                        <span className="text-[10px] font-semibold text-gray-400">
+                                                                            {rateDelta > 0 ? '+' : ''}{rateDelta.toFixed(1)}pp
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-xs font-bold uppercase text-gray-500">No sales base</span>
+                                                            )}
                                                         </td>
                                                         <td className="r">
                                                             <MetricValue value={-refundImpact} type="currency" />
@@ -984,20 +1077,23 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                 </div>
                                                                 <div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div>
                                                             </td>
-                                                            <td className="r font-mono font-bold text-purple-600">
-                                                                {p.caPrice ? formatSmartMoney(p.caPrice) : '—'}
-                                                            </td>
                                                             <td className="r">
                                                                 <MetricValue value={p.periodMargin} type="percent" />
+                                                            </td>
+                                                            <td className="r">
+                                                                <MetricValue value={p.periodProfit} type="currency" />
+                                                            </td>
+                                                            <td className="r">
+                                                                <MetricValue value={p.periodRevenue} type="currency" neutral />
                                                             </td>
                                                             <td className="r text-gray-700 font-semibold">
                                                                 {formatNumber(p.periodUnits)}
                                                             </td>
                                                             <td className="r">
-                                                                <MetricValue value={p.periodRevenue} type="currency" neutral />
+                                                                <MetricValue value={p.displayPrice} type="currency" neutral />
                                                             </td>
-                                                            <td className="r">
-                                                                <MetricValue value={p.periodProfit} type="currency" />
+                                                            <td className="r font-mono font-bold text-purple-600">
+                                                                {p.caPrice ? formatSmartMoney(p.caPrice) : '-'}
                                                             </td>
                                                             <td>
                                                                 <div className="flex items-center gap-2 group relative inline-block">
@@ -1017,7 +1113,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                         <div className="space-y-0.5">
                                                                             <div className="flex justify-between"><span>Unit Revenue:</span><span>{formatSmartMoney(p.displayPrice)}</span></div>
                                                                             <div className="flex justify-between text-orange-400"><span>Ad Cost:</span><span>-{formatSmartMoney((p.adsFee || 0))} ({formatPct(p.tacos)})</span></div>
-                                                                            <div className="flex justify-between text-red-400"><span>Refund Impact:</span><span>-{formatSmartMoney((p.refundRateValue / 100 * p.displayPrice))}</span></div>
+                                                                            <div className="flex justify-between text-red-400"><span>Refund Impact:</span><span>-{formatSmartMoney(p.refundImpact || 0)}</span></div>
                                                                             <div className="flex justify-between text-gray-400"><span>COGS + Ops:</span><span>-{formatSmartMoney((p.costPrice || 0) + (p.postage || 0) + (p.wmsFee || 0))}</span></div>
                                                                         </div>
                                                                     </div>
@@ -1040,33 +1136,54 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                     ) : (
                                                         <>
                                                             <td className="c"><button onClick={() => onDeepDive(p.sku)} className="p-1.5 text-gray-400 hover:text-theme hover:bg-theme-10 rounded-lg transition-colors"><Search className="w-4 h-4" /></button></td>
-                                                            <td><div className="font-medium text-gray-900 group-hover:text-theme transition-colors flex items-center">{p.sku}<GradeBadge gradeLevel={p.gradeLevel} /></div><div className="text-xs text-gray-500 truncate max-w-[250px]">{p.name}</div></td>
+                                                            <td><div className="font-medium text-gray-900 group-hover:text-theme transition-colors flex items-center">{p.sku}<GradeBadge gradeLevel={p.gradeLevel} /></div><div className="text-xs text-gray-500 truncate max-w-[340px]">{p.name}</div></td>
                                                             <td className="r bg-red-50/30">
                                                                 {alerts.margin.some(x => x.sku === p.sku) ? (
                                                                     <span className="font-medium text-gray-800">
                                                                         {formatPct(p.periodMargin)}
                                                                     </span>
-                                                                ) : '—'}
+                                                                ) : <span className="text-gray-300">-</span>}
                                                             </td>
                                                             <td className="r bg-amber-50/30">
                                                                 {alerts.velocity.some(x => x.sku === p.sku) ? (
-                                                                    <span className="font-medium text-gray-800">
-                                                                        {`${p.volumeDropPct > 0 ? '+' : ''}${p.volumeDropPct.toFixed(1)}%`} ({formatNumber(Math.max(0, (p.baselineQty || 0) - (p.periodUnits || 0)), 0)} qty)
-                                                                    </span>
-                                                                ) : '—'}
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className="font-medium text-gray-800">
+                                                                            {(p.volumeDropPct > 0 ? '+' : '') + p.volumeDropPct.toFixed(1) + '%'}
+                                                                        </span>
+                                                                        <span className="text-xs text-gray-500">
+                                                                            {formatNumber(Math.max(0, (p.baselineQty || 0) - (p.periodUnits || 0)), 0)} qty
+                                                                        </span>
+                                                                    </div>
+                                                                ) : <span className="text-gray-300">-</span>}
                                                             </td>
                                                             <td className="r bg-emerald-50/30">
                                                                 {alerts.returns.some(x => x.sku === p.sku) ? (
-                                                                    <span className="font-medium text-gray-800">
-                                                                        {p.refundRateValue.toFixed(1)}% ({formatSmartMoney(-(p.periodRevenue * (p.refundRateValue / 100)))})
-                                                                    </span>
-                                                                ) : '—'}
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className={`font-medium ${(p.refundUnitDelta || 0) > 0 ? 'text-red-600' : 'text-gray-800'}`}>
+                                                                            {(p.refundUnitDelta || 0) > 0 ? '+' : ''}{formatNumber(p.refundUnitDelta || 0, 0)} returned
+                                                                        </span>
+                                                                        <span className="text-xs text-gray-500">
+                                                                            {formatNumber(p.refundUnits || 0, 0)} total
+                                                                            {p.refundRateValue !== null && p.refundRateValue !== undefined ? ` | ${p.refundRateValue.toFixed(1)}%` : ' | No sales base'}
+                                                                        </span>
+                                                                    </div>
+                                                                ) : <span className="text-gray-300">-</span>}
                                                             </td>
                                                             <td className="r bg-purple-50/30 font-medium text-gray-800">
-                                                                {alerts.stock.some(x => x.sku === p.sku) ? `${formatNumber(p.stockLevel)} (${p.periodRunway.toFixed(1)}d)` : '—'}
+                                                                {alerts.stock.some(x => x.sku === p.sku) ? (
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span>{formatNumber(p.stockLevel)}</span>
+                                                                        <span className="text-xs text-gray-500">{p.periodRunway.toFixed(1)}d</span>
+                                                                    </div>
+                                                                ) : <span className="text-gray-300">-</span>}
                                                             </td>
                                                             <td className="r bg-slate-100/50 font-medium text-gray-800">
-                                                                {alerts.dead.some(x => x.sku === p.sku) ? `${formatNumber(p.stockLevel)} (${p.periodRunway.toFixed(1)}d)` : '—'}
+                                                                {alerts.dead.some(x => x.sku === p.sku) ? (
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span>{formatNumber(p.stockLevel)}</span>
+                                                                        <span className="text-xs text-gray-500">{p.periodRunway.toFixed(1)}d</span>
+                                                                    </div>
+                                                                ) : <span className="text-gray-300">-</span>}
                                                             </td>
                                                         </>
                                                     )}
@@ -1142,14 +1259,15 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 )}
             </div>
 
-            {totalPages > 1 && activeTab === 'actions' && (
-                <div className="bg-white/50 px-4 py-3 border-t border-gray-100 flex items-center justify-between mt-auto">
-                    <p className="text-xs text-gray-500">Showing page {currentPage} of {totalPages}</p>
-                    <div className="flex gap-1">
-                        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 border rounded disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
-                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1 border rounded disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
-                    </div>
-                </div>
+            {activeTab === 'actions' && (
+                <TablePagination
+                    currentPage={currentPage}
+                    itemsPerPage={itemsPerPage}
+                    totalCount={workbenchData.length}
+                    totalPages={totalPages}
+                    setCurrentPage={setCurrentPage}
+                    setItemsPerPage={setItemsPerPage}
+                />
             )}
         </div>
     );

@@ -5,11 +5,10 @@ import { Product, PricingRules, PriceLog, RefundLog, ReturnDateBasis } from '../
 import { LayoutDashboard, Coins, Activity, Calendar, RotateCcw, Clock, BarChart2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SortState, sortRows } from '../../utils/tableSort';
-import { calcRevenue, calcProfit, calcUnits, calcAdSpend } from '../../services/metrics';
-import { VAT_MULTIPLIER } from '../../constants';
+import { aggregateTransactionLedger } from '../../services/metrics';
 import { aggregatePlatformTrends } from '../../services/platformTrendAgg';
 import { buildWindow } from '../../services/dateWindow';
-import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, addDaysToDateKey, getReturnDateKey } from '../../services/dateUtils';
+import { asDateKey, isDateKeyBetween, getTodayKeyMelbourne, addDaysToDateKey } from '../../services/dateUtils';
 import { Tab3AlertRules, getTab3AlertRules } from '../../services/platformAlertRules';
 import { PlatformManagementPageProps, Tab, PlatformSortKey, PlatformSummary, PlatformFeesRoi, TimeWindow } from './platformManagement.types';
 import { PlatformOverviewTab } from './tabs/PlatformOverviewTab';
@@ -18,6 +17,16 @@ import { PerformanceTrendTab } from './tabs/PerformanceTrendTab';
 import { AdGroupsTab } from './tabs/AdGroupsTab';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { getPopComparison } from '../../services/popComparison';
+import {
+  buildPlatformOverviewRowDetail,
+  buildPlatformOverviewWeeklyAnalysis,
+  getLastCompleteWeekStartKey,
+  getPlatformOverviewDataRange,
+  PlatformOverviewFocusMetric,
+  PlatformOverviewWeeklyRow
+} from '../../services/platformOverviewAnalysis';
+
+type PlatformOverviewSortKey = 'platform' | 'weekStartKey' | PlatformOverviewFocusMetric | 'focusDelta';
 const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps> = ({
   products = [],
   priceHistoryMap = new Map<string, PriceLog[]>(),
@@ -39,7 +48,10 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>('performance');
   const [sort, setSort] = useState<SortState<PlatformSortKey>>({ key: 'revenue', dir: 'desc' });
-  const [selectedPlatformKey, setSelectedPlatformKey] = useState<string | null>(null);
+  const [overviewSort, setOverviewSort] = useState<SortState<PlatformOverviewSortKey>>({ key: 'focusDelta', dir: 'desc' });
+  const [overviewFocusMetric, setOverviewFocusMetric] = useState<PlatformOverviewFocusMetric>('cogsPct');
+  const [overviewPlatformKey, setOverviewPlatformKey] = useState<string | null>(null);
+  const [selectedOverviewRowId, setSelectedOverviewRowId] = useState<string | null>(null);
 
   // Time Window State
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('30D');
@@ -130,14 +142,6 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
     return filteredMap;
   }, [priceHistoryMap, dateWindow, timeWindow]);
 
-  const filteredRefunds = useMemo(() => {
-    const { startKey, endKey } = dateWindow;
-    return refundHistory.filter(r => {
-      const dKey = getReturnDateKey(r, returnDateBasis, orderDateMap);
-      return dKey && isDateKeyBetween(dKey, startKey, endKey);
-    });
-  }, [refundHistory, dateWindow, returnDateBasis, orderDateMap]);
-
   const previousDateWindow = useMemo(() => {
     const prevEndKey = addDaysToDateKey(dateWindow.startKey, -1);
     const prevStartKey = addDaysToDateKey(prevEndKey, -(dateWindow.expectedDays - 1));
@@ -157,188 +161,85 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
     return filteredMap;
   }, [priceHistoryMap, previousDateWindow]);
 
-  const filteredPrevRefunds = useMemo(() => {
-    const { startKey, endKey } = previousDateWindow;
-    return refundHistory.filter(r => {
-      const dKey = getReturnDateKey(r, returnDateBasis, orderDateMap);
-      return dKey && isDateKeyBetween(dKey, startKey, endKey);
-    });
-  }, [refundHistory, previousDateWindow, returnDateBasis, orderDateMap]);
-
   // Full history for trends (needs context outside window)
   const allPriceLogs = useMemo(() => Array.from(priceHistoryMap.values()).flat(), [priceHistoryMap]);
+  const filteredPriceLogs = useMemo(() => Array.from(filteredPriceHistoryMap.values()).flat(), [filteredPriceHistoryMap]);
+  const filteredPrevPriceLogs = useMemo(() => Array.from(filteredPrevPriceHistoryMap.values()).flat(), [filteredPrevPriceHistoryMap]);
 
   // Platform Summaries (Overview Tab)
   const platformSummaries = useMemo<PlatformSummary[]>(() => {
-    const dataMap: Record<string, {
-      revenue: number;
-      profit: number;
-      units: number;
-      adSpend: number;
-      orderIds: Set<string>;
-      nonOrderRows: number;
-      skus: Set<string>;
-      adRowsCount: number;
-    }> = {};
-
-    filteredPriceHistoryMap.forEach((logs, sku) => {
-      logs.forEach((log) => {
-        const pKey = log.platform || 'Unknown';
-        if (!dataMap[pKey]) {
-          dataMap[pKey] = {
-            revenue: 0,
-            profit: 0,
-            units: 0,
-            adSpend: 0,
-            orderIds: new Set<string>(),
-            nonOrderRows: 0,
-            skus: new Set<string>(),
-            adRowsCount: 0,
-          };
-        }
-        const stats = dataMap[pKey];
-        stats.revenue += calcRevenue(log);
-        stats.profit += calcProfit(log);
-        stats.units += calcUnits(log);
-        stats.adSpend += calcAdSpend(log);
-        stats.skus.add(sku);
-
-        if (log.adsSpend !== undefined && log.adsSpend !== null) {
-          stats.adRowsCount++;
-        }
-
-        if (log.orderId) {
-          stats.orderIds.add(log.orderId);
-        } else {
-          stats.nonOrderRows += 1;
-        }
-      });
+    const ledger = aggregateTransactionLedger({
+      priceLogs: filteredPriceLogs,
+      refundLogs: refundHistory,
+      startKey: dateWindow.startKey,
+      endKey: dateWindow.endKey,
+      returnDateBasis,
+      orderDateMap,
+      deductRefunds
     });
 
-    if (deductRefunds) {
-      filteredRefunds.forEach(r => {
-        const pKey = r.platform || 'Unknown';
-        if (dataMap[pKey]) {
-          const refundAmount = Number(r.amount) || 0;
-          const freightAmount = Number(r.freightAmount) || 0;
-          dataMap[pKey].profit -= (refundAmount + freightAmount);
-        }
-      });
-    }
-
-    return Object.entries(dataMap).map(([platform, stats]): PlatformSummary => {
-      const revenue = stats.revenue * VAT_MULTIPLIER;
-      const adSpend = stats.adSpend * VAT_MULTIPLIER;
-      const netProfit = stats.profit * VAT_MULTIPLIER;
-      const grossProfit = netProfit + adSpend;
+    return ledger.platforms.map((stats): PlatformSummary => {
       const hasAdData = stats.adRowsCount > 0;
-
       return {
-        platform,
-        revenue,
-        profit: grossProfit,
-        netProfit: netProfit,
+        platform: stats.platform,
+        revenue: stats.revenue,
+        profit: stats.netProfit + stats.adjustedAdSpend,
+        netProfit: stats.netProfit,
         units: stats.units,
-        adSpend,
-        orders: stats.orderIds.size + stats.nonOrderRows,
-        marginPct: revenue > 0 ? (netProfit / revenue) * 100 : 0,
-        tacosPct: (revenue > 0 && hasAdData) ? (adSpend / revenue) * 100 : null,
-        skuCount: stats.skus.size,
+        adSpend: stats.adjustedAdSpend,
+        orders: stats.orders,
+        marginPct: stats.margin ?? 0,
+        tacosPct: (stats.revenue > 0 && hasAdData) ? (stats.adjustedAdSpend / stats.revenue) * 100 : null,
+        skuCount: stats.skuCount,
         hasAdData
       };
     });
-  }, [filteredPriceHistoryMap, filteredRefunds, deductRefunds]);
+  }, [filteredPriceLogs, refundHistory, dateWindow, returnDateBasis, orderDateMap, deductRefunds]);
 
   // Fees & ROI Data (ROI Tab)
   const roiData = useMemo<PlatformFeesRoi[]>(() => {
-    const dataMap: Record<string, {
-      revenue: number;
-      profit: number;
-      units: number;
-      adSpend: number;
-      orderCount: number;
-      explicitProfitRows: number;
-      explicitAdRows: number;
-      totalRows: number;
-    }> = {};
-
-    filteredPriceHistoryMap.forEach((logs) => {
-      logs.forEach((log) => {
-        const pKey = log.platform || 'Unknown';
-        if (!dataMap[pKey]) {
-          dataMap[pKey] = {
-            revenue: 0,
-            profit: 0,
-            units: 0,
-            adSpend: 0,
-            orderCount: 0,
-            explicitProfitRows: 0,
-            explicitAdRows: 0,
-            totalRows: 0
-          };
-        }
-        const stats = dataMap[pKey];
-        stats.revenue += calcRevenue(log);
-        stats.profit += calcProfit(log);
-        stats.units += calcUnits(log);
-        stats.adSpend += calcAdSpend(log);
-        stats.totalRows += 1;
-        stats.orderCount += 1;
-
-        if (log.profit !== undefined && log.profit !== null) {
-          stats.explicitProfitRows += 1;
-        }
-        if (log.adsSpend !== undefined && log.adsSpend !== null) {
-          stats.explicitAdRows += 1;
-        }
-      });
+    const ledger = aggregateTransactionLedger({
+      priceLogs: filteredPriceLogs,
+      refundLogs: refundHistory,
+      startKey: dateWindow.startKey,
+      endKey: dateWindow.endKey,
+      returnDateBasis,
+      orderDateMap,
+      deductRefunds
     });
 
-    if (deductRefunds) {
-      filteredRefunds.forEach(r => {
-        const pKey = r.platform || 'Unknown';
-        if (dataMap[pKey]) {
-          const refundAmount = Number(r.amount) || 0;
-          const freightAmount = Number(r.freightAmount) || 0;
-          dataMap[pKey].profit -= (refundAmount + freightAmount);
-        }
-      });
-    }
-
-    return Object.entries(dataMap).map(([platform, stats]): PlatformFeesRoi => {
-      const revenue = stats.revenue * VAT_MULTIPLIER;
-      const adSpend = stats.adSpend * VAT_MULTIPLIER;
-      const netProfit = stats.profit * VAT_MULTIPLIER;
+    return ledger.platforms.map((stats): PlatformFeesRoi => {
+      const revenue = stats.revenue;
+      const adSpend = stats.adjustedAdSpend;
+      const netProfit = stats.netProfit;
       const grossProfit = netProfit + adSpend;
-      const hasAdData = stats.explicitAdRows > 0;
-
-      const marginPctVal = revenue > 0 ? (netProfit / revenue) * 100 : null;
+      const hasAdData = stats.adRowsCount > 0;
+      const marginPctVal = stats.margin;
       const tacosPctVal = (revenue > 0 && hasAdData) ? (adSpend / revenue) * 100 : null;
-
-      const config = pricingRules[platform];
+      const config = pricingRules[stats.platform];
       const netAfterAds = netProfit;
       const roiAfterAds = adSpend > 0 ? (netAfterAds / adSpend) : null;
 
       return {
-        platform,
+        platform: stats.platform,
         revenue,
         profit: grossProfit,
         marginPct: marginPctVal,
         adSpend,
         tacosPct: tacosPctVal,
-        orders: stats.orderCount,
+        orders: stats.orders,
         units: stats.units,
         estMarketplaceFees: config ? (revenue * (config.commission / 100)) : undefined,
         netAfterAds,
         roiAfterAds,
         dataQuality: {
           hasAdData,
-          hasProfit: stats.totalRows > 0,
-          profitIsEstimated: stats.explicitProfitRows < stats.totalRows
+          hasProfit: stats.salesRows > 0 || stats.adRowsCount > 0,
+          profitIsEstimated: false
         }
       };
     });
-  }, [filteredPriceHistoryMap, pricingRules, filteredRefunds, deductRefunds]);
+  }, [filteredPriceLogs, refundHistory, dateWindow, returnDateBasis, orderDateMap, deductRefunds, pricingRules]);
 
   const previousByPlatform = useMemo(() => {
     const map = new Map<string, {
@@ -352,49 +253,26 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
       roiAfterAds: number | null;
     }>();
 
-    const dataMap: Record<string, {
-      revenue: number;
-      profit: number;
-      units: number;
-      adSpend: number;
-      adRowsCount: number;
-    }> = {};
-
-    filteredPrevPriceHistoryMap.forEach((logs) => {
-      logs.forEach((log) => {
-        const pKey = log.platform || 'Unknown';
-        if (!dataMap[pKey]) {
-          dataMap[pKey] = { revenue: 0, profit: 0, units: 0, adSpend: 0, adRowsCount: 0 };
-        }
-        dataMap[pKey].revenue += calcRevenue(log);
-        dataMap[pKey].profit += calcProfit(log);
-        dataMap[pKey].units += calcUnits(log);
-        dataMap[pKey].adSpend += calcAdSpend(log);
-        if (log.adsSpend !== undefined && log.adsSpend !== null) dataMap[pKey].adRowsCount += 1;
-      });
+    const ledger = aggregateTransactionLedger({
+      priceLogs: filteredPrevPriceLogs,
+      refundLogs: refundHistory,
+      startKey: previousDateWindow.startKey,
+      endKey: previousDateWindow.endKey,
+      returnDateBasis,
+      orderDateMap,
+      deductRefunds
     });
 
-    if (deductRefunds) {
-      filteredPrevRefunds.forEach(r => {
-        const pKey = r.platform || 'Unknown';
-        if (dataMap[pKey]) {
-          const refundAmount = Number(r.amount) || 0;
-          const freightAmount = Number(r.freightAmount) || 0;
-          dataMap[pKey].profit -= (refundAmount + freightAmount);
-        }
-      });
-    }
-
-    Object.entries(dataMap).forEach(([platform, stats]) => {
-      const revenue = stats.revenue * VAT_MULTIPLIER;
-      const adSpend = stats.adSpend * VAT_MULTIPLIER;
-      const netProfit = stats.profit * VAT_MULTIPLIER;
+    ledger.platforms.forEach(stats => {
+      const revenue = stats.revenue;
+      const adSpend = stats.adjustedAdSpend;
+      const netProfit = stats.netProfit;
       const grossProfit = netProfit + adSpend;
       const hasAdData = stats.adRowsCount > 0;
-      const marginPctVal = revenue > 0 ? (netProfit / revenue) * 100 : null;
+      const marginPctVal = stats.margin;
       const tacosPctVal = (revenue > 0 && hasAdData) ? (adSpend / revenue) * 100 : null;
       const roiAfterAds = adSpend > 0 ? (netProfit / adSpend) : null;
-      map.set(platform, {
+      map.set(stats.platform, {
         revenue,
         grossProfit,
         netProfit,
@@ -407,22 +285,7 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
     });
 
     return map;
-  }, [filteredPrevPriceHistoryMap, filteredPrevRefunds, deductRefunds]);
-
-  const platformPopByKey = useMemo(() => {
-    const out = new Map<string, Record<string, ReturnType<typeof getPopComparison>>>();
-    platformSummaries.forEach(row => {
-      const prev = previousByPlatform.get(row.platform);
-      out.set(row.platform, {
-        revenue: getPopComparison(row.revenue, prev?.revenue ?? 0),
-        grossProfit: getPopComparison(row.profit, prev?.grossProfit ?? 0),
-        netProfit: getPopComparison(row.netProfit, prev?.netProfit ?? 0),
-        margin: getPopComparison(row.marginPct ?? 0, prev?.marginPct ?? 0),
-        units: getPopComparison(row.units ?? 0, prev?.units ?? 0)
-      });
-    });
-    return out;
-  }, [platformSummaries, previousByPlatform]);
+  }, [filteredPrevPriceLogs, refundHistory, previousDateWindow, returnDateBasis, orderDateMap, deductRefunds]);
 
   const roiPopByKey = useMemo(() => {
     const out = new Map<string, Record<string, ReturnType<typeof getPopComparison>>>();
@@ -467,65 +330,45 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
   // Daily Trend Data for Chart
   const dailyTrendData = useMemo(() => {
     const { startKey, endKey } = dateWindow;
-    const daysMap = new Map<string, any>();
+    const dayKeys = new Set<string>();
     const activePlatforms = new Set<string>();
 
-    filteredPriceHistoryMap.forEach((logs) => {
-      logs.forEach(log => {
-        const dKey = asDateKey(log.date);
-        if (!dKey || !isDateKeyBetween(dKey, startKey, endKey)) return;
-        const platform = log.platform || 'Unknown';
-        activePlatforms.add(platform);
-        if (!daysMap.has(dKey)) daysMap.set(dKey, { date: dKey });
-        const entry = daysMap.get(dKey);
-        if (!entry._acc) entry._acc = {};
-        if (!entry._acc[platform]) entry._acc[platform] = { revenue: 0, net: 0, orders: 0, units: 0, orderIds: new Set() };
-        const pAcc = entry._acc[platform];
-        const rev = calcRevenue(log) * VAT_MULTIPLIER;
-        const net = calcProfit(log) * VAT_MULTIPLIER;
-        pAcc.revenue += rev;
-        pAcc.net += net;
-        pAcc.units += calcUnits(log);
-        if (log.orderId) {
-          if (!pAcc.orderIds.has(log.orderId)) {
-            pAcc.orderIds.add(log.orderId);
-            pAcc.orders += 1;
-          }
-        } else pAcc.orders += 1;
-      });
+    filteredPriceLogs.forEach(log => {
+      const dKey = asDateKey(log.date);
+      if (dKey && isDateKeyBetween(dKey, startKey, endKey)) dayKeys.add(dKey);
+    });
+    refundHistory.forEach(refund => {
+      const dKey = returnDateBasis === 'orderDate' && orderDateMap && refund.orderId
+        ? asDateKey(orderDateMap.get(refund.resendBaseOrderId || refund.orderId.replace(/-resend$/i, '')))
+        : asDateKey(refund.date);
+      if (dKey && isDateKeyBetween(dKey, startKey, endKey)) dayKeys.add(dKey);
     });
 
-    if (deductRefunds) {
-      filteredRefunds.forEach(r => {
-        const dKey = getReturnDateKey(r, returnDateBasis, orderDateMap);
-        if (dKey && daysMap.has(dKey)) {
-          const entry = daysMap.get(dKey);
-          const platform = r.platform || 'Unknown';
-          if (entry._acc[platform]) {
-            const refundVal = (Number(r.amount) + Number(r.freightAmount || 0)) * VAT_MULTIPLIER;
-            entry._acc[platform].net -= refundVal;
-          }
-        }
+    const result = Array.from(dayKeys).sort().map(day => {
+      const ledger = aggregateTransactionLedger({
+        priceLogs: filteredPriceLogs,
+        refundLogs: refundHistory,
+        startKey: day,
+        endKey: day,
+        returnDateBasis,
+        orderDateMap,
+        deductRefunds
       });
-    }
-
-    const result = Array.from(daysMap.values()).map(day => {
-      const flatDay: any = { date: day.date, _sort: new Date(day.date).getTime() };
-      if (day._acc) {
-        Object.entries(day._acc).forEach(([plat, stats]: [string, any]) => {
-          flatDay[`${plat}_NET_PROFIT`] = stats.net;
-          flatDay[`${plat}_MARGIN_PCT`] = stats.revenue > 0 ? (stats.net / stats.revenue) * 100 : 0;
-          flatDay[`${plat}_AVG_ORDER_VALUE`] = stats.orders > 0 ? (stats.revenue / stats.orders) : 0;
-          flatDay[`${plat}_UNITS_SOLD`] = stats.units;
-          flatDay[`${plat}_RAW_REVENUE`] = stats.revenue;
-          flatDay[`${plat}_RAW_ORDERS`] = stats.orders;
-        });
-      }
+      const flatDay: any = { date: day, _sort: new Date(day).getTime() };
+      ledger.platforms.forEach(stats => {
+        activePlatforms.add(stats.platform);
+        flatDay[`${stats.platform}_NET_PROFIT`] = stats.netProfit;
+        flatDay[`${stats.platform}_MARGIN_PCT`] = stats.margin ?? 0;
+        flatDay[`${stats.platform}_AVG_ORDER_VALUE`] = stats.orders > 0 ? (stats.revenue / stats.orders) : 0;
+        flatDay[`${stats.platform}_UNITS_SOLD`] = stats.units;
+        flatDay[`${stats.platform}_RAW_REVENUE`] = stats.revenue;
+        flatDay[`${stats.platform}_RAW_ORDERS`] = stats.orders;
+      });
       return flatDay;
-    }).sort((a, b) => a._sort - b._sort);
+    });
 
     return { data: result, platforms: Array.from(activePlatforms).sort() };
-  }, [filteredPriceHistoryMap, dateWindow, deductRefunds, filteredRefunds, returnDateBasis, orderDateMap]);
+  }, [filteredPriceLogs, refundHistory, dateWindow, deductRefunds, returnDateBasis, orderDateMap]);
 
   // Custom Groups & Chart Aggregation logic
   const [platformGroups, setPlatformGroups] = useState<Array<{ id: string; name: string; platformKeys: string[] }>>(() => {
@@ -680,19 +523,6 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
     return combined.map(d => ({ ...d, bgValue: maxVal * 1.2 })).sort((a, b) => b.current - a.current);
   }, [trendData, selectedChartPlatforms, trendMetric, platformGroups, hiddenSeries, pricingRules]);
 
-  // Overview Data Sorting
-  const sortedSummaries = useMemo(() => {
-    const getValue = (row: PlatformSummary, key: PlatformSortKey) => {
-      if (key === 'name') return row.platform;
-      if (key === 'manager') return pricingRules[row.platform]?.manager || 'Unassigned';
-      if (key === 'skus') return row.skuCount;
-      if (key === 'margin') return row.marginPct;
-      if (key === 'velocity') return row.units;
-      return (row as any)[key] ?? 0;
-    };
-    return sortRows(platformSummaries, sort as SortState<string>, getValue as any);
-  }, [platformSummaries, sort, pricingRules]);
-
   const sortedRoiData = useMemo(() => {
     const getValue = (row: PlatformFeesRoi, key: PlatformSortKey) => {
       if (key === 'name') return row.platform;
@@ -703,31 +533,197 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
     return sortRows(roiData, sort as SortState<string>, getValue as any);
   }, [roiData, sort]);
 
-  const topPlatformKey = useMemo(() => {
-    if (platformSummaries.length === 0) return null;
-    return [...platformSummaries].sort((a, b) => b.netProfit - a.netProfit)[0].platform;
-  }, [platformSummaries]);
+  const overviewDataRange = useMemo(() => {
+    return getPlatformOverviewDataRange({
+      priceLogs: allPriceLogs,
+      refundLogs: refundHistory,
+      returnDateBasis,
+      orderDateMap
+    });
+  }, [allPriceLogs, refundHistory, returnDateBasis, orderDateMap]);
+
+  const overviewAllWeeksAnalysis = useMemo(() => {
+    if (!overviewDataRange) {
+      return { rows: [], summary: { platformCount: 0, weekCount: 0, revenue: 0, netProfit: 0, marginPct: null, units: 0, cogsPct: null } };
+    }
+    return buildPlatformOverviewWeeklyAnalysis({
+      priceLogs: allPriceLogs,
+      refundLogs: refundHistory,
+      startKey: overviewDataRange.startKey,
+      endKey: overviewDataRange.endKey,
+      returnDateBasis,
+      orderDateMap,
+      deductRefunds,
+      platformFilter: overviewPlatformKey || null
+    });
+  }, [allPriceLogs, refundHistory, overviewDataRange, returnDateBasis, orderDateMap, deductRefunds, overviewPlatformKey]);
+
+  const lastCompleteWeekStartKey = useMemo(() => {
+    return getLastCompleteWeekStartKey(overviewAllWeeksAnalysis.rows);
+  }, [overviewAllWeeksAnalysis.rows]);
+
+  const overviewVisibleRows = useMemo(() => {
+    if (overviewPlatformKey) {
+      return overviewAllWeeksAnalysis.rows;
+    }
+    const fallbackWeekStartKey = overviewAllWeeksAnalysis.rows
+      .map(row => row.naturalWeekStartKey)
+      .sort()
+      .slice(-1)[0] || null;
+    const targetWeekStartKey = lastCompleteWeekStartKey || fallbackWeekStartKey;
+    if (!targetWeekStartKey) return [];
+    return overviewAllWeeksAnalysis.rows.filter(row => row.naturalWeekStartKey === targetWeekStartKey);
+  }, [overviewAllWeeksAnalysis.rows, overviewPlatformKey, lastCompleteWeekStartKey]);
+
+  const overviewSummary = useMemo(() => {
+    if (overviewVisibleRows.length === 0) {
+      return { platformCount: 0, weekCount: 0, revenue: 0, netProfit: 0, marginPct: null, units: 0, cogsPct: null };
+    }
+    const revenue = overviewVisibleRows.reduce((sum, row) => sum + row.revenue, 0);
+    const netProfit = overviewVisibleRows.reduce((sum, row) => sum + row.netProfit, 0);
+    const units = overviewVisibleRows.reduce((sum, row) => sum + row.units, 0);
+    const cogs = overviewVisibleRows.reduce((sum, row) => sum + row.cogs, 0);
+    return {
+      platformCount: new Set(overviewVisibleRows.map(row => row.platform)).size,
+      weekCount: new Set(overviewVisibleRows.map(row => row.naturalWeekStartKey)).size,
+      revenue,
+      netProfit,
+      marginPct: revenue > 0 ? (netProfit / revenue) * 100 : null,
+      units,
+      cogsPct: revenue > 0 ? (cogs / revenue) * 100 : null
+    };
+  }, [overviewVisibleRows]);
+
+  const sortedOverviewRows = useMemo(() => {
+    const getValue = (row: PlatformOverviewWeeklyRow, key: PlatformOverviewSortKey) => {
+      if (key === 'platform') return row.platform;
+      if (key === 'weekStartKey') return row.weekStartKey;
+      if (key === 'focusDelta') return row.delta[overviewFocusMetric] ?? Number.NEGATIVE_INFINITY;
+      return row[key] ?? 0;
+    };
+    return sortRows(overviewVisibleRows, overviewSort as SortState<string>, getValue as any);
+  }, [overviewVisibleRows, overviewSort, overviewFocusMetric]);
 
   useEffect(() => {
-    if (platformSummaries.length > 0 && !selectedPlatformKey) {
-      setSelectedPlatformKey(topPlatformKey);
+    if (selectedOverviewRowId === null) return;
+    const hasSelection = sortedOverviewRows.some(row => row.id === selectedOverviewRowId);
+    if (!hasSelection) {
+      setSelectedOverviewRowId(null);
     }
-  }, [platformSummaries, topPlatformKey]);
+  }, [sortedOverviewRows, selectedOverviewRowId]);
 
-  const categoryBreakdown = useMemo(() => {
-    if (!selectedPlatformKey) return [];
-    const catMap: Record<string, number> = {};
-    products.forEach(p => {
-      const cat = p.category || 'Uncategorized';
-      const logs = filteredPriceHistoryMap.get(p.sku) || [];
-      logs.forEach(log => {
-        if (log.platform === selectedPlatformKey) {
-          catMap[cat] = (catMap[cat] || 0) + (calcRevenue(log) * VAT_MULTIPLIER);
-        }
-      });
+  useEffect(() => {
+    setSelectedOverviewRowId(null);
+    setOverviewSort(overviewPlatformKey
+      ? { key: 'weekStartKey', dir: 'desc' }
+      : { key: 'focusDelta', dir: 'desc' });
+  }, [overviewPlatformKey]);
+
+  const selectedOverviewRow = useMemo(() => {
+    return sortedOverviewRows.find(row => row.id === selectedOverviewRowId) || null;
+  }, [sortedOverviewRows, selectedOverviewRowId]);
+
+  const overviewRowDetail = useMemo(() => {
+    if (!selectedOverviewRow) return null;
+    return buildPlatformOverviewRowDetail({
+      products,
+      priceLogs: allPriceLogs,
+      refundLogs: refundHistory,
+      row: selectedOverviewRow,
+      focusMetric: overviewFocusMetric,
+      returnDateBasis,
+      orderDateMap,
+      deductRefunds
     });
-    return Object.entries(catMap).map(([name, revenue]) => ({ name, revenue })).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-  }, [selectedPlatformKey, filteredPriceHistoryMap, products]);
+  }, [products, allPriceLogs, refundHistory, selectedOverviewRow, overviewFocusMetric, returnDateBasis, orderDateMap, deductRefunds]);
+
+  const overviewVisibleRange = useMemo(() => {
+    if (sortedOverviewRows.length === 0) return null;
+    const starts = sortedOverviewRows.map(row => row.weekStartKey).sort();
+    const ends = sortedOverviewRows.map(row => row.weekEndKey).sort();
+    return { startKey: starts[0], endKey: ends[ends.length - 1] };
+  }, [sortedOverviewRows]);
+
+  const overviewAuditRows = useMemo<PlatformSummary[]>(() => {
+    if (!overviewVisibleRange) return [];
+    const ledger = aggregateTransactionLedger({
+      priceLogs: allPriceLogs,
+      refundLogs: refundHistory,
+      startKey: overviewVisibleRange.startKey,
+      endKey: overviewVisibleRange.endKey,
+      returnDateBasis,
+      orderDateMap,
+      deductRefunds,
+      platformFilter: overviewPlatformKey || null
+    });
+
+    return ledger.platforms.map((stats): PlatformSummary => {
+      const hasAdData = stats.adRowsCount > 0;
+      return {
+        platform: stats.platform,
+        revenue: stats.revenue,
+        profit: stats.netProfit + stats.adjustedAdSpend,
+        netProfit: stats.netProfit,
+        units: stats.units,
+        adSpend: stats.adjustedAdSpend,
+        orders: stats.orders,
+        marginPct: stats.margin ?? 0,
+        tacosPct: (stats.revenue > 0 && hasAdData) ? (stats.adjustedAdSpend / stats.revenue) * 100 : null,
+        skuCount: stats.skuCount,
+        hasAdData
+      };
+    });
+  }, [overviewVisibleRange, allPriceLogs, refundHistory, returnDateBasis, orderDateMap, deductRefunds, overviewPlatformKey]);
+
+  const overviewScopeLabel = useMemo(() => {
+    if (overviewPlatformKey) {
+      return `${overviewPlatformKey} • All Available Weeks`;
+    }
+    return 'All Platforms • Last Complete Week';
+  }, [overviewPlatformKey]);
+
+  const sharedHeaderControls = (
+    <>
+      <div className="flex bg-gray-100 p-0.5 rounded-lg h-8 items-center">
+        <button
+          onClick={() => setReturnDateBasis('refundDate')}
+          className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Clock className="w-3 h-3" />
+          Refund Date
+        </button>
+        <button
+          onClick={() => setReturnDateBasis('orderDate')}
+          className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Calendar className="w-3 h-3" />
+          Order Date
+        </button>
+      </div>
+      <label className="flex items-center h-8 gap-2 px-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20 transition-colors">
+        <input
+          type="checkbox"
+          checked={deductRefunds}
+          onChange={e => setDeductRefunds(e.target.checked)}
+          className="w-4 h-4 text-theme rounded focus:ring-theme border-gray-300"
+        />
+        <div className="flex items-center gap-1.5">
+          <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
+          <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
+        </div>
+      </label>
+      {(activeTab === 'performance' || activeTab === 'overview' || activeTab === 'roi') && (
+        <button
+          onClick={() => setIsAuditVisible(v => !v)}
+          className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+          title="Toggle Audit Panel"
+        >
+          <Activity className="w-4 h-4" />
+          Audit{isAuditVisible ? ': On' : ''}
+        </button>
+      )}
+    </>
+  );
 
   // Render Logic
   return (
@@ -746,65 +742,40 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
 
       </div>
 
-      <ContextBar
-        timeOptions={[
-          { key: 'YESTERDAY', label: 'Yesterday' },
-          { key: '7D', label: '7D' },
-          { key: '14D', label: '14D' },
-          { key: '30D', label: '30D' },
-          { key: '60D', label: '60D' },
-          { key: 'ALL', label: 'All Time' },
-          { key: 'CUSTOM', label: 'Custom' }
-        ]}
-        activeWindow={timeWindow}
-        onWindowChange={(key) => setTimeWindow(key as any)}
-        periodLabel={periodLabel}
-        customStart={customStart}
-        customEnd={customEnd}
-        onCustomStartChange={setCustomStart}
-        onCustomEndChange={setCustomEnd}
-      >
-        {activeTab !== 'ad-groups' && (<>
-          <div className="flex bg-gray-100 p-0.5 rounded-lg h-8 items-center">
-            <button
-              onClick={() => setReturnDateBasis('refundDate')}
-              className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'refundDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-              <Clock className="w-3 h-3" />
-              Refund Date
-            </button>
-            <button
-              onClick={() => setReturnDateBasis('orderDate')}
-              className={`px-3 h-7 text-xs font-bold rounded-md transition-all flex items-center gap-1.5 ${returnDateBasis === 'orderDate' ? 'bg-white shadow text-theme' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-              <Calendar className="w-3 h-3" />
-              Order Date
-            </button>
-          </div>
-          <label className="flex items-center h-8 gap-2 px-3 bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:border-theme-20 transition-colors">
-            <input
-              type="checkbox"
-              checked={deductRefunds}
-              onChange={e => setDeductRefunds(e.target.checked)}
-              className="w-4 h-4 text-theme rounded focus:ring-theme border-gray-300"
-            />
-            <div className="flex items-center gap-1.5">
-              <RotateCcw className={`w-3.5 h-3.5 ${deductRefunds ? 'text-red-500' : 'text-gray-400'}`} />
-              <span className={`text-[10px] font-bold uppercase tracking-tight ${deductRefunds ? 'text-gray-900' : 'text-gray-500'}`}>Deduct Returns</span>
+      {activeTab === 'overview' ? (
+        <div className="bg-custom-glass backdrop-blur-custom border border-custom-glass rounded-xl shadow-sm p-3 block md:flex md:flex-row justify-between items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-0.5">Overview Scope</span>
+              <span className="text-xs font-bold text-theme flex items-center gap-1.5">{overviewScopeLabel}</span>
             </div>
-          </label>
-          {(activeTab === 'performance' || activeTab === 'overview' || activeTab === 'roi') && (
-            <button
-              onClick={() => setIsAuditVisible(v => !v)}
-              className={`flex items-center gap-2 px-3 h-8 rounded-lg font-bold border transition-all shadow-sm text-xs ${isAuditVisible ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-              title="Toggle Audit Panel"
-            >
-              <Activity className="w-4 h-4" />
-              Audit{isAuditVisible ? ': On' : ''}
-            </button>
-          )}
-        </>)}
-      </ContextBar>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 mt-4 md:mt-0 h-8">
+            {sharedHeaderControls}
+          </div>
+        </div>
+      ) : (
+        <ContextBar
+          timeOptions={[
+            { key: 'YESTERDAY', label: 'Yesterday' },
+            { key: '7D', label: '7D' },
+            { key: '14D', label: '14D' },
+            { key: '30D', label: '30D' },
+            { key: '60D', label: '60D' },
+            { key: 'ALL', label: 'All Time' },
+            { key: 'CUSTOM', label: 'Custom' }
+          ]}
+          activeWindow={timeWindow}
+          onWindowChange={(key) => setTimeWindow(key as any)}
+          periodLabel={periodLabel}
+          customStart={customStart}
+          customEnd={customEnd}
+          onCustomStartChange={setCustomStart}
+          onCustomEndChange={setCustomEnd}
+        >
+          {activeTab !== 'ad-groups' && sharedHeaderControls}
+        </ContextBar>
+      )}
 
       <div className="min-h-[500px]">
         {activeTab === 'performance' && (
@@ -849,20 +820,25 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
         )}
         {activeTab === 'overview' && (
           <PlatformOverviewTab
-            sortedSummaries={sortedSummaries}
-            selectedPlatformKey={selectedPlatformKey}
-            setSelectedPlatformKey={setSelectedPlatformKey}
             pricingRules={pricingRules}
             themeColor={themeColor}
-            selectedSummary={platformSummaries.find(s => s.platform === selectedPlatformKey)}
-            categoryBreakdown={categoryBreakdown}
-            sort={sort}
-            setSort={setSort}
-            topPlatformKey={topPlatformKey}
-            startKey={dateWindow.startKey}
-            endKey={dateWindow.endKey}
+            summary={overviewSummary}
+            rows={sortedOverviewRows}
+            focusMetric={overviewFocusMetric}
+            setFocusMetric={setOverviewFocusMetric}
+            sort={overviewSort}
+            setSort={setOverviewSort}
+            platformOptions={uniquePlatforms}
+            selectedPlatformKey={overviewPlatformKey}
+            setSelectedPlatformKey={setOverviewPlatformKey}
+            selectedRowId={selectedOverviewRowId}
+            setSelectedRowId={setSelectedOverviewRowId}
+            selectedRow={selectedOverviewRow}
+            detail={overviewRowDetail}
+            auditRows={overviewAuditRows}
+            startKey={overviewVisibleRange?.startKey}
+            endKey={overviewVisibleRange?.endKey}
             isAuditVisible={isAuditVisible}
-            popByPlatform={platformPopByKey}
           />
         )}
         {activeTab === 'roi' && (
