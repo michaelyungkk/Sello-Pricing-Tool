@@ -1629,7 +1629,7 @@ export const useAppState = () => {
             const localCostChangeCount = costChangeHistory?.length || 0;
             const localInventoryChangeCount = inventoryChangeHistory?.length || 0;
             let newTransactions = allTransactions;
-            let doFullSnapshotReplace = salesPushMode === 'full_snapshot';
+            const doFullSnapshotReplace = salesPushMode === 'full_snapshot';
             const fullSnapshotPushStartedAt = doFullSnapshotReplace ? performance.now() : 0;
             if (!doFullSnapshotReplace) {
                 const latestRes = await getLatestTransactionDate();

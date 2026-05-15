@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-15T01:17:57.369Z",
+  "generatedAt": "2026-05-15T01:23:07.658Z",
   "items": [
+    {
+      "id": "d830b7fd8e39",
+      "date": "2026-05-15T11:17:28+10:00",
+      "summary": "Fix snapshot chunking for UTF-8 payloads"
+    },
     {
       "id": "eabccbbd9312",
       "date": "2026-05-07T12:04:39+10:00",
@@ -95,11 +100,6 @@
       "id": "8164de508211",
       "date": "2026-04-27T16:23:35+10:00",
       "summary": "Disable release notes auto-commit in CI"
-    },
-    {
-      "id": "80894a086533",
-      "date": "2026-04-27T16:06:02+10:00",
-      "summary": "Refine velocity alerts and returns import parsing"
     }
   ]
 }
