@@ -11,7 +11,9 @@ export default async (req: Request) => {
     if (req.method === 'OPTIONS')
         return new Response(null, { status: 204, headers: CORS });
     try {
-        const sql = neon(process.env.NETLIFY_DATABASE_URL!);
+        const dbUrl = process.env.NETLIFY_DATABASE_URL_UNPOOLED || process.env.NETLIFY_DATABASE_URL;
+        if (!dbUrl) throw new Error('Server config error');
+        const sql = neon(dbUrl);
         const rows = await sql`
             SELECT last_push_at FROM sync_metadata WHERE id = 1
         `;

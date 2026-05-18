@@ -59,6 +59,8 @@ const getMedianVal = (vals: number[]) => {
     return s.length % 2 !== 0 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
+const perfNowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
 const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     products,
     priceHistoryMap,
@@ -109,6 +111,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const thresholds = useMemo(() => propThresholds || getThresholdConfig(), [propThresholds]);
 
     const orderDateMap = useMemo(() => {
+        const startedAt = perfNowMs();
         const map = new Map<string, string>();
         priceHistoryMap.forEach(logs => {
             logs.forEach(log => {
@@ -117,8 +120,43 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 if (dKey) map.set(log.orderId, dKey);
             });
         });
+        console.log('[perf][overview] orderDateMap complete', {
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            orders: map.size,
+            skuBuckets: priceHistoryMap.size
+        });
         return map;
     }, [priceHistoryMap]);
+
+    const refundsBySku = useMemo(() => {
+        const startedAt = perfNowMs();
+        const map = new Map<string, RefundLog[]>();
+        refundHistory.forEach(refund => {
+            const sku = String(refund?.sku || '').trim();
+            if (!sku) return;
+            if (!map.has(sku)) map.set(sku, []);
+            map.get(sku)!.push(refund);
+        });
+        console.log('[perf][overview] refundsBySku complete', {
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            skuCount: map.size,
+            refunds: refundHistory.length
+        });
+        return map;
+    }, [refundHistory]);
+
+    const activePromotionSkuSet = useMemo(() => {
+        const todayStr = getTodayKeyMelbourne();
+        const set = new Set<string>();
+        promotions.forEach(promo => {
+            if (promo.startDate > todayStr || promo.endDate < todayStr) return;
+            promo.items.forEach(item => {
+                const sku = String(item?.sku || '').trim().toUpperCase();
+                if (sku) set.add(sku);
+            });
+        });
+        return set;
+    }, [promotions]);
 
     // Pre-compute refund totals per SKU for the selected window — same pattern as StrategyPageContainer
     // Keeps deductRefunds toggle instant by avoiding re-running the full product loop
@@ -151,6 +189,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     }, [selectedAlert, range, platformScope, sort, deductRefunds, activeTab, returnDateBasis]);
 
     const { processedData, periodLabel, dateRange, startKey, endKey, distinctDaysFound, expectedDays } = useMemo(() => {
+        const startedAt = perfNowMs();
         const { startKey, endKey, expectedDays } = buildWindow({
             mode: range === 'custom' ? 'custom' : 'days',
             days: range === 'yesterday' ? 1 :
@@ -174,6 +213,19 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
         const todayStr = getTodayKeyMelbourne();
         const todayTs = new Date(todayStr).getTime();
+        const priceChangesBySku = new Map<string, PriceChangeRecord[]>();
+        priceChangeHistory.forEach(change => {
+            const changeDateKey = asDateKey(change.date) || '';
+            if (!changeDateKey || !isDateKeyBetween(changeDateKey, startKey, endKey)) return;
+            const sku = String(change.sku || '').trim().toUpperCase();
+            if (!sku) return;
+            if (!priceChangesBySku.has(sku)) priceChangesBySku.set(sku, []);
+            priceChangesBySku.get(sku)!.push(change);
+        });
+        priceChangesBySku.forEach(changes => {
+            changes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        });
+        const distinctDaysSet = new Set<string>();
 
         const data = debouncedProducts.map(p => {
             const logs = priceHistoryMap.get(p.sku) || [];
@@ -186,7 +238,8 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 return matchesScope;
             });
 
-            const scopeRefunds = refundHistory.filter(r => {
+            const skuRefunds = refundsBySku.get(p.sku) || [];
+            const scopeRefunds = skuRefunds.filter(r => {
                 if (r.sku !== p.sku) return false;
                 const platform = r.platform || 'Unknown';
                 return platformScope.length === 0 || platformScope.some(p => platform === p || platform.includes(p));
@@ -221,18 +274,24 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             const prevProfit = previousLedger.totals.netProfit / VAT_MULTIPLIER;
             const prevRefundUnits = previousLedger.totals.refundUnits;
 
-            // Days Since Last Sale calculation
-            const saleLogs = logs.filter(l => l.velocity > 0).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            const lastSaleDate = saleLogs.length > 0 ? new Date(saleLogs[0].date).getTime() : 0;
+            let lastSaleDate = 0;
+            logs.forEach(log => {
+                if ((log.velocity || 0) <= 0) return;
+                const ts = new Date(log.date).getTime();
+                if (!Number.isNaN(ts) && ts > lastSaleDate) lastSaleDate = ts;
+            });
             const daysSinceLastSale = lastSaleDate > 0 ? Math.floor((todayTs - lastSaleDate) / (1000 * 60 * 60 * 24)) : 999;
 
-            // Calculate historical reference metrics
-            const allSkuLogs = logs.filter(l => {
-                if (platformScope.length > 0 && !platformScope.some(p => l.platform === p || l.platform?.includes(p))) return false;
-                return true;
+            const histDailyUnits: number[] = [];
+            const histDailyPrices: number[] = [];
+            scopeLogs.forEach(log => {
+                histDailyUnits.push(log.velocity);
+                histDailyPrices.push(log.price);
+                const dateKey = asDateKey(log.date);
+                if (dateKey && isDateKeyBetween(dateKey, startKey, endKey)) {
+                    distinctDaysSet.add(dateKey);
+                }
             });
-            const histDailyUnits = allSkuLogs.map(l => l.velocity);
-            const histDailyPrices = allSkuLogs.map(l => l.price);
 
             const medDailyUnits = getMedianVal(histDailyUnits);
             const medPrice = getMedianVal(histDailyPrices);
@@ -266,18 +325,10 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 }
             }
 
-            // REFINED PROMOTION CHECK: Use date range strictly for current validity
-            const inPromotion = promotions.some(promo =>
-                promo.startDate <= todayStr &&
-                promo.endDate >= todayStr &&
-                promo.items.some(item => item.sku.toUpperCase() === p.sku.toUpperCase())
-            );
+            const normalizedSku = p.sku.toUpperCase();
+            const inPromotion = activePromotionSkuSet.has(normalizedSku);
 
-            // Fetch price changes in the selected period
-            const changesInPeriod = priceChangeHistory.filter(c =>
-                c.sku.toUpperCase() === p.sku.toUpperCase() &&
-                isDateKeyBetween(asDateKey(c.date) || '', startKey, endKey)
-            ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            const changesInPeriod = priceChangesBySku.get(normalizedSku) || [];
 
             const netMargin = currentLedger.totals.margin ?? 0;
             const velocityChange = prevUnits > 0 ? ((curUnits - prevUnits) / prevUnits) * 100 : (curUnits > 0 ? 100 : 0);
@@ -409,45 +460,63 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             };
         });
 
-        const distinctDaysSet = new Set<string>();
-        // Re-calculate distinctDaysFound since it was inside the map before (inefficient but that's how it was)
-        // Wait, I should do it properly.
-        debouncedProducts.forEach(p => {
-            const logs = priceHistoryMap.get(p.sku) || [];
-            logs.forEach(l => {
-                const d = asDateKey(l.date);
-                if (d && isDateKeyBetween(d, startKey, endKey)) {
-                    distinctDaysSet.add(d);
-                }
-            });
+        console.log('[perf][overview] processedData complete', {
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            range,
+            activeTab,
+            platformScopeCount: platformScope.length,
+            products: debouncedProducts.length,
+            processedRows: data.length,
+            refunds: refundHistory.length,
+            distinctDaysFound: distinctDaysSet.size,
+            expectedDays
         });
-
         return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, startKey, endKey, distinctDaysFound: distinctDaysSet.size, expectedDays };
-    }, [debouncedProducts, priceHistoryMap, refundHistory, range, customStart, customEnd, platformScope, thresholds, pricingRules, promotions, priceChangeHistory, returnDateBasis, orderDateMap]);
+    }, [debouncedProducts, priceHistoryMap, refundsBySku, range, customStart, customEnd, platformScope, thresholds, pricingRules, activePromotionSkuSet, priceChangeHistory, returnDateBasis, orderDateMap]);
 
     // Cheap: apply deductRefunds toggle without re-running the full product loop
     const processedDataWithToggle = useMemo(() => {
+        const startedAt = perfNowMs();
         if (deductRefunds) return processedData;
-        return processedData.map(row => ({
+        const toggled = processedData.map(row => ({
             ...row,
             periodProfit: row.periodProfitGross ?? row.periodProfit,
             periodMargin: row.periodRevenue > 0 
                 ? ((row.periodProfitGross ?? row.periodProfit) / row.periodRevenue) * 100 
                 : 0,
         }));
+        console.log('[perf][overview] processedDataWithToggle complete', {
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            deductRefunds,
+            rows: toggled.length
+        });
+        return toggled;
     }, [processedData, deductRefunds]);
 
-    const alerts = useMemo(() => ({
-        margin: processedDataWithToggle.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
-        velocity: processedDataWithToggle.filter(p => p.isVolumeDropCandidate),
-        returns: processedDataWithToggle.filter(p => p.refundUnits > 0 && (p.periodUnits === 0 || (p.refundRateValue ?? 0) > thresholds.returnRatePct || (p.refundRateDelta ?? 0) > 0)),
-        // STOCK ALERTS: Updated logic - only alert if we HAVE an incoming shipment (Lead Time < 999) and runway is tight
-        stock: processedDataWithToggle.filter(p => p.stockLevel > 2 && p.effectiveAlertLeadTime < 999 && p.periodRunway < (p.effectiveAlertLeadTime * 1.2)),
-        // DEAD STOCK BUCKET: Updated logic per requirements
-        dead: processedData.filter(p => p.inventoryValue > 200 && p.periodUnits === 0 && p.periodDailyVelocity < p.historicalMedianDemand)
-    }), [processedData, processedDataWithToggle, expectedDays, thresholds]);
+    const alerts = useMemo(() => {
+        const startedAt = perfNowMs();
+        const nextAlerts = {
+            margin: processedDataWithToggle.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
+            velocity: processedDataWithToggle.filter(p => p.isVolumeDropCandidate),
+            returns: processedDataWithToggle.filter(p => p.refundUnits > 0 && (p.periodUnits === 0 || (p.refundRateValue ?? 0) > thresholds.returnRatePct || (p.refundRateDelta ?? 0) > 0)),
+            // STOCK ALERTS: Updated logic - only alert if we HAVE an incoming shipment (Lead Time < 999) and runway is tight
+            stock: processedDataWithToggle.filter(p => p.stockLevel > 2 && p.effectiveAlertLeadTime < 999 && p.periodRunway < (p.effectiveAlertLeadTime * 1.2)),
+            // DEAD STOCK BUCKET: Updated logic per requirements
+            dead: processedData.filter(p => p.inventoryValue > 200 && p.periodUnits === 0 && p.periodDailyVelocity < p.historicalMedianDemand)
+        };
+        console.log('[perf][overview] alerts complete', {
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            margin: nextAlerts.margin.length,
+            velocity: nextAlerts.velocity.length,
+            returns: nextAlerts.returns.length,
+            stock: nextAlerts.stock.length,
+            dead: nextAlerts.dead.length
+        });
+        return nextAlerts;
+    }, [processedData, processedDataWithToggle, expectedDays, thresholds]);
 
     const workbenchData = useMemo(() => {
+        const startedAt = perfNowMs();
         const defaultCandidates = processedData.filter(p =>
             p.periodRevenue > 0 && (
                 alerts.margin.some(x => x.sku === p.sku) ||
@@ -487,7 +556,14 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         };
 
         if (sort) {
-            return sortRows(data, sort, getValue);
+            const sorted = sortRows(data, sort, getValue);
+            console.log('[perf][overview] workbenchData complete', {
+                elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+                selectedAlert: selectedAlert || 'default',
+                rows: sorted.length,
+                mode: 'sorted'
+            });
+            return sorted;
         }
 
         if (!selectedAlert) {
@@ -499,30 +575,61 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 (alerts.dead.some(x => x.sku === row.sku) ? 1 : 0)
             );
 
-            return [...data].sort((a, b) => {
+            const ranked = [...data].sort((a, b) => {
                 const countDiff = problemCount(b) - problemCount(a);
                 if (countDiff !== 0) return countDiff;
                 return (b.periodRevenue || 0) - (a.periodRevenue || 0);
             });
+            console.log('[perf][overview] workbenchData complete', {
+                elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+                selectedAlert: 'default',
+                rows: ranked.length,
+                mode: 'ranked'
+            });
+            return ranked;
         }
 
-        return [...data].sort((a, b) => (b.periodRevenue || 0) - (a.periodRevenue || 0));
+        const sorted = [...data].sort((a, b) => (b.periodRevenue || 0) - (a.periodRevenue || 0));
+        console.log('[perf][overview] workbenchData complete', {
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            selectedAlert,
+            rows: sorted.length,
+            mode: 'revenue'
+        });
+        return sorted;
     }, [selectedAlert, alerts, processedData, sort]);
 
     const paginatedData = workbenchData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     const categoryData = useMemo(() => {
+        const startedAt = perfNowMs();
         if (activeTab !== 'categories') return [];
         const result = aggregateCategoryData(products, priceHistoryMap, dateRange);
+        console.log('[perf][overview] categoryData complete', {
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            categories: result.categories.length
+        });
         return result.categories;
     }, [activeTab, products, priceHistoryMap, dateRange]);
 
     const totalPages = Math.ceil(workbenchData.length / itemsPerPage);
 
     const financialStats = useMemo(() => {
+        const startedAt = perfNowMs();
         const totalRevenue = processedDataWithToggle.reduce((acc, p) => acc + p.periodRevenue, 0);
         const totalProfit = processedDataWithToggle.reduce((acc, p) => acc + p.periodProfit, 0);
         const totalAdSpend = processedDataWithToggle.reduce((acc, p) => acc + p.periodAdSpend, 0);
         const tacos = totalRevenue > 0 ? (totalAdSpend / totalRevenue) * 100 : 0;
+
+        if (activeTab !== 'financials') {
+            console.log('[perf][overview] financialStats complete', {
+                elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+                chartDays: 0,
+                scopedPriceLogs: 0,
+                scopedRefundLogs: 0,
+                skipped: true
+            });
+            return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData: [] as { day: string; revenue: number; ads: number; profit: number }[] };
+        }
 
         const days = [];
         for (let d = new Date(dateRange.start); d <= dateRange.end; d.setDate(d.getDate() + 1)) {
@@ -557,8 +664,14 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             };
         });
 
+        console.log('[perf][overview] financialStats complete', {
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            chartDays: chartData.length,
+            scopedPriceLogs: scopedPriceLogs.length,
+            scopedRefundLogs: scopedRefundLogs.length
+        });
         return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
-    }, [processedDataWithToggle, dateRange, priceHistoryMap, products, refundHistory, pricingRules, platformScope, deductRefunds, returnDateBasis, orderDateMap]);
+    }, [activeTab, processedDataWithToggle, dateRange, priceHistoryMap, products, refundHistory, pricingRules, platformScope, deductRefunds, returnDateBasis, orderDateMap]);
 
     return (
         <div className="space-y-6 pb-20 max-w-[1600px] mx-auto min-h-full flex flex-col">
@@ -576,10 +689,10 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             <ContextBar
                 timeOptions={[
                     { key: 'yesterday', label: 'Yesterday' },
-                    { key: '7d', label: '7 Days' },
-                    { key: '14d', label: '14 Days' },
-                    { key: '30d', label: '30 Days' },
-                    { key: '90d', label: '90 Days' },
+                    { key: '7d', label: '7D' },
+                    { key: '14d', label: '14D' },
+                    { key: '30d', label: '30D' },
+                    { key: '90d', label: '90D' },
                     { key: 'custom', label: 'Custom' }
                 ]}
                 activeWindow={range}

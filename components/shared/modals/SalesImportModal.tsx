@@ -3,8 +3,6 @@ import React, { useState, useRef, useMemo } from 'react';
 import { formatSmartMoney } from '../../../utils/format';
 import { Product, PricingRules, HistoryPayload, PriceLog } from '../../../types';
 import { Upload, X, FileBarChart, AlertCircle, Check, Loader2, RefreshCw, Calendar, ArrowRight, HelpCircle, Settings2, DollarSign, Tag, Truck, RotateCcw, Search, Hash } from 'lucide-react';
-import { asDateKeyNaive } from '../../../services/dateUtils';
-import { getCanonicalSku } from '../../../services/skuNormalization';
 
 export type { HistoryPayload };
 
@@ -92,6 +90,12 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         changed: number;
         removed: number;
     } | null>(null);
+    const importPayloadRef = useRef<{
+        updates: Product[];
+        history: HistoryPayload[];
+        shipmentLogs: any[];
+        discoveredPlatforms: string[];
+    } | null>(null);
     const revenueDisplay = useMemo(() => {
         const value = Number(previewData?.stats?.totalRevenue || 0);
         return `£${value.toLocaleString()}`;
@@ -103,122 +107,59 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         if (len >= 10) return 'text-lg';
         return 'text-2xl';
     }, [revenueDisplay]);
-    const toDateKey = (value: unknown): string => {
-        const key = asDateKeyNaive(value);
-        return key || '';
+    const syncRecommendation = previewData?.syncRecommendation || {
+        mode: 'incremental' as const,
+        reason: 'No recommendation available yet.',
+        label: 'Incremental push recommended'
     };
-    const toFixedNum = (value: unknown, dp = 4): string => {
-        const n = Number(value);
-        if (!Number.isFinite(n)) return '0';
-        return n.toFixed(dp);
-    };
-    const salesRowKey = (row: any): string => {
-        const date = toDateKey(row?.date);
-        const sku = String(row?.sku || '').trim().toUpperCase();
-        const platform = String(row?.platform || 'General').trim();
-        const orderId = String(row?.orderId || '').trim();
-        return orderId ? `${sku}|${date}|${platform}|${orderId}` : `${sku}|${date}|${platform}`;
-    };
-    const salesRowSig = (row: any): string => {
-        // Use stable source-side fields for recommendation logic.
-        // Live salesHistory can have redistributed adsSpend and normalized profit,
-        // which should not be treated as ERP historical mutations.
-        return [
-            toFixedNum(row?.price, 4),
-            toFixedNum(row?.velocity, 4),
-            toFixedNum(row?.cogs, 4),
-            toFixedNum(row?.sellingFee, 4),
-            toFixedNum(row?.adsFee, 4),
-            toFixedNum(row?.postage, 4),
-            toFixedNum(row?.otherFee, 4),
-            toFixedNum(row?.subscriptionFee, 4),
-            toFixedNum(row?.wmsFee, 4),
-            toFixedNum(row?.promoRel, 4),
-            String(row?.postcode || '').trim().toUpperCase(),
-            String(row?.logisticPartner || '').trim(),
-            String(row?.logisticService || '').trim(),
-        ].join('|');
-    };
-    const syncRecommendation = useMemo(() => {
-        const imported = Array.isArray(previewData?.history) ? previewData.history : [];
-        const existing = Array.isArray(salesHistory) ? salesHistory : [];
-        if (imported.length === 0 || existing.length === 0) {
-            return {
-                mode: 'incremental' as const,
-                reason: 'No historical overlap baseline detected.',
-                label: 'Incremental push recommended'
-            };
-        }
-        const importMap = new Map<string, string>();
-        const existingMap = new Map<string, string>();
-        for (const row of imported) {
-            importMap.set(salesRowKey(row), salesRowSig(row));
-        }
-        for (const row of existing) {
-            existingMap.set(salesRowKey(row), salesRowSig(row));
-        }
-        const importDates = imported.map((r: any) => toDateKey(r?.date)).filter(Boolean);
-        const existingDates = existing.map((r: any) => toDateKey((r as any)?.date)).filter(Boolean);
-        if (importDates.length === 0 || existingDates.length === 0 || importMap.size === 0 || existingMap.size === 0) {
-            return {
-                mode: 'incremental' as const,
-                reason: 'Insufficient normalized baseline for detailed change detection.',
-                label: 'Incremental push recommended'
-            };
-        }
-        const importMin = importDates.reduce((a: string, b: string) => (a < b ? a : b));
-        const existingMax = existingDates.reduce((a: string, b: string) => (a > b ? a : b));
-
-        let added = 0;
-        let removed = 0;
-        let changed = 0;
-        let historicalAdded = 0;
-        let historicalRemoved = 0;
-        let historicalChanged = 0;
-
-        for (const [k, sig] of importMap.entries()) {
-            if (!existingMap.has(k)) {
-                added++;
-                const d = k.split('|')[1] || '';
-                if (d && d <= existingMax) historicalAdded++;
-                continue;
-            }
-            if (existingMap.get(k) !== sig) {
-                changed++;
-                const d = k.split('|')[1] || '';
-                if (d && d <= existingMax) historicalChanged++;
-            }
-        }
-        for (const k of existingMap.keys()) {
-            if (!importMap.has(k)) {
-                removed++;
-                const d = k.split('|')[1] || '';
-                if (d && d <= existingMax) historicalRemoved++;
-            }
-        }
-
-        const historicalMutations = historicalAdded + historicalRemoved + historicalChanged;
-        if (historicalMutations > 0) {
-            return {
-                mode: 'reconciliation' as const,
-                reason: `Historical mutations detected (added:${historicalAdded}, removed:${historicalRemoved}, changed:${historicalChanged}) within existing date range up to ${existingMax}. Total delta: added ${added}, removed ${removed}, changed ${changed}.`,
-                label: 'Targeted sales reconciliation recommended'
-            };
-        }
-        return {
-            mode: 'incremental' as const,
-            reason: `No historical mutations detected. Total delta: added ${added}, removed ${removed}, changed ${changed}. Import starts ${importMin}, existing ends ${existingMax}.`,
-            label: 'Incremental push recommended'
-        };
-    }, [previewData, salesHistory]);
     React.useEffect(() => {
         if (step === 'preview') {
             setSelectedSalesPushMode(syncRecommendation.mode);
         }
     }, [step, syncRecommendation.mode]);
 
+    const buildSyncRecommendation = (payload: any) => {
+        const existing = Array.isArray(salesHistory) ? salesHistory : [];
+        const plan = payload?.reconciliationPlan || null;
+        if (existing.length === 0) {
+            return {
+                mode: 'incremental' as const,
+                reason: 'No existing sales history baseline detected.',
+                label: 'Incremental push recommended'
+            };
+        }
+        if (plan && ((plan.added || 0) + (plan.changed || 0) + (plan.removed || 0) > 0)) {
+            return {
+                mode: 'reconciliation' as const,
+                reason: `Historical mutations detected. Total delta: added ${plan.added || 0}, removed ${plan.removed || 0}, changed ${plan.changed || 0}.`,
+                label: 'Targeted sales reconciliation recommended'
+            };
+        }
+        return {
+            mode: 'incremental' as const,
+            reason: 'No historical mutations detected in the analyzed import snapshot.',
+            label: 'Incremental push recommended'
+        };
+    };
+
+    const storeWorkerResult = (payload: any) => {
+        reconciliationPlanRef.current = payload.reconciliationPlan || null;
+        importPayloadRef.current = {
+            updates: Array.isArray(payload.updates) ? payload.updates : [],
+            history: Array.isArray(payload.history) ? payload.history : [],
+            shipmentLogs: Array.isArray(payload.shipmentLogs) ? payload.shipmentLogs : [],
+            discoveredPlatforms: Array.isArray(payload?.stats?.discoveredPlatforms) ? payload.stats.discoveredPlatforms : []
+        };
+        setPreviewData({
+            stats: payload.stats,
+            features: payload.features,
+            sampleUpdates: Array.isArray(payload.updates) ? payload.updates.slice(0, 50) : [],
+            syncRecommendation: buildSyncRecommendation(payload)
+        });
+    };
+
     const handleConfirmImport = async () => {
-        if (!previewData || isConfirmingImport) return;
+        if (!previewData || !importPayloadRef.current || isConfirmingImport) return;
 
         setIsConfirmingImport(true);
         setImportProgress(5);
@@ -232,11 +173,11 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             }, 180);
 
             await Promise.resolve(onConfirm(
-                previewData.updates,
+                importPayloadRef.current.updates,
                 { current: previewData.stats.dateLabel, last: "Previous" },
-                previewData.history,
-                previewData.shipmentLogs,
-                previewData.stats.discoveredPlatforms,
+                importPayloadRef.current.history,
+                importPayloadRef.current.shipmentLogs,
+                importPayloadRef.current.discoveredPlatforms,
                 resolvedAliases,
                 {
                     salesPushMode: selectedSalesPushMode,
@@ -265,6 +206,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         setImportProgress(0);
         setImportProgressText('Reading file...');
         setError(null);
+        setPreviewData(null);
+        importPayloadRef.current = null;
+        reconciliationPlanRef.current = null;
 
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -296,12 +240,10 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                     worker.terminate();
                     if (payload?.success) {
-                        reconciliationPlanRef.current = payload.reconciliationPlan || null;
                         setRawHeaders(payload.headers || []);
                         setRawRows(payload.rows || []);
                         if (payload.detectedMapping) setMapping(payload.detectedMapping);
-                        const { reconciliationPlan, ...safePreviewData } = payload;
-                        setPreviewData(safePreviewData);
+                        storeWorkerResult(payload);
                         if (Object.keys(payload.unknownSkus || {}).length > 0) {
                             setUnknownSkus(payload.unknownSkus);
                             setStep('resolution');
@@ -371,9 +313,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
             worker.terminate();
             if (payload.success) {
-                reconciliationPlanRef.current = payload.reconciliationPlan || null;
-                const { reconciliationPlan, ...safePreviewData } = payload;
-                setPreviewData(safePreviewData);
+                storeWorkerResult(payload);
                 if (Object.keys(payload.unknownSkus || {}).length > 0) {
                     setUnknownSkus(payload.unknownSkus);
                     setStep('resolution');
@@ -437,9 +377,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
             worker.terminate();
             if (payload.success) {
-                reconciliationPlanRef.current = payload.reconciliationPlan || null;
-                const { reconciliationPlan, ...safePreviewData } = payload;
-                setPreviewData(safePreviewData);
+                storeWorkerResult(payload);
                 setResolvedAliases(payload.resolvedAliases);
                 setStep('preview');
                 setImportProgress(100);
@@ -761,7 +699,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {previewData.updates.slice(0, 50).map((u: any, i: number) => {
+                                        {previewData.sampleUpdates.map((u: any, i: number) => {
                                             const totalFees = (u.sellingFee || 0) + (u.adsFee || 0) + (u.postage || 0) + (u.wmsFee || 0);
                                             return (
                                                 <tr key={i}>

@@ -18,7 +18,9 @@ export default async (req: Request) => {
     try {
         const url = new URL(req.url);
         const ifUpdatedSince = url.searchParams.get('ifUpdatedSince');
-        const sql = neon(process.env.NETLIFY_DATABASE_URL!);
+        const dbUrl = process.env.NETLIFY_DATABASE_URL_UNPOOLED || process.env.NETLIFY_DATABASE_URL;
+        if (!dbUrl) throw new Error('Server config error');
+        const sql = neon(dbUrl);
         const rows = await sql`
             SELECT data, updated_at FROM app_snapshot WHERE id = 1
         `;

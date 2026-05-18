@@ -81,6 +81,21 @@ const REFUND_CURSOR_KEY = 'sello_refunds_updated_at';
 const PROMO_CURSOR_KEY = 'sello_promotions_updated_at';
 const PROMO_BASELINE_COMPLETE_KEY = 'sello_promotions_baseline_complete';
 
+const perfNowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+const perfElapsedMs = (startedAt: number) => Number((perfNowMs() - startedAt).toFixed(1));
+const logPerfPostCommitTail = (label: string, startedAt: number, detail: Record<string, unknown> = {}) => {
+    setTimeout(() => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                console.log(`${label} post-commit tail`, {
+                    elapsedMs: perfElapsedMs(startedAt),
+                    ...detail
+                });
+            });
+        });
+    }, 0);
+};
+
 // Helper for recalculation
 const recalculateProductMetrics = (
     products: Product[],
@@ -760,25 +775,11 @@ export const useAppState = () => {
         });
     }, [navigateToEntity, currentView]);
 
-    const refreshSearchSessions = useCallback((
-        nextProducts: Product[],
-        nextSalesHistory: PriceLog[],
-        nextPricingRules: PricingRules,
-        nextRefundHistory: RefundLog[]
-    ) => {
-        setSearchSessions(prev => (prev || []).map(session => {
-            const { results, timeLabel } = processDataForSearch(
-                session.params,
-                nextProducts,
-                nextSalesHistory,
-                nextPricingRules,
-                nextRefundHistory
-            );
-            return { ...session, results, timeLabel };
-        }));
+    const markSearchSessionsStale = useCallback(() => {
+        setSearchSessions(prev => (prev || []).map(session => ({ ...session, stale: true } as SearchSession)));
     }, []);
 
-    const handleRefineSearch = useCallback((sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, salesHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel }; } return s; })); setIsSearchLoading(false); }, 150); }, [products, salesHistory, pricingRules, refundHistory]);
+    const handleRefineSearch = useCallback((sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, salesHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel, stale: false } as SearchSession; } return s; })); setIsSearchLoading(false); }, 150); }, [products, salesHistory, pricingRules, refundHistory]);
     const deleteSearchSession = useCallback((id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } }, [activeSearchId]);
     const handleViewElasticity = useCallback((product: Product) => { setSelectedElasticityProduct(product); }, []);
     const handleAnalyze = useCallback(async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } }, [pricingRules, thresholds]);
@@ -829,16 +830,11 @@ export const useAppState = () => {
         );
         setProducts(finalProducts);
         setLastRecalculationSummary(summary);
-        refreshSearchSessions(
-            finalProducts,
-            redistributed,
-            customRules || pricingRules,
-            refundHistory
-        );
+        markSearchSessionsStale();
 
         if (isAdminMode) setIsDirty(true);
         return summary;
-    }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, isAdminMode, refundHistory, refreshSearchSessions]);
+    }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, isAdminMode, markSearchSessionsStale]);
 
     const getSharedSnapshot = useCallback(() => ({
         products,
@@ -1087,6 +1083,14 @@ export const useAppState = () => {
             removed: number;
         } | null;
     }) => {
+        const salesImportStartedAt = perfNowMs();
+        console.log('[perf][sales-import] start', {
+            currentProducts: Array.isArray(products) ? products.length : 0,
+            currentSalesHistory: Array.isArray(salesHistory) ? salesHistory.length : 0,
+            incomingProducts: Array.isArray(updatedProductsFromImport) ? updatedProductsFromImport.length : 0,
+            historyPayload: Array.isArray(historyPayload) ? historyPayload.length : 0,
+            pushMode: importDirective?.salesPushMode || null
+        });
         if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
         if (importDirective?.salesPushMode) {
             setSalesPushMode(importDirective.salesPushMode);
@@ -1154,12 +1158,21 @@ export const useAppState = () => {
                 pendingSalesReconciliationRef.current = null;
             }
         }
+        console.log('[perf][sales-import] mapping complete', {
+            elapsedMs: perfElapsedMs(salesImportStartedAt),
+            updatedPriceHistory: updatedPriceHistory.length
+        });
         const mergedProducts = (products || []).map(p => { const update = (updatedProductsFromImport || []).find(u => u.id === p.id); return update ? update : p; });
         const finalProducts = recalculateProductMetrics(mergedProducts, updatedPriceHistory, velocityLookback, getThresholdConfig(), pricingRules, brandMap, categoryMap);
+        console.log('[perf][sales-import] recalc complete', {
+            elapsedMs: perfElapsedMs(salesImportStartedAt),
+            finalProducts: finalProducts.length
+        });
         await new Promise<void>((resolve) => {
             setTimeout(() => {
                 setSalesHistory(updatedPriceHistory);
                 setProducts(finalProducts);
+                markSearchSessionsStale();
                 if (discoveredPlatforms && discoveredPlatforms.length > 0) {
                     setPricingRules(prev => {
                         const newRules = { ...(prev || {}) };
@@ -1180,6 +1193,16 @@ export const useAppState = () => {
                     requestAnimationFrame(() => resolve());
                 });
             }, 0);
+        });
+        console.log('[perf][sales-import] state handoff complete', {
+            elapsedMs: perfElapsedMs(salesImportStartedAt),
+            salesHistory: updatedPriceHistory.length,
+            products: finalProducts.length
+        });
+        logPerfPostCommitTail('[perf][sales-import]', salesImportStartedAt, {
+            salesHistory: updatedPriceHistory.length,
+            products: finalProducts.length,
+            pushMode: importDirective?.salesPushMode || null
         });
 
         // Auto-recalculate optimal prices for SKUs that received new transactions.
@@ -1255,7 +1278,7 @@ export const useAppState = () => {
             }, 0);
         }
     }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, isAdminMode,
-        cohortSnapshot, learnedAliases, priceChangeHistory, promotions]);
+        cohortSnapshot, learnedAliases, priceChangeHistory, promotions, markSearchSessionsStale]);
 
     const handleInventoryImport = useCallback((data: any[]) => {
         const costChanges: CostChangeRecord[] = [];
@@ -1431,6 +1454,12 @@ export const useAppState = () => {
     }, [pricingRules, isAdminMode]);
 
     const handleReturnsImport = useCallback(async (newRefunds: RefundLog[]): Promise<void> => {
+        const refundImportStartedAt = perfNowMs();
+        console.log('[perf][refund-import] start', {
+            incomingRefunds: Array.isArray(newRefunds) ? newRefunds.length : 0,
+            currentRefunds: Array.isArray(refundHistory) ? refundHistory.length : 0,
+            currentProducts: Array.isArray(products) ? products.length : 0
+        });
         // Authoritative snapshot import:
         // local refunds become exactly the newly imported file (after in-file dedupe).
         const uniqueInNew = new Map<string, RefundLog>();
@@ -1451,6 +1480,10 @@ export const useAppState = () => {
         });
 
         if (matchesCurrentState) {
+            console.log('[perf][refund-import] no-op match', {
+                elapsedMs: perfElapsedMs(refundImportStartedAt),
+                refunds: deduped.length
+            });
             updateTimestamp('Refunds');
             if (isAdminMode) setIsDirty(true);
             return;
@@ -1462,31 +1495,72 @@ export const useAppState = () => {
             if (!sku) return;
             refundQtyBySku.set(sku, (refundQtyBySku.get(sku) || 0) + (Number(r.quantity) || 0));
         });
+        console.log('[perf][refund-import] dedupe complete', {
+            elapsedMs: perfElapsedMs(refundImportStartedAt),
+            dedupedRefunds: deduped.length,
+            refundSkus: refundQtyBySku.size
+        });
+
+        const yieldToUi = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 
         await new Promise<void>((resolve) => {
             setTimeout(() => {
                 setRefundHistory(deduped);
+                resolve();
+            }, 0);
+        });
+        console.log('[perf][refund-import] refund history handoff complete', {
+            elapsedMs: perfElapsedMs(refundImportStartedAt),
+            refunds: deduped.length
+        });
+
+        await yieldToUi();
+
+        await new Promise<void>((resolve) => {
+            setTimeout(() => {
                 setProducts(prev => (prev || []).map(p => {
                     const totalRefundQty = refundQtyBySku.get(p.sku) || 0;
                     const returnRate = p.averageDailySales > 0 ? (totalRefundQty / (p.averageDailySales * 30)) * 100 : 0;
-                    return { ...p, returnRate };
+                    return p.returnRate === returnRate ? p : { ...p, returnRate };
                 }));
+                markSearchSessionsStale();
                 updateTimestamp('Refunds');
                 if (isAdminMode) setIsDirty(true);
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => resolve());
-                });
+                resolve();
             }, 0);
         });
-    }, [refundHistory, updateTimestamp, isAdminMode]);
+        console.log('[perf][refund-import] product rewrite complete', {
+            elapsedMs: perfElapsedMs(refundImportStartedAt),
+            refunds: deduped.length
+        });
+        logPerfPostCommitTail('[perf][refund-import]', refundImportStartedAt, {
+            refunds: deduped.length,
+            refundSkus: refundQtyBySku.size
+        });
+
+        await yieldToUi();
+        console.log('[perf][refund-import] complete', {
+            elapsedMs: perfElapsedMs(refundImportStartedAt),
+            refunds: deduped.length
+        });
+    }, [refundHistory, products, updateTimestamp, isAdminMode, markSearchSessionsStale]);
 
     const handleFreightRatesUpload = useCallback(async (rates: FreightRate[]): Promise<void> => {
+        const freightUploadStartedAt = perfNowMs();
+        console.log('[perf][freight-upload] start', {
+            rates: Array.isArray(rates) ? rates.length : 0,
+            currentProducts: Array.isArray(products) ? products.length : 0
+        });
         if (!rates || rates.length === 0) return;
         const rateMap = new Map<string, number>();
         rates.forEach((rate) => {
             const sku = String(rate?.sku || '').trim().toUpperCase();
             if (!sku) return;
             rateMap.set(sku, Number(rate.rate) || 0);
+        });
+        console.log('[perf][freight-upload] map complete', {
+            elapsedMs: perfElapsedMs(freightUploadStartedAt),
+            uniqueSkus: rateMap.size
         });
 
         await new Promise<void>((resolve) => {
@@ -1497,6 +1571,7 @@ export const useAppState = () => {
                     const nextRate = rateMap.get(p.sku.toUpperCase());
                     return nextRate !== undefined ? { ...p, postage: nextRate } : p;
                 }));
+                markSearchSessionsStale();
                 updateTimestamp('FreightRates');
                 if (isAdminMode) setIsDirty(true);
                 requestAnimationFrame(() => {
@@ -1504,7 +1579,16 @@ export const useAppState = () => {
                 });
             }, 0);
         });
-    }, [updateTimestamp, isAdminMode]);
+        console.log('[perf][freight-upload] complete', {
+            elapsedMs: perfElapsedMs(freightUploadStartedAt),
+            rates: rates.length,
+            uniqueSkus: rateMap.size
+        });
+        logPerfPostCommitTail('[perf][freight-upload]', freightUploadStartedAt, {
+            rates: rates.length,
+            uniqueSkus: rateMap.size
+        });
+    }, [products, updateTimestamp, isAdminMode, markSearchSessionsStale]);
 
     const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => {
         let repairedFieldCount = 0;
@@ -2087,6 +2171,12 @@ export const useAppState = () => {
         transactions: any[],
         refunds: any[] = []
     ) => {
+        const applyLoadedStateStartedAt = perfNowMs();
+        console.log('[perf][apply-loaded-state] start', {
+            snapshotProducts: Array.isArray(snapshot?.products) ? snapshot.products.length : 0,
+            transactions: Array.isArray(transactions) ? transactions.length : 0,
+            refunds: Array.isArray(refunds) ? refunds.length : 0
+        });
         const safe = normalizeRestoredState(snapshot);
         const m = migrateRestoredDatabase(safe);
         const mergeHistoryById = <T extends { id?: string; date?: string }>(incoming: any, prev: T[]): T[] => {
@@ -2144,6 +2234,10 @@ export const useAppState = () => {
         }
         const adGroupsToUse = Array.isArray(m.adGroups) ? m.adGroups : [];
         const redistributedTransactions = redistributeAdSpend(transactions, adGroupsToUse);
+        console.log('[perf][apply-loaded-state] redistribution complete', {
+            elapsedMs: perfElapsedMs(applyLoadedStateStartedAt),
+            redistributedTransactions: redistributedTransactions.length
+        });
         const pricingRulesToUse = m.pricingRules || DEFAULT_PRICING_RULES;
         setSalesHistory(redistributedTransactions);
         const finalProducts = recalculateProductMetrics(
@@ -2155,14 +2249,13 @@ export const useAppState = () => {
             m.brandMap,
             m.categoryMap
         );
+        console.log('[perf][apply-loaded-state] recalc complete', {
+            elapsedMs: perfElapsedMs(applyLoadedStateStartedAt),
+            finalProducts: finalProducts.length
+        });
         setProducts(finalProducts);
         setAdGroups(adGroupsToUse);
-        refreshSearchSessions(
-            finalProducts,
-            redistributedTransactions,
-            pricingRulesToUse,
-            Array.isArray(refunds) ? refunds : []
-        );
+        markSearchSessionsStale();
 
         // Restore optimal pricing state if present in snapshot
         if (m.cohortSnapshot) {
@@ -2180,7 +2273,18 @@ export const useAppState = () => {
         if (m.benchmarkUpdateNotices) {
             setBenchmarkUpdateNotices(m.benchmarkUpdateNotices);
         }
-    }, [velocityLookback, thresholds, refreshSearchSessions]);
+        console.log('[perf][apply-loaded-state] complete', {
+            elapsedMs: perfElapsedMs(applyLoadedStateStartedAt),
+            products: finalProducts.length,
+            transactions: redistributedTransactions.length,
+            refunds: Array.isArray(refunds) ? refunds.length : 0
+        });
+        logPerfPostCommitTail('[perf][apply-loaded-state]', applyLoadedStateStartedAt, {
+            products: finalProducts.length,
+            transactions: redistributedTransactions.length,
+            refunds: Array.isArray(refunds) ? refunds.length : 0
+        });
+    }, [velocityLookback, thresholds, markSearchSessionsStale]);
 
     const clearClientDataForImportantRefresh = useCallback(async (token: string) => {
         await clearCache();
@@ -2194,11 +2298,17 @@ export const useAppState = () => {
     }, []);
 
     const handleSync = useCallback(async () => {
+        const syncStartedAt = perfNowMs();
         setSyncStatus('syncing');
         setSyncStep('Connecting...');
         setSyncProgress(0);
         setSyncTotal(0);
         try {
+            console.log('[perf][sync] start', {
+                currentProducts: Array.isArray(products) ? products.length : 0,
+                currentSalesHistory: Array.isArray(salesHistory) ? salesHistory.length : 0,
+                currentRefunds: Array.isArray(refundHistory) ? refundHistory.length : 0
+            });
             let promotionsForCache: PromotionEvent[] = normalizePromotionStatuses(promotions || []);
             const lastKnownSnapshotUpdatedAt = localStorage.getItem('sello_snapshot_updated_at') || undefined;
             const masterRes = await pullSnapshotIfUpdated(lastKnownSnapshotUpdatedAt);
@@ -2305,12 +2415,14 @@ export const useAppState = () => {
                     setSyncStep(`Loading ${totalNew.toLocaleString()} new transactions...`);
 
                     let page = 1;
+                    let nextCursor = firstPage.nextCursor || null;
                     let hasMore = !!firstPage.hasMore;
                     while (hasMore && page < totalPages) {
-                        const pageRes = await pullTransactionPageSince(localNewestDate, page, PAGE_SIZE);
+                        const pageRes = await pullTransactionPageSince(localNewestDate, page, PAGE_SIZE, nextCursor);
                         if (!pageRes.success) { setSyncStatus('error'); setSyncStep(''); return; }
                         allTransactions = [...allTransactions, ...(pageRes.transactions || [])];
                         hasMore = !!pageRes.hasMore;
+                        nextCursor = pageRes.nextCursor || null;
                         setSyncProgress(page + 1);
                         setSyncStep(`Loading new transactions... ${allTransactions.length.toLocaleString()} / ${totalNew.toLocaleString()}`);
                         page++;
@@ -2336,12 +2448,14 @@ export const useAppState = () => {
                 setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
 
                 let page = 1;
+                let nextCursor = firstPage.nextCursor || null;
                 let hasMore = !!firstPage.hasMore;
                 while (hasMore && page < totalPages) {
-                    const pageRes = await pullTransactionPage(page, PAGE_SIZE);
+                    const pageRes = await pullTransactionPage(page, PAGE_SIZE, nextCursor);
                     if (!pageRes.success) { setSyncStatus('error'); setSyncStep(''); return; }
                     allTransactions = [...allTransactions, ...(pageRes.transactions || [])];
                     hasMore = !!pageRes.hasMore;
+                    nextCursor = pageRes.nextCursor || null;
                     setSyncProgress(page + 1);
                     setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
                     page++;
@@ -2349,6 +2463,11 @@ export const useAppState = () => {
             }
 
             setSyncStep('Applying data...');
+            console.log('[perf][sync] transactions ready', {
+                elapsedMs: perfElapsedMs(syncStartedAt),
+                transactions: allTransactions.length,
+                snapshotUpdated: hasSnapshotUpdate
+            });
 
             // Pull refunds (incremental when cursor exists)
             const lastRefundUpdatedAt = forceImportantRefresh
@@ -2522,6 +2641,7 @@ export const useAppState = () => {
                 localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
             }
 
+            const syncApplyStartedAt = perfNowMs();
             if (incoming) {
                 applyLoadedState(incoming, allTransactions, refunds);
             } else {
@@ -2538,13 +2658,21 @@ export const useAppState = () => {
                     categoryMap
                 );
                 setProducts(finalProducts);
-                refreshSearchSessions(
-                    finalProducts,
-                    redistributedTransactions,
-                    pricingRules,
-                    Array.isArray(refunds) ? refunds : []
-                );
+                markSearchSessionsStale();
             }
+            console.log('[perf][sync] apply complete', {
+                elapsedMs: perfElapsedMs(syncApplyStartedAt),
+                totalElapsedMs: perfElapsedMs(syncStartedAt),
+                transactions: allTransactions.length,
+                refunds: Array.isArray(refunds) ? refunds.length : 0,
+                usedIncomingSnapshot: Boolean(incoming)
+            });
+            logPerfPostCommitTail('[perf][sync]', syncApplyStartedAt, {
+                totalElapsedMs: perfElapsedMs(syncStartedAt),
+                transactions: allTransactions.length,
+                refunds: Array.isArray(refunds) ? refunds.length : 0,
+                usedIncomingSnapshot: Boolean(incoming)
+            });
 
             const resolvedProducts = incoming
                 ? (Array.isArray(incoming.products) ? incoming.products : [])
@@ -2583,6 +2711,12 @@ export const useAppState = () => {
                 console.log(`[sync] important refresh token consumed: ${remoteForceToken}`);
             }
             console.log(`[sync] complete  -  cached version: ${version}`);
+            console.log('[perf][sync] complete', {
+                elapsedMs: perfElapsedMs(syncStartedAt),
+                transactions: allTransactions.length,
+                refunds: Array.isArray(refunds) ? refunds.length : 0,
+                promotions: Array.isArray(promotionsForCache) ? promotionsForCache.length : 0
+            });
             setSyncProgress(0);
             setSyncTotal(0);
             setSyncStep('');
@@ -2596,7 +2730,7 @@ export const useAppState = () => {
         }
     }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, salesHistory, pricingRules, brandMap, categoryMap, getSharedSnapshot, pullSnapshot,
         clearClientDataForImportantRefresh,
-        refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets]);
+        refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets, markSearchSessionsStale]);
 
     const resolveConflicts = useCallback(async (keepLocal: boolean) => {
         const res = await pullSnapshot();
@@ -2716,24 +2850,26 @@ export const useAppState = () => {
                     if (cachedPromotions.length > 0) {
                         setPromotions(cachedPromotions);
                     }
-                    const promoRes = await pullPromotionsSince(undefined);
-                    if (promoRes.success && Array.isArray(promoRes.promotions)) {
-                        const remotePromotions = normalizePromotionStatuses(promoRes.promotions);
-                        const nextPromotions = (remotePromotions.length === 0 && cachedPromotions.length > 0)
-                            ? cachedPromotions
-                            : remotePromotions;
-                        if (remotePromotions.length === 0 && cachedPromotions.length > 0) {
-                            console.warn('[init] promotions pull returned empty; preserving cached ' + cachedPromotions.length);
-                        }
-                        setPromotions(nextPromotions);
-                        localStorage.setItem(PROMO_BASELINE_COMPLETE_KEY, '1');
-                        console.log('[init] promotions loaded from DB - ' + nextPromotions.length + ' campaigns');
-                    } else {
-                        console.warn('[init] promotions pull failed on cache init (non-fatal):', promoRes.error);
-                        localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
-                    }
                     setSyncStatus('idle');
                     console.log('[init] loaded from cache instantly');
+                    setTimeout(async () => {
+                        const promoRes = await pullPromotionsSince(undefined);
+                        if (promoRes.success && Array.isArray(promoRes.promotions)) {
+                            const remotePromotions = normalizePromotionStatuses(promoRes.promotions);
+                            const nextPromotions = (remotePromotions.length === 0 && cachedPromotions.length > 0)
+                                ? cachedPromotions
+                                : remotePromotions;
+                            if (remotePromotions.length === 0 && cachedPromotions.length > 0) {
+                                console.warn('[init] promotions pull returned empty; preserving cached ' + cachedPromotions.length);
+                            }
+                            setPromotions(nextPromotions);
+                            localStorage.setItem(PROMO_BASELINE_COMPLETE_KEY, '1');
+                            console.log('[init] promotions loaded from DB - ' + nextPromotions.length + ' campaigns');
+                        } else {
+                            console.warn('[init] promotions pull failed on cache init (non-fatal):', promoRes.error);
+                            localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
+                        }
+                    }, 0);
                     return;
                     }
                 }

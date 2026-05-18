@@ -250,17 +250,22 @@ export async function getLatestTransactionDate():
 
 export async function pullTransactionPage(
     page: number,
-    pageSize: number = 2000
+    pageSize: number = 2000,
+    cursor?: { afterDate: string; afterId: string } | null
 ): Promise<{
     success: boolean;
     transactions?: PriceLog[];
     totalRows?: number;
     hasMore?: boolean;
+    nextCursor?: { afterDate: string; afterId: string } | null;
     error?: string
 }> {
     try {
+        const cursorQs = cursor?.afterDate && cursor?.afterId
+            ? `&afterDate=${encodeURIComponent(cursor.afterDate)}&afterId=${encodeURIComponent(cursor.afterId)}`
+            : '';
         const res = await fetch(
-            `${BASE}/db-pull-transactions?page=${page}&pageSize=${pageSize}`
+            `${BASE}/db-pull-transactions?page=${page}&pageSize=${pageSize}${cursorQs}`
         );
         return await res.json();
     } catch {
@@ -271,17 +276,22 @@ export async function pullTransactionPage(
 export async function pullTransactionPageSince(
     since: string,
     page: number,
-    pageSize: number = 2000
+    pageSize: number = 2000,
+    cursor?: { afterDate: string; afterId: string } | null
 ): Promise<{
     success: boolean;
     transactions?: PriceLog[];
     totalRows?: number;
     hasMore?: boolean;
+    nextCursor?: { afterDate: string; afterId: string } | null;
     error?: string
 }> {
     try {
+        const cursorQs = cursor?.afterDate && cursor?.afterId
+            ? `&afterDate=${encodeURIComponent(cursor.afterDate)}&afterId=${encodeURIComponent(cursor.afterId)}`
+            : '';
         const res = await fetch(
-            `${BASE}/db-pull-transactions?page=${page}&pageSize=${pageSize}&since=${encodeURIComponent(since)}`
+            `${BASE}/db-pull-transactions?page=${page}&pageSize=${pageSize}&since=${encodeURIComponent(since)}${cursorQs}`
         );
         return await res.json();
     } catch {

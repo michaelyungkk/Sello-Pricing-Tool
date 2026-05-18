@@ -20,9 +20,13 @@ export default async (req: Request) => {
         const page = parseInt(url.searchParams.get('page') || '0');
         const pageSize = parseInt(url.searchParams.get('pageSize') || '2000');
         const since = url.searchParams.get('since') || null; // ISO date string for incremental sync
+        const afterDate = url.searchParams.get('afterDate') || null;
+        const afterId = url.searchParams.get('afterId') || null;
         const offset = page * pageSize;
 
-        const sql = neon(process.env.NETLIFY_DATABASE_URL!);
+        const dbUrl = process.env.NETLIFY_DATABASE_URL_UNPOOLED || process.env.NETLIFY_DATABASE_URL;
+        if (!dbUrl) throw new Error('Server config error');
+        const sql = neon(dbUrl);
 
         // Get total count on first page only
         let totalRows = 0;
@@ -33,30 +37,68 @@ export default async (req: Request) => {
             totalRows = Number(countRes[0]?.total || 0);
         }
 
-        const rows = since
-            ? await sql`
-                SELECT id, sku, date, price, velocity, margin, profit,
-                       ads_spend, raw_ads_spend, platform, order_id,
-                       postcode, logistic_partner, logistic_service,
-                       real_postage, real_extra_freight,
-                       cogs, selling_fee, ads_fee, postage, other_fee,
-                       subscription_fee, wms_fee, promo_rel
-                FROM transaction_history
-                WHERE date > ${since}
-                ORDER BY date DESC, id DESC
-                LIMIT ${pageSize} OFFSET ${offset}
-              `
-            : await sql`
-                SELECT id, sku, date, price, velocity, margin, profit,
-                       ads_spend, raw_ads_spend, platform, order_id,
-                       postcode, logistic_partner, logistic_service,
-                       real_postage, real_extra_freight,
-                       cogs, selling_fee, ads_fee, postage, other_fee,
-                       subscription_fee, wms_fee, promo_rel
-                FROM transaction_history
-                ORDER BY date DESC, id DESC
-                LIMIT ${pageSize} OFFSET ${offset}
-              `;
+        const useCursor = Boolean(afterDate && afterId);
+        const rows = useCursor
+            ? (
+                since
+                    ? await sql`
+                        SELECT id, sku, date, price, velocity, margin, profit,
+                               ads_spend, raw_ads_spend, platform, order_id,
+                               postcode, logistic_partner, logistic_service,
+                               real_postage, real_extra_freight,
+                               cogs, selling_fee, ads_fee, postage, other_fee,
+                               subscription_fee, wms_fee, promo_rel
+                        FROM transaction_history
+                        WHERE date > ${since}
+                          AND (
+                            date < ${afterDate}
+                            OR (date = ${afterDate} AND id < ${afterId})
+                          )
+                        ORDER BY date DESC, id DESC
+                        LIMIT ${pageSize}
+                      `
+                    : await sql`
+                        SELECT id, sku, date, price, velocity, margin, profit,
+                               ads_spend, raw_ads_spend, platform, order_id,
+                               postcode, logistic_partner, logistic_service,
+                               real_postage, real_extra_freight,
+                               cogs, selling_fee, ads_fee, postage, other_fee,
+                               subscription_fee, wms_fee, promo_rel
+                        FROM transaction_history
+                        WHERE (
+                            date < ${afterDate}
+                            OR (date = ${afterDate} AND id < ${afterId})
+                        )
+                        ORDER BY date DESC, id DESC
+                        LIMIT ${pageSize}
+                      `
+            )
+            : (
+                since
+                    ? await sql`
+                        SELECT id, sku, date, price, velocity, margin, profit,
+                               ads_spend, raw_ads_spend, platform, order_id,
+                               postcode, logistic_partner, logistic_service,
+                               real_postage, real_extra_freight,
+                               cogs, selling_fee, ads_fee, postage, other_fee,
+                               subscription_fee, wms_fee, promo_rel
+                        FROM transaction_history
+                        WHERE date > ${since}
+                        ORDER BY date DESC, id DESC
+                        LIMIT ${pageSize} OFFSET ${offset}
+                      `
+                    : await sql`
+                        SELECT id, sku, date, price, velocity, margin, profit,
+                               ads_spend, raw_ads_spend, platform, order_id,
+                               postcode, logistic_partner, logistic_service,
+                               real_postage, real_extra_freight,
+                               cogs, selling_fee, ads_fee, postage, other_fee,
+                               subscription_fee, wms_fee, promo_rel
+                        FROM transaction_history
+                        ORDER BY date DESC, id DESC
+                        LIMIT ${pageSize} OFFSET ${offset}
+                      `
+            );
 
         const transactions = rows.map(r => ({
             id: r.id,
@@ -86,6 +128,14 @@ export default async (req: Request) => {
             promoRel: r.promo_rel != null ? Number(r.promo_rel) : undefined
         }));
 
+        const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+        const nextCursor = rows.length === pageSize && lastRow
+            ? {
+                afterDate: lastRow.date,
+                afterId: lastRow.id
+            }
+            : null;
+
         return new Response(
             JSON.stringify({
                 success: true,
@@ -93,7 +143,8 @@ export default async (req: Request) => {
                 page,
                 pageSize,
                 totalRows,
-                hasMore: rows.length === pageSize
+                hasMore: rows.length === pageSize,
+                nextCursor
             }),
             { status: 200, headers: CORS }
         );

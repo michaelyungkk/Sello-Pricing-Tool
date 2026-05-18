@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Product, PricingRules, SearchConfig, PriceChangeRecord, OptimalPriceResult, PromotionEvent, NavigationIntent } from '../../../types';
 import { SearchIntent } from '../../../services/searchIntentService';
 import { isAdsEnabled } from '../../../services/platformCapabilities';
@@ -10,7 +10,7 @@ import { SearchResultPanels } from './parts/SearchResultPanels';
 import { RotateCcw } from 'lucide-react';
 
 interface SearchResultsPageContainerProps {
-    data: { results: any[], query: string, params: SearchIntent, id?: string };
+    data: { results: any[], query: string, params: SearchIntent, id?: string, stale?: boolean };
     products: Product[];
     pricingRules: PricingRules;
     themeColor: string;
@@ -37,6 +37,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
     const [groupBy, setGroupBy] = useState<GroupBy>('platform');
     const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
     const [expandedSubGroup, setExpandedSubGroup] = useState<string | null>(null);
+    const staleRefreshRef = useRef<string | null>(null);
     const [deductRefunds, setDeductRefunds] = useState<boolean>(() => {
         return localStorage.getItem('sello_search_deduct_refunds') === 'true';
     });
@@ -44,6 +45,16 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
     useEffect(() => {
         localStorage.setItem('sello_search_deduct_refunds', deductRefunds.toString());
     }, [deductRefunds]);
+
+    useEffect(() => {
+        if (!data.stale || !data.id) {
+            staleRefreshRef.current = null;
+            return;
+        }
+        if (staleRefreshRef.current === data.id) return;
+        staleRefreshRef.current = data.id;
+        onRefine(data.id, data.params);
+    }, [data.stale, data.id, data.params, onRefine]);
 
     const isDeepDive = data.params.primaryMetric === 'DEEP_DIVE' && data.results.length > 0;
 

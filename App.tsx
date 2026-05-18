@@ -104,6 +104,7 @@ interface ReleaseNoteItem {
 
 const RELEASE_NOTES_SEEN_KEY = 'sello_release_notes_seen_id';
 const APP_BOOT_START_MS = typeof performance !== 'undefined' ? performance.now() : Date.now();
+const perfNowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 const App: React.FC = () => {
     const {
@@ -268,6 +269,11 @@ const App: React.FC = () => {
     // Progressive page mounting — pages stagger-mount during browser idle time after initial render
     const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','ad-campaigns','tools','definitions','settings','custom-report'];
     const [mountedPages, setMountedPages] = useState<Set<string>>(() => new Set<string>());
+    const mountPerfRef = React.useRef<{
+        schedulerStartedAt?: number;
+        firstDataReadyLogged?: boolean;
+        firstCurrentViewMounted?: boolean;
+    }>({});
     // Frozen props for background-mounted pages — only update when page is active
     // Prevents expensive useMemo recalcs in hidden pages when unrelated state changes
     const frozenPromotionsRef = React.useRef(promotions || []);
@@ -363,22 +369,33 @@ const App: React.FC = () => {
     }, [navigationNotice]);
 
     useEffect(() => {
+        const schedulerStartedAt = perfNowMs();
+        mountPerfRef.current.schedulerStartedAt = schedulerStartedAt;
+        console.log('[perf][app-mount] scheduler start', {
+            currentView,
+            pageOrderCount: PAGE_ORDER.length,
+            elapsedMs: Number((schedulerStartedAt - APP_BOOT_START_MS).toFixed(1))
+        });
         let i = 0;
+        let timer: number | null = null;
         const schedule = () => {
             if (i >= PAGE_ORDER.length) return;
             const page = PAGE_ORDER[i++];
             setMountedPages(prev => new Set([...prev, page]));
-            if (typeof requestIdleCallback !== 'undefined') {
-                requestIdleCallback(schedule, { timeout: 300 });
-            } else {
-                setTimeout(schedule, 50);
+            console.log('[perf][app-mount] page mounted', {
+                page,
+                mountedCount: i,
+                elapsedMs: Number((perfNowMs() - schedulerStartedAt).toFixed(1)),
+                sinceBootMs: Number((perfNowMs() - APP_BOOT_START_MS).toFixed(1))
+            });
+            timer = window.setTimeout(schedule, 25);
+        };
+        timer = window.setTimeout(schedule, 25);
+        return () => {
+            if (timer !== null) {
+                window.clearTimeout(timer);
             }
         };
-        if (typeof requestIdleCallback !== 'undefined') {
-            requestIdleCallback(schedule, { timeout: 500 });
-        } else {
-            setTimeout(schedule, 100);
-        }
     }, []);
 
     // Admin mode local UI state
@@ -543,6 +560,18 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const hasAnyData = (products?.length || 0) > 0 || (salesHistory?.length || 0) > 0 || (refundHistory?.length || 0) > 0;
+        if (hasAnyData && syncStatus === 'idle' && !mountPerfRef.current.firstDataReadyLogged) {
+            mountPerfRef.current.firstDataReadyLogged = true;
+            console.log('[perf][app-mount] data-ready gate opened', {
+                currentView,
+                mountedCurrentView: mountedPages.has(currentView),
+                mountedCount: mountedPages.size,
+                products: products?.length || 0,
+                salesHistory: salesHistory?.length || 0,
+                refunds: refundHistory?.length || 0,
+                elapsedMs: Number((perfNowMs() - APP_BOOT_START_MS).toFixed(1))
+            });
+        }
         if (syncStatus === 'idle' && hasAnyData && !perfMarksRef.current.firstDataReadyAt) {
             const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
             perfMarksRef.current.firstDataReadyAt = now;
@@ -552,12 +581,30 @@ const App: React.FC = () => {
             };
             console.log(`[perf] first_view_data_ready: ${(now - APP_BOOT_START_MS).toFixed(1)}ms`);
         }
-    }, [syncStatus, products, salesHistory, refundHistory]);
+    }, [syncStatus, products, salesHistory, refundHistory, mountedPages, currentView]);
+
+    useEffect(() => {
+        if (mountedPages.has(currentView) && !mountPerfRef.current.firstCurrentViewMounted) {
+            mountPerfRef.current.firstCurrentViewMounted = true;
+            console.log('[perf][app-mount] current view mounted', {
+                currentView,
+                mountedCount: mountedPages.size,
+                elapsedMs: Number((perfNowMs() - APP_BOOT_START_MS).toFixed(1))
+            });
+        }
+    }, [mountedPages, currentView]);
 
     useEffect(() => {
         if (perfLoggedRef.current) return;
         if (!perfMarksRef.current.firstDataReadyAt) return;
         if (!mountedPages.has(currentView)) return;
+
+        console.log('[perf][app-mount] interactive gate opened', {
+            currentView,
+            mountedCount: mountedPages.size,
+            dataReadyElapsedMs: Number(((perfMarksRef.current.firstDataReadyAt || perfNowMs()) - APP_BOOT_START_MS).toFixed(1)),
+            elapsedMs: Number((perfNowMs() - APP_BOOT_START_MS).toFixed(1))
+        });
 
         const stampInteractive = () => {
             if (perfLoggedRef.current) return;
@@ -1102,7 +1149,7 @@ const App: React.FC = () => {
                                             Try Again
                                         </button>
                                     </div>
-                                ) : (isAdminMode || startupSyncMode === 'local') ? (
+                                ) : (startupSyncMode === 'local') ? (
                                     <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full">
                                         <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
                                             style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}>
