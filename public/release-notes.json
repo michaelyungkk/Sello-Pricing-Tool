@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-15T01:23:07.658Z",
+  "generatedAt": "2026-05-18T00:46:56.313Z",
   "items": [
+    {
+      "id": "ab8c94a40187",
+      "date": "2026-05-15T11:22:36+10:00",
+      "summary": "Fix snapshot chunking for UTF-8 payloads"
+    },
     {
       "id": "d830b7fd8e39",
       "date": "2026-05-15T11:17:28+10:00",
@@ -95,11 +100,6 @@
       "id": "b138dc06b90e",
       "date": "2026-04-29T15:53:56+10:00",
       "summary": "Add release notes hook and polish pricing and overview UI"
-    },
-    {
-      "id": "8164de508211",
-      "date": "2026-04-27T16:23:35+10:00",
-      "summary": "Disable release notes auto-commit in CI"
     }
   ]
 }

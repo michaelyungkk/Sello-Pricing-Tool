@@ -341,6 +341,35 @@ const refundSignaturePayload = (r: any) => ({
 
 const buildRefundSignature = (r: any): string => toHash(buildStableString(refundSignaturePayload(r)));
 const buildPromotionSignature = (promotion: any): string => toHash(buildStableString(promotion));
+const toSalesCompareDateKey = (value: unknown): string =>
+    asDateKey(value == null ? null : String(value)) || '';
+const toSalesCompareFixedNum = (value: unknown, dp = 4): string => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '0';
+    return n.toFixed(dp);
+};
+const buildSalesCompareKey = (row: any): string => {
+    const date = toSalesCompareDateKey(row?.date);
+    const sku = String(row?.sku || '').trim().toUpperCase();
+    const platform = String(row?.platform || 'General').trim();
+    const orderId = String(row?.orderId || '').trim();
+    return orderId ? `${sku}|${date}|${platform}|${orderId}` : `${sku}|${date}|${platform}`;
+};
+const buildSalesCompareSig = (row: any): string => [
+    toSalesCompareFixedNum(row?.price, 4),
+    toSalesCompareFixedNum(row?.velocity, 4),
+    toSalesCompareFixedNum(row?.cogs, 4),
+    toSalesCompareFixedNum(row?.sellingFee, 4),
+    toSalesCompareFixedNum(row?.adsFee, 4),
+    toSalesCompareFixedNum(row?.postage, 4),
+    toSalesCompareFixedNum(row?.otherFee, 4),
+    toSalesCompareFixedNum(row?.subscriptionFee, 4),
+    toSalesCompareFixedNum(row?.wmsFee, 4),
+    toSalesCompareFixedNum(row?.promoRel, 4),
+    String(row?.postcode || '').trim().toUpperCase(),
+    String(row?.logisticPartner || '').trim(),
+    String(row?.logisticService || '').trim(),
+].join('|');
 
 const isArrivedShipmentStatus = (status?: string): boolean => {
     const raw = String(status || '').trim();
@@ -411,7 +440,7 @@ export const useAppState = () => {
     );
     const [isDirty, setIsDirty] = useState<boolean>(false);
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'pushing' | 'error'>('idle');
-    const [salesPushMode, setSalesPushMode] = useState<'incremental' | 'full_snapshot'>('incremental');
+    const [salesPushMode, setSalesPushMode] = useState<'incremental' | 'reconciliation' | 'full_snapshot'>('incremental');
     const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(
         () => localStorage.getItem('sello_last_synced_at')
     );
@@ -422,6 +451,16 @@ export const useAppState = () => {
     const [syncStep, setSyncStep] = useState<string>('');
     const [syncProgress, setSyncProgress] = useState<number>(0);
     const [syncTotal, setSyncTotal] = useState<number>(0);
+    const [startupChoicePending, setStartupChoicePending] = useState<boolean>(true);
+    const [startupSyncMode, setStartupSyncMode] = useState<'sync' | 'local' | null>(null);
+    const [isRestoring, setIsRestoring] = useState<boolean>(false);
+    const pendingSalesReconciliationRef = useRef<{
+        upsertKeys: string[];
+        removedKeys: string[];
+        added: number;
+        changed: number;
+        removed: number;
+    } | null>(null);
 
     const [brandMap, setBrandMap] = useState<AttributeMap>({});
     const [categoryMap, setCategoryMap] = useState<AttributeMap>({});
@@ -892,13 +931,25 @@ export const useAppState = () => {
         const reader = new FileReader();
         reader.onload = async (event) => {
             let worker: Worker | null = null;
+            const restoreStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
             try {
+                setIsRestoring(true);
+                setStartupSyncMode('local');
+                setStartupChoicePending(false);
+                console.log('[restore] start', {
+                    fileName: file.name,
+                    fileSizeBytes: file.size
+                });
                 setSyncStatus('syncing');
                 setSyncProgress(0);
                 setSyncTotal(4);
                 setSyncStep('Reading restore backup...');
 
                 const rawText = String(event.target?.result || '');
+                console.log('[restore] file read complete', {
+                    elapsedMs: Number(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - restoreStartedAt).toFixed(1)),
+                    rawTextLength: rawText.length
+                });
                 await new Promise<void>(resolve => setTimeout(resolve, 0));
 
                 worker = new Worker(
@@ -930,8 +981,23 @@ export const useAppState = () => {
                     worker.postMessage({ rawText });
                 });
 
+                console.log('[restore] worker complete', {
+                    elapsedMs: Number(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - restoreStartedAt).toFixed(1)),
+                    products: Array.isArray(restored.products) ? restored.products.length : 0,
+                    priceHistory: Array.isArray(restored.priceHistory) ? restored.priceHistory.length : 0,
+                    refundHistory: Array.isArray(restored.refundHistory) ? restored.refundHistory.length : 0,
+                    rebuiltSalesHistory: Array.isArray(restored.rebuiltSalesHistory) ? restored.rebuiltSalesHistory.length : 0,
+                    rebuiltProducts: Array.isArray(restored.rebuiltProducts) ? restored.rebuiltProducts.length : 0
+                });
+
                 setSyncProgress(2);
                 setSyncStep('Applying restored settings...');
+                const settingsApplyStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+                console.log('[restore] applying settings', {
+                    promotions: Array.isArray(restored.promotions) ? restored.promotions.length : 0,
+                    freightRates: Array.isArray(restored.freightRates) ? restored.freightRates.length : 0,
+                    adGroups: Array.isArray(restored.adGroups) ? restored.adGroups.length : 0
+                });
 
                 setRefundHistory(restored.refundHistory);
                 setFreightRates(restored.freightRates);
@@ -966,6 +1032,9 @@ export const useAppState = () => {
                 }
 
                 await new Promise<void>(resolve => setTimeout(resolve, 0));
+                console.log('[restore] settings apply scheduled', {
+                    elapsedMs: Number(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - settingsApplyStartedAt).toFixed(1))
+                });
                 setSyncProgress(3);
                 setSyncStep('Applying rebuilt transactions and product metrics...');
 
@@ -980,9 +1049,14 @@ export const useAppState = () => {
                 setSyncProgress(4);
                 setSyncStep('');
                 setSyncStatus('idle');
+                setIsRestoring(false);
                 alert(t('alert_db_restore_success'));
             } catch (err) {
-                console.error("Restore failed", err);
+                console.error('[restore] failed', {
+                    elapsedMs: Number(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - restoreStartedAt).toFixed(1)),
+                    error: err
+                });
+                setIsRestoring(false);
                 setSyncStatus('error');
                 setSyncStep('');
                 setSyncProgress(0);
@@ -1002,7 +1076,17 @@ export const useAppState = () => {
     const handleUpdateCostChangeRecord = useCallback((recordToUpdate: CostChangeRecord) => { setCostChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
     const handleUpdateInventoryChangeRecord = useCallback((recordToUpdate: InventoryChangeRecord) => { setInventoryChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
 
-    const handleSalesImportConfirm = useCallback(async (updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: any[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>, importDirective?: { salesPushMode: 'incremental' | 'full_snapshot'; reason: string }) => {
+    const handleSalesImportConfirm = useCallback(async (updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: any[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>, importDirective?: {
+        salesPushMode: 'incremental' | 'reconciliation' | 'full_snapshot';
+        reason: string;
+        reconciliationPlan?: {
+            upsertKeys: string[];
+            removedKeys: string[];
+            added: number;
+            changed: number;
+            removed: number;
+        } | null;
+    }) => {
         if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
         if (importDirective?.salesPushMode) {
             setSalesPushMode(importDirective.salesPushMode);
@@ -1057,6 +1141,18 @@ export const useAppState = () => {
             // Authoritative snapshot import:
             // replace local sales history with the imported file snapshot.
             updatedPriceHistory = [...newLogs];
+
+            if (importDirective?.salesPushMode === 'reconciliation' && importDirective.reconciliationPlan) {
+                pendingSalesReconciliationRef.current = importDirective.reconciliationPlan;
+                console.log('[sales-import] reconciliation plan prepared', {
+                    upserts: importDirective.reconciliationPlan.upsertKeys.length,
+                    added: importDirective.reconciliationPlan.added,
+                    changed: importDirective.reconciliationPlan.changed,
+                    removed: importDirective.reconciliationPlan.removed
+                });
+            } else {
+                pendingSalesReconciliationRef.current = null;
+            }
         }
         const mergedProducts = (products || []).map(p => { const update = (updatedProductsFromImport || []).find(u => u.id === p.id); return update ? update : p; });
         const finalProducts = recalculateProductMetrics(mergedProducts, updatedPriceHistory, velocityLookback, getThresholdConfig(), pricingRules, brandMap, categoryMap);
@@ -1297,6 +1393,7 @@ export const useAppState = () => {
 
     const handleResetSalesData = useCallback(() => {
         setSalesHistory([]);
+        pendingSalesReconciliationRef.current = null;
         const currentThresholds = getThresholdConfig();
         const recalculated = recalculateProductMetrics(products, [], velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
         setProducts(recalculated);
@@ -1629,9 +1726,23 @@ export const useAppState = () => {
             const localCostChangeCount = costChangeHistory?.length || 0;
             const localInventoryChangeCount = inventoryChangeHistory?.length || 0;
             let newTransactions = allTransactions;
-            const doFullSnapshotReplace = salesPushMode === 'full_snapshot';
+            let removedTransactionKeys: string[] = [];
+            const pendingSalesReconciliation = pendingSalesReconciliationRef.current;
+            const requestedReconciliation = salesPushMode === 'reconciliation';
+            const canReconcile = requestedReconciliation && !!pendingSalesReconciliation;
+            const doReconciliation = canReconcile;
+            const doFullSnapshotReplace = salesPushMode === 'full_snapshot' || (requestedReconciliation && !canReconcile);
             const fullSnapshotPushStartedAt = doFullSnapshotReplace ? performance.now() : 0;
-            if (!doFullSnapshotReplace) {
+            if (doReconciliation && pendingSalesReconciliation) {
+                const upsertKeySet = new Set(pendingSalesReconciliation.upsertKeys);
+                newTransactions = allTransactions.filter(tx => upsertKeySet.has(buildSalesCompareKey(tx)));
+                removedTransactionKeys = pendingSalesReconciliation.removedKeys;
+                console.log(
+                    `[push] sales reconciliation mode - local total: ${localTotal}, ` +
+                    `upserts: ${newTransactions.length} (added:${pendingSalesReconciliation.added}, changed:${pendingSalesReconciliation.changed}), ` +
+                    `removals: ${removedTransactionKeys.length}`
+                );
+            } else if (!doFullSnapshotReplace) {
                 const latestRes = await getLatestTransactionDate();
                 if (!latestRes.success) {
                     console.error('[push] failed to get latest date for incremental mode:', latestRes.error);
@@ -1647,6 +1758,9 @@ export const useAppState = () => {
                     });
                 console.log(`[push] sales incremental mode - local total: ${localTotal}, sending: ${newTransactions.length} from ${latestDateInDb || 'start'}`);
             } else {
+                if (requestedReconciliation && !pendingSalesReconciliation) {
+                    console.warn('[push] reconciliation requested but no plan is available; falling back to full snapshot replace');
+                }
                 console.log(`[push] sales snapshot replace - local total: ${localTotal}, sending full snapshot: ${newTransactions.length}`);
             }
             console.log(
@@ -1655,12 +1769,21 @@ export const useAppState = () => {
             );
 
             // Step 3: Calculate total chunks for progress
-            const CHUNK_SIZE = doFullSnapshotReplace ? 500 : 50;
+            const CHUNK_SIZE = doFullSnapshotReplace || doReconciliation ? 500 : 50;
             const txChunks: typeof newTransactions[] = [];
             for (let i = 0; i < newTransactions.length; i += CHUNK_SIZE) {
                 txChunks.push(newTransactions.slice(i, i + CHUNK_SIZE));
             }
-            const totalSteps = txChunks.length + (doFullSnapshotReplace ? 3 : 1); // optional begin/finalize + chunk uploads + snapshot
+            const DELETE_CHUNK_SIZE = 1000;
+            const deleteChunks: string[][] = [];
+            for (let i = 0; i < removedTransactionKeys.length; i += DELETE_CHUNK_SIZE) {
+                deleteChunks.push(removedTransactionKeys.slice(i, i + DELETE_CHUNK_SIZE));
+            }
+            const totalSteps = doFullSnapshotReplace
+                ? txChunks.length + 3
+                : doReconciliation
+                    ? txChunks.length + deleteChunks.length + 1
+                    : txChunks.length + 1;
             setPushTotal(totalSteps);
             setPushProgress(0);
 
@@ -1703,7 +1826,7 @@ export const useAppState = () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         password: storedAdminPassword,
-                        action: doFullSnapshotReplace ? 'upload_replace_chunk' : undefined,
+                        action: doFullSnapshotReplace ? 'upload_replace_chunk' : (doReconciliation ? 'reconcile_upsert' : undefined),
                         uploadId: doFullSnapshotReplace ? replaceUploadId : undefined,
                         transactions: txChunks[i],
                         chunkIndex: i,
@@ -1712,7 +1835,7 @@ export const useAppState = () => {
                 });
                 const data = await res.json();
                 if (!data.success) {
-                    console.error('[push][sales-full][chunk][error]', {
+                    console.error(doFullSnapshotReplace ? '[push][sales-full][chunk][error]' : '[push][sales-reconcile][upsert][error]', {
                         status: res.status,
                         uploadId: replaceUploadId,
                         chunkIndex: i + 1,
@@ -1734,12 +1857,20 @@ export const useAppState = () => {
                     setSyncStatus('error');
                     return;
                 }
+                const elapsedMs = performance.now() - chunkStartedAt;
+                const rowCount = txChunks[i].length;
+                const rowsPerSecond = elapsedMs > 0 ? (rowCount / elapsedMs) * 1000 : 0;
                 if (doFullSnapshotReplace) {
-                    const elapsedMs = performance.now() - chunkStartedAt;
-                    const rowCount = txChunks[i].length;
-                    const rowsPerSecond = elapsedMs > 0 ? (rowCount / elapsedMs) * 1000 : 0;
                     console.log('[push][sales-full][chunk]', {
                         uploadId: replaceUploadId,
+                        chunkIndex: i + 1,
+                        totalChunks: txChunks.length,
+                        rows: rowCount,
+                        elapsedMs: Number(elapsedMs.toFixed(1)),
+                        rowsPerSecond: Number(rowsPerSecond.toFixed(1))
+                    });
+                } else if (doReconciliation) {
+                    console.log('[push][sales-reconcile][upsert]', {
                         chunkIndex: i + 1,
                         totalChunks: txChunks.length,
                         rows: rowCount,
@@ -1794,7 +1925,48 @@ export const useAppState = () => {
                 setPushProgress(txChunks.length + 2);
             }
 
-            console.log(`[push] complete  -  pushed ${newTransactions.length} transactions`);
+            if (doReconciliation) {
+                for (let i = 0; i < deleteChunks.length; i++) {
+                    const deleteStartedAt = performance.now();
+                    const res = await fetch('/.netlify/functions/db-push-transactions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            password: storedAdminPassword,
+                            action: 'reconcile_delete',
+                            removedKeys: deleteChunks[i],
+                            chunkIndex: i,
+                            totalChunks: deleteChunks.length
+                        })
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        console.error('[push][sales-reconcile][delete][error]', {
+                            status: res.status,
+                            chunkIndex: i + 1,
+                            totalChunks: deleteChunks.length,
+                            rows: deleteChunks[i].length,
+                            payload: data
+                        });
+                        setSyncStatus('error');
+                        return;
+                    }
+                    const elapsedMs = performance.now() - deleteStartedAt;
+                    console.log('[push][sales-reconcile][delete]', {
+                        chunkIndex: i + 1,
+                        totalChunks: deleteChunks.length,
+                        rows: deleteChunks[i].length,
+                        elapsedMs: Number(elapsedMs.toFixed(1))
+                    });
+                    setPushProgress(txChunks.length + i + 1);
+                }
+            }
+
+            console.log(
+                doReconciliation
+                    ? `[push] reconciliation complete  -  upserted ${newTransactions.length} rows, deleted ${removedTransactionKeys.length} rows`
+                    : `[push] complete  -  pushed ${newTransactions.length} transactions`
+            );
 
             // Push refunds as authoritative snapshot (full replace).
             // ERP files can amend/remove prior rows, so delta-only upsert is not sufficient.
@@ -1876,6 +2048,7 @@ export const useAppState = () => {
 
             setPushProgress(0);
             setPushTotal(0);
+            pendingSalesReconciliationRef.current = null;
             setIsDirty(false);
             setShowSaveToast(true);
             setTimeout(() => setShowSaveToast(false), 3000);
@@ -1957,9 +2130,14 @@ export const useAppState = () => {
             Array.isArray(m.inventoryTemplates) ? m.inventoryTemplates : []
         );
         setCustomReportPresets(Array.isArray(m.customReportPresets) ? m.customReportPresets : []);
+        if (Array.isArray(m.priceCheckTemplates)) setPriceCheckTemplates(m.priceCheckTemplates);
         setBrandMap(m.brandMap || {});
         setCategoryMap(m.categoryMap || {});
         setSkuFamilies(Array.isArray(m.skuFamilies) ? m.skuFamilies : []);
+        setUploadTimestamps(m.uploadTimestamps && typeof m.uploadTimestamps === 'object' ? m.uploadTimestamps : {});
+        if (m.userProfile && typeof m.userProfile === 'object') {
+            setUserProfile(prev => ({ ...prev, ...m.userProfile }));
+        }
         if (m.thresholds) {
             setThresholds(m.thresholds);
             saveThresholdConfig(m.thresholds);
@@ -2280,12 +2458,16 @@ export const useAppState = () => {
             // Pull promotions from separate table (incremental when cursor exists)
             const promoBaselineComplete = !forceImportantRefresh
                 && localStorage.getItem(PROMO_BASELINE_COMPLETE_KEY) === '1';
-            const lastPromoUpdatedAt = promoBaselineComplete
+            const localPromotions = Array.isArray(promotions) ? promotions : [];
+            const canUsePromoIncremental = promoBaselineComplete && localPromotions.length > 0;
+            const lastPromoUpdatedAt = canUsePromoIncremental
                 ? (localStorage.getItem(PROMO_CURSOR_KEY) || undefined)
                 : undefined;
+            if (promoBaselineComplete && localPromotions.length === 0) {
+                console.warn('[sync] promotions local baseline empty; ignoring cursor and forcing full pull');
+            }
             let promoRes = await pullPromotionsSince(lastPromoUpdatedAt);
             if (promoRes.success && Array.isArray(promoRes.promotions)) {
-                const localPromotions = promotions || [];
                 const isIncrementalEmpty = Boolean(lastPromoUpdatedAt && promoRes.incremental && promoRes.promotions.length === 0);
                 if (isIncrementalEmpty && localPromotions.length === 0) {
                     console.warn('[sync] promotions incremental returned empty with empty local state; retrying full pull');
@@ -2431,12 +2613,62 @@ export const useAppState = () => {
     }, [pendingFamilyConflicts, handleSync]);
 
     const initRanRef = useRef(false);
+    const handleStartSyncNow = useCallback(() => {
+        setStartupSyncMode('sync');
+        setStartupChoicePending(false);
+    }, []);
+
+    const handleStartLocalOnly = useCallback(() => {
+        setStartupSyncMode('local');
+        setStartupChoicePending(false);
+    }, []);
 
     useEffect(() => {
-        if (initRanRef.current) return;
+        if (startupChoicePending || !startupSyncMode || initRanRef.current) return;
         initRanRef.current = true;
 
+        const loadCacheOnly = async () => {
+            console.log('[init] startup choice: local cache only');
+            setSyncStatus('syncing');
+            const cache = await loadFromCache();
+            if (cache) {
+                const cachedProducts = Array.isArray(cache.snapshot?.products) ? cache.snapshot.products : [];
+                const cachedTransactions = Array.isArray(cache.transactions) ? cache.transactions : [];
+                const cachedRefunds = Array.isArray(cache.refunds) ? cache.refunds : [];
+                const hasHistoryButNoInventory = cachedProducts.length === 0 && (cachedTransactions.length > 0 || cachedRefunds.length > 0);
+                if (hasHistoryButNoInventory) {
+                    console.warn(
+                        `[init] local-only cache rejected - products:${cachedProducts.length}, ` +
+                        `transactions:${cachedTransactions.length}, refunds:${cachedRefunds.length}`
+                    );
+                } else {
+                    applyLoadedState(
+                        cache.snapshot,
+                        cache.transactions,
+                        cache.refunds || []
+                    );
+                    const time = localStorage.getItem('sello_last_synced_at')
+                        || cache.cachedAt;
+                    setLastSyncedAt(time);
+                    const cachedPromotions = normalizePromotionStatuses(
+                        Array.isArray(cache.snapshot?.promotions) ? cache.snapshot.promotions : []
+                    );
+                    if (cachedPromotions.length > 0) {
+                        setPromotions(cachedPromotions);
+                    }
+                    console.log('[init] loaded from local cache only');
+                }
+            } else {
+                console.warn('[init] local-only start requested but no cache found');
+            }
+            setSyncStatus('idle');
+        };
+
         const initApp = async () => {
+            if (startupSyncMode === 'local') {
+                await loadCacheOnly();
+                return;
+            }
             // Step 1: Check what version the DB has (fast, tiny request)
             const versionRes = await checkVersion();
             const dbVersion = versionRes.success ? versionRes.lastPushAt : null;
@@ -2514,7 +2746,7 @@ export const useAppState = () => {
 
         initApp();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [clearClientDataForImportantRefresh]);
+    }, [startupChoicePending, startupSyncMode, clearClientDataForImportantRefresh]);
 
     // --- OPTIMAL PRICING: RECALCULATE BENCHMARKS ---
     const handleCancelBenchmarkRecalculation = useCallback(() => {
@@ -3030,10 +3262,15 @@ export const useAppState = () => {
         syncStep,
         syncProgress,
         syncTotal,
+        startupChoicePending,
+        startupSyncMode,
+        isRestoring,
         handleAdminToggle,
         handleAdminExit,
         handleAdminPush,
         handleSync,
+        handleStartSyncNow,
+        handleStartLocalOnly,
         resolveConflicts,
         getSharedSnapshot,
         // Ad Campaign

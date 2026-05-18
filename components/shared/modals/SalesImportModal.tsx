@@ -22,7 +22,17 @@ interface SalesImportModalProps {
         shipmentLogs?: any[],
         discoveredPlatforms?: string[],
         newlyLearnedAliases?: Record<string, string>,
-        importDirective?: { salesPushMode: 'incremental' | 'full_snapshot'; reason: string }
+        importDirective?: {
+            salesPushMode: 'incremental' | 'reconciliation' | 'full_snapshot';
+            reason: string;
+            reconciliationPlan?: {
+                upsertKeys: string[];
+                removedKeys: string[];
+                added: number;
+                changed: number;
+                removed: number;
+            } | null;
+        }
     ) => void | Promise<void>;
 }
 
@@ -70,11 +80,18 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
     const [showAdvancedMapping, setShowAdvancedMapping] = useState(false);
 
     const [previewData, setPreviewData] = useState<any>(null);
-    const [selectedSalesPushMode, setSelectedSalesPushMode] = useState<'incremental' | 'full_snapshot'>('incremental');
+    const [selectedSalesPushMode, setSelectedSalesPushMode] = useState<'incremental' | 'reconciliation' | 'full_snapshot'>('incremental');
     const [unknownSkus, setUnknownSkus] = useState<Record<string, { count: number, revenue: number, masterSku: string | null }>>({});
     const [resolvedAliases, setResolvedAliases] = useState<Record<string, string>>({});
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const reconciliationPlanRef = useRef<{
+        upsertKeys: string[];
+        removedKeys: string[];
+        added: number;
+        changed: number;
+        removed: number;
+    } | null>(null);
     const revenueDisplay = useMemo(() => {
         const value = Number(previewData?.stats?.totalRevenue || 0);
         return `£${value.toLocaleString()}`;
@@ -103,12 +120,12 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         return orderId ? `${sku}|${date}|${platform}|${orderId}` : `${sku}|${date}|${platform}`;
     };
     const salesRowSig = (row: any): string => {
+        // Use stable source-side fields for recommendation logic.
+        // Live salesHistory can have redistributed adsSpend and normalized profit,
+        // which should not be treated as ERP historical mutations.
         return [
             toFixedNum(row?.price, 4),
             toFixedNum(row?.velocity, 4),
-            toFixedNum(row?.margin, 4),
-            toFixedNum(row?.profit, 4),
-            toFixedNum(row?.adsSpend, 4),
             toFixedNum(row?.cogs, 4),
             toFixedNum(row?.sellingFee, 4),
             toFixedNum(row?.adsFee, 4),
@@ -183,9 +200,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         const historicalMutations = historicalAdded + historicalRemoved + historicalChanged;
         if (historicalMutations > 0) {
             return {
-                mode: 'full_snapshot' as const,
+                mode: 'reconciliation' as const,
                 reason: `Historical mutations detected (added:${historicalAdded}, removed:${historicalRemoved}, changed:${historicalChanged}) within existing date range up to ${existingMax}. Total delta: added ${added}, removed ${removed}, changed ${changed}.`,
-                label: 'Full sales snapshot publish recommended'
+                label: 'Targeted sales reconciliation recommended'
             };
         }
         return {
@@ -221,7 +238,11 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                 previewData.shipmentLogs,
                 previewData.stats.discoveredPlatforms,
                 resolvedAliases,
-                { salesPushMode: selectedSalesPushMode, reason: syncRecommendation.reason }
+                {
+                    salesPushMode: selectedSalesPushMode,
+                    reason: syncRecommendation.reason,
+                    reconciliationPlan: reconciliationPlanRef.current
+                }
             ));
 
             setImportProgress(100);
@@ -275,10 +296,12 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
                     worker.terminate();
                     if (payload?.success) {
+                        reconciliationPlanRef.current = payload.reconciliationPlan || null;
                         setRawHeaders(payload.headers || []);
                         setRawRows(payload.rows || []);
                         if (payload.detectedMapping) setMapping(payload.detectedMapping);
-                        setPreviewData(payload);
+                        const { reconciliationPlan, ...safePreviewData } = payload;
+                        setPreviewData(safePreviewData);
                         if (Object.keys(payload.unknownSkus || {}).length > 0) {
                             setUnknownSkus(payload.unknownSkus);
                             setStep('resolution');
@@ -305,6 +328,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     fileText: typeof data === 'string' ? data : undefined,
                     products,
                     pricingRules,
+                    existingSalesHistory: salesHistory,
                     learnedAliases,
                     extraAliases: {}
                 });
@@ -347,7 +371,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
             worker.terminate();
             if (payload.success) {
-                setPreviewData(payload);
+                reconciliationPlanRef.current = payload.reconciliationPlan || null;
+                const { reconciliationPlan, ...safePreviewData } = payload;
+                setPreviewData(safePreviewData);
                 if (Object.keys(payload.unknownSkus || {}).length > 0) {
                     setUnknownSkus(payload.unknownSkus);
                     setStep('resolution');
@@ -374,6 +400,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             mapping,
             products,
             pricingRules,
+            existingSalesHistory: salesHistory,
             learnedAliases,
             extraAliases: {}
         });
@@ -410,7 +437,9 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
 
             worker.terminate();
             if (payload.success) {
-                setPreviewData(payload);
+                reconciliationPlanRef.current = payload.reconciliationPlan || null;
+                const { reconciliationPlan, ...safePreviewData } = payload;
+                setPreviewData(safePreviewData);
                 setResolvedAliases(payload.resolvedAliases);
                 setStep('preview');
                 setImportProgress(100);
@@ -433,6 +462,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
             mapping,
             products,
             pricingRules,
+            existingSalesHistory: salesHistory,
             learnedAliases,
             extraAliases: newAliases
         });
@@ -748,7 +778,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                     </tbody>
                                 </table>
                             </div>
-                            <div className={`p-3 rounded-lg border ${syncRecommendation.mode === 'full_snapshot' ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                            <div className={`p-3 rounded-lg border ${syncRecommendation.mode === 'incremental' ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                                 <div className="text-xs font-bold mb-1">Sync Recommendation</div>
                                 <div className="text-xs text-gray-700 mb-2">{syncRecommendation.label}</div>
                                 <div className="text-[11px] text-gray-600 mb-2">{syncRecommendation.reason}</div>
@@ -756,10 +786,11 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                                     <span className="text-[11px] font-medium text-gray-600">Sales Push Mode:</span>
                                     <select
                                         value={selectedSalesPushMode}
-                                        onChange={(e) => setSelectedSalesPushMode(e.target.value as 'incremental' | 'full_snapshot')}
+                                        onChange={(e) => setSelectedSalesPushMode(e.target.value as 'incremental' | 'reconciliation' | 'full_snapshot')}
                                         className="border border-gray-300 rounded-md px-2 py-1 text-xs bg-white"
                                     >
                                         <option value="incremental">Incremental</option>
+                                        <option value="reconciliation">Reconcile Changes</option>
                                         <option value="full_snapshot">Clean + Replace</option>
                                     </select>
                                 </div>

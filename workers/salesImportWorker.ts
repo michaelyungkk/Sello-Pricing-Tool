@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { Product, PricingRules, HistoryPayload } from '../types';
+import { Product, PricingRules, HistoryPayload, PriceLog } from '../types';
 import { asDateKeyNaive } from '../services/dateUtils';
 import { getCanonicalSku } from '../services/skuNormalization';
 
@@ -46,6 +46,42 @@ const postProgress = (phase: ProgressPhase, progress: number, message: string) =
 };
 
 const normalizeHeader = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, '');
+const toSalesCompareDateKey = (value: unknown): string => asDateKeyNaive(value) || '';
+const toSalesCompareFixedNum = (value: unknown, dp = 4): string => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '0';
+    return n.toFixed(dp);
+};
+const buildSalesCompareKey = (row: any): string => {
+    const date = toSalesCompareDateKey(row?.date);
+    const sku = String(row?.sku || '').trim().toUpperCase();
+    const platform = String(row?.platform || 'General').trim();
+    const orderId = String(row?.orderId || '').trim();
+    return orderId ? `${sku}|${date}|${platform}|${orderId}` : `${sku}|${date}|${platform}`;
+};
+const buildSalesCompareSig = (row: any): string => [
+    toSalesCompareFixedNum(row?.price, 4),
+    toSalesCompareFixedNum(row?.velocity, 4),
+    toSalesCompareFixedNum(row?.cogs, 4),
+    toSalesCompareFixedNum(row?.sellingFee, 4),
+    toSalesCompareFixedNum(row?.adsFee, 4),
+    toSalesCompareFixedNum(row?.postage, 4),
+    toSalesCompareFixedNum(row?.otherFee, 4),
+    toSalesCompareFixedNum(row?.subscriptionFee, 4),
+    toSalesCompareFixedNum(row?.wmsFee, 4),
+    toSalesCompareFixedNum(row?.promoRel, 4),
+    String(row?.postcode || '').trim().toUpperCase(),
+    String(row?.logisticPartner || '').trim(),
+    String(row?.logisticService || '').trim(),
+].join('|');
+
+interface ReconciliationPlan {
+    upsertKeys: string[];
+    removedKeys: string[];
+    added: number;
+    changed: number;
+    removed: number;
+}
 
 const findMappedHeader = (headers: string[], candidates: string[], fuzzy = false): string => {
     const normalizedHeaders = headers.map(h => ({ original: h, normalized: normalizeHeader(h) }));
@@ -143,7 +179,8 @@ const processRows = (
     products: Product[],
     pricingRules: PricingRules,
     learnedAliases: Record<string, string>,
-    extraAliases: Record<string, string>
+    extraAliases: Record<string, string>,
+    existingSalesHistory: PriceLog[]
 ) => {
     const getIdx = (col?: string) => col ? headers.indexOf(col) : -1;
 
@@ -593,10 +630,51 @@ const processRows = (
         category: mapping.category && updates.some(u => u.category !== productBySku.get(u.sku)?.category)
     };
 
+    let reconciliationPlan: ReconciliationPlan | null = null;
+    if (existingSalesHistory.length > 0) {
+        const importMap = new Map<string, string>();
+        const existingMap = new Map<string, string>();
+        history.forEach((row) => {
+            importMap.set(buildSalesCompareKey(row), buildSalesCompareSig(row));
+        });
+        existingSalesHistory.forEach((row) => {
+            existingMap.set(buildSalesCompareKey(row), buildSalesCompareSig(row));
+        });
+
+        const upsertKeys: string[] = [];
+        const removedKeys: string[] = [];
+        let added = 0;
+        let changed = 0;
+
+        for (const [key, sig] of importMap.entries()) {
+            if (!existingMap.has(key)) {
+                added++;
+                upsertKeys.push(key);
+                continue;
+            }
+            if (existingMap.get(key) !== sig) {
+                changed++;
+                upsertKeys.push(key);
+            }
+        }
+        for (const key of existingMap.keys()) {
+            if (!importMap.has(key)) removedKeys.push(key);
+        }
+
+        reconciliationPlan = {
+            upsertKeys,
+            removedKeys,
+            added,
+            changed,
+            removed: removedKeys.length
+        };
+    }
+
     return {
         success: true,
         updates,
         history,
+        reconciliationPlan,
         shipmentLogs,
         features,
         stats: {
@@ -624,7 +702,8 @@ self.onmessage = (e: MessageEvent) => {
         products,
         pricingRules,
         learnedAliases = {},
-        extraAliases = {}
+        extraAliases = {},
+        existingSalesHistory = []
     } = e.data || {};
 
     try {
@@ -671,7 +750,8 @@ self.onmessage = (e: MessageEvent) => {
             products || [],
             pricingRules || {},
             learnedAliases || {},
-            extraAliases || {}
+            extraAliases || {},
+            existingSalesHistory || []
         );
 
         postProgress('finalizing', 100, 'Import ready');

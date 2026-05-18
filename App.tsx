@@ -240,10 +240,15 @@ const App: React.FC = () => {
         syncStep,
         syncProgress,
         syncTotal,
+        startupChoicePending,
+        startupSyncMode,
+        isRestoring,
         handleAdminToggle,
         handleAdminExit,
         handleAdminPush,
         handleSync,
+        handleStartSyncNow,
+        handleStartLocalOnly,
         // Optimal pricing
         cohortSnapshot,
         optimalPriceResults,
@@ -314,6 +319,7 @@ const App: React.FC = () => {
             setNavigationNotice(result.message);
         }
     };
+    const hasAnyLocalData = (products?.length || 0) > 0 || (salesHistory?.length || 0) > 0 || (refundHistory?.length || 0) > 0;
 
     useEffect(() => {
         if (!navigationIntent) return;
@@ -588,6 +594,51 @@ const App: React.FC = () => {
     return (
         <>
             <style>{`html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } :root { --glass-bg: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${(userProfile.glassOpacity ?? 90) / 100})` : `rgba(255, 255, 255, ${(userProfile.glassOpacity ?? 90) / 100})`}; --glass-border: ${userProfile.glassMode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)'}; --glass-blur: blur(${userProfile.glassBlur ?? 10}px); --glass-bg-modal: ${userProfile.glassMode === 'dark' ? `rgba(17, 24, 39, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})` : `rgba(255, 255, 255, ${Math.min(1, (userProfile.glassOpacity ?? 90) / 100 + 0.1)})`}; --glass-blur-modal: blur(${Math.min(40, (userProfile.glassBlur ?? 10) + 8)}px); --ambient-bg: rgba(${ambientRgb.r}, ${ambientRgb.g}, ${ambientRgb.b}, ${(userProfile.ambientGlassOpacity ?? 15) / 100}); --ambient-blur: blur(${Math.min(20, (userProfile.glassBlur ?? 10) + 4)}px); --glass-header-bg: rgba(249,250,251,0.97); --glass-row-even: rgba(249,250,251,0.30); --glass-row-hover: rgba(243,244,246,0.60); --glass-divider: rgba(229,231,235,0.55); --theme: ${userProfile.themeColor}; --theme-rgb: ${_themeRgb}; --theme-10: rgba(${_themeRgb}, 0.10); --theme-20: rgba(${_themeRgb}, 0.20); } .bg-custom-glass { background-color: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); } .border-custom-glass { border-color: var(--glass-border); } .bg-custom-glass-modal { background-color: var(--glass-bg-modal); } .backdrop-blur-custom-modal { backdrop-filter: var(--glass-blur-modal); -webkit-backdrop-filter: var(--glass-blur-modal); } .bg-custom-ambient { background-color: var(--ambient-bg); } .backdrop-blur-custom-ambient { backdrop-filter: var(--ambient-blur); -webkit-backdrop-filter: var(--ambient-blur); }`}</style>
+            {startupChoicePending && !hasAnyLocalData && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/35 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-lg bg-custom-glass-modal backdrop-blur-custom-modal border border-custom-glass rounded-2xl shadow-2xl p-6 space-y-5">
+                        <div>
+                            <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Startup</div>
+                            <h2 className="mt-2 text-2xl font-bold text-gray-900">Choose how to start</h2>
+                            <p className="mt-2 text-sm text-gray-600">
+                                Auto-sync is paused. Start from the database, stay on local data, or restore a backup before any sync runs.
+                            </p>
+                        </div>
+                        <div className="grid gap-3">
+                            <button
+                                onClick={handleStartSyncNow}
+                                className="w-full rounded-xl border border-theme-20 bg-theme-10 px-4 py-3 text-left hover:bg-theme-10 transition-colors"
+                            >
+                                <div className="flex items-center gap-2 text-sm font-bold text-theme">
+                                    <RefreshCw className="w-4 h-4" />
+                                    Sync from database
+                                </div>
+                                <div className="mt-1 text-xs text-gray-500">Run the normal startup sync now.</div>
+                            </button>
+                            <button
+                                onClick={handleStartLocalOnly}
+                                className="w-full rounded-xl border border-custom-glass bg-white/70 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
+                                    <Database className="w-4 h-4" />
+                                    Stay local only
+                                </div>
+                                <div className="mt-1 text-xs text-gray-500">Start fresh and upload new report.</div>
+                            </button>
+                            <button
+                                onClick={() => fileRestoreRef.current?.click()}
+                                className="w-full rounded-xl border border-custom-glass bg-white/70 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
+                                    <Upload className="w-4 h-4" />
+                                    Restore from backup first
+                                </div>
+                                <div className="mt-1 text-xs text-gray-500">Select a JSON backup before any database sync runs.</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="h-screen flex font-sans text-gray-900 transition-colors duration-500 relative bg-transparent">
                 {userProfile.ambientGlass && <div className="fixed inset-0 z-[1] pointer-events-none transition-all duration-500 bg-custom-ambient backdrop-blur-custom-ambient" />}
                 <div className="group/sidebar hidden md:block fixed h-full z-40" style={{ width: sidebarCollapsed ? 64 : 240, transition: 'width 300ms' }}>
@@ -936,6 +987,38 @@ const App: React.FC = () => {
                     </header>
                     <div className="h-[60px] shrink-0" />
                     <div ref={mainContentRef} className="flex-1 overflow-y-auto relative p-4 md:p-8">
+                        {isRestoring ? (
+                            <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border border-custom-glass text-center p-12 h-full">
+                                <div
+                                    className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
+                                    style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}
+                                >
+                                    <Loader2 className="w-10 h-10 animate-spin" />
+                                </div>
+                                <h3 className="text-2xl font-bold text-gray-900">Restoring backup...</h3>
+                                <p className="text-gray-500 max-w-lg mt-3 text-base">
+                                    {syncStep || 'Applying restored data. Heavy pages stay paused until restore completes.'}
+                                </p>
+                                {syncTotal > 0 && (
+                                    <div className="w-full max-w-md mt-8">
+                                        <div className="flex justify-between text-xs text-gray-400 mb-2">
+                                            <span>{syncStep || 'Restoring backup...'}</span>
+                                            <span>{Math.round((syncProgress / syncTotal) * 100)}%</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div
+                                                className="rounded-full h-2 transition-all duration-300"
+                                                style={{
+                                                    width: `${Math.round((syncProgress / syncTotal) * 100)}%`,
+                                                    backgroundColor: userProfile.themeColor
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <>
                         {/* Spinner shown when user navigates to a page before it has mounted */}
                         {!mountedPages.has(currentView) && currentView !== 'overview' && currentView !== 'custom-report' && (
                             <PageSpinner />
@@ -1019,7 +1102,7 @@ const App: React.FC = () => {
                                             Try Again
                                         </button>
                                     </div>
-                                ) : isAdminMode ? (
+                                ) : (isAdminMode || startupSyncMode === 'local') ? (
                                     <div className="flex flex-col items-center justify-center min-h-[500px] bg-custom-glass rounded-2xl border-2 border-dashed border-custom-glass text-center p-12 h-full">
                                         <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm"
                                             style={{ backgroundColor: `${userProfile.themeColor}15`, color: userProfile.themeColor }}>
@@ -1423,6 +1506,8 @@ const App: React.FC = () => {
                             />
                         </div>)}
                         </Suspense>
+                            </>
+                        )}
                     </div>
                 </main>
                 <Suspense fallback={null}>

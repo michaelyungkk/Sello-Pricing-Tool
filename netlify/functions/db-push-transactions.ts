@@ -19,7 +19,7 @@ export default async (req: Request) => {
     let errorContext: Record<string, any> = { stage: 'request_init' };
     try {
         const body = await req.json();
-        const { password, transactions, clearAll, chunkIndex, totalChunks, action, uploadId } = body;
+        const { password, transactions, removedKeys, clearAll, chunkIndex, totalChunks, action, uploadId } = body;
         errorContext = {
             action: action || (clearAll === true ? 'clear_all' : 'upsert_chunk'),
             uploadId: String(uploadId || '').trim() || null,
@@ -172,10 +172,15 @@ export default async (req: Request) => {
             );
         }
 
-        const requiresTransactions = action === 'upload_replace_chunk' || !action;
+        const requiresTransactions = action === 'upload_replace_chunk' || action === 'reconcile_upsert' || !action;
         if (requiresTransactions && !Array.isArray(transactions))
             return new Response(
                 JSON.stringify({ success: false, error: 'transactions must be array' }),
+                { status: 400, headers: CORS }
+            );
+        if (action === 'reconcile_delete' && !Array.isArray(removedKeys))
+            return new Response(
+                JSON.stringify({ success: false, error: 'removedKeys must be array' }),
                 { status: 400, headers: CORS }
             );
 
@@ -447,7 +452,53 @@ export default async (req: Request) => {
             );
         }
 
-            errorContext.stage = 'incremental_upsert';
+        if (action === 'reconcile_delete') {
+            const keys = removedKeys
+                .map((key: unknown) => String(key || '').trim())
+                .filter(Boolean);
+            const uniqueKeys = [...new Set(keys)];
+            errorContext = {
+                ...errorContext,
+                action: 'reconcile_delete',
+                rowsInRequest: uniqueKeys.length,
+                stage: 'reconcile_delete'
+            };
+            if (uniqueKeys.length === 0) {
+                return new Response(
+                    JSON.stringify({ success: true, chunkIndex, totalChunks, deletedCount: 0 }),
+                    { status: 200, headers: CORS }
+                );
+            }
+
+            const deleteStartedAt = Date.now();
+            const deletedRows = await sql.query(
+                `
+                WITH deleted AS (
+                    DELETE FROM transaction_history
+                    WHERE dedup_key = ANY($1::text[])
+                    RETURNING dedup_key
+                )
+                SELECT COUNT(*)::INT AS deleted_count FROM deleted
+                `,
+                [uniqueKeys]
+            );
+            const deletedCount = Number(deletedRows?.[0]?.deleted_count || 0);
+
+            console.log('[db-push-transactions][reconcile_delete]', {
+                chunkIndex,
+                totalChunks,
+                requestedKeys: uniqueKeys.length,
+                deletedCount,
+                elapsedMs: Date.now() - deleteStartedAt
+            });
+
+            return new Response(
+                JSON.stringify({ success: true, chunkIndex, totalChunks, deletedCount }),
+                { status: 200, headers: CORS }
+            );
+        }
+
+        errorContext.stage = action === 'reconcile_upsert' ? 'reconcile_upsert' : 'incremental_upsert';
         const placeholders = rows.map((_: any, i: number) => {
             const b = i * 25;
             return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15},$${b + 16},$${b + 17},$${b + 18},$${b + 19},$${b + 20},$${b + 21},$${b + 22},$${b + 23},$${b + 24},$${b + 25},NOW())`;
@@ -498,7 +549,11 @@ export default async (req: Request) => {
                 updated_at = NOW()
         `, flatValues);
 
-        console.log(`[db-push-transactions] chunk ${chunkIndex}/${totalChunks} — ${rows.length} rows upserted`);
+        console.log(
+            action === 'reconcile_upsert'
+                ? `[db-push-transactions] reconcile chunk ${chunkIndex}/${totalChunks} - ${rows.length} rows upserted`
+                : `[db-push-transactions] chunk ${chunkIndex}/${totalChunks} - ${rows.length} rows upserted`
+        );
 
         return new Response(
             JSON.stringify({ success: true, chunkIndex, totalChunks, upsertedCount: rows.length }),
