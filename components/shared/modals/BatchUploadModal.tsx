@@ -31,19 +31,36 @@ export interface BatchUpdateItem {
 interface BatchUploadModalProps {
     products: Product[];
     onClose: () => void;
-    onConfirm: (data: BatchUpdateItem[]) => void;
+    onConfirm: (data: BatchUpdateItem[]) => Promise<void>;
 }
 
 const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, onConfirm }) => {
     const { t } = useTranslation();
     const [dragActive, setDragActive] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [parsedItems, setParsedItems] = useState<BatchUpdateItem[] | null>(null);
     const [costChangeSummary, setCostChangeSummary] = useState<{ increases: number; decreases: number; unchanged: number } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const existingSkus = useMemo(() => new Set(products.map(p => p.sku)), [products]);
+
+    const handleConfirm = async () => {
+        if (!parsedItems || parsedItems.length === 0 || isImporting) return;
+        setIsImporting(true);
+        setError(null);
+        let shouldClose = false;
+        try {
+            await onConfirm(parsedItems);
+            shouldClose = true;
+        } catch (err: any) {
+            setError(err?.message || 'Failed to import inventory.');
+        } finally {
+            setIsImporting(false);
+            if (shouldClose) onClose();
+        }
+    };
 
     const handleDrag = (e: React.DragEvent) => {
         e.preventDefault();
@@ -426,14 +443,15 @@ const BatchUploadModal: React.FC<BatchUploadModalProps> = ({ products, onClose, 
                 </div>
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">{t('cancel')}</button>
+                    <button onClick={onClose} disabled={isImporting} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">{t('cancel')}</button>
                     {parsedItems && parsedItems.length > 0 && (
                         <button
-                            onClick={() => onConfirm(parsedItems)}
-                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors flex items-center gap-2"
+                            onClick={handleConfirm}
+                            disabled={isImporting}
+                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Check className="w-4 h-4" />
-                            {t('confirm_import')}
+                            {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            {isImporting ? 'Applying Inventory...' : t('confirm_import')}
                         </button>
                     )}
                 </div>

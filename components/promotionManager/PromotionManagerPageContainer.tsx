@@ -5,6 +5,7 @@ import { TabSwitcher } from '../common/TabSwitcher';
 import { CampaignsTab } from './tabs/CampaignsTab';
 import { MasterPromoLogTab } from './tabs/MasterPromoLogTab';
 import { PromotionEvent, Product, PricingRules, PriceLog, LogisticsRule, PriceChangeRecord, NavigationIntent } from '../../types';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 interface PromotionManagerPageContainerProps {
     products: Product[];
@@ -39,9 +40,18 @@ const PromotionManagerPageContainerInner: React.FC<PromotionManagerPageContainer
     navigationIntent,
     onConsumeNavigationIntent
 }) => {
+    const pagePerfStartedAt = perfNowMs();
     void logisticsRules;
     void headerStyle;
     const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+
+    const promotionPerfKey = `${activeTab}|${promotions.length}|${products.length}|${priceHistoryMap?.size || 0}`;
+    usePagePerfLogger('promotions', 'promotions', promotionPerfKey, {
+        activeTab,
+        promotions: promotions.length,
+        products: products.length,
+        priceHistoryBuckets: priceHistoryMap?.size || 0
+    }, true, pagePerfStartedAt);
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">

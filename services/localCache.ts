@@ -1,4 +1,5 @@
 import { get, set, del } from 'idb-keyval';
+import { logRuntimeDebug, warnRuntimeDebug } from './runtimeDebug';
 
 const CACHE_KEY = 'sello_app_cache';
 const VERSION_KEY = 'sello_cache_version';
@@ -23,11 +24,11 @@ export async function saveToCache(
     snapshot: any,
     transactions: any[],
     refunds: any[],
-    _shipments: any[], // kept for call-site compat, ignored
+    _shipments: any[],
     version: string
 ): Promise<void> {
     if (!isIndexedDBAvailable()) {
-        console.warn('[cache] IndexedDB not available, skipping save');
+        warnRuntimeDebug('[cache] IndexedDB not available, skipping save');
         return;
     }
     try {
@@ -40,25 +41,25 @@ export async function saveToCache(
         };
         await set(CACHE_KEY, cache);
         localStorage.setItem(VERSION_KEY, version);
-        console.log(`[cache] saved — ${transactions.length} transactions, ${refunds.length} refunds`);
+        logRuntimeDebug(`[cache] saved - ${transactions.length} transactions, ${refunds.length} refunds`);
     } catch (e) {
-        console.warn('[cache] failed to save:', e);
+        warnRuntimeDebug('[cache] failed to save:', e);
     }
 }
 
 export async function loadFromCache(): Promise<CachedState | null> {
     if (!isIndexedDBAvailable()) {
-        console.warn('[cache] IndexedDB not available, skipping load');
+        warnRuntimeDebug('[cache] IndexedDB not available, skipping load');
         return null;
     }
     try {
         const cache = await get<CachedState>(CACHE_KEY);
         if (cache) {
-            console.log(`[cache] loaded — ${cache.transactions?.length ?? 0} transactions`);
+            logRuntimeDebug(`[cache] loaded - ${cache.transactions?.length ?? 0} transactions`);
         }
         return cache || null;
     } catch (e) {
-        console.warn('[cache] failed to load:', e);
+        warnRuntimeDebug('[cache] failed to load:', e);
         return null;
     }
 }
@@ -68,9 +69,9 @@ export async function clearCache(): Promise<void> {
     try {
         await del(CACHE_KEY);
         localStorage.removeItem(VERSION_KEY);
-        console.log('[cache] cleared');
+        logRuntimeDebug('[cache] cleared');
     } catch (e) {
-        console.warn('[cache] failed to clear:', e);
+        warnRuntimeDebug('[cache] failed to clear:', e);
     }
 }
 

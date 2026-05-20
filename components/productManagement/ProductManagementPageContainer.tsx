@@ -17,6 +17,7 @@ import { TagsDrawer } from './parts/TagsDrawer';
 import { buildWindow } from '../../services/dateWindow';
 import { getTodayKeyMelbourne } from '../../services/dateUtils';
 import { ContextBar } from '../common/ContextBar';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 type BenchmarkRecalcMode = 'incremental' | 'full';
 type BenchmarkRecalcStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'error';
@@ -100,6 +101,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     onEditContainerShipments,
     onStampLandedAt,
 }) => {
+    const pagePerfStartedAt = perfNowMs();
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
     const [productForTags, setProductForTags] = useState<Product | null>(null);
@@ -179,6 +181,17 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
         const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
         return `${format(start, !sameYear)} – ${format(end, true)}`;
     }, [dateWindow]);
+
+    const productPerfKey = `${activeTab}|${timeWindow}|${customStart}|${customEnd}|${products.length}|${refundHistory.length}|${skuFamilies.length}|${pendingFamilySuggestions.length}|${benchmarkUpdateNotices?.length || 0}`;
+    usePagePerfLogger('products', 'products', productPerfKey, {
+        activeTab,
+        timeWindow,
+        products: products.length,
+        refunds: refundHistory.length,
+        families: skuFamilies.length,
+        pendingSuggestions: pendingFamilySuggestions.length,
+        benchmarkNotices: benchmarkUpdateNotices?.length || 0
+    }, true, pagePerfStartedAt);
 
     const benchmarkProgressPct = useMemo(() => {
         const total = benchmarkRecalcState?.total || 0;

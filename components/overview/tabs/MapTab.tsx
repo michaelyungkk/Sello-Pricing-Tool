@@ -10,9 +10,10 @@ import { aggregateUkMapData, aggregateSkuAreaComparisonData, AreaData, SkuAreaCo
 import { asDateKey, isDateKeyBetween } from '../../../services/dateUtils';
 import { SelectFilter } from '../../common/SelectFilter';
 import { UK_AREA_DEMOGRAPHICS } from '../../../data/ukAreaDemographics';
+import { logPerf, warnPerf } from '../../../services/pagePerf';
 
-// Use reliable World Atlas via jsDelivr instead of raw GitHub content which might be flaky or CORS blocked
-const UK_TOPO_JSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
+// Bundle the map topology locally so the map does not depend on a live CDN fetch.
+const UK_TOPO_JSON = "/assets/world-atlas/countries-50m.json";
 
 // NEW: type for map marker data, combining AreaData with calculated metrics
 type MapMarkerData = AreaData & {
@@ -399,11 +400,11 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
       const bytes = new TextEncoder().encode(json).length;
       const kb = bytes / 1024;
       const mb = kb / 1024;
-      console.log(
+      logPerf(
         `[mapData] rows=${mapData.length}, size=${kb.toFixed(1)}KB (${mb.toFixed(3)}MB), compareSkus=${selectedCompareSkus.length}`
       );
     } catch (error) {
-      console.warn('[mapData] failed to calculate size', error);
+      warnPerf('[mapData] failed to calculate size', error);
     }
   }, [mapData, selectedCompareSkus.length]);
 
@@ -414,9 +415,9 @@ const UkSalesMap: React.FC<UkSalesMapProps> = ({
       const bytes = new TextEncoder().encode(json).length;
       const kb = bytes / 1024;
       const mb = kb / 1024;
-      console.log(`[demographics] rows=${demoRows}, size=${kb.toFixed(1)}KB (${mb.toFixed(3)}MB)`);
+      logPerf(`[demographics] rows=${demoRows}, size=${kb.toFixed(1)}KB (${mb.toFixed(3)}MB)`);
     } catch (error) {
-      console.warn('[demographics] failed to calculate size', error);
+      warnPerf('[demographics] failed to calculate size', error);
     }
   }, []);
 

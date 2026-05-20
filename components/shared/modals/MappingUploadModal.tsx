@@ -9,7 +9,7 @@ interface MappingUploadModalProps {
     platforms: string[];
     learnedAliases?: Record<string, string>;
     onClose: () => void;
-    onConfirm: (mappings: SkuMapping[], mode: 'merge' | 'replace', platform: string) => void;
+    onConfirm: (mappings: SkuMapping[], mode: 'merge' | 'replace', platform: string) => Promise<void>;
 }
 
 export interface SkuMapping {
@@ -31,6 +31,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
     const [dragActive, setDragActive] = useState(false);
     const [detectedRows, setDetectedRows] = useState<DetectedRow[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showExact, setShowExact] = useState(false);
 
@@ -292,7 +293,8 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
         setDetectedRows(newRows);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
+        if (isImporting) return;
         const validMappings = detectedRows
             .filter(r => r.masterSku !== null && masterSkuSet.has(r.masterSku))
             .map(r => ({
@@ -301,7 +303,18 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                 alias: r.fileSku
             }));
 
-        onConfirm(validMappings, importMode, selectedPlatform);
+        setIsImporting(true);
+        setError(null);
+        let shouldClose = false;
+        try {
+            await onConfirm(validMappings, importMode, selectedPlatform);
+            shouldClose = true;
+        } catch (err: any) {
+            setError(err?.message || 'Failed to import mappings.');
+        } finally {
+            setIsImporting(false);
+            if (shouldClose) onClose();
+        }
     };
 
     const matchedCount = detectedRows.filter(r => r.masterSku && r.method !== 'none').length;
@@ -328,7 +341,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                             <p className="text-xs text-gray-500">Upload a platform export to auto-link aliases</p>
                         </div>
                     </div>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
+                    <button onClick={onClose} disabled={isImporting} className="disabled:opacity-50 disabled:cursor-not-allowed"><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto">
@@ -469,7 +482,7 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                                             {showExact ? 'Hide Exact Matches' : `Show ${exactCount} Exact Matches`}
                                         </button>
                                     )}
-                                    <button onClick={() => { setDetectedRows([]); setStep('upload'); setShowExact(false); }} className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-900 ml-2">
+                                    <button onClick={() => { setDetectedRows([]); setStep('upload'); setShowExact(false); }} disabled={isImporting} className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-900 ml-2 disabled:opacity-50 disabled:cursor-not-allowed">
                                         <RefreshCw className="w-3 h-3" /> Reset
                                     </button>
                                 </div>
@@ -547,14 +560,17 @@ const MappingUploadModal: React.FC<MappingUploadModalProps> = ({ products, platf
                 </div>
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
+                    <button onClick={onClose} disabled={isImporting} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
                     {step === 'preview' && matchedCount > 0 && (
                         <button
                             onClick={handleSave}
-                            className={`px-4 py-2 text-white text-sm font-bold rounded-lg shadow-md flex items-center gap-2 ${importMode === 'replace' ? 'bg-red-600 hover:bg-red-700' : 'bg-theme hover:bg-theme'}`}
+                            disabled={isImporting}
+                            className={`px-4 py-2 text-white text-sm font-bold rounded-lg shadow-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${importMode === 'replace' ? 'bg-red-600 hover:bg-red-700' : 'bg-theme hover:bg-theme'}`}
                         >
-                            {importMode === 'replace' ? <Eraser className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                            Confirm {importMode === 'replace' ? 'Overwrite' : 'Merge'} {matchedCount} Mappings
+                            {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : (importMode === 'replace' ? <Eraser className="w-4 h-4" /> : <Check className="w-4 h-4" />)}
+                            {isImporting
+                                ? `Applying ${matchedCount} Mappings...`
+                                : `Confirm ${importMode === 'replace' ? 'Overwrite' : 'Merge'} ${matchedCount} Mappings`}
                         </button>
                     )}
                 </div>

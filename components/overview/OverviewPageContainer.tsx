@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, PricingRules, PriceLog, RefundLog, PriceChangeRecord, SearchChip, PromotionEvent, ReturnDateBasis } from '../../types';
 import { ThresholdConfig, getThresholdConfig } from '../../services/thresholdsConfig';
-import { getDiagnosisMeta, CanonicalDiagnosisId } from '../../services/diagnosisRegistry';
-import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne, getYesterdayKeyMelbourne } from '../../services/dateUtils';
+import { CanonicalDiagnosisId } from '../../services/diagnosisRegistry';
+import { asDateKey, isDateKeyBetween, addDaysToDateKey, getTodayKeyMelbourne } from '../../services/dateUtils';
 import { buildWindow } from '../../services/dateWindow';
 import { VAT_MULTIPLIER } from '../../constants';
 import { MetricCard } from '../productManagement/parts/MetricCard';
@@ -15,16 +15,16 @@ import UkSalesMap from './tabs/MapTab';
 import { CategoryPerformanceSlide } from './tabs/CategoriesTab';
 import { aggregateCategoryData } from '../../services/categoryAgg';
 import AuditPanel from '../common/AuditPanel';
-import { FilterBar } from '../common/FilterBar';
 import { Activity, Download, Search, Info, Package, TrendingDown, DollarSign, BarChart2, RotateCcw, PieChart, Map as MapIcon, ShieldAlert, Zap, History, Ship, Calculator, Coins, Megaphone } from 'lucide-react';
 import { formatSmartMoney, formatNumber, formatPct } from '../../utils/format';
-import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, Bar, Line, BarChart, Cell } from 'recharts';
+import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, Bar, Line } from 'recharts';
 import { resolveEffectiveVelocity, aggregateTransactionLedger } from '../../services/metrics';
 import { MetricValue } from '../common/MetricValue';
 import { TabSwitcher } from '../common/TabSwitcher';
 import { ContextBar } from '../common/ContextBar';
 import { SelectFilter } from '../common/SelectFilter';
 import { TablePagination } from '../common/TablePagination';
+import { logPerf, usePagePerfLogger } from '../../services/pagePerf';
 
 interface OverviewPageContainerProps {
     products: Product[];
@@ -60,6 +60,44 @@ const getMedianVal = (vals: number[]) => {
 };
 
 const perfNowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+const OVERVIEW_IMPORT_SETTLE_MS = 900;
+const OVERVIEW_VISIBLE_SETTLE_CONFIRM_MS = 1200;
+const areStringArraysEqual = (left: string[], right: string[]) => {
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1) {
+        if (left[index] !== right[index]) return false;
+    }
+    return true;
+};
+const isSortStateEqual = (
+    left: SortState<SortKey> | null,
+    right: SortState<SortKey> | null
+) => {
+    if (left === right) return true;
+    if (!left || !right) return false;
+    return left.key === right.key && left.dir === right.dir;
+};
+let overviewBusyToken = 0;
+const beginOverviewBusy = (reason: string) => {
+    const token = ++overviewBusyToken;
+    if (typeof window !== 'undefined') {
+        (window as any).__selloOverviewBusy = true;
+        (window as any).__selloOverviewBusyReason = reason;
+        (window as any).__selloOverviewBusyUpdatedAt = perfNowMs();
+    }
+    return (meta: Record<string, unknown> = {}) => {
+        if (typeof window === 'undefined') return;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (overviewBusyToken !== token) return;
+                (window as any).__selloOverviewBusy = false;
+                (window as any).__selloOverviewBusyReason = null;
+                (window as any).__selloOverviewBusyUpdatedAt = perfNowMs();
+                (window as any).__selloOverviewBusyMeta = meta;
+            });
+        });
+    };
+};
 
 const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     products,
@@ -69,27 +107,31 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     priceChangeHistory,
     promotions,
     themeColor,
-    onAnalyze,
     onDeepDive,
     onSearch,
     thresholds: propThresholds,
         mapJumpState
 }) => {
+    const pagePerfStartedAt = perfNowMs();
     const [debouncedProducts, setDebouncedProducts] = useState(products);
+    const [debouncedPriceHistoryMap, setDebouncedPriceHistoryMap] = useState(priceHistoryMap);
+    const [debouncedRefundHistory, setDebouncedRefundHistory] = useState(refundHistory);
 
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedProducts(products);
-        }, 300);
+            setDebouncedPriceHistoryMap(priceHistoryMap);
+            setDebouncedRefundHistory(refundHistory);
+        }, OVERVIEW_IMPORT_SETTLE_MS);
         return () => clearTimeout(timer);
-    }, [products]);
+    }, [products, priceHistoryMap, refundHistory]);
 
     const [activeTab, setActiveTab] = useState<OverviewTab>('actions');
     const [isAuditVisible, setIsAuditVisible] = useState(false);
     const [range, setRange] = useState<DateRange>('30d');
     const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
     const [customEnd, setCustomEnd] = useState<string>(getTodayKeyMelbourne());
-    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [, setShowDatePicker] = useState(false);
     const [platformScope, setPlatformScope] = useState<string[]>([]);
     // Default to Executive Workbench summary (no specific alert selected)
     const [selectedAlert, setSelectedAlert] = useState<AlertType | null>(null);
@@ -99,6 +141,67 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const [sort, setSort] = useState<SortState<SortKey> | null>(null);
     const [showWorkbenchPop, setShowWorkbenchPop] = useState(false);
     const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
+    const visibleSettleSequenceRef = React.useRef(0);
+    const orderDateMapCacheRef = React.useRef<{ historyMap: Map<string, PriceLog[]> | null; result: Map<string, string> | null }>({
+        historyMap: null,
+        result: null
+    });
+    const refundsBySkuCacheRef = React.useRef<{ refundHistory: RefundLog[] | null; result: Map<string, RefundLog[]> | null }>({
+        refundHistory: null,
+        result: null
+    });
+    const processedDataCacheRef = React.useRef<{
+        products: Product[] | null;
+        historyMap: Map<string, PriceLog[]> | null;
+        refundsBySku: Map<string, RefundLog[]> | null;
+        range: DateRange;
+        customStart: string;
+        customEnd: string;
+        platformScope: string[];
+        thresholds: ThresholdConfig | null;
+        pricingRules: PricingRules | null;
+        activePromotionSkuSet: Set<string> | null;
+        priceChangeHistory: PriceChangeRecord[] | null;
+        returnDateBasis: ReturnDateBasis;
+        orderDateMap: Map<string, string> | null;
+        result: {
+            processedData: any[];
+            periodLabel: string;
+            dateRange: { start: Date; end: Date };
+            startKey: string;
+            endKey: string;
+            distinctDaysFound: number;
+            expectedDays: number;
+        } | null;
+    }>({
+        products: null,
+        historyMap: null,
+        refundsBySku: null,
+        range: '30d',
+        customStart: '',
+        customEnd: '',
+        platformScope: [],
+        thresholds: null,
+        pricingRules: null,
+        activePromotionSkuSet: null,
+        priceChangeHistory: null,
+        returnDateBasis: 'refundDate',
+        orderDateMap: null,
+        result: null
+    });
+    const workbenchDataCacheRef = React.useRef<{
+        selectedAlert: AlertType | null;
+        alerts: any;
+        processedData: any[] | null;
+        sort: SortState<SortKey> | null;
+        result: any[] | null;
+    }>({
+        selectedAlert: null,
+        alerts: null,
+        processedData: null,
+        sort: null,
+        result: null
+    });
 
     const [deductRefunds, setDeductRefunds] = React.useState<boolean>(() => {
         const saved = localStorage.getItem('sello_deduct_refunds_overview');
@@ -109,41 +212,56 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     }, [deductRefunds]);
 
     const thresholds = useMemo(() => propThresholds || getThresholdConfig(), [propThresholds]);
+    const platformScopeKey = useMemo(() => platformScope.join('|'), [platformScope]);
 
     const orderDateMap = useMemo(() => {
+        if (orderDateMapCacheRef.current.historyMap === debouncedPriceHistoryMap && orderDateMapCacheRef.current.result) {
+            return orderDateMapCacheRef.current.result;
+        }
         const startedAt = perfNowMs();
         const map = new Map<string, string>();
-        priceHistoryMap.forEach(logs => {
+        debouncedPriceHistoryMap.forEach(logs => {
             logs.forEach(log => {
                 if (!log.orderId) return;
                 const dKey = asDateKey(log.date);
                 if (dKey) map.set(log.orderId, dKey);
             });
         });
-        console.log('[perf][overview] orderDateMap complete', {
+        logPerf('[perf][overview] orderDateMap complete', {
             elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
             orders: map.size,
-            skuBuckets: priceHistoryMap.size
+            skuBuckets: debouncedPriceHistoryMap.size
         });
+        orderDateMapCacheRef.current = {
+            historyMap: debouncedPriceHistoryMap,
+            result: map
+        };
         return map;
-    }, [priceHistoryMap]);
+    }, [debouncedPriceHistoryMap]);
 
     const refundsBySku = useMemo(() => {
+        if (refundsBySkuCacheRef.current.refundHistory === debouncedRefundHistory && refundsBySkuCacheRef.current.result) {
+            return refundsBySkuCacheRef.current.result;
+        }
         const startedAt = perfNowMs();
         const map = new Map<string, RefundLog[]>();
-        refundHistory.forEach(refund => {
+        debouncedRefundHistory.forEach(refund => {
             const sku = String(refund?.sku || '').trim();
             if (!sku) return;
             if (!map.has(sku)) map.set(sku, []);
             map.get(sku)!.push(refund);
         });
-        console.log('[perf][overview] refundsBySku complete', {
+        logPerf('[perf][overview] refundsBySku complete', {
             elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
             skuCount: map.size,
-            refunds: refundHistory.length
+            refunds: debouncedRefundHistory.length
         });
+        refundsBySkuCacheRef.current = {
+            refundHistory: debouncedRefundHistory,
+            result: map
+        };
         return map;
-    }, [refundHistory]);
+    }, [debouncedRefundHistory]);
 
     const activePromotionSkuSet = useMemo(() => {
         const todayStr = getTodayKeyMelbourne();
@@ -189,7 +307,27 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     }, [selectedAlert, range, platformScope, sort, deductRefunds, activeTab, returnDateBasis]);
 
     const { processedData, periodLabel, dateRange, startKey, endKey, distinctDaysFound, expectedDays } = useMemo(() => {
+        const cachedProcessedData = processedDataCacheRef.current;
+        if (
+            cachedProcessedData.products === debouncedProducts &&
+            cachedProcessedData.historyMap === debouncedPriceHistoryMap &&
+            cachedProcessedData.refundsBySku === refundsBySku &&
+            cachedProcessedData.range === range &&
+            cachedProcessedData.customStart === customStart &&
+            cachedProcessedData.customEnd === customEnd &&
+            areStringArraysEqual(cachedProcessedData.platformScope, platformScope) &&
+            cachedProcessedData.thresholds === thresholds &&
+            cachedProcessedData.pricingRules === pricingRules &&
+            cachedProcessedData.activePromotionSkuSet === activePromotionSkuSet &&
+            cachedProcessedData.priceChangeHistory === priceChangeHistory &&
+            cachedProcessedData.returnDateBasis === returnDateBasis &&
+            cachedProcessedData.orderDateMap === orderDateMap &&
+            cachedProcessedData.result
+        ) {
+            return cachedProcessedData.result;
+        }
         const startedAt = perfNowMs();
+        const endBusy = beginOverviewBusy('processedData');
         const { startKey, endKey, expectedDays } = buildWindow({
             mode: range === 'custom' ? 'custom' : 'days',
             days: range === 'yesterday' ? 1 :
@@ -228,7 +366,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         const distinctDaysSet = new Set<string>();
 
         const data = debouncedProducts.map(p => {
-            const logs = priceHistoryMap.get(p.sku) || [];
+            const logs = debouncedPriceHistoryMap.get(p.sku) || [];
 
             // Scope Filter: Respect platform selection only. 
             // Exclusion shield ONLY affects strategy, not dashboard metrics.
@@ -460,19 +598,39 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             };
         });
 
-        console.log('[perf][overview] processedData complete', {
+        logPerf('[perf][overview] processedData complete', {
             elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
             range,
-            activeTab,
             platformScopeCount: platformScope.length,
             products: debouncedProducts.length,
             processedRows: data.length,
-            refunds: refundHistory.length,
             distinctDaysFound: distinctDaysSet.size,
             expectedDays
         });
-        return { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, startKey, endKey, distinctDaysFound: distinctDaysSet.size, expectedDays };
-    }, [debouncedProducts, priceHistoryMap, refundsBySku, range, customStart, customEnd, platformScope, thresholds, pricingRules, activePromotionSkuSet, priceChangeHistory, returnDateBasis, orderDateMap]);
+        endBusy({
+            reason: 'processedData',
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            range
+        });
+        const result = { processedData: data, periodLabel: label, dateRange: { start: startDate, end: endDate }, startKey, endKey, distinctDaysFound: distinctDaysSet.size, expectedDays };
+        processedDataCacheRef.current = {
+            products: debouncedProducts,
+            historyMap: debouncedPriceHistoryMap,
+            refundsBySku,
+            range,
+            customStart,
+            customEnd,
+            platformScope: [...platformScope],
+            thresholds,
+            pricingRules,
+            activePromotionSkuSet,
+            priceChangeHistory,
+            returnDateBasis,
+            orderDateMap,
+            result
+        };
+        return result;
+    }, [debouncedProducts, debouncedPriceHistoryMap, refundsBySku, range, customStart, customEnd, platformScope, thresholds, pricingRules, activePromotionSkuSet, priceChangeHistory, returnDateBasis, orderDateMap]);
 
     // Cheap: apply deductRefunds toggle without re-running the full product loop
     const processedDataWithToggle = useMemo(() => {
@@ -485,7 +643,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 ? ((row.periodProfitGross ?? row.periodProfit) / row.periodRevenue) * 100 
                 : 0,
         }));
-        console.log('[perf][overview] processedDataWithToggle complete', {
+        logPerf('[perf][overview] processedDataWithToggle complete', {
             elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
             deductRefunds,
             rows: toggled.length
@@ -504,7 +662,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             // DEAD STOCK BUCKET: Updated logic per requirements
             dead: processedData.filter(p => p.inventoryValue > 200 && p.periodUnits === 0 && p.periodDailyVelocity < p.historicalMedianDemand)
         };
-        console.log('[perf][overview] alerts complete', {
+        logPerf('[perf][overview] alerts complete', {
             elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
             margin: nextAlerts.margin.length,
             velocity: nextAlerts.velocity.length,
@@ -513,10 +671,21 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             dead: nextAlerts.dead.length
         });
         return nextAlerts;
-    }, [processedData, processedDataWithToggle, expectedDays, thresholds]);
+    }, [processedData, processedDataWithToggle, thresholds]);
 
     const workbenchData = useMemo(() => {
+        const cachedWorkbenchData = workbenchDataCacheRef.current;
+        if (
+            cachedWorkbenchData.selectedAlert === selectedAlert &&
+            cachedWorkbenchData.alerts === alerts &&
+            cachedWorkbenchData.processedData === processedData &&
+            isSortStateEqual(cachedWorkbenchData.sort, sort) &&
+            cachedWorkbenchData.result
+        ) {
+            return cachedWorkbenchData.result;
+        }
         const startedAt = perfNowMs();
+        const endBusy = beginOverviewBusy('workbenchData');
         const defaultCandidates = processedData.filter(p =>
             p.periodRevenue > 0 && (
                 alerts.margin.some(x => x.sku === p.sku) ||
@@ -557,12 +726,25 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
         if (sort) {
             const sorted = sortRows(data, sort, getValue);
-            console.log('[perf][overview] workbenchData complete', {
+            logPerf('[perf][overview] workbenchData complete', {
                 elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
                 selectedAlert: selectedAlert || 'default',
                 rows: sorted.length,
                 mode: 'sorted'
             });
+            endBusy({
+                reason: 'workbenchData',
+                elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+                rows: sorted.length,
+                mode: 'sorted'
+            });
+            workbenchDataCacheRef.current = {
+                selectedAlert,
+                alerts,
+                processedData,
+                sort,
+                result: sorted
+            };
             return sorted;
         }
 
@@ -580,22 +762,48 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 if (countDiff !== 0) return countDiff;
                 return (b.periodRevenue || 0) - (a.periodRevenue || 0);
             });
-            console.log('[perf][overview] workbenchData complete', {
+            logPerf('[perf][overview] workbenchData complete', {
                 elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
                 selectedAlert: 'default',
                 rows: ranked.length,
                 mode: 'ranked'
             });
+            endBusy({
+                reason: 'workbenchData',
+                elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+                rows: ranked.length,
+                mode: 'ranked'
+            });
+            workbenchDataCacheRef.current = {
+                selectedAlert,
+                alerts,
+                processedData,
+                sort,
+                result: ranked
+            };
             return ranked;
         }
 
         const sorted = [...data].sort((a, b) => (b.periodRevenue || 0) - (a.periodRevenue || 0));
-        console.log('[perf][overview] workbenchData complete', {
+        logPerf('[perf][overview] workbenchData complete', {
             elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
             selectedAlert,
             rows: sorted.length,
             mode: 'revenue'
         });
+        endBusy({
+            reason: 'workbenchData',
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            rows: sorted.length,
+            mode: 'revenue'
+        });
+        workbenchDataCacheRef.current = {
+            selectedAlert,
+            alerts,
+            processedData,
+            sort,
+            result: sorted
+        };
         return sorted;
     }, [selectedAlert, alerts, processedData, sort]);
 
@@ -603,29 +811,36 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const categoryData = useMemo(() => {
         const startedAt = perfNowMs();
         if (activeTab !== 'categories') return [];
-        const result = aggregateCategoryData(products, priceHistoryMap, dateRange);
-        console.log('[perf][overview] categoryData complete', {
+        const result = aggregateCategoryData(products, debouncedPriceHistoryMap, dateRange);
+        logPerf('[perf][overview] categoryData complete', {
             elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
             categories: result.categories.length
         });
         return result.categories;
-    }, [activeTab, products, priceHistoryMap, dateRange]);
+    }, [activeTab, products, debouncedPriceHistoryMap, dateRange]);
 
     const totalPages = Math.ceil(workbenchData.length / itemsPerPage);
 
     const financialStats = useMemo(() => {
         const startedAt = perfNowMs();
+        const endBusy = beginOverviewBusy('financialStats');
         const totalRevenue = processedDataWithToggle.reduce((acc, p) => acc + p.periodRevenue, 0);
         const totalProfit = processedDataWithToggle.reduce((acc, p) => acc + p.periodProfit, 0);
         const totalAdSpend = processedDataWithToggle.reduce((acc, p) => acc + p.periodAdSpend, 0);
         const tacos = totalRevenue > 0 ? (totalAdSpend / totalRevenue) * 100 : 0;
 
         if (activeTab !== 'financials') {
-            console.log('[perf][overview] financialStats complete', {
+            logPerf('[perf][overview] financialStats complete', {
                 elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
                 chartDays: 0,
                 scopedPriceLogs: 0,
                 scopedRefundLogs: 0,
+                skipped: true
+            });
+            endBusy({
+                reason: 'financialStats',
+                elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+                chartDays: 0,
                 skipped: true
             });
             return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData: [] as { day: string; revenue: number; ads: number; profit: number }[] };
@@ -636,11 +851,11 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             days.push(new Date(d).toISOString().split('T')[0]);
         }
 
-        const scopedPriceLogs = products.flatMap(p => priceHistoryMap.get(p.sku) || []).filter(log => {
+        const scopedPriceLogs = products.flatMap(p => debouncedPriceHistoryMap.get(p.sku) || []).filter(log => {
             const platform = log.platform || 'Unknown';
             return platformScope.length === 0 || platformScope.some(p => platform === p || platform.includes(p));
         });
-        const scopedRefundLogs = refundHistory.filter(refund => {
+        const scopedRefundLogs = debouncedRefundHistory.filter(refund => {
             const platform = refund.platform || 'Unknown';
             return platformScope.length === 0 || platformScope.some(p => platform === p || platform.includes(p));
         });
@@ -664,14 +879,83 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             };
         });
 
-        console.log('[perf][overview] financialStats complete', {
+        logPerf('[perf][overview] financialStats complete', {
             elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
             chartDays: chartData.length,
             scopedPriceLogs: scopedPriceLogs.length,
             scopedRefundLogs: scopedRefundLogs.length
         });
+        endBusy({
+            reason: 'financialStats',
+            elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+            chartDays: chartData.length
+        });
         return { totalRevenue, totalProfit, totalAdSpend, tacos, chartData };
-    }, [activeTab, processedDataWithToggle, dateRange, priceHistoryMap, products, refundHistory, pricingRules, platformScope, deductRefunds, returnDateBasis, orderDateMap]);
+    }, [activeTab, processedDataWithToggle, dateRange, debouncedPriceHistoryMap, products, debouncedRefundHistory, platformScope, deductRefunds, returnDateBasis, orderDateMap]);
+
+    const overviewPerfKey = `${activeTab}|${range}|${customStart}|${customEnd}|${platformScopeKey}|${processedDataWithToggle.length}|${workbenchData.length}|${categoryData.length}|${financialStats.chartData.length}|${totalPages}`;
+    usePagePerfLogger('overview', 'overview', overviewPerfKey, {
+        activeTab,
+        range,
+        platformScopeCount: platformScope.length,
+        processedRows: processedDataWithToggle.length,
+        workbenchRows: workbenchData.length,
+        categoryCount: categoryData.length,
+        chartDays: financialStats.chartData.length,
+        totalPages
+    }, true, pagePerfStartedAt);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const pendingToken = typeof (window as any).__selloPendingApplySettleToken === 'number'
+            ? (window as any).__selloPendingApplySettleToken as number
+            : null;
+        const pendingView = typeof (window as any).__selloPendingApplySettleView === 'string'
+            ? (window as any).__selloPendingApplySettleView as string
+            : null;
+        const activeView = typeof (window as any).__selloActiveView === 'string'
+            ? (window as any).__selloActiveView as string
+            : null;
+        if (!pendingToken || pendingView !== 'overview' || activeView !== 'overview') return;
+
+        const sequence = ++visibleSettleSequenceRef.current;
+        const timer = window.setTimeout(() => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (visibleSettleSequenceRef.current !== sequence) return;
+                    if ((window as any).__selloPendingApplySettleToken !== pendingToken) return;
+                    if ((window as any).__selloPendingApplySettleView !== 'overview') return;
+                    if ((window as any).__selloActiveView !== 'overview') return;
+                    (window as any).__selloSettledApplyToken = pendingToken;
+                    (window as any).__selloSettledApplyView = 'overview';
+                    (window as any).__selloSettledApplyUpdatedAt = perfNowMs();
+                    (window as any).__selloSettledApplyMeta = {
+                        activeTab,
+                        range,
+                        rows: workbenchData.length,
+                        categories: categoryData.length,
+                        chartDays: financialStats.chartData.length
+                    };
+                });
+            });
+        }, OVERVIEW_VISIBLE_SETTLE_CONFIRM_MS);
+
+        return () => window.clearTimeout(timer);
+    }, [
+        activeTab,
+        range,
+        customStart,
+        customEnd,
+        platformScope,
+        selectedAlert,
+        returnDateBasis,
+        orderDateMap,
+        refundsBySku,
+        processedDataWithToggle,
+        workbenchData,
+        categoryData,
+        financialStats
+    ]);
 
     return (
         <div className="space-y-6 pb-20 max-w-[1600px] mx-auto min-h-full flex flex-col">
@@ -931,7 +1215,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                 const priceDiff = p.displayPrice - p.historicalMedianPrice;
                                                 const isPriceHigh = priceDiff > 0.05;
 
-                                                const hasRecentPriceIncrease = p.changesInPeriod.some(c => c.changeType === 'INCREASE');
+                                                const hasRecentPriceIncrease = p.changesInPeriod.some((c: any) => c.changeType === 'INCREASE');
 
                                                 // CTA and Justification
                                                 let ctaText = isPriceHigh ? "Review Price Positioning" : "Consider Promotion";
@@ -995,7 +1279,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                                                             <History className="w-3 h-3" />
                                                                         </div>
                                                                         <div className="space-y-1">
-                                                                            {p.changesInPeriod.slice(0, 5).map(c => (
+                                                                            {p.changesInPeriod.slice(0, 5).map((c: any) => (
                                                                                 <div key={c.id} className="flex justify-between items-center gap-3">
                                                                                     <span className="text-gray-400">{new Date(c.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
                                                                                     <div className="flex items-center gap-2">

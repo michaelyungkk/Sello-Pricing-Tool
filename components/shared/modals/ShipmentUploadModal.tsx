@@ -32,12 +32,13 @@ interface ContainerSummary {
 interface ShipmentUploadModalProps {
     products: Product[];
     onClose: () => void;
-    onConfirm: (updates: ShipmentUpdate[]) => void;
+    onConfirm: (updates: ShipmentUpdate[]) => Promise<void>;
 }
 
 const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onClose, onConfirm }) => {
     const [dragActive, setDragActive] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [parsedUpdates, setParsedUpdates] = useState<ShipmentUpdate[] | null>(null);
     const [containerSummaries, setContainerSummaries] = useState<ContainerSummary[]>([]);
@@ -400,6 +401,22 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
         };
     }, [containerSummaries]);
 
+    const handleConfirm = async () => {
+        if (!parsedUpdates || parsedUpdates.length === 0 || isImporting) return;
+        setIsImporting(true);
+        setError(null);
+        let shouldClose = false;
+        try {
+            await onConfirm(parsedUpdates);
+            shouldClose = true;
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to apply shipment updates.');
+        } finally {
+            setIsImporting(false);
+            if (shouldClose) onClose();
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
@@ -413,7 +430,7 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                             <p className="text-xs text-gray-500">Update incoming stock and ETAs</p>
                         </div>
                     </div>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
+                    <button onClick={onClose} disabled={isImporting}><X className="w-5 h-5 text-gray-500 hover:text-gray-700" /></button>
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto">
@@ -538,14 +555,15 @@ const ShipmentUploadModal: React.FC<ShipmentUploadModalProps> = ({ products, onC
                 </div>
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
+                    <button onClick={onClose} disabled={isImporting} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">Cancel</button>
                     {parsedUpdates && parsedUpdates.length > 0 && (
                         <button
-                            onClick={() => onConfirm(parsedUpdates)}
-                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors flex items-center gap-2"
+                            onClick={handleConfirm}
+                            disabled={isImporting}
+                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            <Check className="w-4 h-4" />
-                            Confirm Update
+                            {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            {isImporting ? 'Applying Shipments...' : 'Confirm Update'}
                         </button>
                     )}
                 </div>

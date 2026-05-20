@@ -10,6 +10,7 @@ import { ERPCrossCheckTool } from './components/ERPCrossCheckTool';
 import { PriceCheckTool } from './components/PriceCheckTool';
 import { SkuScreenTool } from './components/SkuScreenTool';
 import { DealSimulatorTool } from './components/DealSimulatorTool';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
     promotions,
@@ -27,7 +28,17 @@ const ToolboxPageInner: React.FC<ToolboxPageProps> = ({
     onSavePriceCheckTemplates,
     freightRates,
 }) => {
+    const pagePerfStartedAt = perfNowMs();
     const { activeTab, setActiveTab } = useToolBox();
+
+    const toolboxPerfKey = `${activeTab}|${products?.length || 0}|${promotions?.length || 0}|${salesHistory?.length || 0}|${refundHistory?.length || 0}`;
+    usePagePerfLogger('tools', 'tools', toolboxPerfKey, {
+        activeTab,
+        products: products?.length || 0,
+        promotions: promotions?.length || 0,
+        salesHistory: salesHistory?.length || 0,
+        refundHistory: refundHistory?.length || 0
+    }, true, pagePerfStartedAt);
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20">

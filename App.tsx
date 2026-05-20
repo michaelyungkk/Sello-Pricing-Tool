@@ -7,15 +7,14 @@ import {
     LayoutDashboard, FlaskConical, BadgePoundSterling, Tag, Briefcase, Settings, BookOpen, Search, X,
     Download, Upload, Database, CheckCircle, FileBarChart, Bell, History,
     ChevronDown, RotateCcw, FileText, Link as LinkIcon, Ship, Store, Truck,
-    ArrowUp, ShoppingBasket, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2, BarChart2, Target
+    ArrowUp, ShoppingBasket, Table, Lock, LogOut, RefreshCw, UploadCloud, Loader2, Target
 } from 'lucide-react';
 
 import GlobalSearch from './components/shared/GlobalSearch';
 import UserProfile from './components/shared/UserProfile';
-import { TAX_NOTE_SHORT } from './services/taxPolicy';
 import { hexToRgb } from './utils/color';
 import { StrategyConfig, OptimalPriceResult } from './types';
-import type { CohortShiftWarning } from './services/cohortAnalysis';
+import { logPerf } from './services/pagePerf';
 
 const OverviewPageContainer = lazy(() => import('./components/overview/OverviewPageContainer').then(m => ({ default: m.OverviewPageContainer })));
 const ProductManagementPage = lazy(() => import('./components/productManagement/ProductManagementPage'));
@@ -105,6 +104,15 @@ interface ReleaseNoteItem {
 const RELEASE_NOTES_SEEN_KEY = 'sello_release_notes_seen_id';
 const APP_BOOT_START_MS = typeof performance !== 'undefined' ? performance.now() : Date.now();
 const perfNowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','ad-campaigns','tools','definitions','settings','custom-report'];
+const publishAppBusySignal = (reasons: Set<string>, meta: Record<string, unknown> = {}) => {
+    if (typeof window === 'undefined') return;
+    const activeReasons = Array.from(reasons.values());
+    (window as any).__selloAppBusy = activeReasons.length > 0;
+    (window as any).__selloAppBusyReasons = activeReasons;
+    (window as any).__selloAppBusyUpdatedAt = perfNowMs();
+    (window as any).__selloAppBusyMeta = meta;
+};
 
 const App: React.FC = () => {
     const {
@@ -141,7 +149,6 @@ const App: React.FC = () => {
         pendingFamilySuggestions,
         setPendingFamilySuggestions,
         adGroups,
-        setAdGroups,
         onSyncFromFamilies,
         onAddAdGroup,
         onEditAdGroup,
@@ -243,6 +250,7 @@ const App: React.FC = () => {
         syncTotal,
         startupChoicePending,
         startupSyncMode,
+        postApplySource,
         isRestoring,
         handleAdminToggle,
         handleAdminExit,
@@ -267,21 +275,22 @@ const App: React.FC = () => {
     } = useAppState();
 
     // Progressive page mounting — pages stagger-mount during browser idle time after initial render
-    const PAGE_ORDER = ['search','products','platforms','strategy','costs','promotions','ad-campaigns','tools','definitions','settings','custom-report'];
     const [mountedPages, setMountedPages] = useState<Set<string>>(() => new Set<string>());
+    const [, setHiddenPageWarmTick] = useState(0);
     const mountPerfRef = React.useRef<{
         schedulerStartedAt?: number;
         firstDataReadyLogged?: boolean;
         firstCurrentViewMounted?: boolean;
     }>({});
+    const appBusyReasonsRef = React.useRef<Set<string>>(new Set<string>());
+    const hiddenWarmCycleRef = React.useRef(0);
+    const skipNextHiddenWarmRef = React.useRef(false);
     // Frozen props for background-mounted pages — only update when page is active
     // Prevents expensive useMemo recalcs in hidden pages when unrelated state changes
     const frozenPromotionsRef = React.useRef(promotions || []);
     if (currentView === 'strategy' || !mountedPages.has('strategy')) {
         frozenPromotionsRef.current = promotions || [];
     }
-    const strategyPromotions = frozenPromotionsRef.current;
-
     const frozenPromoOverviewRef = React.useRef(promotions || []);
     if (currentView === 'overview' || !mountedPages.has('overview')) {
         frozenPromoOverviewRef.current = promotions || [];
@@ -303,6 +312,430 @@ const App: React.FC = () => {
     if (currentView === 'tools' || !mountedPages.has('tools')) {
         frozenPromoToolboxRef.current = promotions || [];
     }
+    const searchPageDataRef = React.useRef({
+        products,
+        pricingRules,
+        promotions: promotions || [],
+        priceHistoryMap,
+        optimalPriceResults,
+        adGroups,
+        skuFamilies
+    });
+    if (currentView === 'search' || !mountedPages.has('search')) {
+        searchPageDataRef.current = {
+            products,
+            pricingRules,
+            promotions: promotions || [],
+            priceHistoryMap,
+            optimalPriceResults,
+            adGroups,
+            skuFamilies
+        };
+    }
+    const overviewPageDataRef = React.useRef({
+        products,
+        priceHistoryMap,
+        refundHistory,
+        pricingRules,
+        priceChangeHistory,
+        promotions: promotions || [],
+        thresholds,
+        mapJumpState
+    });
+    if (currentView === 'overview' || !mountedPages.has('overview')) {
+        overviewPageDataRef.current = {
+            products,
+            priceHistoryMap,
+            refundHistory,
+            pricingRules,
+            priceChangeHistory,
+            promotions: promotions || [],
+            thresholds,
+            mapJumpState
+        };
+    }
+    const productPageDataRef = React.useRef({
+        products,
+        pricingRules,
+        promotions: promotions || [],
+        priceHistoryMap,
+        refundHistory: refundHistory || [],
+        priceChangeHistory: priceChangeHistory || [],
+        inventoryChangeHistory: inventoryChangeHistory || [],
+        skuFamilies,
+        pendingFamilySuggestions,
+        cohortSnapshot,
+        optimalPriceResults,
+        benchmarkUpdateNotices,
+        benchmarkRecalcState
+    });
+    if (currentView === 'products' || !mountedPages.has('products')) {
+        productPageDataRef.current = {
+            products,
+            pricingRules,
+            promotions: promotions || [],
+            priceHistoryMap,
+            refundHistory: refundHistory || [],
+            priceChangeHistory: priceChangeHistory || [],
+            inventoryChangeHistory: inventoryChangeHistory || [],
+            skuFamilies,
+            pendingFamilySuggestions,
+            cohortSnapshot,
+            optimalPriceResults,
+            benchmarkUpdateNotices,
+            benchmarkRecalcState
+        };
+    }
+    const platformsPageDataRef = React.useRef({
+        products,
+        priceHistoryMap,
+        refundHistory,
+        pricingRules,
+        adGroups,
+        skuFamilies,
+        lastRecalculationSummary
+    });
+    if (currentView === 'platforms' || !mountedPages.has('platforms')) {
+        platformsPageDataRef.current = {
+            products,
+            priceHistoryMap,
+            refundHistory,
+            pricingRules,
+            adGroups,
+            skuFamilies,
+            lastRecalculationSummary
+        };
+    }
+    const strategyPageDataRef = React.useRef({
+        products,
+        pricingRules,
+        refundHistory,
+        promotions: promotions || [],
+        priceHistoryMap,
+        priceChangeHistory: priceChangeHistory || [],
+        costChangeHistory: costChangeHistory || [],
+        inventoryChangeHistory: inventoryChangeHistory || [],
+        skuFamilies,
+        optimalPriceResults
+    });
+    if (currentView === 'strategy' || !mountedPages.has('strategy')) {
+        strategyPageDataRef.current = {
+            products,
+            pricingRules,
+            refundHistory,
+            promotions: promotions || [],
+            priceHistoryMap,
+            priceChangeHistory: priceChangeHistory || [],
+            costChangeHistory: costChangeHistory || [],
+            inventoryChangeHistory: inventoryChangeHistory || [],
+            skuFamilies,
+            optimalPriceResults
+        };
+    }
+    const promotionsPageDataRef = React.useRef({
+        products,
+        pricingRules,
+        logisticsRules: logisticsRules || [],
+        promotions: promotions || [],
+        priceHistoryMap
+    });
+    if (currentView === 'promotions' || !mountedPages.has('promotions')) {
+        promotionsPageDataRef.current = {
+            products,
+            pricingRules,
+            logisticsRules: logisticsRules || [],
+            promotions: promotions || [],
+            priceHistoryMap
+        };
+    }
+    const adCampaignPageDataRef = React.useRef({
+        products: products || [],
+        salesHistory: salesHistory || [],
+        adSnapshots: adSnapshots || [],
+        adRosterChanges: adRosterChanges || [],
+        adBudgets: adBudgets || {}
+    });
+    if (currentView === 'ad-campaigns' || !mountedPages.has('ad-campaigns')) {
+        adCampaignPageDataRef.current = {
+            products: products || [],
+            salesHistory: salesHistory || [],
+            adSnapshots: adSnapshots || [],
+            adRosterChanges: adRosterChanges || [],
+            adBudgets: adBudgets || {}
+        };
+    }
+    const toolsPageDataRef = React.useRef({
+        promotions: promotions || [],
+        freightRates: freightRates || [],
+        pricingRules,
+        inventoryTemplates: inventoryTemplates || [],
+        products: products || [],
+        salesHistory: salesHistory || [],
+        refundHistory: refundHistory || [],
+        priceCheckTemplates: priceCheckTemplates || []
+    });
+    if (currentView === 'tools' || !mountedPages.has('tools')) {
+        toolsPageDataRef.current = {
+            promotions: promotions || [],
+            freightRates: freightRates || [],
+            pricingRules,
+            inventoryTemplates: inventoryTemplates || [],
+            products: products || [],
+            salesHistory: salesHistory || [],
+            refundHistory: refundHistory || [],
+            priceCheckTemplates: priceCheckTemplates || []
+        };
+    }
+    const customReportPageDataRef = React.useRef({
+        products,
+        priceHistory: salesHistory,
+        refundHistory,
+        pricingRules,
+        customReportPresets
+    });
+    if (currentView === 'custom-report' || !mountedPages.has('custom-report')) {
+        customReportPageDataRef.current = {
+            products,
+            priceHistory: salesHistory,
+            refundHistory,
+            pricingRules,
+            customReportPresets
+        };
+    }
+    const settingsPageDataRef = React.useRef({
+        currentRules: pricingRules,
+        logisticsRules: logisticsRules || [],
+        products,
+        freightRates: freightRates || [],
+        searchConfig,
+        velocityLookback,
+        extraData: { priceHistory: salesHistory, promotions: promotions || [] },
+        brandMap,
+        categoryMap
+    });
+    if (currentView === 'settings' || !mountedPages.has('settings')) {
+        settingsPageDataRef.current = {
+            currentRules: pricingRules,
+            logisticsRules: logisticsRules || [],
+            products,
+            freightRates: freightRates || [],
+            searchConfig,
+            velocityLookback,
+            extraData: { priceHistory: salesHistory, promotions: promotions || [] },
+            brandMap,
+            categoryMap
+        };
+    }
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        (window as any).__selloActiveView = currentView;
+        (window as any).__selloActiveViewUpdatedAt = perfNowMs();
+    }, [currentView]);
+    useEffect(() => {
+        if (isRestoring) {
+            skipNextHiddenWarmRef.current = true;
+        }
+    }, [isRestoring]);
+    useEffect(() => {
+        if (syncStatus !== 'idle' || isRestoring) return;
+        if (skipNextHiddenWarmRef.current) {
+            skipNextHiddenWarmRef.current = false;
+            return;
+        }
+        if (postApplySource === 'refund-import' || postApplySource === 'sales-import' || postApplySource === 'inventory-import') return;
+        if (mountedPages.size === 0) return;
+        const hiddenPages = PAGE_ORDER.filter(page => page !== currentView && mountedPages.has(page));
+        if (hiddenPages.length === 0) return;
+
+        const cycle = hiddenWarmCycleRef.current + 1;
+        const busyReasons = appBusyReasonsRef.current;
+        hiddenWarmCycleRef.current = cycle;
+        let index = 0;
+        let timer: number | null = null;
+        busyReasons.add('hidden-warm');
+        publishAppBusySignal(busyReasons, {
+            source: 'hidden-warm',
+            cycle,
+            hiddenPages
+        });
+
+        const warmPageSnapshot = (page: string) => {
+            switch (page) {
+                case 'search':
+                    searchPageDataRef.current = {
+                        products,
+                        pricingRules,
+                        promotions: promotions || [],
+                        priceHistoryMap,
+                        optimalPriceResults,
+                        adGroups,
+                        skuFamilies
+                    };
+                    break;
+                case 'products':
+                    productPageDataRef.current = {
+                        products,
+                        pricingRules,
+                        promotions: promotions || [],
+                        priceHistoryMap,
+                        refundHistory: refundHistory || [],
+                        priceChangeHistory: priceChangeHistory || [],
+                        inventoryChangeHistory: inventoryChangeHistory || [],
+                        skuFamilies,
+                        pendingFamilySuggestions,
+                        cohortSnapshot,
+                        optimalPriceResults,
+                        benchmarkUpdateNotices,
+                        benchmarkRecalcState
+                    };
+                    break;
+                case 'platforms':
+                    platformsPageDataRef.current = {
+                        products,
+                        priceHistoryMap,
+                        refundHistory,
+                        pricingRules,
+                        adGroups,
+                        skuFamilies,
+                        lastRecalculationSummary
+                    };
+                    break;
+                case 'strategy':
+                    strategyPageDataRef.current = {
+                        products,
+                        pricingRules,
+                        refundHistory,
+                        promotions: promotions || [],
+                        priceHistoryMap,
+                        priceChangeHistory: priceChangeHistory || [],
+                        costChangeHistory: costChangeHistory || [],
+                        inventoryChangeHistory: inventoryChangeHistory || [],
+                        skuFamilies,
+                        optimalPriceResults
+                    };
+                    break;
+                case 'promotions':
+                    promotionsPageDataRef.current = {
+                        products,
+                        pricingRules,
+                        logisticsRules: logisticsRules || [],
+                        promotions: promotions || [],
+                        priceHistoryMap
+                    };
+                    break;
+                case 'ad-campaigns':
+                    adCampaignPageDataRef.current = {
+                        products: products || [],
+                        salesHistory: salesHistory || [],
+                        adSnapshots: adSnapshots || [],
+                        adRosterChanges: adRosterChanges || [],
+                        adBudgets: adBudgets || {}
+                    };
+                    break;
+                case 'tools':
+                    toolsPageDataRef.current = {
+                        promotions: promotions || [],
+                        freightRates: freightRates || [],
+                        pricingRules,
+                        inventoryTemplates: inventoryTemplates || [],
+                        products: products || [],
+                        salesHistory: salesHistory || [],
+                        refundHistory: refundHistory || [],
+                        priceCheckTemplates: priceCheckTemplates || []
+                    };
+                    break;
+                case 'custom-report':
+                    customReportPageDataRef.current = {
+                        products,
+                        priceHistory: salesHistory,
+                        refundHistory,
+                        pricingRules,
+                        customReportPresets
+                    };
+                    break;
+                case 'settings':
+                    settingsPageDataRef.current = {
+                        currentRules: pricingRules,
+                        logisticsRules: logisticsRules || [],
+                        products,
+                        freightRates: freightRates || [],
+                        searchConfig,
+                        velocityLookback,
+                        extraData: { priceHistory: salesHistory, promotions: promotions || [] },
+                        brandMap,
+                        categoryMap
+                    };
+                    break;
+                default:
+                    break;
+            }
+        };
+
+        const schedule = () => {
+            if (hiddenWarmCycleRef.current !== cycle) return;
+            if (index >= hiddenPages.length) {
+                busyReasons.delete('hidden-warm');
+                publishAppBusySignal(busyReasons, {
+                    source: 'hidden-warm',
+                    cycle,
+                    hiddenPages,
+                    completed: true
+                });
+                return;
+            }
+            const page = hiddenPages[index++];
+            warmPageSnapshot(page);
+            setHiddenPageWarmTick(tick => tick + 1);
+            timer = window.setTimeout(schedule, 150);
+        };
+
+        timer = window.setTimeout(schedule, 1200);
+        return () => {
+            hiddenWarmCycleRef.current = cycle;
+            busyReasons.delete('hidden-warm');
+            publishAppBusySignal(busyReasons, {
+                source: 'hidden-warm',
+                cycle,
+                cleanedUp: true
+            });
+            if (timer !== null) window.clearTimeout(timer);
+        };
+    }, [
+        syncStatus,
+        isRestoring,
+        mountedPages,
+        currentView,
+        products,
+        pricingRules,
+        promotions,
+        priceHistoryMap,
+        optimalPriceResults,
+        adGroups,
+        skuFamilies,
+        refundHistory,
+        priceChangeHistory,
+        inventoryChangeHistory,
+        pendingFamilySuggestions,
+        cohortSnapshot,
+        benchmarkUpdateNotices,
+        benchmarkRecalcState,
+        lastRecalculationSummary,
+        costChangeHistory,
+        logisticsRules,
+        adSnapshots,
+        adRosterChanges,
+        adBudgets,
+        freightRates,
+        inventoryTemplates,
+        salesHistory,
+        priceCheckTemplates,
+        customReportPresets,
+        searchConfig,
+        velocityLookback,
+        brandMap,
+        categoryMap,
+        postApplySource
+    ]);
     const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
         try { return localStorage.getItem('sello_sidebar_collapsed') === 'true'; } catch { return false; }
     });
@@ -370,19 +803,32 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const schedulerStartedAt = perfNowMs();
+        const busyReasons = appBusyReasonsRef.current;
         mountPerfRef.current.schedulerStartedAt = schedulerStartedAt;
-        console.log('[perf][app-mount] scheduler start', {
-            currentView,
+        busyReasons.add('page-mount-scheduler');
+        publishAppBusySignal(busyReasons, {
+            source: 'page-mount-scheduler',
+            pageOrderCount: PAGE_ORDER.length
+        });
+        logPerf('[perf][app-mount] scheduler start', {
             pageOrderCount: PAGE_ORDER.length,
             elapsedMs: Number((schedulerStartedAt - APP_BOOT_START_MS).toFixed(1))
         });
         let i = 0;
         let timer: number | null = null;
         const schedule = () => {
-            if (i >= PAGE_ORDER.length) return;
+            if (i >= PAGE_ORDER.length) {
+                busyReasons.delete('page-mount-scheduler');
+                publishAppBusySignal(busyReasons, {
+                    source: 'page-mount-scheduler',
+                    pageOrderCount: PAGE_ORDER.length,
+                    completed: true
+                });
+                return;
+            }
             const page = PAGE_ORDER[i++];
             setMountedPages(prev => new Set([...prev, page]));
-            console.log('[perf][app-mount] page mounted', {
+            logPerf('[perf][app-mount] page mounted', {
                 page,
                 mountedCount: i,
                 elapsedMs: Number((perfNowMs() - schedulerStartedAt).toFixed(1)),
@@ -392,6 +838,11 @@ const App: React.FC = () => {
         };
         timer = window.setTimeout(schedule, 25);
         return () => {
+            busyReasons.delete('page-mount-scheduler');
+            publishAppBusySignal(busyReasons, {
+                source: 'page-mount-scheduler',
+                cleanedUp: true
+            });
             if (timer !== null) {
                 window.clearTimeout(timer);
             }
@@ -548,7 +999,7 @@ const App: React.FC = () => {
                     appBootStartAt: APP_BOOT_START_MS,
                     appShellRenderedAt: now
                 };
-                console.log(`[perf] app_shell_rendered: ${(now - APP_BOOT_START_MS).toFixed(1)}ms`);
+                logPerf(`[perf] app_shell_rendered: ${(now - APP_BOOT_START_MS).toFixed(1)}ms`);
             }
         };
         if (typeof requestAnimationFrame !== 'undefined') {
@@ -562,7 +1013,7 @@ const App: React.FC = () => {
         const hasAnyData = (products?.length || 0) > 0 || (salesHistory?.length || 0) > 0 || (refundHistory?.length || 0) > 0;
         if (hasAnyData && syncStatus === 'idle' && !mountPerfRef.current.firstDataReadyLogged) {
             mountPerfRef.current.firstDataReadyLogged = true;
-            console.log('[perf][app-mount] data-ready gate opened', {
+            logPerf('[perf][app-mount] data-ready gate opened', {
                 currentView,
                 mountedCurrentView: mountedPages.has(currentView),
                 mountedCount: mountedPages.size,
@@ -579,14 +1030,14 @@ const App: React.FC = () => {
                 ...((window as any).__selloPerf || {}),
                 firstViewDataReadyAt: now
             };
-            console.log(`[perf] first_view_data_ready: ${(now - APP_BOOT_START_MS).toFixed(1)}ms`);
+            logPerf(`[perf] first_view_data_ready: ${(now - APP_BOOT_START_MS).toFixed(1)}ms`);
         }
     }, [syncStatus, products, salesHistory, refundHistory, mountedPages, currentView]);
 
     useEffect(() => {
         if (mountedPages.has(currentView) && !mountPerfRef.current.firstCurrentViewMounted) {
             mountPerfRef.current.firstCurrentViewMounted = true;
-            console.log('[perf][app-mount] current view mounted', {
+            logPerf('[perf][app-mount] current view mounted', {
                 currentView,
                 mountedCount: mountedPages.size,
                 elapsedMs: Number((perfNowMs() - APP_BOOT_START_MS).toFixed(1))
@@ -599,7 +1050,7 @@ const App: React.FC = () => {
         if (!perfMarksRef.current.firstDataReadyAt) return;
         if (!mountedPages.has(currentView)) return;
 
-        console.log('[perf][app-mount] interactive gate opened', {
+        logPerf('[perf][app-mount] interactive gate opened', {
             currentView,
             mountedCount: mountedPages.size,
             dataReadyElapsedMs: Number(((perfMarksRef.current.firstDataReadyAt || perfNowMs()) - APP_BOOT_START_MS).toFixed(1)),
@@ -625,7 +1076,7 @@ const App: React.FC = () => {
                     readyToInteractiveMs: Number(readyToInteractiveMs.toFixed(1))
                 }
             };
-            console.log(
+            logPerf(
                 `[perf] startup_summary shell=${shellMs.toFixed(1)}ms data_ready=${dataReadyMs.toFixed(1)}ms ` +
                 `interactive=${interactiveMs.toFixed(1)}ms ready_to_interactive=${readyToInteractiveMs.toFixed(1)}ms`
             );
@@ -1077,8 +1528,8 @@ const App: React.FC = () => {
                             {activeSearch ? (
                                 <SearchResultsPage
                                     data={{ results: activeSearch.results || [], query: activeSearch.query, params: activeSearch.params, id: activeSearch.id }}
-                                    products={products}
-                                    pricingRules={pricingRules}
+                                    products={searchPageDataRef.current.products}
+                                    pricingRules={searchPageDataRef.current.pricingRules}
                                     themeColor={userProfile.themeColor}
                                     timeLabel={activeSearch.timeLabel}
                                     onRefine={handleRefineSearch}
@@ -1086,11 +1537,11 @@ const App: React.FC = () => {
                                     priceChangeHistory={priceChangeHistory}
                                     thresholds={thresholds}
                                     headerStyle={headerStyle}
-                                    skuFamilies={skuFamilies}
-                                    adGroups={adGroups}
-                                    promotions={promotions || []}
-                                    priceHistoryMap={priceHistoryMap}
-                                    optimalPriceResults={optimalPriceResults}
+                                    skuFamilies={searchPageDataRef.current.skuFamilies}
+                                    adGroups={searchPageDataRef.current.adGroups}
+                                    promotions={searchPageDataRef.current.promotions}
+                                    priceHistoryMap={searchPageDataRef.current.priceHistoryMap}
+                                    optimalPriceResults={searchPageDataRef.current.optimalPriceResults}
                                     navigateToEntity={navigateToEntity}
                                 />
                             ) : (
@@ -1103,7 +1554,7 @@ const App: React.FC = () => {
                         </div>)}
                         <div style={{ display: currentView === 'overview' ? 'block' : 'none' }}>
                             {products.length === 0 ? (
-                                syncStatus === 'syncing' ? (
+                                (syncStatus === 'syncing' || (startupSyncMode === 'sync' && syncStatus !== 'error')) ? (
                                     <div className="flex flex-col items-center justify-center min-h-[500px]">
                                         <div className="w-16 h-16 rounded-full flex items-center justify-center mb-6"
                                             style={{ backgroundColor: `${userProfile.themeColor}15` }}>
@@ -1217,12 +1668,12 @@ const App: React.FC = () => {
                                 )
                             ) : (
                                 <OverviewPageContainer
-                                    products={products}
-                                    priceHistoryMap={priceHistoryMap}
-                                    refundHistory={refundHistory}
-                                    pricingRules={pricingRules}
-                                    priceChangeHistory={priceChangeHistory}
-                                    promotions={frozenPromoOverviewRef.current}
+                                    products={overviewPageDataRef.current.products}
+                                    priceHistoryMap={overviewPageDataRef.current.priceHistoryMap}
+                                    refundHistory={overviewPageDataRef.current.refundHistory}
+                                    pricingRules={overviewPageDataRef.current.pricingRules}
+                                    priceChangeHistory={overviewPageDataRef.current.priceChangeHistory}
+                                    promotions={overviewPageDataRef.current.promotions}
                                     themeColor={userProfile.themeColor}
                                     onAnalyze={handleAnalyze}
                                     onDeepDive={(sku) => navigateToEntity({
@@ -1232,23 +1683,23 @@ const App: React.FC = () => {
                                         sourceView: currentView
                                     })}
                                     onSearch={handleSearch}
-                                    thresholds={thresholds}
-                                    mapJumpState={mapJumpState}
+                                    thresholds={overviewPageDataRef.current.thresholds}
+                                    mapJumpState={overviewPageDataRef.current.mapJumpState}
                                 />
                             )}
                         </div>
                         {mountedPages.has('products') && (
                         <div style={{ display: currentView === 'products' ? 'block' : 'none' }}>
                             <ProductManagementPage
-                                products={products}
-                                pricingRules={pricingRules}
-                                promotions={frozenPromoProductsRef.current}
-                                priceHistoryMap={priceHistoryMap}
-                                refundHistory={refundHistory || []}
+                                products={productPageDataRef.current.products}
+                                pricingRules={productPageDataRef.current.pricingRules}
+                                promotions={productPageDataRef.current.promotions}
+                                priceHistoryMap={productPageDataRef.current.priceHistoryMap}
+                                refundHistory={productPageDataRef.current.refundHistory}
                                 deductRefunds={deductRefunds}
                                 setDeductRefunds={setDeductRefunds}
-                                priceChangeHistory={priceChangeHistory || []}
-                                inventoryChangeHistory={inventoryChangeHistory || []}
+                                priceChangeHistory={productPageDataRef.current.priceChangeHistory}
+                                inventoryChangeHistory={productPageDataRef.current.inventoryChangeHistory}
                                 onOpenMappingModal={() => setIsMappingModalOpen(true)}
                                 dateLabels={dynamicDateLabels}
                                 onUpdateProduct={(p) => setProducts(prev => (prev || []).map(old => old.id === p.id ? p : old))}
@@ -1264,16 +1715,16 @@ const App: React.FC = () => {
                                 onSearch={handleSearch}
                                 thresholds={thresholds}
                                 onAnalyzeCarrier={handleAnalyzeCarrier}
-                                skuFamilies={skuFamilies}
+                                skuFamilies={productPageDataRef.current.skuFamilies}
                                 setSkuFamilies={setSkuFamilies}
-                                pendingFamilySuggestions={pendingFamilySuggestions}
+                                pendingFamilySuggestions={productPageDataRef.current.pendingFamilySuggestions}
                                 setPendingFamilySuggestions={setPendingFamilySuggestions}
                                 headerStyle={headerStyle}
-                                cohortSnapshot={cohortSnapshot}
-                                optimalPriceResults={optimalPriceResults}
-                                benchmarkUpdateNotices={benchmarkUpdateNotices}
+                                cohortSnapshot={productPageDataRef.current.cohortSnapshot}
+                                optimalPriceResults={productPageDataRef.current.optimalPriceResults}
+                                benchmarkUpdateNotices={productPageDataRef.current.benchmarkUpdateNotices}
                                 onRecalculateBenchmarks={handleRecalculateBenchmarks}
-                                benchmarkRecalcState={benchmarkRecalcState}
+                                benchmarkRecalcState={productPageDataRef.current.benchmarkRecalcState}
                                 onCancelBenchmarkRecalculation={handleCancelBenchmarkRecalculation}
                                 onDismissBenchmarkRecalcState={handleDismissBenchmarkRecalcState}
                                 onStampLandedAt={handleStampLandedAt}
@@ -1408,40 +1859,40 @@ const App: React.FC = () => {
                         {mountedPages.has('platforms') && (
                         <div style={{ display: currentView === 'platforms' ? 'block' : 'none' }}>
                             <PlatformManagementPage
-                                products={products}
-                                priceHistoryMap={priceHistoryMap}
-                                refundHistory={refundHistory}
+                                products={platformsPageDataRef.current.products}
+                                priceHistoryMap={platformsPageDataRef.current.priceHistoryMap}
+                                refundHistory={platformsPageDataRef.current.refundHistory}
                                 deductRefunds={deductRefunds}
                                 setDeductRefunds={setDeductRefunds}
-                                pricingRules={pricingRules}
+                                pricingRules={platformsPageDataRef.current.pricingRules}
                                 themeColor={userProfile.themeColor}
-                                adGroups={adGroups}
-                                skuFamilies={skuFamilies}
+                                adGroups={platformsPageDataRef.current.adGroups}
+                                skuFamilies={platformsPageDataRef.current.skuFamilies}
                                 onSyncFromFamilies={onSyncFromFamilies}
                                 onAddAdGroup={onAddAdGroup}
                                 onEditAdGroup={onEditAdGroup}
                                 onRemoveAdGroup={onRemoveAdGroup}
                                 onSaveAdGroups={handleAdGroupSave}
-                                lastRecalculationSummary={lastRecalculationSummary}
+                                lastRecalculationSummary={platformsPageDataRef.current.lastRecalculationSummary}
                                 headerStyle={headerStyle}
                             />
                         </div>)}
                         {mountedPages.has('strategy') && (
                         <div style={{ display: currentView === 'strategy' ? 'block' : 'none' }}>
                             <StrategyPage
-                                products={products}
-                                pricingRules={pricingRules}
+                                products={strategyPageDataRef.current.products}
+                                pricingRules={strategyPageDataRef.current.pricingRules}
                                 currentConfig={strategyRules}
                                 onSaveConfig={(newConfig: StrategyConfig) => { setStrategyRules(newConfig); }}
                                 themeColor={userProfile.themeColor}
-                                priceHistoryMap={priceHistoryMap}
-                                refundHistory={refundHistory}
+                                priceHistoryMap={strategyPageDataRef.current.priceHistoryMap}
+                                refundHistory={strategyPageDataRef.current.refundHistory}
                                 deductRefunds={deductRefunds}
                                 setDeductRefunds={setDeductRefunds}
-                                promotions={strategyPromotions}
-                                priceChangeHistory={priceChangeHistory || []}
-                                costChangeHistory={costChangeHistory || []}
-                                inventoryChangeHistory={inventoryChangeHistory || []}
+                                promotions={strategyPageDataRef.current.promotions}
+                                priceChangeHistory={strategyPageDataRef.current.priceChangeHistory}
+                                costChangeHistory={strategyPageDataRef.current.costChangeHistory}
+                                inventoryChangeHistory={strategyPageDataRef.current.inventoryChangeHistory}
                                 onUpdatePriceChangeRecord={handleUpdatePriceChangeRecord}
                                 onUpdateCostChangeRecord={handleUpdateCostChangeRecord}
                                 onUpdateInventoryChangeRecord={handleUpdateInventoryChangeRecord}
@@ -1449,8 +1900,8 @@ const App: React.FC = () => {
                                 onManualCostChange={handleManualCostChange}
                                 velocityLookback={velocityLookback}
                                 thresholds={thresholds}
-                                skuFamilies={skuFamilies}
-                                optimalPriceResults={optimalPriceResults}
+                                skuFamilies={strategyPageDataRef.current.skuFamilies}
+                                optimalPriceResults={strategyPageDataRef.current.optimalPriceResults}
                             />
                         </div>)}
                         {mountedPages.has('costs') && (
@@ -1460,11 +1911,11 @@ const App: React.FC = () => {
                         {mountedPages.has('promotions') && (
                         <div style={{ display: currentView === 'promotions' ? 'block' : 'none' }}>
                             <PromotionPage
-                                products={products}
-                                pricingRules={pricingRules}
-                                logisticsRules={logisticsRules || []}
-                                promotions={promotions || []}
-                                priceHistoryMap={priceHistoryMap}
+                                products={promotionsPageDataRef.current.products}
+                                pricingRules={promotionsPageDataRef.current.pricingRules}
+                                logisticsRules={promotionsPageDataRef.current.logisticsRules}
+                                promotions={promotionsPageDataRef.current.promotions}
+                                priceHistoryMap={promotionsPageDataRef.current.priceHistoryMap}
                                 onAddPromotion={(p) => startTransition(() => setPromotions(prev => [...(prev || []), p]))}
                                 onUpdatePromotion={(p) => startTransition(() => setPromotions(prev => (prev || []).map(o => o.id === p.id ? p : o)))}
                                 onDeletePromotion={(id) => startTransition(() => setPromotions(prev => (prev || []).filter(p => p.id !== id)))}
@@ -1477,12 +1928,12 @@ const App: React.FC = () => {
                         {mountedPages.has('ad-campaigns') && (
                         <div style={{ display: currentView === 'ad-campaigns' ? 'block' : 'none' }}>
                             <AdCampaignPageContainer
-                                products={products || []}
-                                salesHistory={frozenSalesForAdRef.current}
+                                products={adCampaignPageDataRef.current.products}
+                                salesHistory={adCampaignPageDataRef.current.salesHistory}
                                 learnedAliases={learnedAliases || {}}
-                                adSnapshots={adSnapshots || []}
-                                adRosterChanges={adRosterChanges || []}
-                                adBudgets={adBudgets || {}}
+                                adSnapshots={adCampaignPageDataRef.current.adSnapshots}
+                                adRosterChanges={adCampaignPageDataRef.current.adRosterChanges}
+                                adBudgets={adCampaignPageDataRef.current.adBudgets}
                                 onImport={handleAdCampaignImport}
                                 onRosterChange={handleAdRosterChange}
                             />
@@ -1490,19 +1941,19 @@ const App: React.FC = () => {
                         {mountedPages.has('tools') && (
                         <div style={{ display: currentView === 'tools' ? 'block' : 'none' }}>
                             <ToolboxPage
-                                promotions={frozenPromoToolboxRef.current}
-                                freightRates={freightRates || []}
+                                promotions={toolsPageDataRef.current.promotions}
+                                freightRates={toolsPageDataRef.current.freightRates}
                                 learnedAliases={learnedAliases || {}}
-                                pricingRules={pricingRules}
-                                inventoryTemplates={inventoryTemplates || []}
+                                pricingRules={toolsPageDataRef.current.pricingRules}
+                                inventoryTemplates={toolsPageDataRef.current.inventoryTemplates}
                                 onSaveTemplates={setInventoryTemplates}
                                 onSaveLearnedAliases={(aliases) => setLearnedAliases(prev => ({ ...prev, ...aliases }))}
-                                products={products || []}
+                                products={toolsPageDataRef.current.products}
                                 themeColor={userProfile.themeColor}
                                 headerStyle={headerStyle}
-                                salesHistory={frozenSalesForToolsRef.current}
-                                refundHistory={refundHistory || []}
-                                priceCheckTemplates={priceCheckTemplates || []}
+                                salesHistory={toolsPageDataRef.current.salesHistory}
+                                refundHistory={toolsPageDataRef.current.refundHistory}
+                                priceCheckTemplates={toolsPageDataRef.current.priceCheckTemplates}
                                 onSavePriceCheckTemplates={handleSavePriceCheckTemplates}
                                 onDescriptionImport={handleDescriptionImport}
                             />
@@ -1514,11 +1965,11 @@ const App: React.FC = () => {
                         {mountedPages.has('custom-report') && (
                         <div style={{ display: currentView === 'custom-report' ? 'block' : 'none' }}>
                             <CustomReportPage
-                                products={products}
-                                priceHistory={salesHistory}
-                                refundHistory={refundHistory}
-                                pricingRules={pricingRules}
-                                customReportPresets={customReportPresets}
+                                products={customReportPageDataRef.current.products}
+                                priceHistory={customReportPageDataRef.current.priceHistory}
+                                refundHistory={customReportPageDataRef.current.refundHistory}
+                                pricingRules={customReportPageDataRef.current.pricingRules}
+                                customReportPresets={customReportPageDataRef.current.customReportPresets}
                                 setCustomReportPresets={setCustomReportPresets}
                                 isAdminMode={isAdminMode}
                             />
@@ -1526,7 +1977,7 @@ const App: React.FC = () => {
                         {mountedPages.has('settings') && (
                         <div style={{ display: currentView === 'settings' ? 'block' : 'none' }}>
                             <SettingsPage
-                                currentRules={pricingRules}
+                                currentRules={settingsPageDataRef.current.currentRules}
                                 onSave={(newRules, newVelocity, newSearchConfig) => {
                                     setPricingRules(newRules);
                                     setVelocityLookback(newVelocity);
@@ -1534,19 +1985,19 @@ const App: React.FC = () => {
                                     localStorage.setItem('sello_velocity_setting', newVelocity);
                                     handleRecalculateVelocity(newVelocity, salesHistory);
                                 }}
-                                logisticsRules={logisticsRules || []}
+                                logisticsRules={settingsPageDataRef.current.logisticsRules}
                                 onSaveLogistics={(newLogistics) => { setLogisticsRules(newLogistics); }}
-                                products={products}
-                                freightRates={freightRates || []}
+                                products={settingsPageDataRef.current.products}
+                                freightRates={settingsPageDataRef.current.freightRates}
                                 onFreightRatesUpload={handleFreightRatesUpload}
                                 onOpenFreightUpload={() => setIsFreightModalOpen(true)}
                                 themeColor={userProfile.themeColor}
-                                searchConfig={searchConfig}
-                                velocityLookback={velocityLookback}
-                                extraData={{ priceHistory: salesHistory, promotions: promotions || [] }}
+                                searchConfig={settingsPageDataRef.current.searchConfig}
+                                velocityLookback={settingsPageDataRef.current.velocityLookback}
+                                extraData={settingsPageDataRef.current.extraData}
                                 onRefreshThresholds={handleRefreshThresholds}
-                                brandMap={brandMap}
-                                categoryMap={categoryMap}
+                                brandMap={settingsPageDataRef.current.brandMap}
+                                categoryMap={settingsPageDataRef.current.categoryMap}
                                 onSaveBrandMap={handleSaveBrandMap}
                                 onSaveCategoryMap={handleSaveCategoryMap}
                                 headerStyle={headerStyle}

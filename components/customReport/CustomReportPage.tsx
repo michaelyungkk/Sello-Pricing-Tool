@@ -33,6 +33,7 @@ import {
 import { formatMoney, formatSmartMoney, formatPct, formatNumber } from '../../utils/format';
 import { GradeBadge } from '../common/GradeBadge';
 import { SelectFilter } from '../common/SelectFilter';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 // Local alias so existing usages inside this file need no changes
 const MultiSelectDropdown = SelectFilter;
@@ -581,6 +582,7 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
     setCustomReportPresets,
     isAdminMode = false,
 }) => {
+    const pagePerfStartedAt = perfNowMs();
     // --- STATE ---
 
     // pendingMetrics = staging; metrics = last committed (used by generateReport)
@@ -1566,6 +1568,16 @@ const CustomReportPageInner: React.FC<CustomReportPageProps> = ({
         products.forEach(p => p.channels?.forEach(ch => { if (ch.platform) s.add(ch.platform); }));
         return Array.from(s).sort();
     }, [products]);
+
+    const processedRowCount = processedData?.length ?? 0;
+    const customReportPerfKey = `${reportName}|${processedRowCount}|${orderedColHeaders.length}|${availablePresetLayouts.length}|${uniquePlatforms.length}`;
+    usePagePerfLogger('custom-report', 'custom-report', customReportPerfKey, {
+        reportName,
+        rows: processedRowCount,
+        columns: orderedColHeaders.length,
+        presetLayouts: availablePresetLayouts.length,
+        platforms: uniquePlatforms.length
+    }, true, pagePerfStartedAt);
 
     const getUniqueValues = (field: string) => {
         const values = new Set<string>();

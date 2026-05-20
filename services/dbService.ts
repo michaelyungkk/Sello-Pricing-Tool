@@ -1,4 +1,5 @@
 import { PriceLog } from '../types';
+import { logRuntimeDebug } from './runtimeDebug';
 
 const BASE = '/.netlify/functions';
 
@@ -50,7 +51,7 @@ function trimSnapshot(snapshot: Record<string, any>): Record<string, any> {
     // Promotions now live in their own DB table — strip from snapshot entirely
     delete trimmed.promotions;
     const finalBytes = sizeOf(trimmed);
-    console.log(`[pushSnapshot] payload size: ${(finalBytes / 1024 / 1024).toFixed(2)}MB`);
+    logRuntimeDebug(`[pushSnapshot] payload size: ${(finalBytes / 1024 / 1024).toFixed(2)}MB`);
 
     return trimmed;
 }
@@ -76,7 +77,7 @@ export async function pushSnapshot(password: string, snapshot: object):
         const snapshotChunks = chunkUtf8String(snapshotJson, SNAPSHOT_CHUNK_BYTES);
         const totalChunks = snapshotChunks.length;
         const uploadId = `snapshot-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-        console.log(
+        logRuntimeDebug(
             `[pushSnapshot] chunked upload start: ${(
                 bytes / 1024 / 1024
             ).toFixed(2)}MB total, ${totalChunks} chunks @ ~${Math.round(SNAPSHOT_CHUNK_BYTES / 1024)}KB`
@@ -93,7 +94,7 @@ export async function pushSnapshot(password: string, snapshot: object):
         for (let i = 0; i < totalChunks; i++) {
             const chunkData = snapshotChunks[i];
             const chunkBytes = new TextEncoder().encode(chunkData).length;
-            console.log(
+            logRuntimeDebug(
                 `[pushSnapshot] uploading chunk ${i + 1}/${totalChunks} (${(chunkBytes / 1024).toFixed(1)}KB)`
             );
             const chunkRes = await fetch(`${BASE}/db-push`, {
@@ -105,7 +106,7 @@ export async function pushSnapshot(password: string, snapshot: object):
             if (!chunkResult.success) return chunkResult;
         }
 
-        console.log('[pushSnapshot] finalizing chunked upload');
+        logRuntimeDebug('[pushSnapshot] finalizing chunked upload');
         const finalizeRes = await fetch(`${BASE}/db-push`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

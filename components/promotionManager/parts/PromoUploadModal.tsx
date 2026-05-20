@@ -36,10 +36,19 @@ const SkuAutocomplete: React.FC<{
     const inputRef = useRef<HTMLInputElement>(null);
 
     const matches = useMemo(() => {
-        if (!value || value.length < 1) return [];
         const q = value.toUpperCase();
-        return products
-            .filter(p => p.sku.toUpperCase().includes(q))
+        const candidates = !q
+            ? products.slice(0, 8)
+            : products.filter(p => p.sku.toUpperCase().includes(q));
+        return [...candidates]
+            .sort((left, right) => {
+                const leftSku = left.sku.toUpperCase();
+                const rightSku = right.sku.toUpperCase();
+                const leftStarts = leftSku.startsWith(q);
+                const rightStarts = rightSku.startsWith(q);
+                if (leftStarts !== rightStarts) return leftStarts ? -1 : 1;
+                return leftSku.localeCompare(rightSku);
+            })
             .slice(0, 8);
     }, [value, products]);
 
@@ -145,8 +154,9 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
             const rawSku = String(r[skuCol] || '').trim();
             const rawValue = String(r[valueCol] || '').trim();
             const value = parseFloat(rawValue.replace(/[^0-9.]/g, '')) || 0;
-            const override = skuOverrides[rawSku];
-            const masterSku = override ? override : resolveSku(rawSku);
+            const override = (skuOverrides[rawSku] || '').trim().toUpperCase();
+            const overrideResolved = override ? resolveSku(override) : null;
+            const masterSku = overrideResolved || resolveSku(rawSku);
             const product = masterSku ? productMap.get(masterSku.toUpperCase()) ?? null : null;
             return {
                 rawSku, rawValue, value,
@@ -362,8 +372,9 @@ export const PromoUploadModal: React.FC<PromoUploadModalProps> = ({ products, th
                         </thead>
                         <tbody>
                             {unmatched.map((r, i) => {
-                                const override = skuOverrides[r.rawSku] ?? '';
-                                const resolved = override ? productMap.get(override.toUpperCase()) : null;
+                                const override = (skuOverrides[r.rawSku] ?? '').trim().toUpperCase();
+                                const resolvedSku = override ? resolveSku(override) : null;
+                                const resolved = resolvedSku ? productMap.get(resolvedSku.toUpperCase()) ?? null : null;
                                 return (
                                     <tr key={i}>
                                         <td><span className="sku">{r.rawSku}</span></td>

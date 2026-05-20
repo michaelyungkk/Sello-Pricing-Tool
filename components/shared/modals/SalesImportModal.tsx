@@ -30,7 +30,8 @@ interface SalesImportModalProps {
                 changed: number;
                 removed: number;
             } | null;
-        }
+        },
+        progressReporter?: (status: { message: string; progress: number }) => void
     ) => void | Promise<void>;
 }
 
@@ -72,6 +73,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
     const [importProgress, setImportProgress] = useState(0);
     const [importProgressText, setImportProgressText] = useState('');
     const [isConfirmingImport, setIsConfirmingImport] = useState(false);
+    const [isClosingAfterImport, setIsClosingAfterImport] = useState(false);
 
     const [mapping, setMapping] = useState<ColumnMapping>({ sku: '', qty: '', revenue: '' });
     const [periodDays, setPeriodDays] = useState<number>(30); // Default to 30 days calculation if no dates
@@ -158,18 +160,36 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
         });
     };
 
+    const prepareForClose = async () => {
+        setIsClosingAfterImport(true);
+        setImportProgressText('Finalizing modal close...');
+        setStep('upload');
+        setPreviewData(null);
+        setUnknownSkus({});
+        setResolvedAliases({});
+        setRawHeaders([]);
+        setRawRows([]);
+        setShowAdvancedMapping(false);
+        reconciliationPlanRef.current = null;
+        importPayloadRef.current = null;
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+    };
+
     const handleConfirmImport = async () => {
         if (!previewData || !importPayloadRef.current || isConfirmingImport) return;
 
         setIsConfirmingImport(true);
         setImportProgress(5);
-        setImportProgressText('Applying import to app data...');
+        setImportProgressText('Applying import and waiting for app to settle...');
 
         let progressInterval: ReturnType<typeof setInterval> | null = null;
+        let shouldClose = false;
         try {
             await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
             progressInterval = setInterval(() => {
-                setImportProgress(prev => (prev >= 90 ? prev : prev + 5));
+                setImportProgress(prev => (prev >= 70 ? prev : prev + 3));
             }, 180);
 
             await Promise.resolve(onConfirm(
@@ -183,17 +203,25 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                     salesPushMode: selectedSalesPushMode,
                     reason: syncRecommendation.reason,
                     reconciliationPlan: reconciliationPlanRef.current
+                },
+                (status) => {
+                    setImportProgressText(status.message);
+                    setImportProgress(status.progress);
                 }
             ));
-
+            setImportProgressText('Finalizing visible page...');
             setImportProgress(100);
             setImportProgressText('Import complete');
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            await prepareForClose();
+            shouldClose = true;
         } catch (err) {
             console.error(err);
             setError('Failed to apply import. Please try again.');
         } finally {
             if (progressInterval) clearInterval(progressInterval);
             setIsConfirmingImport(false);
+            if (shouldClose) onClose();
         }
     };
 
@@ -463,7 +491,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         </div>
                     )}
 
-                    {(isProcessing || isConfirmingImport) && (
+                    {(isProcessing || isConfirmingImport || isClosingAfterImport) && (
                         <div className="mb-4 rounded-lg border border-theme-20 bg-theme-5 p-3">
                             <div className="flex items-center justify-between text-xs text-theme mb-2">
                                 <span>{importProgressText || 'Processing import...'}</span>
@@ -478,7 +506,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         </div>
                     )}
 
-                    {step === 'upload' && (
+                    {!isClosingAfterImport && step === 'upload' && (
                         <div className="space-y-6">
                             <div
                                 className="border-2 border-dashed border-gray-300 rounded-xl p-10 flex flex-col items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer"
@@ -502,7 +530,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         </div>
                     )}
 
-                    {step === 'mapping' && (
+                    {!isClosingAfterImport && step === 'mapping' && (
                         <div className="space-y-6">
                             <div className="flex items-center justify-between">
                                 <p className="text-sm text-gray-600">We couldn&apos;t auto-match everything. Please confirm columns.</p>
@@ -562,7 +590,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         </div>
                     )}
 
-                    {step === 'resolution' && (
+                    {!isClosingAfterImport && step === 'resolution' && (
                         <div className="space-y-6">
                             <div className="flex items-center gap-3 p-4 bg-theme-10 text-theme rounded-xl border border-indigo-100">
                                 <HelpCircle className="w-5 h-5 flex-shrink-0" />
@@ -630,7 +658,7 @@ const SalesImportModal: React.FC<SalesImportModalProps> = ({ products, pricingRu
                         </div>
                     )}
 
-                    {step === 'preview' && previewData && (
+                    {!isClosingAfterImport && step === 'preview' && previewData && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-4 gap-4 text-center">
                                 <div className="p-4 bg-green-50 rounded-xl border border-green-100">

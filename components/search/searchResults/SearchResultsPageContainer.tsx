@@ -8,6 +8,7 @@ import { ThresholdConfig } from '../../../services/thresholdsConfig';
 import { SearchHeader } from './parts/SearchHeader';
 import { SearchResultPanels } from './parts/SearchResultPanels';
 import { RotateCcw } from 'lucide-react';
+import { perfNowMs, usePagePerfLogger } from '../../../services/pagePerf';
 
 interface SearchResultsPageContainerProps {
     data: { results: any[], query: string, params: SearchIntent, id?: string, stale?: boolean };
@@ -34,6 +35,7 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
     data, products, pricingRules, themeColor, headerStyle, timeLabel, onRefine, searchConfig, priceChangeHistory, thresholds,
     skuFamilies, adGroups, promotions, priceHistoryMap, optimalPriceResults, navigateToEntity
 }) => {
+    const pagePerfStartedAt = perfNowMs();
     const [groupBy, setGroupBy] = useState<GroupBy>('platform');
     const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
     const [expandedSubGroup, setExpandedSubGroup] = useState<string | null>(null);
@@ -460,6 +462,16 @@ export const SearchResultsPageContainer: React.FC<SearchResultsPageContainerProp
 
         return { isLowVolume: false, getBand };
     }, [hierarchicalData, searchConfig]);
+
+    const searchPerfKey = `${groupBy}|${data.id || 'no-id'}|${data.results.length}|${hierarchicalData.length}|${expandedGroup || ''}|${expandedSubGroup || ''}`;
+    usePagePerfLogger('search', 'search', searchPerfKey, {
+        groupBy,
+        query: data.query,
+        resultCount: data.results.length,
+        groupCount: hierarchicalData.length,
+        stale: !!data.stale,
+        isDeepDive
+    }, true, pagePerfStartedAt);
 
     const handleGroupToggle = (groupKey: string, e?: React.MouseEvent) => {
         const selection = window.getSelection();

@@ -11,7 +11,6 @@ import {
     Product,
     AdSnapshot,
     AdRosterChange,
-    AdCampaignState,
     PricingRules,
     PriceLog,
     PromotionEvent,
@@ -42,10 +41,10 @@ import { analyzePriceAdjustment, parseSearchQuery, createTextFallbackIntent, Sea
 import { processDataForSearch } from '../services/searchExecution';
 import { getThresholdConfig, ThresholdConfig, saveThresholdConfig } from '../services/thresholdsConfig';
 import { ReportLayout } from '../services/persistenceService';
-import { migrateRestoredDatabase, auditRestoredDatabase } from '../services/migrationService';
+import { migrateRestoredDatabase } from '../services/migrationService';
 import { normalizeRestoredState, repairMojibakeText } from '../services/restoreSanitizer';
 import { hexToRgb, extractFirstHex } from '../utils/color';
-import { getCanonicalSku, buildCanonicalResolver, CANONICAL_MAP } from '../services/skuNormalization';
+import { getCanonicalSku, buildCanonicalResolver } from '../services/skuNormalization';
 import {
     calculateOptimalPrice,
     buildPriceEras,
@@ -68,33 +67,19 @@ import { redistributeAdSpend } from '../services/adSpreadService';
 import {
     verifyPassword, pushSnapshot, pullSnapshot,
     pullSnapshotIfUpdated,
-    pushTransactions, pullTransactions, getLatestTransactionDate,
+    getLatestTransactionDate,
     pullTransactionPage, pullTransactionPageSince, checkVersion,
     pushRefundsAndShipments, pullRefundsAndShipments, pullRefundSignatures,
     pushAdData, pullAdData,
     pushPromotions, pullPromotionsSince, pullPromotionSignatures
 } from '../services/dbService';
 import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
+import { perfNowMs, perfElapsedMs, logPerfPostCommitTail, waitForUiResponsiveAfterApply } from '../services/uiSettle';
 
 const FORCE_FULL_PULL_TOKEN_KEY = 'sello_last_force_full_pull_token';
 const REFUND_CURSOR_KEY = 'sello_refunds_updated_at';
 const PROMO_CURSOR_KEY = 'sello_promotions_updated_at';
 const PROMO_BASELINE_COMPLETE_KEY = 'sello_promotions_baseline_complete';
-
-const perfNowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
-const perfElapsedMs = (startedAt: number) => Number((perfNowMs() - startedAt).toFixed(1));
-const logPerfPostCommitTail = (label: string, startedAt: number, detail: Record<string, unknown> = {}) => {
-    setTimeout(() => {
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                console.log(`${label} post-commit tail`, {
-                    elapsedMs: perfElapsedMs(startedAt),
-                    ...detail
-                });
-            });
-        });
-    }, 0);
-};
 
 // Helper for recalculation
 const recalculateProductMetrics = (
@@ -329,40 +314,9 @@ const toHash = (raw: string): string => {
     return `${(h2 >>> 0).toString(16).padStart(8, '0')}${(h1 >>> 0).toString(16).padStart(8, '0')}`;
 };
 
-const getRefundId = (r: any): string => String(r?.id || `${r?.sku || ''}|${r?.orderId || r?.date || ''}`);
-
-const refundSignaturePayload = (r: any) => ({
-    id: getRefundId(r),
-    sku: r?.sku ?? null,
-    rawSku: r?.rawSku ?? null,
-    date: String(r?.date || '').split('T')[0],
-    amount: r?.amount == null ? null : Number(r.amount),
-    freightAmount: r?.freightAmount == null ? null : Number(r.freightAmount),
-    quantity: r?.quantity == null ? null : Number(r.quantity),
-    platform: r?.platform ?? null,
-    reason: r?.reason ?? null,
-    customerReason: r?.customerReason ?? null,
-    platformReason: r?.platformReason ?? null,
-    comments: r?.comments ?? null,
-    commentEn: r?.commentEn ?? null,
-    commentCn: r?.commentCn ?? null,
-    remarks: r?.remarks ?? null,
-    orderId: r?.orderId ?? null,
-    orderType: r?.orderType ?? null,
-    resendBaseOrderId: r?.resendBaseOrderId ?? null,
-    status: r?.status ?? null,
-    logisticPartner: r?.logisticPartner ?? null
-});
-
-const buildRefundSignature = (r: any): string => toHash(buildStableString(refundSignaturePayload(r)));
 const buildPromotionSignature = (promotion: any): string => toHash(buildStableString(promotion));
 const toSalesCompareDateKey = (value: unknown): string =>
     asDateKey(value == null ? null : String(value)) || '';
-const toSalesCompareFixedNum = (value: unknown, dp = 4): string => {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return '0';
-    return n.toFixed(dp);
-};
 const buildSalesCompareKey = (row: any): string => {
     const date = toSalesCompareDateKey(row?.date);
     const sku = String(row?.sku || '').trim().toUpperCase();
@@ -370,22 +324,6 @@ const buildSalesCompareKey = (row: any): string => {
     const orderId = String(row?.orderId || '').trim();
     return orderId ? `${sku}|${date}|${platform}|${orderId}` : `${sku}|${date}|${platform}`;
 };
-const buildSalesCompareSig = (row: any): string => [
-    toSalesCompareFixedNum(row?.price, 4),
-    toSalesCompareFixedNum(row?.velocity, 4),
-    toSalesCompareFixedNum(row?.cogs, 4),
-    toSalesCompareFixedNum(row?.sellingFee, 4),
-    toSalesCompareFixedNum(row?.adsFee, 4),
-    toSalesCompareFixedNum(row?.postage, 4),
-    toSalesCompareFixedNum(row?.otherFee, 4),
-    toSalesCompareFixedNum(row?.subscriptionFee, 4),
-    toSalesCompareFixedNum(row?.wmsFee, 4),
-    toSalesCompareFixedNum(row?.promoRel, 4),
-    String(row?.postcode || '').trim().toUpperCase(),
-    String(row?.logisticPartner || '').trim(),
-    String(row?.logisticService || '').trim(),
-].join('|');
-
 const isArrivedShipmentStatus = (status?: string): boolean => {
     const raw = String(status || '').trim();
     if (!raw) return false;
@@ -397,7 +335,6 @@ const isArrivedShipmentStatus = (status?: string): boolean => {
 export const useAppState = () => {
     const { t } = useTranslation();
 
-    const [isDataLoaded, setIsDataLoaded] = useState(false);
     const [products, setProducts] = useState<Product[]>([]);
     const [salesHistory, setSalesHistory] = useState<PriceLog[]>([]);
     const [refundHistory, setRefundHistory] = useState<RefundLog[]>([]);
@@ -455,6 +392,7 @@ export const useAppState = () => {
     );
     const [isDirty, setIsDirty] = useState<boolean>(false);
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'pushing' | 'error'>('idle');
+    const [postApplySource, setPostApplySource] = useState<'none' | 'sales-import' | 'refund-import' | 'inventory-import' | 'freight-upload' | 'sync' | 'cache-load' | 'local-cache-load'>('none');
     const [salesPushMode, setSalesPushMode] = useState<'incremental' | 'reconciliation' | 'full_snapshot'>('incremental');
     const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(
         () => localStorage.getItem('sello_last_synced_at')
@@ -510,11 +448,6 @@ export const useAppState = () => {
     const fileRestoreRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        const loadDatabase = async () => {
-            setIsDataLoaded(true);
-        };
-        loadDatabase();
-
         let lastShowBackToTop = false;
         const handleScroll = () => {
             if (mainContentRef.current) {
@@ -553,7 +486,7 @@ export const useAppState = () => {
     const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
     const [currentView, setCurrentView] = useState<AppView>('overview');
     const [navigationIntent, setNavigationIntent] = useState<NavigationIntent | null>(null);
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [isOnline] = useState(navigator.onLine);
     const [isFreshnessExpanded, setIsFreshnessExpanded] = useState(false);
     const [mapJumpState, setMapJumpState] = useState<{ carrier: string, metric: 'RETURN_RATE' | 'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS' } | null>(null);
 
@@ -602,7 +535,7 @@ export const useAppState = () => {
     const handleRefreshProductStatuses = useCallback((config: ThresholdConfig) => {
         const recalculated = recalculateProductMetrics(products, priceHistoryMap, velocityLookback, config, pricingRules, brandMap, categoryMap);
         setProducts(recalculated);
-    }, [products, salesHistory, velocityLookback, pricingRules, brandMap, categoryMap]);
+    }, [products, priceHistoryMap, velocityLookback, pricingRules, brandMap, categoryMap]);
 
     const handleSaveBrandMap = useCallback((newMap: AttributeMap) => {
         setBrandMap(newMap);
@@ -1082,8 +1015,16 @@ export const useAppState = () => {
             changed: number;
             removed: number;
         } | null;
-    }) => {
+    }, progressReporter?: (status: { message: string; progress: number }) => void) => {
         const salesImportStartedAt = perfNowMs();
+        const reportProgress = (message: string, progress: number) => {
+            progressReporter?.({
+                message,
+                progress
+            });
+        };
+        setPostApplySource('sales-import');
+        reportProgress('Applying sales import...', 78);
         console.log('[perf][sales-import] start', {
             currentProducts: Array.isArray(products) ? products.length : 0,
             currentSalesHistory: Array.isArray(salesHistory) ? salesHistory.length : 0,
@@ -1103,7 +1044,7 @@ export const useAppState = () => {
                 const isAdOnly = (h.price ?? 0) === 0 && adsSpend > 0;
                 const normalizedProfit = (h.profit ?? 0) === 0 && isAdOnly ? -adsSpend : h.profit;
                 return ({
-                id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
                 sku: h.sku,
                 date: h.date,
                 price: h.price,
@@ -1187,7 +1128,6 @@ export const useAppState = () => {
                     });
                 }
                 updateTimestamp('Sales');
-                setIsSalesImportModalOpen(false);
                 if (isAdminMode) setIsDirty(true);
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => resolve());
@@ -1204,83 +1144,59 @@ export const useAppState = () => {
             products: finalProducts.length,
             pushMode: importDirective?.salesPushMode || null
         });
+        await waitForUiResponsiveAfterApply('[perf][sales-import]', salesImportStartedAt, {
+            salesHistory: updatedPriceHistory.length,
+            products: finalProducts.length,
+            pushMode: importDirective?.salesPushMode || null
+        });
+        reportProgress('Refreshing visible page...', 86);
 
-        // Auto-recalculate optimal prices for SKUs that received new transactions.
-        // Keep this off the critical import path so the confirm step can complete first.
+        // Sales import should only flag benchmark shifts, not recalculate optimal prices.
+        // Full optimal-price refresh remains a separate explicit Master Catalogue action.
         if (historyPayload && historyPayload.length > 0 && cohortSnapshot) {
-            setTimeout(async () => {
-                try {
-                    const todayKey = new Date().toISOString().split('T')[0];
-                    const yieldToUi = async () => new Promise<void>(resolve => setTimeout(resolve, 0));
-                    const resolver = buildCanonicalResolver({ ...(learnedAliases || {}), ...(newlyLearnedAliases || {}) });
-                    const affectedSkus = Array.from(new Set(historyPayload.map(tx => resolver(tx.sku))));
-                    const productByCanonical = new Map<string, Product>();
-                    (products || []).forEach(p => {
-                        const key = resolver(p.sku);
-                        if (!productByCanonical.has(key)) productByCanonical.set(key, p);
+            try {
+                reportProgress('Checking benchmark shifts...', 92);
+                console.log('[perf][sales-import][benchmark-check] start', {
+                    elapsedMsFromImportStart: perfElapsedMs(salesImportStartedAt)
+                });
+                const resolver = buildCanonicalResolver({ ...(learnedAliases || {}), ...(newlyLearnedAliases || {}) });
+                const affectedSkus = Array.from(new Set(historyPayload.map(tx => resolver(tx.sku))));
+                const notices = detectBenchmarkUpdateNeeded(finalProducts, cohortSnapshot, affectedSkus);
+                if (notices.length > 0) {
+                    setBenchmarkUpdateNotices(prev => {
+                        const merged = [...prev];
+                        notices.forEach(n => {
+                            const existing = merged.findIndex(m => m.category === n.category);
+                            if (existing >= 0) merged[existing] = { ...merged[existing], skuCount: merged[existing].skuCount + n.skuCount };
+                            else merged.push(n);
+                        });
+                        return merged;
                     });
-
-                    const nextOptimalUpdates = new Map<string, any>();
-                    const chunkSize = 120;
-                    for (let i = 0; i < affectedSkus.length; i++) {
-                        const canonicalSku = affectedSkus[i];
-                        const product = productByCanonical.get(canonicalSku);
-                        if (!product) continue;
-                        const bucketKey = cohortSnapshot.skuAssignments.get(canonicalSku);
-                        const cohort = bucketKey ? cohortSnapshot.cohortStats.get(bucketKey) : undefined;
-                        if (!cohort) continue;
-
-                        const result = calculateOptimalPrice({
-                            sku: product,
-                            priceHistory: updatedPriceHistory,
-                            priceChangeLog: priceChangeHistory,
-                            promotions,
-                            pricingRules,
-                            cohortSnapshot,
-                            learnedAliases: { ...(learnedAliases || {}), ...(newlyLearnedAliases || {}) },
-                            today: todayKey,
-                        });
-                        nextOptimalUpdates.set(canonicalSku, result);
-
-                        if ((i + 1) % chunkSize === 0) {
-                            setOptimalPriceResults(prev => {
-                                const next = new Map(prev);
-                                nextOptimalUpdates.forEach((value, key) => next.set(key, value));
-                                return next;
-                            });
-                            nextOptimalUpdates.clear();
-                            await yieldToUi();
-                        }
-                    }
-                    if (nextOptimalUpdates.size > 0) {
-                        setOptimalPriceResults(prev => {
-                            const next = new Map(prev);
-                            nextOptimalUpdates.forEach((value, key) => next.set(key, value));
-                            return next;
-                        });
-                    }
-
-                    const notices = detectBenchmarkUpdateNeeded(products, cohortSnapshot, affectedSkus);
-                    if (notices.length > 0) {
-                        setBenchmarkUpdateNotices(prev => {
-                            const merged = [...prev];
-                            notices.forEach(n => {
-                                const existing = merged.findIndex(m => m.category === n.category);
-                                if (existing >= 0) merged[existing] = { ...merged[existing], skuCount: merged[existing].skuCount + n.skuCount };
-                                else merged.push(n);
-                            });
-                            return merged;
-                        });
-                    }
-                } catch (e) {
-                    console.warn('[sales-import] deferred optimal price recalculation failed:', e);
                 }
-            }, 0);
+                console.log('[perf][sales-import][benchmark-check] complete', {
+                    elapsedMsFromImportStart: perfElapsedMs(salesImportStartedAt),
+                    affectedSkus: affectedSkus.length,
+                    notices: notices.length
+                });
+                await waitForUiResponsiveAfterApply('[perf][sales-import][benchmark-check]', salesImportStartedAt, {
+                    affectedSkus: affectedSkus.length,
+                    notices: notices.length
+                });
+                reportProgress('Finalizing import...', 99);
+            } catch (e) {
+                console.warn('[sales-import] benchmark shift detection failed:', e);
+            }
         }
     }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, isAdminMode,
-        cohortSnapshot, learnedAliases, priceChangeHistory, promotions, markSearchSessionsStale]);
+        cohortSnapshot, learnedAliases, markSearchSessionsStale]);
 
-    const handleInventoryImport = useCallback((data: any[]) => {
+    const handleInventoryImport = useCallback(async (data: any[]) => {
+        const startedAt = perfNowMs();
+        console.log('[perf][inventory-import] start', {
+            incomingRows: data.length,
+            currentProducts: products.length,
+            currentSalesHistory: salesHistory.length
+        });
         const costChanges: CostChangeRecord[] = [];
         const inventoryLogs: InventoryChangeRecord[] = [];
         const reportDate = new Date().toISOString().split('T')[0];
@@ -1302,8 +1218,12 @@ export const useAppState = () => {
             aggregatedDataMap.set(canonicalSku, existing);
         });
         const finalData = Array.from(aggregatedDataMap.values());
+        console.log('[perf][inventory-import] aggregate complete', {
+            elapsedMs: perfElapsedMs(startedAt),
+            aggregatedSkus: finalData.length
+        });
+        setPostApplySource('inventory-import');
         setProducts(prev => {
-            const currentThresholds = getThresholdConfig();
             const newProducts = [...(prev || [])];
             finalData.forEach(item => {
                 const existingIndex = newProducts.findIndex(p => p.sku === item.sku);
@@ -1366,7 +1286,24 @@ export const useAppState = () => {
                     });
                 }
             });
-            return recalculateProductMetrics(newProducts, priceHistoryMap, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
+            return newProducts;
+        });
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        console.log('[perf][inventory-import] base product handoff complete', {
+            elapsedMs: perfElapsedMs(startedAt),
+            products: finalData.length
+        });
+        setProducts(prev => {
+            const currentThresholds = getThresholdConfig();
+            return recalculateProductMetrics(prev || [], priceHistoryMap, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
+        });
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        console.log('[perf][inventory-import] recalc handoff complete', {
+            elapsedMs: perfElapsedMs(startedAt),
+            products: products.length,
+            aggregatedSkus: finalData.length
         });
 
         // Family Group Suggestion Step
@@ -1410,9 +1347,25 @@ export const useAppState = () => {
 
         if (costChanges.length > 0) setCostChangeHistory(prev => [...costChanges, ...(prev || [])]);
         if (inventoryLogs.length > 0) setInventoryChangeHistory(prev => [...inventoryLogs, ...(prev || [])]);
-        updateTimestamp('Inventory'); setIsUploadModalOpen(false);
+        updateTimestamp('Inventory');
         if (isAdminMode) setIsDirty(true);
-    }, [priceHistoryMap, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, skuFamilies, isAdminMode]);
+        console.log('[perf][inventory-import] complete', {
+            elapsedMs: perfElapsedMs(startedAt),
+            costChanges: costChanges.length,
+            inventoryLogs: inventoryLogs.length,
+            familySuggestions: newSuggestions.length
+        });
+        logPerfPostCommitTail('[perf][inventory-import]', startedAt, {
+            costChanges: costChanges.length,
+            inventoryLogs: inventoryLogs.length,
+            familySuggestions: newSuggestions.length
+        });
+        await waitForUiResponsiveAfterApply('[perf][inventory-import]', startedAt, {
+            costChanges: costChanges.length,
+            inventoryLogs: inventoryLogs.length,
+            familySuggestions: newSuggestions.length
+        });
+    }, [priceHistoryMap, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, skuFamilies, isAdminMode, products.length, salesHistory.length]);
 
     const handleResetSalesData = useCallback(() => {
         setSalesHistory([]);
@@ -1423,17 +1376,21 @@ export const useAppState = () => {
         setIsSalesImportModalOpen(false);
     }, [products, velocityLookback, pricingRules, brandMap, categoryMap]);
 
-    const handleSkuDetailImport = useCallback((data: { masterSku: string; detail: SkuCostDetail }[]) => {
+    const handleSkuDetailImport = useCallback(async (data: { masterSku: string; detail: SkuCostDetail }[]) => {
+        const skuDetailImportStartedAt = perfNowMs();
         setProducts(prev => (prev || []).map(p => {
             const update = data.find(d => d.masterSku === p.sku);
             return update ? { ...p, costDetail: update.detail } : p;
         }));
         updateTimestamp('SKU Details');
-        setIsSkuDetailModalOpen(false);
         if (isAdminMode) setIsDirty(true);
+        await waitForUiResponsiveAfterApply('[perf][sku-detail-import]', skuDetailImportStartedAt, {
+            rows: Array.isArray(data) ? data.length : 0
+        });
     }, [updateTimestamp, isAdminMode]);
 
-    const handleMappingImport = useCallback((mappings: any[], mode: 'merge' | 'replace', platform: string) => {
+    const handleMappingImport = useCallback(async (mappings: any[], mode: 'merge' | 'replace', platform: string) => {
+        const mappingImportStartedAt = perfNowMs();
         setProducts(prev => (prev || []).map(p => {
             const platformMappings = mappings.filter(m => m.masterSku === p.sku && m.platform === platform);
             if (platformMappings.length === 0 && mode === 'merge') return p;
@@ -1449,12 +1406,17 @@ export const useAppState = () => {
             }
             return { ...p, channels: updatedChannels };
         }));
-        setIsMappingModalOpen(false);
         if (isAdminMode) setIsDirty(true);
+        await waitForUiResponsiveAfterApply('[perf][mapping-import]', mappingImportStartedAt, {
+            rows: Array.isArray(mappings) ? mappings.length : 0,
+            mode,
+            platform
+        });
     }, [pricingRules, isAdminMode]);
 
     const handleReturnsImport = useCallback(async (newRefunds: RefundLog[]): Promise<void> => {
         const refundImportStartedAt = perfNowMs();
+        setPostApplySource('refund-import');
         console.log('[perf][refund-import] start', {
             incomingRefunds: Array.isArray(newRefunds) ? newRefunds.length : 0,
             currentRefunds: Array.isArray(refundHistory) ? refundHistory.length : 0,
@@ -1538,7 +1500,10 @@ export const useAppState = () => {
             refundSkus: refundQtyBySku.size
         });
 
-        await yieldToUi();
+        await waitForUiResponsiveAfterApply('[perf][refund-import]', refundImportStartedAt, {
+            refunds: deduped.length,
+            refundSkus: refundQtyBySku.size
+        });
         console.log('[perf][refund-import] complete', {
             elapsedMs: perfElapsedMs(refundImportStartedAt),
             refunds: deduped.length
@@ -1547,6 +1512,7 @@ export const useAppState = () => {
 
     const handleFreightRatesUpload = useCallback(async (rates: FreightRate[]): Promise<void> => {
         const freightUploadStartedAt = perfNowMs();
+        setPostApplySource('freight-upload');
         console.log('[perf][freight-upload] start', {
             rates: Array.isArray(rates) ? rates.length : 0,
             currentProducts: Array.isArray(products) ? products.length : 0
@@ -1565,17 +1531,49 @@ export const useAppState = () => {
 
         await new Promise<void>((resolve) => {
             setTimeout(() => {
-                setFreightRates(rates);
+                let changedRateRows = 0;
+                let changedProducts = 0;
+                setFreightRates(prev => {
+                    const current = Array.isArray(prev) ? prev : [];
+                    const nextBySku = new Map<string, FreightRate>();
+                    current.forEach(rate => {
+                        const sku = String(rate?.sku || '').trim().toUpperCase();
+                        if (!sku) return;
+                        nextBySku.set(sku, rate);
+                    });
+                    rates.forEach(rate => {
+                        const sku = String(rate?.sku || '').trim().toUpperCase();
+                        if (!sku) return;
+                        const prevRate = nextBySku.get(sku);
+                        const incomingRate = Number(rate.rate) || 0;
+                        const prevValue = prevRate ? (Number(prevRate.rate) || 0) : undefined;
+                        if (!prevRate || prevValue !== incomingRate) {
+                            changedRateRows++;
+                            nextBySku.set(sku, rate);
+                        }
+                    });
+                    return Array.from(nextBySku.values());
+                });
                 // Apply rates directly to product.postage so all profit/margin calculations use them
                 setProducts(prev => (prev || []).map(p => {
                     const nextRate = rateMap.get(p.sku.toUpperCase());
-                    return nextRate !== undefined ? { ...p, postage: nextRate } : p;
+                    if (nextRate === undefined) return p;
+                    if ((p.postage ?? 0) === nextRate) return p;
+                    changedProducts++;
+                    return { ...p, postage: nextRate };
                 }));
                 markSearchSessionsStale();
                 updateTimestamp('FreightRates');
                 if (isAdminMode) setIsDirty(true);
                 requestAnimationFrame(() => {
-                    requestAnimationFrame(() => resolve());
+                    requestAnimationFrame(() => {
+                        console.log('[perf][freight-upload] apply delta', {
+                            elapsedMs: perfElapsedMs(freightUploadStartedAt),
+                            changedRateRows,
+                            changedProducts
+                        });
+                        resolve();
+                    });
                 });
             }, 0);
         });
@@ -1588,9 +1586,14 @@ export const useAppState = () => {
             rates: rates.length,
             uniqueSkus: rateMap.size
         });
+        await waitForUiResponsiveAfterApply('[perf][freight-upload]', freightUploadStartedAt, {
+            rates: rates.length,
+            uniqueSkus: rateMap.size
+        });
     }, [products, updateTimestamp, isAdminMode, markSearchSessionsStale]);
 
-    const handleCAImport = useCallback((data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => {
+    const handleCAImport = useCallback(async (data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => {
+        const caImportStartedAt = perfNowMs();
         let repairedFieldCount = 0;
         const repairedSkuSet = new Set<string>();
         const normalizedData = (data || []).map(item => {
@@ -1659,7 +1662,10 @@ export const useAppState = () => {
         }));
         if (changes.length > 0) setPriceChangeHistory(prev => [...changes, ...(prev || [])]);
         updateTimestamp('CA Prices');
-        setIsCAUploadModalOpen(false);
+        await waitForUiResponsiveAfterApply('[perf][ca-import]', caImportStartedAt, {
+            rows: Array.isArray(data) ? data.length : 0,
+            changes: changes.length
+        });
     }, [updateTimestamp]);
 
     const handleDescriptionImport = useCallback((data: { sku: string; description: string; imageUrl?: string }[]) => {
@@ -1702,7 +1708,8 @@ export const useAppState = () => {
         if (isAdminMode) setIsDirty(true);
     }, [updateTimestamp, isAdminMode]);
 
-    const handleShipmentImport = useCallback((updates: any[]) => {
+    const handleShipmentImport = useCallback(async (updates: any[]) => {
+        const shipmentImportStartedAt = perfNowMs();
         setProducts(prev => (prev || []).map(p => {
             const update = updates.find(u => u.sku === p.sku);
             if (update) {
@@ -1728,7 +1735,9 @@ export const useAppState = () => {
             return p;
         }));
         updateTimestamp('Shipments');
-        setIsShipmentModalOpen(false);
+        await waitForUiResponsiveAfterApply('[perf][shipment-import]', shipmentImportStartedAt, {
+            rows: Array.isArray(updates) ? updates.length : 0
+        });
     }, [updateTimestamp]);
 
 
@@ -2643,8 +2652,10 @@ export const useAppState = () => {
 
             const syncApplyStartedAt = perfNowMs();
             if (incoming) {
+                setPostApplySource('sync');
                 applyLoadedState(incoming, allTransactions, refunds);
             } else {
+                setPostApplySource('sync');
                 setRefundHistory(Array.isArray(refunds) ? refunds : []);
                 const redistributedTransactions = redistributeAdSpend(allTransactions, adGroups);
                 setSalesHistory(redistributedTransactions);
@@ -2728,7 +2739,7 @@ export const useAppState = () => {
             setSyncProgress(0);
             setSyncTotal(0);
         }
-    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, salesHistory, pricingRules, brandMap, categoryMap, getSharedSnapshot, pullSnapshot,
+    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, salesHistory, pricingRules, brandMap, categoryMap, getSharedSnapshot,
         clearClientDataForImportantRefresh,
         refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets, markSearchSessionsStale]);
 
@@ -2776,6 +2787,7 @@ export const useAppState = () => {
                         `transactions:${cachedTransactions.length}, refunds:${cachedRefunds.length}`
                     );
                 } else {
+                    setPostApplySource('local-cache-load');
                     applyLoadedState(
                         cache.snapshot,
                         cache.transactions,
@@ -2836,6 +2848,7 @@ export const useAppState = () => {
                         );
                         setSyncStatus('idle');
                     } else {
+                    setPostApplySource('cache-load');
                     applyLoadedState(
                         cache.snapshot,
                         cache.transactions,
@@ -3400,6 +3413,7 @@ export const useAppState = () => {
         syncTotal,
         startupChoicePending,
         startupSyncMode,
+        postApplySource,
         isRestoring,
         handleAdminToggle,
         handleAdminExit,

@@ -1,9 +1,8 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ContextBar } from '../common/ContextBar';
-import { Product, PricingRules, PriceLog, RefundLog, ReturnDateBasis } from '../../types';
+import { PriceLog, ReturnDateBasis } from '../../types';
 import { LayoutDashboard, Coins, Activity, Calendar, RotateCcw, Clock, BarChart2 } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import { SortState, sortRows } from '../../utils/tableSort';
 import { aggregateTransactionLedger } from '../../services/metrics';
 import { aggregatePlatformTrends } from '../../services/platformTrendAgg';
@@ -25,6 +24,7 @@ import {
   PlatformOverviewFocusMetric,
   PlatformOverviewWeeklyRow
 } from '../../services/platformOverviewAnalysis';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 type PlatformOverviewSortKey = 'platform' | 'weekStartKey' | PlatformOverviewFocusMetric | 'focusDelta';
 const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps> = ({
@@ -33,7 +33,6 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
   refundHistory = [],
   pricingRules = {},
   themeColor,
-  headerStyle,
 
   // Ad Groups
   adGroups = [],
@@ -45,7 +44,7 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
   onSaveAdGroups,
   lastRecalculationSummary
 }) => {
-  const { t } = useTranslation();
+  const pagePerfStartedAt = perfNowMs();
   const [activeTab, setActiveTab] = useState<Tab>('performance');
   const [sort, setSort] = useState<SortState<PlatformSortKey>>({ key: 'revenue', dir: 'desc' });
   const [overviewSort, setOverviewSort] = useState<SortState<PlatformOverviewSortKey>>({ key: 'focusDelta', dir: 'desc' });
@@ -439,7 +438,7 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
     if (len !== zoomState.lastDataLen) {
       setZoomState({ startIndex: 0, endIndex: Math.max(0, len - 1), lastDataLen: len, isZoomed: false });
     }
-  }, [chartDataWithGroups.length]);
+  }, [chartDataWithGroups.length, zoomState.lastDataLen]);
 
   const handleResetZoom = () => {
     setZoomState(prev => ({ ...prev, startIndex: 0, endIndex: Math.max(0, prev.lastDataLen - 1), isZoomed: false }));
@@ -681,6 +680,16 @@ const PlatformManagementPageContainerInner: React.FC<PlatformManagementPageProps
     }
     return 'All Platforms • Last Complete Week';
   }, [overviewPlatformKey]);
+
+  const platformPerfKey = `${activeTab}|${timeWindow}|${customStart}|${customEnd}|${platformSummaries.length}|${roiData.length}|${visibleChartData.length}|${overviewVisibleRows.length}`;
+  usePagePerfLogger('platforms', 'platforms', platformPerfKey, {
+    activeTab,
+    timeWindow,
+    platformCount: platformSummaries.length,
+    roiRows: roiData.length,
+    chartRows: visibleChartData.length,
+    overviewRows: overviewVisibleRows.length
+  }, true, pagePerfStartedAt);
 
   const sharedHeaderControls = (
     <>

@@ -6,8 +6,10 @@ import { CostSummarySection } from './sections/CostSummarySection';
 import { FeeBreakdownTable } from './sections/FeeBreakdownTable';
 import { MarginImpactTable } from './sections/MarginImpactTable';
 import { CostNotesPanel } from './sections/CostNotesPanel';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 const CostManagementPageInner: React.FC<CostManagementPageProps> = ({ products, themeColor, headerStyle }) => {
+    const pagePerfStartedAt = perfNowMs();
     const {
         searchTags, setSearchTags,
         setSearch,
@@ -23,6 +25,16 @@ const CostManagementPageInner: React.FC<CostManagementPageProps> = ({ products, 
         totalPages,
         handleExport
     } = useCostManagementState(products);
+
+    const costPerfKey = `${viewMode}|${includeVat}|${showInactive}|${filteredAndSorted.length}|${paginatedProducts.length}|${totalPages}`;
+    usePagePerfLogger('costs', 'costs', costPerfKey, {
+        viewMode,
+        includeVat,
+        showInactive,
+        filteredRows: filteredAndSorted.length,
+        pageRows: paginatedProducts.length,
+        totalPages
+    }, true, pagePerfStartedAt);
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-20 flex flex-col">

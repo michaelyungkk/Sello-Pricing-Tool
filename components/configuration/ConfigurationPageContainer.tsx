@@ -9,13 +9,24 @@ import { PersonalizationSection } from './sections/PersonalizationSection';
 import { DataNormalizationSection } from './sections/DataNormalizationSection';
 import { Globe, Truck, AlertTriangle, Search, Save, Database } from 'lucide-react';
 import { TabSwitcher } from '../common/TabSwitcher';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 export const ConfigurationPage: React.FC<ConfigurationPageProps> = (props) => {
+    const pagePerfStartedAt = perfNowMs();
     const {
         activeTab, setActiveTab, rules, logistics, searchConfig, setSearchConfig,
         newPlatformName, setNewPlatformName, isSaved, discoveredPlatforms, platformKeys,
         handleFieldChange, toggleExclusion, toggleAdsSupported, handleAddPlatform, handleDeletePlatform,
         freightRates, freightUploadCount, handleSave
     } = useConfigurationState(props);
+    const freightRateCount = Array.isArray(freightRates) ? freightRates.length : 0;
+
+    const configurationPerfKey = `${activeTab}|${platformKeys.length}|${freightRateCount}|${discoveredPlatforms.length}`;
+    usePagePerfLogger('settings', 'settings', configurationPerfKey, {
+        activeTab,
+        platforms: platformKeys.length,
+        freightRates: freightRateCount,
+        discoveredPlatforms: discoveredPlatforms.length
+    }, true, pagePerfStartedAt);
 
     return (
         <div className="max-w-[1600px] mx-auto pb-10 flex flex-col">

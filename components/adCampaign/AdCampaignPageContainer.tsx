@@ -21,6 +21,7 @@ import { MetricCard } from '../common/MetricCard';
 import { SelectFilter } from '../common/SelectFilter';
 import { SortableHeader } from '../common/SortableHeader';
 import { SortState, toggleSort } from '../../utils/tableSort';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 // ─────────────────────────────────────────────────────────────
 //  PROPS
@@ -1214,6 +1215,7 @@ const AdCampaignPageContainerInner: React.FC<AdCampaignPageProps> = ({
     products, salesHistory, learnedAliases,
     adSnapshots, adRosterChanges, adBudgets, onImport, onRosterChange,
 }) => {
+    const pagePerfStartedAt = perfNowMs();
     const productMap = useMemo(() => {
         const m = new Map<string, Product>();
         (products || []).forEach((p: Product) => m.set(p.sku.toUpperCase(), p));
@@ -1282,6 +1284,16 @@ const AdCampaignPageContainerInner: React.FC<AdCampaignPageProps> = ({
         const from = [...new Set((adSnapshots || []).map(s => s.platform))];
         return from.includes('The Range') ? from : ['The Range', ...from];
     }, [adSnapshots]);
+
+    const adCampaignPerfKey = `${platform}|${selectedWeekIdx}|${activeMainTab}|${platformSnapshots.length}|${campaign?.adGroups.length || 0}|${candidates.length}`;
+    usePagePerfLogger('ad-campaigns', 'ad-campaigns', adCampaignPerfKey, {
+        platform,
+        selectedWeekIdx,
+        activeMainTab,
+        snapshotWeeks: platformSnapshots.length,
+        adGroups: campaign?.adGroups.length || 0,
+        candidates: candidates.length
+    }, true, pagePerfStartedAt);
 
     const weekOptions = platformSnapshots.map((s, i) => ({
         label: `${s.weekStartDate} → ${s.weekEndDate}`,

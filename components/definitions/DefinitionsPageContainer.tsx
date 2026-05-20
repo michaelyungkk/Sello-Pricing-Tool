@@ -9,13 +9,22 @@ import { useDefinitions } from './hooks/useDefinitions';
 import { DefinitionCard } from './components/DefinitionCard';
 import { DefinitionSection } from './components/DefinitionSection';
 import { DefinitionGrid } from './components/DefinitionGrid';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 interface DefinitionsPageProps {
     headerStyle?: React.CSSProperties;
 }
 
 const DefinitionsPage: React.FC<DefinitionsPageProps> = ({ headerStyle }) => {
+    const pagePerfStartedAt = perfNowMs();
     const { activeTab, setActiveTab, statusCards, manualSections } = useDefinitions();
+
+    const definitionsPerfKey = `${activeTab}|${statusCards.length}|${manualSections.length}`;
+    usePagePerfLogger('definitions', 'definitions', definitionsPerfKey, {
+        activeTab,
+        statusCards: statusCards.length,
+        manualSections: manualSections.length
+    }, true, pagePerfStartedAt);
 
     return (
         <div className="max-w-[1600px] mx-auto space-y-6 pb-10 h-full flex flex-col">

@@ -21,6 +21,7 @@ import { TabSwitcher } from '../common/TabSwitcher';
 import ManualPriceChangeModal from '../shared/modals/ManualPriceChangeModal';
 import ManualCostChangeModal from '../shared/modals/ManualCostChangeModal';
 import { TablePagination } from '../common/TablePagination';
+import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 interface StrategyPageContainerProps {
     products: Product[];
@@ -60,6 +61,7 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
     onManualCostChange,
     optimalPriceResults,
 }) => {
+    const pagePerfStartedAt = perfNowMs();
     // --- STATE ---
     const [config, setConfig] = useState<StrategyConfig>(() => {
         try {
@@ -643,6 +645,17 @@ const StrategyPageContainerInner: React.FC<StrategyPageContainerProps> = ({
         if (pricingRules) Object.keys(pricingRules).forEach(k => platformSet.add(k));
         return Array.from(platformSet).sort();
     }, [products, pricingRules]);
+
+    const strategyPerfKey = `${activeTab}|${selectedWindow}|${customStart}|${customEnd}|${filteredAndSortedData.length}|${paginatedData.length}|${historyTableData.length}|${costHistoryTableData.length}|${inventoryHistoryTableData.length}`;
+    usePagePerfLogger('strategy', 'strategy', strategyPerfKey, {
+        activeTab,
+        selectedWindow,
+        filteredRows: filteredAndSortedData.length,
+        pageRows: paginatedData.length,
+        historyRows: historyTableData.length,
+        costHistoryRows: costHistoryTableData.length,
+        inventoryHistoryRows: inventoryHistoryTableData.length
+    }, true, pagePerfStartedAt);
 
     const handleExport = (platform: string = 'All') => {
         const clean = (val: any) => `"${String(val || '').replace(/[\r\n]+/g, ' ').replace(/"/g, '""')}"`;

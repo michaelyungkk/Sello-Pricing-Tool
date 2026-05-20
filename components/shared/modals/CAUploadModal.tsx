@@ -8,13 +8,14 @@ import { Product } from '../../../types';
 interface CAUploadModalProps {
     products: Product[];
     onClose: () => void;
-    onConfirm: (data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => void;
+    onConfirm: (data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => Promise<void>;
 }
 
 const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConfirm }) => {
     const [dragActive, setDragActive] = useState(false);
     const [parsedItems, setParsedItems] = useState<{ sku: string; caPrice: number; imageUrl?: string; description?: string; status: 'valid' | 'error' | 'skipped' }[] | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [stats, setStats] = useState({ valid: 0, skipped: 0, matched: 0, changes: 0, images: 0, descriptions: 0 });
     const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]); // Default to today
@@ -228,12 +229,28 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
 
     const validItems = parsedItems?.filter(i => i.status === 'valid') || [];
 
+    const handleConfirm = async () => {
+        if (validItems.length === 0 || isImporting) return;
+        setIsImporting(true);
+        setError(null);
+        let shouldClose = false;
+        try {
+            await onConfirm(validItems, reportDate);
+            shouldClose = true;
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to apply CA updates.');
+        } finally {
+            setIsImporting(false);
+            if (shouldClose) onClose();
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                     <h2 className="text-xl font-bold">Import CA Prices</h2>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+                    <button onClick={onClose} disabled={isImporting}><X className="w-5 h-5 text-gray-500" /></button>
                 </div>
 
                 <div className="p-6 space-y-6">
@@ -331,7 +348,7 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                                         </span>
                                     )}
                                 </div>
-                                <button onClick={() => setParsedItems(null)} className="text-[10px] text-gray-400 flex items-center gap-1 hover:text-gray-600 transition-colors uppercase font-bold"><RefreshCw className="w-2.5 h-2.5" /> Reset</button>
+                                <button onClick={() => setParsedItems(null)} disabled={isImporting} className="text-[10px] text-gray-400 flex items-center gap-1 hover:text-gray-600 transition-colors uppercase font-bold disabled:opacity-50"><RefreshCw className="w-2.5 h-2.5" /> Reset</button>
                             </div>
 
                             <div className="max-h-40 overflow-y-auto border rounded-lg shadow-inner bg-gray-50/30">
@@ -380,13 +397,15 @@ const CAUploadModal: React.FC<CAUploadModalProps> = ({ products, onClose, onConf
                 </div>
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
+                    <button onClick={onClose} disabled={isImporting} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors disabled:opacity-50">Cancel</button>
                     {validItems.length > 0 && (
                         <button
-                            onClick={() => onConfirm(validItems, reportDate)}
-                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors"
+                            onClick={handleConfirm}
+                            disabled={isImporting}
+                            className="px-4 py-2 bg-theme text-white text-sm font-bold rounded-lg shadow-md hover:bg-theme transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
                         >
-                            Update Prices & Images
+                            {isImporting && <Loader2 className="w-4 h-4 animate-spin" />}
+                            {isImporting ? 'Applying CA Prices...' : 'Update Prices & Images'}
                         </button>
                     )}
                 </div>

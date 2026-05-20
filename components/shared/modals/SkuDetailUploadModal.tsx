@@ -6,17 +6,34 @@ import { Product, SkuCostDetail } from '../../../types';
 interface SkuDetailUploadModalProps {
     products: Product[];
     onClose: () => void;
-    onConfirm: (data: { masterSku: string; detail: SkuCostDetail }[]) => void;
+    onConfirm: (data: { masterSku: string; detail: SkuCostDetail }[]) => Promise<void>;
 }
 
 const SkuDetailUploadModal: React.FC<SkuDetailUploadModalProps> = ({ products, onClose, onConfirm }) => {
     const [dragActive, setDragActive] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [parsedData, setParsedData] = useState<{ masterSku: string; detail: SkuCostDetail }[] | null>(null);
     const [stats, setStats] = useState({ matched: 0, unmatched: 0 });
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleConfirm = async () => {
+        if (!parsedData || parsedData.length === 0 || isImporting) return;
+        setIsImporting(true);
+        setError(null);
+        let shouldClose = false;
+        try {
+            await onConfirm(parsedData);
+            shouldClose = true;
+        } catch (err: any) {
+            setError(err?.message || 'Failed to apply SKU details.');
+        } finally {
+            setIsImporting(false);
+            if (shouldClose) onClose();
+        }
+    };
 
     const handleDrag = (e: React.DragEvent) => {
         e.preventDefault();
@@ -298,14 +315,15 @@ const SkuDetailUploadModal: React.FC<SkuDetailUploadModalProps> = ({ products, o
                 </div>
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
-                    <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">Cancel</button>
+                    <button onClick={onClose} disabled={isImporting} className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
                     {parsedData && parsedData.length > 0 && (
                         <button
-                            onClick={() => onConfirm(parsedData)}
-                            className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                            onClick={handleConfirm}
+                            disabled={isImporting}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Check className="w-4 h-4" />
-                            Confirm Update
+                            {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            {isImporting ? 'Applying SKU Details...' : 'Confirm Update'}
                         </button>
                     )}
                 </div>
