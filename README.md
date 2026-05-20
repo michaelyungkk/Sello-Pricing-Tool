@@ -2,19 +2,36 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# Sello Pricing Tool
 
-This contains everything you need to run your app locally.
+React/TypeScript e-commerce analytics dashboard for Sello UK.
 
-View your app in AI Studio: https://ai.studio/apps/377691cd-0b99-4584-ac59-086c56fa39bd
+## Local setup
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
+Prerequisites:
+- Node.js
+- npm
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Install repo git hooks:
+   `npm run hooks:install`
+3. Copy [.env.example](.env.example) to `.env.local` and fill in the values you need.
+4. Start the app:
    `npm run dev`
+
+## Environment variables
+
+Client build/runtime:
+- `API_KEY`
+- `VITE_API_KEY`
+
+Netlify/database functions:
+- `NETLIFY_DATABASE_URL`
+- `NETLIFY_DATABASE_URL_UNPOOLED`
+- `ADMIN_PASSWORD_HASH`
+
+Notes:
+- The Vite config accepts either `API_KEY` or `VITE_API_KEY` for the client build.
+- Database sync/push features require the Netlify function environment variables.
+- `.env`, `.env.local`, and environment-specific `.env.*` files stay untracked; use `.env.example` as the portable template.
