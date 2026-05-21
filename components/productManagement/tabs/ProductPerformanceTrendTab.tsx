@@ -9,6 +9,7 @@ import { SortableHeader } from '../../common/SortableHeader';
 import AuditPanel from '../../common/AuditPanel';
 import { SortState, sortRows } from '../../../utils/tableSort';
 import { BcgMatrix, QuadrantKey } from '../parts/BcgMatrix';
+import { logPerf, perfNowMs } from '../../../services/pagePerf';
 
 interface ProductPerformanceTrendTabProps {
   products: Product[];
@@ -94,27 +95,65 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
     setSelectedQuadrants(prev => prev.includes(quadrant) ? prev.filter(q => q !== quadrant) : [...prev, quadrant]);
   };
 
+  const allLogs = useMemo(() => {
+    const startedAt = perfNowMs();
+    const flattened = Array.from(priceHistoryMap.values()).flat() as PriceLog[];
+    logPerf('[perf][products][performance] allLogs complete', {
+      elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+      products: products.length,
+      skuBuckets: priceHistoryMap.size,
+      logs: flattened.length,
+      refunds: refundHistory.length,
+      timeWindow: `${dateWindow.startKey}..${dateWindow.endKey}`
+    });
+    return flattened;
+  }, [priceHistoryMap, products.length, refundHistory.length, dateWindow.endKey, dateWindow.startKey]);
+
   // 1. Trend Aggregation
   const trendData = useMemo(() => {
-    const allLogs = Array.from(priceHistoryMap.values()).flat() as PriceLog[];
-    return aggregateProductTrends(products, allLogs, dateWindow, refundHistory, deductRefunds);
-  }, [products, priceHistoryMap, dateWindow, refundHistory, deductRefunds]);
+    const startedAt = perfNowMs();
+    const aggregated = aggregateProductTrends(products, allLogs, dateWindow, refundHistory, deductRefunds);
+    logPerf('[perf][products][performance] trendData complete', {
+      elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+      products: products.length,
+      logs: allLogs.length,
+      rows: aggregated.length,
+      refunds: refundHistory.length,
+      deductRefunds,
+      timeWindow: `${dateWindow.startKey}..${dateWindow.endKey}`
+    });
+    return aggregated;
+  }, [products, allLogs, dateWindow, refundHistory, deductRefunds]);
 
   // 2. Summary Logic
   const summary = useMemo(() => {
-    if (trendData.length === 0) return null;
+    const startedAt = perfNowMs();
+    if (trendData.length === 0) {
+      logPerf('[perf][products][performance] summary complete', {
+        elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+        rows: 0
+      });
+      return null;
+    }
     const validRev = trendData.filter(d => d.deltas.revenueDeltaPct !== null && d.current.revenue > 100);
 
-    return {
+    const result = {
       velocityKing: [...validRev].sort((a, b) => (b.deltas.unitsDeltaPct! - a.deltas.unitsDeltaPct!))[0],
       revenueLoser: [...validRev].sort((a, b) => (a.deltas.revenueDeltaPct! - b.deltas.revenueDeltaPct!))[0],
-      marginImprover: trendData.sort((a, b) => b.deltas.marginDeltaPp - a.deltas.marginDeltaPp)[0],
+      marginImprover: [...trendData].sort((a, b) => b.deltas.marginDeltaPp - a.deltas.marginDeltaPp)[0],
       topProfit: [...trendData].sort((a, b) => b.current.netProfit - a.current.netProfit)[0]
     };
+    logPerf('[perf][products][performance] summary complete', {
+      elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+      rows: trendData.length,
+      validRevenueRows: validRev.length
+    });
+    return result;
   }, [trendData]);
 
   // 3. Table Sorting
   const sortedData = useMemo(() => {
+    const startedAt = perfNowMs();
     const getValue = (row: ProductTrendData, key: string) => {
       if (key === 'revenue') return row.current.revenue;
       if (key === 'profit') return row.current.netProfit;
@@ -123,7 +162,14 @@ export const ProductPerformanceTrendTab: React.FC<ProductPerformanceTrendTabProp
       if (key === 'refund') return row.current.refundRatePct;
       return (row as any)[key];
     };
-    return sortRows(trendData, sort, getValue);
+    const sorted = sortRows(trendData, sort, getValue);
+    logPerf('[perf][products][performance] sortedData complete', {
+      elapsedMs: Number((perfNowMs() - startedAt).toFixed(1)),
+      rows: sorted.length,
+      sortKey: sort?.key ?? null,
+      sortDir: sort?.dir ?? null
+    });
+    return sorted;
   }, [trendData, sort]);
 
   return (

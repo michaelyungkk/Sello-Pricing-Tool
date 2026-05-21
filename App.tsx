@@ -542,7 +542,14 @@ const App: React.FC = () => {
             skipNextHiddenWarmRef.current = false;
             return;
         }
-        if (postApplySource === 'refund-import' || postApplySource === 'sales-import' || postApplySource === 'inventory-import') return;
+        if (
+            postApplySource === 'refund-import'
+            || postApplySource === 'sales-import'
+            || postApplySource === 'inventory-import'
+            || postApplySource === 'cache-load'
+            || postApplySource === 'local-cache-load'
+            || postApplySource === 'sync'
+        ) return;
         if (mountedPages.size === 0) return;
         const hiddenPages = PAGE_ORDER.filter(page => page !== currentView && mountedPages.has(page));
         if (hiddenPages.length === 0) return;
@@ -759,6 +766,8 @@ const App: React.FC = () => {
         }
     };
     const hasAnyLocalData = (products?.length || 0) > 0 || (salesHistory?.length || 0) > 0 || (refundHistory?.length || 0) > 0;
+    const [startupLoadSettled, setStartupLoadSettled] = useState(false);
+    const showStartupLoadingOverlay = !startupLoadSettled && !startupChoicePending && !isRestoring && syncStatus === 'syncing';
 
     useEffect(() => {
         if (!navigationIntent) return;
@@ -900,6 +909,11 @@ const App: React.FC = () => {
     const headerStyle = { color: headerTextColor, ...textShadowStyle };
     const hasInventory = products && products.length > 0;
     const activeSearch = (searchSessions || []).find(s => s.id === activeSearchId);
+    const isViewMounted = useCallback((view: string) => (
+        view === 'overview'
+        || view === 'custom-report'
+        || mountedPages.has(view)
+    ), [mountedPages]);
 
     const pageTitles: Record<string, string> = {
         search: t('header_search'),
@@ -1015,7 +1029,7 @@ const App: React.FC = () => {
             mountPerfRef.current.firstDataReadyLogged = true;
             logPerf('[perf][app-mount] data-ready gate opened', {
                 currentView,
-                mountedCurrentView: mountedPages.has(currentView),
+                mountedCurrentView: isViewMounted(currentView),
                 mountedCount: mountedPages.size,
                 products: products?.length || 0,
                 salesHistory: salesHistory?.length || 0,
@@ -1032,10 +1046,18 @@ const App: React.FC = () => {
             };
             logPerf(`[perf] first_view_data_ready: ${(now - APP_BOOT_START_MS).toFixed(1)}ms`);
         }
-    }, [syncStatus, products, salesHistory, refundHistory, mountedPages, currentView]);
+    }, [syncStatus, products, salesHistory, refundHistory, mountedPages, currentView, isViewMounted]);
 
     useEffect(() => {
-        if (mountedPages.has(currentView) && !mountPerfRef.current.firstCurrentViewMounted) {
+        if (startupLoadSettled) return;
+        if (startupChoicePending || isRestoring) return;
+        if (syncStatus !== 'idle') return;
+        if (!hasAnyLocalData) return;
+        setStartupLoadSettled(true);
+    }, [startupChoicePending, isRestoring, syncStatus, hasAnyLocalData, startupLoadSettled]);
+
+    useEffect(() => {
+        if (isViewMounted(currentView) && !mountPerfRef.current.firstCurrentViewMounted) {
             mountPerfRef.current.firstCurrentViewMounted = true;
             logPerf('[perf][app-mount] current view mounted', {
                 currentView,
@@ -1043,12 +1065,12 @@ const App: React.FC = () => {
                 elapsedMs: Number((perfNowMs() - APP_BOOT_START_MS).toFixed(1))
             });
         }
-    }, [mountedPages, currentView]);
+    }, [mountedPages, currentView, isViewMounted]);
 
     useEffect(() => {
         if (perfLoggedRef.current) return;
         if (!perfMarksRef.current.firstDataReadyAt) return;
-        if (!mountedPages.has(currentView)) return;
+        if (!isViewMounted(currentView)) return;
 
         logPerf('[perf][app-mount] interactive gate opened', {
             currentView,
@@ -1087,7 +1109,7 @@ const App: React.FC = () => {
         } else {
             setTimeout(stampInteractive, 0);
         }
-    }, [mountedPages, currentView]);
+    }, [mountedPages, currentView, isViewMounted]);
 
     return (
         <>
@@ -1133,6 +1155,34 @@ const App: React.FC = () => {
                                 </div>
                                 <div className="mt-1 text-xs text-gray-500">Select a JSON backup before any database sync runs.</div>
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showStartupLoadingOverlay && (
+                <div className="fixed inset-0 z-[290] flex items-center justify-center bg-black/25 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-lg bg-custom-glass-modal backdrop-blur-custom-modal border border-custom-glass rounded-2xl shadow-2xl p-6 space-y-5">
+                        <div>
+                            <div className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Startup</div>
+                            <h2 className="mt-2 text-2xl font-bold text-gray-900">Loading your data...</h2>
+                            <p className="mt-2 text-sm text-gray-600">
+                                {syncStep || 'Applying data and waiting for heavy pages to settle.'}
+                            </p>
+                        </div>
+                        <div className="w-full">
+                            <div className="flex justify-between text-xs text-gray-400 mb-2">
+                                <span>{syncStep || 'Preparing interface...'}</span>
+                                <span>{syncTotal > 0 ? `${Math.round((syncProgress / syncTotal) * 100)}%` : 'Working'}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                    className="rounded-full h-2 transition-all duration-300"
+                                    style={{
+                                        width: `${syncTotal > 0 ? Math.round((syncProgress / syncTotal) * 100) : 100}%`,
+                                        backgroundColor: userProfile.themeColor
+                                    }}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>

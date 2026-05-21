@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     VAT_MULTIPLIER,
@@ -20,12 +20,9 @@ import {
     StrategyConfig,
     VelocityLookback,
     RefundLog,
-    HistoryPayload,
     PriceChangeRecord,
-    AnalysisResult,
     SearchChip,
     SearchConfig,
-    SkuCostDetail,
     InventoryTemplate,
     PriceCheckTemplate,
     SearchSession,
@@ -34,50 +31,30 @@ import {
     AttributeMap,
     SkuFamily,
     AdGroup,
-    AppView,
     NavigationIntent
 } from '../types';
 import { analyzePriceAdjustment, parseSearchQuery, createTextFallbackIntent, SearchIntent } from '../services/searchIntentService';
 import { processDataForSearch } from '../services/searchExecution';
-import { getThresholdConfig, ThresholdConfig, saveThresholdConfig } from '../services/thresholdsConfig';
+import { getThresholdConfig, ThresholdConfig } from '../services/thresholdsConfig';
 import { ReportLayout } from '../services/persistenceService';
-import { migrateRestoredDatabase } from '../services/migrationService';
-import { normalizeRestoredState, repairMojibakeText } from '../services/restoreSanitizer';
 import { hexToRgb, extractFirstHex } from '../utils/color';
-import { getCanonicalSku, buildCanonicalResolver } from '../services/skuNormalization';
-import {
-    calculateOptimalPrice,
-    buildPriceEras,
-    buildPricePoints,
-    isEligibleTransaction,
-    tagTransactionSource,
-    assignTransactionToEra,
-} from '../services/optimalPriceEngine';
-import {
-    computeAllCohortStats,
-    detectBenchmarkShifts,
-    detectBenchmarkUpdateNeeded,
-} from '../services/cohortAnalysis';
-import type { CohortShiftWarning } from '../services/cohortAnalysis';
-import type { CohortSnapshot, OptimalPriceResult, BenchmarkUpdateNotice, PricePoint } from '../types';
+import type { CohortSnapshot, OptimalPriceResult, BenchmarkUpdateNotice } from '../types';
 import { resolveEffectiveVelocity, toNumber } from '../services/metrics';
 import { asDateKey, getTodayKeyMelbourne } from '../services/dateUtils';
 import { resolveAttribute } from '../services/mappingService';
 import { redistributeAdSpend } from '../services/adSpreadService';
 import {
-    verifyPassword, pushSnapshot, pullSnapshot,
-    pullSnapshotIfUpdated,
+    verifyPassword, pushSnapshot,
     getLatestTransactionDate,
-    pullTransactionPage, pullTransactionPageSince, checkVersion,
-    pushRefundsAndShipments, pullRefundsAndShipments, pullRefundSignatures,
-    pushAdData, pullAdData,
-    pushPromotions, pullPromotionsSince, pullPromotionSignatures
+    pushRefundsAndShipments,
+    pushAdData,
+    pushPromotions, pullPromotionSignatures
 } from '../services/dbService';
-import { saveToCache, loadFromCache, clearCache, getCachedVersion } from '../services/localCache';
-import { perfNowMs, perfElapsedMs, logPerfPostCommitTail, waitForUiResponsiveAfterApply } from '../services/uiSettle';
+import { useUploadHandlers } from './useUploadHandlers';
+import { useSyncRestore } from './useSyncRestore';
+import { useBenchmarkWorkflow } from './useBenchmarkWorkflow';
+import { useUiNavigationState } from './useUiNavigationState';
 
-const FORCE_FULL_PULL_TOKEN_KEY = 'sello_last_force_full_pull_token';
-const REFUND_CURSOR_KEY = 'sello_refunds_updated_at';
 const PROMO_CURSOR_KEY = 'sello_promotions_updated_at';
 const PROMO_BASELINE_COMPLETE_KEY = 'sello_promotions_baseline_complete';
 
@@ -258,39 +235,6 @@ const normalizePromotionStatuses = (list: PromotionEvent[] = []): PromotionEvent
     }));
 };
 
-type BenchmarkRecalcMode = 'incremental' | 'full';
-type BenchmarkRecalcStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'error';
-type BenchmarkRecalcStage = 'IDLE' | 'PREPARING' | 'REBUILDING_COHORTS' | 'CALCULATING_OPTIMAL_PRICES' | 'FINALIZING';
-
-interface BenchmarkRecalcState {
-    status: BenchmarkRecalcStatus;
-    stage: BenchmarkRecalcStage;
-    mode: BenchmarkRecalcMode;
-    processed: number;
-    total: number;
-    elapsedMs: number;
-    startedAt: string | null;
-    completedAt: string | null;
-    summary: string;
-}
-
-interface RecalculateBenchmarkOptions {
-    mode?: BenchmarkRecalcMode;
-    categories?: string[];
-}
-
-const BENCHMARK_IDLE_STATE: BenchmarkRecalcState = {
-    status: 'idle',
-    stage: 'IDLE',
-    mode: 'incremental',
-    processed: 0,
-    total: 0,
-    elapsedMs: 0,
-    startedAt: null,
-    completedAt: null,
-    summary: '',
-};
-
 const buildStableString = (value: any): string => {
     if (value === null || value === undefined) return 'null';
     if (Array.isArray(value)) return `[${value.map(buildStableString).join(',')}]`;
@@ -379,8 +323,6 @@ export const useAppState = () => {
     const [cohortSnapshot, setCohortSnapshot] = useState<CohortSnapshot | null>(null);
     const [optimalPriceResults, setOptimalPriceResults] = useState<Map<string, OptimalPriceResult>>(new Map());
     const [benchmarkUpdateNotices, setBenchmarkUpdateNotices] = useState<BenchmarkUpdateNotice[]>([]);
-    const [benchmarkRecalcState, setBenchmarkRecalcState] = useState<BenchmarkRecalcState>(BENCHMARK_IDLE_STATE);
-    const benchmarkRunRef = useRef<{ id: number; cancelled: boolean; running: boolean }>({ id: 0, cancelled: false, running: false });
 
     // --- DB SYNC STATE ---
     const [isAdminMode, setIsAdminMode] = useState<boolean>(
@@ -469,26 +411,48 @@ export const useAppState = () => {
         };
     }, []);
 
-    const [selectedElasticityProduct, setSelectedElasticityProduct] = useState<Product | null>(null);
-    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-    const [isSalesImportModalOpen, setIsSalesImportModalOpen] = useState(false);
-    const [isCostUploadModalOpen, setIsCostUploadModalOpen] = useState(false);
-    const [isSkuDetailModalOpen, setIsSkuDetailModalOpen] = useState(false);
-    const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
-    const [isReturnsModalOpen, setIsReturnsModalOpen] = useState(false);
-    const [isCAUploadModalOpen, setIsCAUploadModalOpen] = useState(false);
-    const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
-    const [selectedAnalysisProduct, setSelectedAnalysisProduct] = useState<Product | null>(null);
-    const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-    const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
-    const [isSearchLoading, setIsSearchLoading] = useState(false);
-    const [searchSessions, setSearchSessions] = useState<SearchSession[]>([]);
-    const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
-    const [currentView, setCurrentView] = useState<AppView>('overview');
-    const [navigationIntent, setNavigationIntent] = useState<NavigationIntent | null>(null);
     const [isOnline] = useState(navigator.onLine);
-    const [isFreshnessExpanded, setIsFreshnessExpanded] = useState(false);
-    const [mapJumpState, setMapJumpState] = useState<{ carrier: string, metric: 'RETURN_RATE' | 'REVENUE' | 'PROFIT' | 'MARGIN' | 'TACOS' } | null>(null);
+
+    const {
+        selectedElasticityProduct,
+        setSelectedElasticityProduct,
+        isUploadModalOpen,
+        setIsUploadModalOpen,
+        isSalesImportModalOpen,
+        setIsSalesImportModalOpen,
+        isCostUploadModalOpen,
+        setIsCostUploadModalOpen,
+        isSkuDetailModalOpen,
+        setIsSkuDetailModalOpen,
+        isMappingModalOpen,
+        setIsMappingModalOpen,
+        isReturnsModalOpen,
+        setIsReturnsModalOpen,
+        isCAUploadModalOpen,
+        setIsCAUploadModalOpen,
+        isShipmentModalOpen,
+        setIsShipmentModalOpen,
+        selectedAnalysisProduct,
+        setSelectedAnalysisProduct,
+        analysisResult,
+        setAnalysisResult,
+        isAnalysisLoading,
+        setIsAnalysisLoading,
+        isSearchLoading,
+        setIsSearchLoading,
+        searchSessions,
+        setSearchSessions,
+        activeSearchId,
+        setActiveSearchId,
+        currentView,
+        setCurrentView,
+        navigationIntent,
+        setNavigationIntent,
+        isFreshnessExpanded,
+        setIsFreshnessExpanded,
+        mapJumpState,
+        setMapJumpState
+    } = useUiNavigationState();
 
     const priceHistoryMap = useMemo(() => {
         const map = new Map<string, PriceLog[]>();
@@ -659,7 +623,7 @@ export const useAppState = () => {
             devSearchLog('search failed', { query: rawText, error: e });
             console.error("Search failed", e);
         } finally { setIsSearchLoading(false); }
-    }, [products, salesHistory, pricingRules, refundHistory]);
+    }, [products, salesHistory, pricingRules, refundHistory, setActiveSearchId, setCurrentView, setIsSearchLoading, setSearchSessions]);
 
     const handleDeepDiveRequest = useCallback((sku: string) => { handleSearch(`SKU: ${sku}`); }, [handleSearch]);
 
@@ -673,11 +637,11 @@ export const useAppState = () => {
             ...intent,
             createdAt: Date.now()
         });
-    }, []);
+    }, [setNavigationIntent]);
 
     const clearNavigationIntent = useCallback(() => {
         setNavigationIntent(null);
-    }, []);
+    }, [setNavigationIntent]);
 
     const handleManualPriceChange = useCallback((data: Omit<PriceChangeRecord, 'id' | 'changeType' | 'percentChange'>) => {
         const { sku, productName, date, platform, oldPrice, newPrice } = data;
@@ -710,13 +674,13 @@ export const useAppState = () => {
 
     const markSearchSessionsStale = useCallback(() => {
         setSearchSessions(prev => (prev || []).map(session => ({ ...session, stale: true } as SearchSession)));
-    }, []);
+    }, [setSearchSessions]);
 
-    const handleRefineSearch = useCallback((sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, salesHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel, stale: false } as SearchSession; } return s; })); setIsSearchLoading(false); }, 150); }, [products, salesHistory, pricingRules, refundHistory]);
-    const deleteSearchSession = useCallback((id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } }, [activeSearchId]);
-    const handleViewElasticity = useCallback((product: Product) => { setSelectedElasticityProduct(product); }, []);
-    const handleAnalyze = useCallback(async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } }, [pricingRules, thresholds]);
-    const handleApplyPrice = useCallback((productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = (prev || []).find(p => p.id === productId); if (!productToUpdate) return prev; const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], platform: productToUpdate.platform || 'Unknown', oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...(prevHistory || []), change]); return prev.map(p => { if (p.id !== productId) return p; return { ...p, caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }; }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); }, []);
+    const handleRefineSearch = useCallback((sessionId: string, newIntent: SearchIntent) => { setIsSearchLoading(true); setTimeout(() => { const { results, timeLabel } = processDataForSearch(newIntent, products, salesHistory, pricingRules, refundHistory); setSearchSessions(prev => (prev || []).map(s => { if (s.id === sessionId) { return { ...s, results, params: newIntent, timeLabel, stale: false } as SearchSession; } return s; })); setIsSearchLoading(false); }, 150); }, [products, salesHistory, pricingRules, refundHistory, setIsSearchLoading, setSearchSessions]);
+    const deleteSearchSession = useCallback((id: string, e: React.MouseEvent) => { e.stopPropagation(); setSearchSessions(prev => (prev || []).filter(s => s.id !== id)); if (activeSearchId === id) { setActiveSearchId(null); setCurrentView('overview'); } }, [activeSearchId, setActiveSearchId, setCurrentView, setSearchSessions]);
+    const handleViewElasticity = useCallback((product: Product) => { setSelectedElasticityProduct(product); }, [setSelectedElasticityProduct]);
+    const handleAnalyze = useCallback(async (product: Product, context?: string) => { const platformName = product.platform || (product.channels && product.channels.length > 0 ? product.channels[0].platform : 'General'); const platformRule = pricingRules[platformName] || { markup: 0, commission: 15, manager: 'General', isExcluded: false }; setSelectedAnalysisProduct(product); setAnalysisResult(null); setIsAnalysisLoading(true); try { const result = await analyzePriceAdjustment(product, platformRule, context, thresholds); setAnalysisResult(result); } catch (error) { console.error("Analysis failed in App:", error); } finally { setIsAnalysisLoading(false); } }, [pricingRules, thresholds, setAnalysisResult, setIsAnalysisLoading, setSelectedAnalysisProduct]);
+    const handleApplyPrice = useCallback((productId: string, newPrice: number) => { setProducts(prev => { const productToUpdate = (prev || []).find(p => p.id === productId); if (!productToUpdate) return prev; const oldPrice = productToUpdate.caPrice || (productToUpdate.currentPrice * VAT_MULTIPLIER); const change: PriceChangeRecord = { id: `chg-${Date.now()}-${productToUpdate.sku}`, sku: productToUpdate.sku, productName: productToUpdate.name, date: new Date().toISOString().split('T')[0], platform: productToUpdate.platform || 'Unknown', oldPrice: oldPrice, newPrice: newPrice, changeType: newPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 100 }; setPriceChangeHistory(prevHistory => [...(prevHistory || []), change]); return prev.map(p => { if (p.id !== productId) return p; return { ...p, caPrice: newPrice, lastUpdated: new Date().toISOString().split('T')[0] }; }); }); setSelectedAnalysisProduct(null); setAnalysisResult(null); }, [setAnalysisResult, setSelectedAnalysisProduct]);
 
     const handleAdGroupSave = useCallback((
         updatedAdGroups: AdGroup[],
@@ -769,41 +733,6 @@ export const useAppState = () => {
         return summary;
     }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, isAdminMode, markSearchSessionsStale]);
 
-    const getSharedSnapshot = useCallback(() => ({
-        products,
-        priceChangeHistory,
-        costChangeHistory,
-        inventoryChangeHistory,
-        learnedAliases,
-        pricingRules,
-        logisticsRules,
-        strategyRules,
-        searchConfig,
-        thresholds,
-        brandMap,
-        categoryMap,
-        skuFamilies,
-        adGroups,
-        inventoryTemplates,
-        customReportPresets,
-        priceCheckTemplates,
-        freightRates,
-        cohortSnapshot: cohortSnapshot ? {
-            ...cohortSnapshot,
-            categoryBuckets: Object.fromEntries(cohortSnapshot.categoryBuckets),
-            cohortStats: Object.fromEntries(cohortSnapshot.cohortStats),
-            skuAssignments: Object.fromEntries(cohortSnapshot.skuAssignments),
-        } : null,
-        optimalPriceResults: Object.fromEntries(optimalPriceResults),
-        benchmarkUpdateNotices,
-    }), [products, priceChangeHistory, costChangeHistory,
-        inventoryChangeHistory, learnedAliases,
-        pricingRules, logisticsRules, strategyRules, searchConfig,
-        thresholds, brandMap, categoryMap, skuFamilies, adGroups,
-        inventoryTemplates, priceCheckTemplates, freightRates,
-        customReportPresets,
-        cohortSnapshot, optimalPriceResults, benchmarkUpdateNotices]);
-
     // --- AD CAMPAIGN HANDLERS ---
     const handleAdCampaignImport = useCallback((snapshot: AdSnapshot, updatedBudgets: Record<string, number>) => {
         setAdSnapshots(prev => {
@@ -825,921 +754,165 @@ export const useAppState = () => {
         });
     }, []);
 
-    const handleBackup = useCallback(() => {
-        const normalizedPromotions = normalizePromotionStatuses(promotions || []);
-        const data = {
-            ...getSharedSnapshot(),
-            promotions: normalizedPromotions,
-            priceHistory: salesHistory,
-            refundHistory,
-            velocityLookback,
-            userProfile,
-            uploadTimestamps,
-            exportDate: new Date().toISOString()
-        };
-        const blob = new Blob(
-            [JSON.stringify(data, null, 2)],
-            { type: 'application/json' }
-        );
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `sello_backup_${new Date().toISOString().slice(0, 10)}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }, [getSharedSnapshot, salesHistory, refundHistory,
-        promotions,
-        velocityLookback, userProfile,
-        uploadTimestamps]);
-
-    const handleRestore = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            let worker: Worker | null = null;
-            const restoreStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
-            try {
-                setIsRestoring(true);
-                setStartupSyncMode('local');
-                setStartupChoicePending(false);
-                console.log('[restore] start', {
-                    fileName: file.name,
-                    fileSizeBytes: file.size
-                });
-                setSyncStatus('syncing');
-                setSyncProgress(0);
-                setSyncTotal(4);
-                setSyncStep('Reading restore backup...');
-
-                const rawText = String(event.target?.result || '');
-                console.log('[restore] file read complete', {
-                    elapsedMs: Number(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - restoreStartedAt).toFixed(1)),
-                    rawTextLength: rawText.length
-                });
-                await new Promise<void>(resolve => setTimeout(resolve, 0));
-
-                worker = new Worker(
-                    new URL('../workers/restoreWorker.ts', import.meta.url),
-                    { type: 'module' }
-                );
-
-                const restored = await new Promise<any>((resolve, reject) => {
-                    if (!worker) {
-                        reject(new Error('Restore worker failed to initialize.'));
-                        return;
-                    }
-                    worker.onmessage = (message) => {
-                        const payload = message.data;
-                        if (payload?.type === 'progress') {
-                            setSyncProgress(payload.progress || 0);
-                            setSyncStep(payload.message || 'Restoring backup...');
-                            return;
-                        }
-                        if (payload?.type === 'success') {
-                            resolve(payload.restored);
-                            return;
-                        }
-                        if (payload?.type === 'error') {
-                            reject(new Error(payload.error || 'Restore worker failed.'));
-                        }
-                    };
-                    worker.onerror = (workerError) => reject(workerError);
-                    worker.postMessage({ rawText });
-                });
-
-                console.log('[restore] worker complete', {
-                    elapsedMs: Number(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - restoreStartedAt).toFixed(1)),
-                    products: Array.isArray(restored.products) ? restored.products.length : 0,
-                    priceHistory: Array.isArray(restored.priceHistory) ? restored.priceHistory.length : 0,
-                    refundHistory: Array.isArray(restored.refundHistory) ? restored.refundHistory.length : 0,
-                    rebuiltSalesHistory: Array.isArray(restored.rebuiltSalesHistory) ? restored.rebuiltSalesHistory.length : 0,
-                    rebuiltProducts: Array.isArray(restored.rebuiltProducts) ? restored.rebuiltProducts.length : 0
-                });
-
-                setSyncProgress(2);
-                setSyncStep('Applying restored settings...');
-                const settingsApplyStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                console.log('[restore] applying settings', {
-                    promotions: Array.isArray(restored.promotions) ? restored.promotions.length : 0,
-                    freightRates: Array.isArray(restored.freightRates) ? restored.freightRates.length : 0,
-                    adGroups: Array.isArray(restored.adGroups) ? restored.adGroups.length : 0
-                });
-
-                setRefundHistory(restored.refundHistory);
-                setFreightRates(restored.freightRates);
-                setPriceChangeHistory(restored.priceChangeHistory);
-                setCostChangeHistory(restored.costChangeHistory);
-                setInventoryChangeHistory(restored.inventoryChangeHistory);
-                setPromotions(normalizePromotionStatuses(restored.promotions));
-                setLearnedAliases(restored.learnedAliases);
-                setPricingRules(restored.pricingRules);
-                setLogisticsRules(restored.logisticsRules);
-                setStrategyRules(restored.strategyRules);
-                setSearchConfig(restored.searchConfig);
-                setInventoryTemplates(restored.inventoryTemplates);
-                setCustomReportPresets(restored.customReportPresets);
-                if (Array.isArray(restored.priceCheckTemplates)) setPriceCheckTemplates(restored.priceCheckTemplates);
-                setUploadTimestamps(restored.uploadTimestamps);
-                setBrandMap(restored.brandMap);
-                setCategoryMap(restored.categoryMap);
-                setSkuFamilies(restored.skuFamilies);
-
-                localStorage.setItem('sello_upload_timestamps', JSON.stringify(restored.uploadTimestamps));
-                setUserProfile(prev => ({ ...prev, ...restored.userProfile }));
-
-                if (restored.thresholds) {
-                    setThresholds(restored.thresholds);
-                    saveThresholdConfig(restored.thresholds);
-                }
-
-                if (restored.velocityLookback) {
-                    setVelocityLookback(restored.velocityLookback);
-                    localStorage.setItem('sello_velocity_setting', restored.velocityLookback);
-                }
-
-                await new Promise<void>(resolve => setTimeout(resolve, 0));
-                console.log('[restore] settings apply scheduled', {
-                    elapsedMs: Number(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - settingsApplyStartedAt).toFixed(1))
-                });
-                setSyncProgress(3);
-                setSyncStep('Applying rebuilt transactions and product metrics...');
-
-                setAdGroups(restored.adGroups);
-                setSalesHistory(restored.rebuiltSalesHistory || restored.priceHistory || []);
-                setProducts(restored.rebuiltProducts || restored.products || []);
-                setLastRecalculationSummary(restored.recalculationSummary || null);
-                setSearchSessions([]);
-                setActiveSearchId(null);
-
-                if (isAdminMode) setIsDirty(true);
-                setSyncProgress(4);
-                setSyncStep('');
-                setSyncStatus('idle');
-                setIsRestoring(false);
-                alert(t('alert_db_restore_success'));
-            } catch (err) {
-                console.error('[restore] failed', {
-                    elapsedMs: Number(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - restoreStartedAt).toFixed(1)),
-                    error: err
-                });
-                setIsRestoring(false);
-                setSyncStatus('error');
-                setSyncStep('');
-                setSyncProgress(0);
-                setSyncTotal(0);
-                alert(t('alert_db_restore_fail'));
-            } finally {
-                if (worker) worker.terminate();
-            }
-        };
-        reader.readAsText(file);
-        if (fileRestoreRef.current) fileRestoreRef.current.value = '';
-    }, [t, isAdminMode]);
-
-    const handleResetRefunds = useCallback(() => { setRefundHistory([]); setProducts(prev => (prev || []).map(p => ({ ...p, returnRate: 0 }))); setIsReturnsModalOpen(false); }, []);
+    const handleResetRefunds = useCallback(() => { setRefundHistory([]); setProducts(prev => (prev || []).map(p => ({ ...p, returnRate: 0 }))); setIsReturnsModalOpen(false); }, [setIsReturnsModalOpen]);
 
     const handleUpdatePriceChangeRecord = useCallback((recordToUpdate: PriceChangeRecord) => { setPriceChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
     const handleUpdateCostChangeRecord = useCallback((recordToUpdate: CostChangeRecord) => { setCostChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
     const handleUpdateInventoryChangeRecord = useCallback((recordToUpdate: InventoryChangeRecord) => { setInventoryChangeHistory(prev => (prev || []).map(record => record.id === recordToUpdate.id ? { ...record, date: recordToUpdate.date } : record)); }, []);
+    const {
+        handleSalesImportConfirm,
+        handleInventoryImport,
+        handleResetSalesData,
+        handleSkuDetailImport,
+        handleMappingImport,
+        handleReturnsImport,
+        handleFreightRatesUpload,
+        handleCAImport,
+        handleDescriptionImport,
+        handleStampLandedAt,
+        handleShipmentImport
+    } = useUploadHandlers({
+        products,
+        salesHistory,
+        refundHistory,
+        priceHistoryMap,
+        velocityLookback,
+        pricingRules,
+        brandMap,
+        categoryMap,
+        skuFamilies,
+        cohortSnapshot,
+        learnedAliases,
+        isAdminMode,
+        pendingSalesReconciliationRef,
+        setPostApplySource,
+        setSalesPushMode,
+        setLearnedAliases,
+        setSalesHistory,
+        setProducts,
+        setPricingRules,
+        setIsDirty,
+        setBenchmarkUpdateNotices,
+        setPendingFamilySuggestions,
+        setCostChangeHistory,
+        setInventoryChangeHistory,
+        setRefundHistory,
+        setFreightRates,
+        setPriceChangeHistory,
+        setIsSalesImportModalOpen,
+        markSearchSessionsStale,
+        updateTimestamp,
+        recalculateProductMetrics,
+        isArrivedShipmentStatus
+    });
 
-    const handleSalesImportConfirm = useCallback(async (updatedProductsFromImport: Product[], newDateLabels?: { current: string, last: string }, historyPayload?: HistoryPayload[], newShipmentLogs?: any[], discoveredPlatforms?: string[], newlyLearnedAliases?: Record<string, string>, importDirective?: {
-        salesPushMode: 'incremental' | 'reconciliation' | 'full_snapshot';
-        reason: string;
-        reconciliationPlan?: {
-            upsertKeys: string[];
-            removedKeys: string[];
-            added: number;
-            changed: number;
-            removed: number;
-        } | null;
-    }, progressReporter?: (status: { message: string; progress: number }) => void) => {
-        const salesImportStartedAt = perfNowMs();
-        const reportProgress = (message: string, progress: number) => {
-            progressReporter?.({
-                message,
-                progress
-            });
-        };
-        setPostApplySource('sales-import');
-        reportProgress('Applying sales import...', 78);
-        console.log('[perf][sales-import] start', {
-            currentProducts: Array.isArray(products) ? products.length : 0,
-            currentSalesHistory: Array.isArray(salesHistory) ? salesHistory.length : 0,
-            incomingProducts: Array.isArray(updatedProductsFromImport) ? updatedProductsFromImport.length : 0,
-            historyPayload: Array.isArray(historyPayload) ? historyPayload.length : 0,
-            pushMode: importDirective?.salesPushMode || null
-        });
-        if (newlyLearnedAliases) setLearnedAliases(prev => ({ ...(prev || {}), ...newlyLearnedAliases }));
-        if (importDirective?.salesPushMode) {
-            setSalesPushMode(importDirective.salesPushMode);
-            console.log(`[sales-import] push mode set: ${importDirective.salesPushMode} (${importDirective.reason || 'no reason'})`);
-        }
-        let updatedPriceHistory = [...(salesHistory || [])];
-        if (historyPayload && historyPayload.length > 0) {
-            const newLogs: PriceLog[] = historyPayload.map(h => {
-                const adsSpend = h.adsSpend ?? h.adsFee ?? 0;
-                const isAdOnly = (h.price ?? 0) === 0 && adsSpend > 0;
-                const normalizedProfit = (h.profit ?? 0) === 0 && isAdOnly ? -adsSpend : h.profit;
-                return ({
-                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-                sku: h.sku,
-                date: h.date,
-                price: h.price,
-                velocity: h.velocity,
-                margin: h.margin,
-                profit: normalizedProfit,
-                adsSpend,
-                rawAdsSpend: h.rawAdsSpend ?? adsSpend,
-                platform: h.platform,
-                orderId: h.orderId,
-                postcode: h.postcode,
-                logisticPartner: h.logisticPartner,
-                logisticService: h.logisticService,
-                realPostage: h.realPostage,
-                realExtraFreight: h.realExtraFreight,
-                cogs: h.cogs,
-                sellingFee: h.sellingFee,
-                adsFee: h.adsFee,
-                postage: h.postage,
-                otherFee: h.otherFee,
-                subscriptionFee: h.subscriptionFee,
-                wmsFee: h.wmsFee,
-                promoRel: h.promoRel
-            })});
-            const rowsWithWaterfallCosts = newLogs.filter(l =>
-                l.cogs !== undefined ||
-                l.sellingFee !== undefined ||
-                l.adsFee !== undefined ||
-                l.postage !== undefined ||
-                l.otherFee !== undefined ||
-                l.subscriptionFee !== undefined ||
-                l.wmsFee !== undefined ||
-                l.promoRel !== undefined
-            ).length;
-            console.log(
-                `[sales-import] mapped ${newLogs.length} logs; ` +
-                `${rowsWithWaterfallCosts} rows include waterfall cost fields`
-            );
-            // Authoritative snapshot import:
-            // replace local sales history with the imported file snapshot.
-            updatedPriceHistory = [...newLogs];
+    const {
+        getSharedSnapshot,
+        handleBackup,
+        handleRestore,
+        handleSync,
+        resolveConflicts,
+        handleStartSyncNow,
+        handleStartLocalOnly
+    } = useSyncRestore({
+        t,
+        products,
+        salesHistory,
+        refundHistory,
+        priceChangeHistory,
+        costChangeHistory,
+        inventoryChangeHistory,
+        promotions,
+        adGroups,
+        skuFamilies,
+        learnedAliases,
+        pricingRules,
+        logisticsRules,
+        strategyRules,
+        searchConfig,
+        thresholds,
+        brandMap,
+        categoryMap,
+        inventoryTemplates,
+        customReportPresets,
+        priceCheckTemplates,
+        freightRates,
+        cohortSnapshot,
+        optimalPriceResults,
+        benchmarkUpdateNotices,
+        velocityLookback,
+        userProfile,
+        uploadTimestamps,
+        pendingFamilyConflicts,
+        isAdminMode,
+        startupChoicePending,
+        startupSyncMode,
+        fileRestoreRef,
+        setRefundHistory,
+        setFreightRates,
+        setPriceChangeHistory,
+        setCostChangeHistory,
+        setInventoryChangeHistory,
+        setPromotions,
+        setLearnedAliases,
+        setPricingRules,
+        setLogisticsRules,
+        setStrategyRules,
+        setSearchConfig,
+        setInventoryTemplates,
+        setCustomReportPresets,
+        setPriceCheckTemplates,
+        setUploadTimestamps,
+        setBrandMap,
+        setCategoryMap,
+        setSkuFamilies,
+        setUserProfile,
+        setThresholds,
+        setVelocityLookback,
+        setAdGroups,
+        setSalesHistory,
+        setProducts,
+        setLastRecalculationSummary,
+        setSearchSessions,
+        setActiveSearchId,
+        setSyncStatus,
+        setSyncStep,
+        setSyncProgress,
+        setSyncTotal,
+        setStartupSyncMode,
+        setStartupChoicePending,
+        setIsRestoring,
+        setLastSyncedAt,
+        setPendingFamilyConflicts,
+        setPostApplySource,
+        setCohortSnapshot,
+        setOptimalPriceResults,
+        setBenchmarkUpdateNotices,
+        setIsDirty,
+        normalizePromotionStatuses,
+        recalculateProductMetrics,
+        markSearchSessionsStale
+    });
 
-            if (importDirective?.salesPushMode === 'reconciliation' && importDirective.reconciliationPlan) {
-                pendingSalesReconciliationRef.current = importDirective.reconciliationPlan;
-                console.log('[sales-import] reconciliation plan prepared', {
-                    upserts: importDirective.reconciliationPlan.upsertKeys.length,
-                    added: importDirective.reconciliationPlan.added,
-                    changed: importDirective.reconciliationPlan.changed,
-                    removed: importDirective.reconciliationPlan.removed
-                });
-            } else {
-                pendingSalesReconciliationRef.current = null;
-            }
-        }
-        console.log('[perf][sales-import] mapping complete', {
-            elapsedMs: perfElapsedMs(salesImportStartedAt),
-            updatedPriceHistory: updatedPriceHistory.length
-        });
-        const mergedProducts = (products || []).map(p => { const update = (updatedProductsFromImport || []).find(u => u.id === p.id); return update ? update : p; });
-        const finalProducts = recalculateProductMetrics(mergedProducts, updatedPriceHistory, velocityLookback, getThresholdConfig(), pricingRules, brandMap, categoryMap);
-        console.log('[perf][sales-import] recalc complete', {
-            elapsedMs: perfElapsedMs(salesImportStartedAt),
-            finalProducts: finalProducts.length
-        });
-        await new Promise<void>((resolve) => {
-            setTimeout(() => {
-                setSalesHistory(updatedPriceHistory);
-                setProducts(finalProducts);
-                markSearchSessionsStale();
-                if (discoveredPlatforms && discoveredPlatforms.length > 0) {
-                    setPricingRules(prev => {
-                        const newRules = { ...(prev || {}) };
-                        let changed = false;
-                        discoveredPlatforms.forEach(p => {
-                            if (!newRules[p]) {
-                                newRules[p] = { markup: 0, commission: 15, manager: 'Unassigned', color: '#6b7280', pricingControl: 'MERCHANT', feeModel: 'COMMISSION_PCT', adsEnabled: false };
-                                changed = true;
-                            }
-                        });
-                        return changed ? newRules : prev;
-                    });
-                }
-                updateTimestamp('Sales');
-                if (isAdminMode) setIsDirty(true);
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => resolve());
-                });
-            }, 0);
-        });
-        console.log('[perf][sales-import] state handoff complete', {
-            elapsedMs: perfElapsedMs(salesImportStartedAt),
-            salesHistory: updatedPriceHistory.length,
-            products: finalProducts.length
-        });
-        logPerfPostCommitTail('[perf][sales-import]', salesImportStartedAt, {
-            salesHistory: updatedPriceHistory.length,
-            products: finalProducts.length,
-            pushMode: importDirective?.salesPushMode || null
-        });
-        await waitForUiResponsiveAfterApply('[perf][sales-import]', salesImportStartedAt, {
-            salesHistory: updatedPriceHistory.length,
-            products: finalProducts.length,
-            pushMode: importDirective?.salesPushMode || null
-        });
-        reportProgress('Refreshing visible page...', 86);
-
-        // Sales import should only flag benchmark shifts, not recalculate optimal prices.
-        // Full optimal-price refresh remains a separate explicit Master Catalogue action.
-        if (historyPayload && historyPayload.length > 0 && cohortSnapshot) {
-            try {
-                reportProgress('Checking benchmark shifts...', 92);
-                console.log('[perf][sales-import][benchmark-check] start', {
-                    elapsedMsFromImportStart: perfElapsedMs(salesImportStartedAt)
-                });
-                const resolver = buildCanonicalResolver({ ...(learnedAliases || {}), ...(newlyLearnedAliases || {}) });
-                const affectedSkus = Array.from(new Set(historyPayload.map(tx => resolver(tx.sku))));
-                const notices = detectBenchmarkUpdateNeeded(finalProducts, cohortSnapshot, affectedSkus);
-                if (notices.length > 0) {
-                    setBenchmarkUpdateNotices(prev => {
-                        const merged = [...prev];
-                        notices.forEach(n => {
-                            const existing = merged.findIndex(m => m.category === n.category);
-                            if (existing >= 0) merged[existing] = { ...merged[existing], skuCount: merged[existing].skuCount + n.skuCount };
-                            else merged.push(n);
-                        });
-                        return merged;
-                    });
-                }
-                console.log('[perf][sales-import][benchmark-check] complete', {
-                    elapsedMsFromImportStart: perfElapsedMs(salesImportStartedAt),
-                    affectedSkus: affectedSkus.length,
-                    notices: notices.length
-                });
-                await waitForUiResponsiveAfterApply('[perf][sales-import][benchmark-check]', salesImportStartedAt, {
-                    affectedSkus: affectedSkus.length,
-                    notices: notices.length
-                });
-                reportProgress('Finalizing import...', 99);
-            } catch (e) {
-                console.warn('[sales-import] benchmark shift detection failed:', e);
-            }
-        }
-    }, [salesHistory, products, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, isAdminMode,
-        cohortSnapshot, learnedAliases, markSearchSessionsStale]);
-
-    const handleInventoryImport = useCallback(async (data: any[]) => {
-        const startedAt = perfNowMs();
-        console.log('[perf][inventory-import] start', {
-            incomingRows: data.length,
-            currentProducts: products.length,
-            currentSalesHistory: salesHistory.length
-        });
-        const costChanges: CostChangeRecord[] = [];
-        const inventoryLogs: InventoryChangeRecord[] = [];
-        const reportDate = new Date().toISOString().split('T')[0];
-        const timestamp = Date.now();
-        const uploadBatchId = `batch-${timestamp}`;
-        const aggregatedDataMap = new Map<string, any>();
-        data.forEach(item => {
-            const rawSku = String(item.sku || '').trim();
-            if (!rawSku) return;
-            const canonicalSku = getCanonicalSku(rawSku);
-            const existing = aggregatedDataMap.get(canonicalSku) || {};
-            Object.entries(item).forEach(([k, v]) => {
-                    if (v !== undefined) {
-                        if (k === 'stock') existing[k] = (Number(existing[k]) || 0) + Number(v);
-                        else if (k === 'sku') existing[k] = canonicalSku;
-                        else existing[k] = v;
-                    }
-            });
-            aggregatedDataMap.set(canonicalSku, existing);
-        });
-        const finalData = Array.from(aggregatedDataMap.values());
-        console.log('[perf][inventory-import] aggregate complete', {
-            elapsedMs: perfElapsedMs(startedAt),
-            aggregatedSkus: finalData.length
-        });
-        setPostApplySource('inventory-import');
-        setProducts(prev => {
-            const newProducts = [...(prev || [])];
-            finalData.forEach(item => {
-                const existingIndex = newProducts.findIndex(p => p.sku === item.sku);
-                const existingProduct = existingIndex !== -1 ? newProducts[existingIndex] : null;
-                if (existingProduct) {
-                    const existing = { ...existingProduct };
-                    if (item.stock !== undefined) {
-                        const prevStock = existing.stockLevel || 0; const newStock = Number(item.stock);
-                        if (newStock > prevStock) {
-                            const deltaStock = newStock - prevStock; const pctIncrease = prevStock === 0 ? 1 : deltaStock / prevStock; const isSignificant = pctIncrease >= 0.05;
-                            const hasMatchingShipment = (existing.shipments || []).some(s => { if (!s.eta) return false; const shipmentDate = new Date(s.eta).getTime(); const reportTime = new Date(reportDate).getTime(); return Math.abs((shipmentDate - reportTime) / (1000 * 60 * 60 * 24)) <= 7; });
-                            const isStrategic = isSignificant && hasMatchingShipment;
-                            inventoryLogs.push({ id: `inv-chg-${timestamp}-${item.sku}`, sku: item.sku, productName: existing.name, timestamp, date: reportDate, prevStock, newStock, deltaStock, source: "ERP_UPLOAD", uploadBatchId, isStrategic, reason: isStrategic ? "Strategic Restock" : "Routine Adjustment" });
-                        }
-                        existing.stockLevel = newStock;
-                    }
-                    if (item.cost !== undefined) {
-                        const oldCost = existing.costPrice || 0; const newCost = Number(item.cost);
-                        if (oldCost > 0 && Math.abs(oldCost - newCost) > 0.02) { costChanges.push({ id: `cost-chg-${Date.now()}-${item.sku}`, sku: item.sku, productName: existing.name, date: reportDate, oldCost, newCost, changeType: newCost > oldCost ? 'INCREASE' : 'DECREASE', percentChange: ((newCost - oldCost) / oldCost) * 100 }); }
-                        existing.costPrice = newCost;
-                    }
-                    if (item.dailyAverageSales !== undefined) {
-                        existing.dailyAverageSales = toNumber(item.dailyAverageSales);
-                    }
-                    if (item.name) existing.name = item.name;
-                    if (item.brand) existing.brand = item.brand;
-                    if (item.category) existing.category = item.category;
-                    if (item.gradeLevel !== undefined && item.gradeLevel !== null) existing.gradeLevel = item.gradeLevel;
-                    if (item.subcategory) existing.subcategory = item.subcategory;
-                    if (item.agedStock !== undefined) existing.agedStockQty = item.agedStock;
-                    if (item.inventoryStatus) existing.inventoryStatus = item.inventoryStatus;
-                    if (item.cartonDimensions) existing.cartonDimensions = item.cartonDimensions;
-                    if (!existing.landedAt) existing.landedAt = reportDate;
-                    existing.lastUpdated = reportDate;
-                    newProducts[existingIndex] = existing;
-                } else {
-                    newProducts.push({
-                        id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                        sku: item.sku,
-                        name: item.name || item.sku,
-                        stockLevel: item.stock || 0,
-                        costPrice: item.cost || 0,
-                        currentPrice: 0,
-                        averageDailySales: toNumber(item.dailyAverageSales),
-                        leadTimeDays: 30,
-                        status: 'Healthy',
-                        recommendation: 'New Product',
-                        daysRemaining: 999,
-                        channels: [],
-                        landedAt: reportDate,
-                        lastUpdated: reportDate,
-                        category: item.category || 'Uncategorized',
-                        subcategory: item.subcategory,
-                        brand: item.brand,
-                        dailyAverageSales: toNumber(item.dailyAverageSales),
-                        gradeLevel: item.gradeLevel ?? undefined,
-                        agedStockQty: item.agedStock ?? undefined,
-                        inventoryStatus: item.inventoryStatus ?? undefined,
-                        cartonDimensions: item.cartonDimensions ?? undefined,
-                    });
-                }
-            });
-            return newProducts;
-        });
-        await new Promise<void>(resolve => setTimeout(resolve, 0));
-        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-        console.log('[perf][inventory-import] base product handoff complete', {
-            elapsedMs: perfElapsedMs(startedAt),
-            products: finalData.length
-        });
-        setProducts(prev => {
-            const currentThresholds = getThresholdConfig();
-            return recalculateProductMetrics(prev || [], priceHistoryMap, velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
-        });
-        await new Promise<void>(resolve => setTimeout(resolve, 0));
-        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-        console.log('[perf][inventory-import] recalc handoff complete', {
-            elapsedMs: perfElapsedMs(startedAt),
-            products: products.length,
-            aggregatedSkus: finalData.length
-        });
-
-        // Family Group Suggestion Step
-        const prefixGroups = new Map<string, string[]>();
-        data.forEach(item => {
-            const sku = String(item.sku || '').trim();
-            if (!sku) return;
-            const parts = sku.split('-');
-            if (parts.length >= 3) {
-                // Strip the variant segment between the first and last hyphen groups
-                const prefix = `${parts[0]}-${parts[parts.length - 1]}`;
-                if (!prefixGroups.has(prefix)) prefixGroups.set(prefix, []);
-                prefixGroups.get(prefix)!.push(sku);
-            }
-        });
-
-        const newSuggestions: SkuFamily[] = [];
-        prefixGroups.forEach((memberSkus, prefix) => {
-            if (memberSkus.length >= 2) {
-                // Check if a SkuFamily already exists that contains all these SKUs
-                const alreadyExists = skuFamilies.some(f =>
-                    memberSkus.every(sku => f.memberSkus.includes(sku))
-                );
-
-                if (!alreadyExists) {
-                    newSuggestions.push({
-                        id: `suggest-${Date.now()}-${prefix}`,
-                        name: prefix,
-                        memberSkus,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
-                    });
-                }
-            }
-        });
-
-        if (newSuggestions.length > 0) {
-            setPendingFamilySuggestions(prev => [...prev, ...newSuggestions]);
-            alert(`${newSuggestions.length} new SKU family groups detected. Review them in Family Groups.`);
-        }
-
-        if (costChanges.length > 0) setCostChangeHistory(prev => [...costChanges, ...(prev || [])]);
-        if (inventoryLogs.length > 0) setInventoryChangeHistory(prev => [...inventoryLogs, ...(prev || [])]);
-        updateTimestamp('Inventory');
-        if (isAdminMode) setIsDirty(true);
-        console.log('[perf][inventory-import] complete', {
-            elapsedMs: perfElapsedMs(startedAt),
-            costChanges: costChanges.length,
-            inventoryLogs: inventoryLogs.length,
-            familySuggestions: newSuggestions.length
-        });
-        logPerfPostCommitTail('[perf][inventory-import]', startedAt, {
-            costChanges: costChanges.length,
-            inventoryLogs: inventoryLogs.length,
-            familySuggestions: newSuggestions.length
-        });
-        await waitForUiResponsiveAfterApply('[perf][inventory-import]', startedAt, {
-            costChanges: costChanges.length,
-            inventoryLogs: inventoryLogs.length,
-            familySuggestions: newSuggestions.length
-        });
-    }, [priceHistoryMap, velocityLookback, pricingRules, brandMap, categoryMap, updateTimestamp, skuFamilies, isAdminMode, products.length, salesHistory.length]);
-
-    const handleResetSalesData = useCallback(() => {
-        setSalesHistory([]);
-        pendingSalesReconciliationRef.current = null;
-        const currentThresholds = getThresholdConfig();
-        const recalculated = recalculateProductMetrics(products, [], velocityLookback, currentThresholds, pricingRules, brandMap, categoryMap);
-        setProducts(recalculated);
-        setIsSalesImportModalOpen(false);
-    }, [products, velocityLookback, pricingRules, brandMap, categoryMap]);
-
-    const handleSkuDetailImport = useCallback(async (data: { masterSku: string; detail: SkuCostDetail }[]) => {
-        const skuDetailImportStartedAt = perfNowMs();
-        setProducts(prev => (prev || []).map(p => {
-            const update = data.find(d => d.masterSku === p.sku);
-            return update ? { ...p, costDetail: update.detail } : p;
-        }));
-        updateTimestamp('SKU Details');
-        if (isAdminMode) setIsDirty(true);
-        await waitForUiResponsiveAfterApply('[perf][sku-detail-import]', skuDetailImportStartedAt, {
-            rows: Array.isArray(data) ? data.length : 0
-        });
-    }, [updateTimestamp, isAdminMode]);
-
-    const handleMappingImport = useCallback(async (mappings: any[], mode: 'merge' | 'replace', platform: string) => {
-        const mappingImportStartedAt = perfNowMs();
-        setProducts(prev => (prev || []).map(p => {
-            const platformMappings = mappings.filter(m => m.masterSku === p.sku && m.platform === platform);
-            if (platformMappings.length === 0 && mode === 'merge') return p;
-            const updatedChannels = [...p.channels];
-            const channelIdx = updatedChannels.findIndex(c => c.platform === platform);
-            const newAliases = platformMappings.map(m => m.alias).join(', ');
-            if (channelIdx >= 0) {
-                const existingAliases = updatedChannels[channelIdx].skuAlias?.split(',').map(s => s.trim()).filter(Boolean) || [];
-                const importedAliases = newAliases.split(',').map(s => s.trim()).filter(Boolean);
-                updatedChannels[channelIdx] = { ...updatedChannels[channelIdx], skuAlias: mode === 'replace' ? newAliases : [...new Set([...existingAliases, ...importedAliases])].join(', ') };
-            } else if (newAliases) {
-                updatedChannels.push({ platform, manager: pricingRules[platform]?.manager || 'Unassigned', velocity: 0, skuAlias: newAliases });
-            }
-            return { ...p, channels: updatedChannels };
-        }));
-        if (isAdminMode) setIsDirty(true);
-        await waitForUiResponsiveAfterApply('[perf][mapping-import]', mappingImportStartedAt, {
-            rows: Array.isArray(mappings) ? mappings.length : 0,
-            mode,
-            platform
-        });
-    }, [pricingRules, isAdminMode]);
-
-    const handleReturnsImport = useCallback(async (newRefunds: RefundLog[]): Promise<void> => {
-        const refundImportStartedAt = perfNowMs();
-        setPostApplySource('refund-import');
-        console.log('[perf][refund-import] start', {
-            incomingRefunds: Array.isArray(newRefunds) ? newRefunds.length : 0,
-            currentRefunds: Array.isArray(refundHistory) ? refundHistory.length : 0,
-            currentProducts: Array.isArray(products) ? products.length : 0
-        });
-        // Authoritative snapshot import:
-        // local refunds become exactly the newly imported file (after in-file dedupe).
-        const uniqueInNew = new Map<string, RefundLog>();
-        newRefunds.forEach(r => { if (!uniqueInNew.has(r.id)) uniqueInNew.set(r.id, r); });
-        const deduped = Array.from(uniqueInNew.values());
-
-        const matchesCurrentState = deduped.length === refundHistory.length && deduped.every((refund, index) => {
-            const current = refundHistory[index];
-            if (!current) return false;
-            return (
-                current.id === refund.id &&
-                current.quantity === refund.quantity &&
-                current.amount === refund.amount &&
-                current.freightAmount === refund.freightAmount &&
-                current.orderId === refund.orderId &&
-                current.platform === refund.platform
-            );
-        });
-
-        if (matchesCurrentState) {
-            console.log('[perf][refund-import] no-op match', {
-                elapsedMs: perfElapsedMs(refundImportStartedAt),
-                refunds: deduped.length
-            });
-            updateTimestamp('Refunds');
-            if (isAdminMode) setIsDirty(true);
-            return;
-        }
-
-        const refundQtyBySku = new Map<string, number>();
-        deduped.forEach(r => {
-            const sku = r.sku || '';
-            if (!sku) return;
-            refundQtyBySku.set(sku, (refundQtyBySku.get(sku) || 0) + (Number(r.quantity) || 0));
-        });
-        console.log('[perf][refund-import] dedupe complete', {
-            elapsedMs: perfElapsedMs(refundImportStartedAt),
-            dedupedRefunds: deduped.length,
-            refundSkus: refundQtyBySku.size
-        });
-
-        const yieldToUi = () => new Promise<void>(resolve => setTimeout(resolve, 0));
-
-        await new Promise<void>((resolve) => {
-            setTimeout(() => {
-                setRefundHistory(deduped);
-                resolve();
-            }, 0);
-        });
-        console.log('[perf][refund-import] refund history handoff complete', {
-            elapsedMs: perfElapsedMs(refundImportStartedAt),
-            refunds: deduped.length
-        });
-
-        await yieldToUi();
-
-        await new Promise<void>((resolve) => {
-            setTimeout(() => {
-                setProducts(prev => (prev || []).map(p => {
-                    const totalRefundQty = refundQtyBySku.get(p.sku) || 0;
-                    const returnRate = p.averageDailySales > 0 ? (totalRefundQty / (p.averageDailySales * 30)) * 100 : 0;
-                    return p.returnRate === returnRate ? p : { ...p, returnRate };
-                }));
-                markSearchSessionsStale();
-                updateTimestamp('Refunds');
-                if (isAdminMode) setIsDirty(true);
-                resolve();
-            }, 0);
-        });
-        console.log('[perf][refund-import] product rewrite complete', {
-            elapsedMs: perfElapsedMs(refundImportStartedAt),
-            refunds: deduped.length
-        });
-        logPerfPostCommitTail('[perf][refund-import]', refundImportStartedAt, {
-            refunds: deduped.length,
-            refundSkus: refundQtyBySku.size
-        });
-
-        await waitForUiResponsiveAfterApply('[perf][refund-import]', refundImportStartedAt, {
-            refunds: deduped.length,
-            refundSkus: refundQtyBySku.size
-        });
-        console.log('[perf][refund-import] complete', {
-            elapsedMs: perfElapsedMs(refundImportStartedAt),
-            refunds: deduped.length
-        });
-    }, [refundHistory, products, updateTimestamp, isAdminMode, markSearchSessionsStale]);
-
-    const handleFreightRatesUpload = useCallback(async (rates: FreightRate[]): Promise<void> => {
-        const freightUploadStartedAt = perfNowMs();
-        setPostApplySource('freight-upload');
-        console.log('[perf][freight-upload] start', {
-            rates: Array.isArray(rates) ? rates.length : 0,
-            currentProducts: Array.isArray(products) ? products.length : 0
-        });
-        if (!rates || rates.length === 0) return;
-        const rateMap = new Map<string, number>();
-        rates.forEach((rate) => {
-            const sku = String(rate?.sku || '').trim().toUpperCase();
-            if (!sku) return;
-            rateMap.set(sku, Number(rate.rate) || 0);
-        });
-        console.log('[perf][freight-upload] map complete', {
-            elapsedMs: perfElapsedMs(freightUploadStartedAt),
-            uniqueSkus: rateMap.size
-        });
-
-        await new Promise<void>((resolve) => {
-            setTimeout(() => {
-                let changedRateRows = 0;
-                let changedProducts = 0;
-                setFreightRates(prev => {
-                    const current = Array.isArray(prev) ? prev : [];
-                    const nextBySku = new Map<string, FreightRate>();
-                    current.forEach(rate => {
-                        const sku = String(rate?.sku || '').trim().toUpperCase();
-                        if (!sku) return;
-                        nextBySku.set(sku, rate);
-                    });
-                    rates.forEach(rate => {
-                        const sku = String(rate?.sku || '').trim().toUpperCase();
-                        if (!sku) return;
-                        const prevRate = nextBySku.get(sku);
-                        const incomingRate = Number(rate.rate) || 0;
-                        const prevValue = prevRate ? (Number(prevRate.rate) || 0) : undefined;
-                        if (!prevRate || prevValue !== incomingRate) {
-                            changedRateRows++;
-                            nextBySku.set(sku, rate);
-                        }
-                    });
-                    return Array.from(nextBySku.values());
-                });
-                // Apply rates directly to product.postage so all profit/margin calculations use them
-                setProducts(prev => (prev || []).map(p => {
-                    const nextRate = rateMap.get(p.sku.toUpperCase());
-                    if (nextRate === undefined) return p;
-                    if ((p.postage ?? 0) === nextRate) return p;
-                    changedProducts++;
-                    return { ...p, postage: nextRate };
-                }));
-                markSearchSessionsStale();
-                updateTimestamp('FreightRates');
-                if (isAdminMode) setIsDirty(true);
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        console.log('[perf][freight-upload] apply delta', {
-                            elapsedMs: perfElapsedMs(freightUploadStartedAt),
-                            changedRateRows,
-                            changedProducts
-                        });
-                        resolve();
-                    });
-                });
-            }, 0);
-        });
-        console.log('[perf][freight-upload] complete', {
-            elapsedMs: perfElapsedMs(freightUploadStartedAt),
-            rates: rates.length,
-            uniqueSkus: rateMap.size
-        });
-        logPerfPostCommitTail('[perf][freight-upload]', freightUploadStartedAt, {
-            rates: rates.length,
-            uniqueSkus: rateMap.size
-        });
-        await waitForUiResponsiveAfterApply('[perf][freight-upload]', freightUploadStartedAt, {
-            rates: rates.length,
-            uniqueSkus: rateMap.size
-        });
-    }, [products, updateTimestamp, isAdminMode, markSearchSessionsStale]);
-
-    const handleCAImport = useCallback(async (data: { sku: string; caPrice: number; imageUrl?: string; description?: string }[], reportDate: string) => {
-        const caImportStartedAt = perfNowMs();
-        let repairedFieldCount = 0;
-        const repairedSkuSet = new Set<string>();
-        const normalizedData = (data || []).map(item => {
-            let rowChanged = false;
-
-            const originalSku = String(item.sku || '').trim();
-            const repairedSku = repairMojibakeText(originalSku);
-            if (repairedSku !== originalSku) {
-                repairedFieldCount += 1;
-                rowChanged = true;
-            }
-
-            const originalImageUrl = item.imageUrl ? String(item.imageUrl).trim() : undefined;
-            const repairedImageUrl = originalImageUrl ? repairMojibakeText(originalImageUrl) : undefined;
-            if (repairedImageUrl !== originalImageUrl) {
-                repairedFieldCount += 1;
-                rowChanged = true;
-            }
-
-            const originalDescription = item.description ? String(item.description).trim() : undefined;
-            const repairedDescription = originalDescription ? repairMojibakeText(originalDescription) : undefined;
-            if (repairedDescription !== originalDescription) {
-                repairedFieldCount += 1;
-                rowChanged = true;
-            }
-
-            if (rowChanged && repairedSku) {
-                repairedSkuSet.add(repairedSku.toUpperCase());
-            }
-
-            return {
-                ...item,
-                sku: repairedSku,
-                imageUrl: repairedImageUrl,
-                description: repairedDescription
-            };
-        });
-
-        if (repairedFieldCount > 0) {
-            console.log(`[ca-import] repaired ${repairedFieldCount} text field(s) across ${repairedSkuSet.size} SKU(s)`);
-        }
-
-        const changes: PriceChangeRecord[] = [];
-        setProducts(prev => (prev || []).map(p => {
-            const update = normalizedData.find(d => d.sku.toUpperCase() === p.sku.toUpperCase() || d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, ''));
-            if (update) {
-                const oldPrice = p.caPrice || (p.currentPrice * VAT_MULTIPLIER);
-                if (oldPrice > 0 && Math.abs(oldPrice - update.caPrice) > 0.02) {
-                    changes.push({ id: `ca-chg-${Date.now()}-${p.sku}`, sku: p.sku, productName: p.name, date: reportDate, platform: p.platform || 'Unknown', oldPrice, newPrice: update.caPrice, changeType: update.caPrice > oldPrice ? 'INCREASE' : 'DECREASE', percentChange: ((update.caPrice - oldPrice) / oldPrice) * 100 });
-                }
-                const nextImageUrl = update.imageUrl || p.imageUrl;
-                const nextDescription = update.description || p.description;
-                const wasListingReady = !!(p.imageUrl && p.description);
-                const isListingReady = !!(nextImageUrl && nextDescription);
-                const becameListingReady = !p.listingReadyAt && !wasListingReady && isListingReady;
-                return {
-                    ...p,
-                    caPrice: update.caPrice,
-                    lastUpdated: reportDate,
-                    imageUrl: nextImageUrl,
-                    description: nextDescription,
-                    listingReadyAt: p.listingReadyAt || (becameListingReady ? reportDate : undefined)
-                };
-            }
-            return p;
-        }));
-        if (changes.length > 0) setPriceChangeHistory(prev => [...changes, ...(prev || [])]);
-        updateTimestamp('CA Prices');
-        await waitForUiResponsiveAfterApply('[perf][ca-import]', caImportStartedAt, {
-            rows: Array.isArray(data) ? data.length : 0,
-            changes: changes.length
-        });
-    }, [updateTimestamp]);
-
-    const handleDescriptionImport = useCallback((data: { sku: string; description: string; imageUrl?: string }[]) => {
-        const todayKey = getTodayKeyMelbourne();
-        if (!Array.isArray(data) || data.length === 0) return;
-        setProducts(prev => (prev || []).map(p => {
-            const update = data.find(d =>
-                d.sku.toUpperCase() === p.sku.toUpperCase() ||
-                d.sku.toUpperCase() === p.sku.toUpperCase().replace(/[-_]UK$/i, '')
-            );
-            if (!update) return p;
-            const nextImageUrl = update.imageUrl || p.imageUrl;
-            const nextDescription = update.description || p.description;
-            const wasListingReady = !!(p.imageUrl && p.description);
-            const isListingReady = !!(nextImageUrl && nextDescription);
-            const becameListingReady = !p.listingReadyAt && !wasListingReady && isListingReady;
-            return {
-                ...p,
-                imageUrl: nextImageUrl,
-                description: nextDescription,
-                listingReadyAt: p.listingReadyAt || (becameListingReady ? todayKey : undefined),
-                lastUpdated: todayKey
-            };
-        }));
-        updateTimestamp('Descriptions');
-        if (isAdminMode) setIsDirty(true);
-    }, [updateTimestamp, isAdminMode]);
-
-    const handleStampLandedAt = useCallback((skus: string[], date: string) => {
-        if (!Array.isArray(skus) || skus.length === 0 || !date) return;
-        const lookup = new Set(skus.map(s => String(s || '').trim().toUpperCase()).filter(Boolean));
-        setProducts(prev => (prev || []).map(p => {
-            const skuUpper = p.sku.toUpperCase();
-            const skuStripped = skuUpper.replace(/[-_]UK$/i, '');
-            if (!lookup.has(skuUpper) && !lookup.has(skuStripped)) return p;
-            if (p.landedAt) return p;
-            return { ...p, landedAt: date };
-        }));
-        updateTimestamp('Landed Date');
-        if (isAdminMode) setIsDirty(true);
-    }, [updateTimestamp, isAdminMode]);
-
-    const handleShipmentImport = useCallback(async (updates: any[]) => {
-        const shipmentImportStartedAt = perfNowMs();
-        setProducts(prev => (prev || []).map(p => {
-            const update = updates.find(u => u.sku === p.sku);
-            if (update) {
-                const nextShipments = update.clearShipments === true
-                    ? (p.shipments || []).filter((s: any) => isArrivedShipmentStatus(s?.status))
-                    : (Array.isArray(update.shipments) && update.shipments.length > 0
-                        ? update.shipments
-                        : (p.shipments || []));
-                const incomingStock = nextShipments.reduce((sum: number, s: any) => {
-                    return isArrivedShipmentStatus(s?.status) ? sum : sum + (Number(s?.quantity) || 0);
-                }, 0);
-                return {
-                    ...p,
-                    shipments: nextShipments,
-                    incomingStock,
-                    reorderPlacedDate: update.reorderPlacedDate || undefined,
-                    productionScheduledQty: Number(update.productionScheduledQty) || 0,
-                    toBeShippedQty: Number(update.toBeShippedQty) || 0,
-                    shippedOutQty: Number(update.shippedOutQty) || 0,
-                    shipmentStatus: update.shipmentStatus || ''
-                };
-            }
-            return p;
-        }));
-        updateTimestamp('Shipments');
-        await waitForUiResponsiveAfterApply('[perf][shipment-import]', shipmentImportStartedAt, {
-            rows: Array.isArray(updates) ? updates.length : 0
-        });
-    }, [updateTimestamp]);
-
+    const {
+        benchmarkRecalcState,
+        handleCancelBenchmarkRecalculation,
+        handleDismissBenchmarkRecalcState,
+        handleRecalculateBenchmarks
+    } = useBenchmarkWorkflow({
+        products,
+        salesHistory,
+        priceChangeHistory,
+        pricingRules,
+        promotions,
+        learnedAliases,
+        cohortSnapshot,
+        optimalPriceResults,
+        benchmarkUpdateNotices,
+        setCohortSnapshot,
+        setOptimalPriceResults,
+        setBenchmarkUpdateNotices
+    });
 
     const onSyncFromFamilies = useCallback((platform: string) => {
         const nextGroups = [...(adGroups || [])];
@@ -2175,1031 +1348,7 @@ export const useAppState = () => {
         salesHistory, refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets,
         priceChangeHistory, costChangeHistory, inventoryChangeHistory, salesPushMode]);
 
-    const applyLoadedState = useCallback((
-        snapshot: any,
-        transactions: any[],
-        refunds: any[] = []
-    ) => {
-        const applyLoadedStateStartedAt = perfNowMs();
-        console.log('[perf][apply-loaded-state] start', {
-            snapshotProducts: Array.isArray(snapshot?.products) ? snapshot.products.length : 0,
-            transactions: Array.isArray(transactions) ? transactions.length : 0,
-            refunds: Array.isArray(refunds) ? refunds.length : 0
-        });
-        const safe = normalizeRestoredState(snapshot);
-        const m = migrateRestoredDatabase(safe);
-        const mergeHistoryById = <T extends { id?: string; date?: string }>(incoming: any, prev: T[]): T[] => {
-            const prevSafe = Array.isArray(prev) ? prev : [];
-            const incomingSafe = Array.isArray(incoming) ? incoming as T[] : [];
-            if (incomingSafe.length === 0) return prevSafe;
-
-            const seen = new Set<string>();
-            const out: T[] = [];
-            const pushUnique = (item: T) => {
-                const key = item?.id || JSON.stringify(item);
-                if (seen.has(key)) return;
-                seen.add(key);
-                out.push(item);
-            };
-
-            incomingSafe.forEach(pushUnique);
-            prevSafe.forEach(pushUnique);
-
-            return out.sort((a, b) => {
-                const ad = a?.date ? new Date(a.date).getTime() : 0;
-                const bd = b?.date ? new Date(b.date).getTime() : 0;
-                return bd - ad;
-            });
-        };
-
-        setRefundHistory(Array.isArray(refunds) ? refunds : []);
-        setFreightRates(Array.isArray(m.freightRates) ? m.freightRates : []);
-        setPriceChangeHistory(prev => mergeHistoryById<PriceChangeRecord>(m.priceChangeHistory, prev));
-        setCostChangeHistory(prev => mergeHistoryById<CostChangeRecord>(m.costChangeHistory, prev));
-        setInventoryChangeHistory(prev => mergeHistoryById<InventoryChangeRecord>(m.inventoryChangeHistory, prev));
-        setLearnedAliases(m.learnedAliases || {});
-        setPricingRules(m.pricingRules || DEFAULT_PRICING_RULES);
-        setLogisticsRules(
-            Array.isArray(m.logisticsRules) && m.logisticsRules.length > 0
-                ? m.logisticsRules : DEFAULT_LOGISTICS_RULES
-        );
-        setStrategyRules(m.strategyRules || DEFAULT_STRATEGY_RULES);
-        setSearchConfig(m.searchConfig || DEFAULT_SEARCH_CONFIG);
-        setInventoryTemplates(
-            Array.isArray(m.inventoryTemplates) ? m.inventoryTemplates : []
-        );
-        setCustomReportPresets(Array.isArray(m.customReportPresets) ? m.customReportPresets : []);
-        if (Array.isArray(m.priceCheckTemplates)) setPriceCheckTemplates(m.priceCheckTemplates);
-        setBrandMap(m.brandMap || {});
-        setCategoryMap(m.categoryMap || {});
-        setSkuFamilies(Array.isArray(m.skuFamilies) ? m.skuFamilies : []);
-        setUploadTimestamps(m.uploadTimestamps && typeof m.uploadTimestamps === 'object' ? m.uploadTimestamps : {});
-        if (m.userProfile && typeof m.userProfile === 'object') {
-            setUserProfile(prev => ({ ...prev, ...m.userProfile }));
-        }
-        if (m.thresholds) {
-            setThresholds(m.thresholds);
-            saveThresholdConfig(m.thresholds);
-        }
-        const adGroupsToUse = Array.isArray(m.adGroups) ? m.adGroups : [];
-        const redistributedTransactions = redistributeAdSpend(transactions, adGroupsToUse);
-        console.log('[perf][apply-loaded-state] redistribution complete', {
-            elapsedMs: perfElapsedMs(applyLoadedStateStartedAt),
-            redistributedTransactions: redistributedTransactions.length
-        });
-        const pricingRulesToUse = m.pricingRules || DEFAULT_PRICING_RULES;
-        setSalesHistory(redistributedTransactions);
-        const finalProducts = recalculateProductMetrics(
-            Array.isArray(m.products) ? m.products : [],
-            redistributedTransactions,
-            velocityLookback,
-            m.thresholds || thresholds,
-            pricingRulesToUse,
-            m.brandMap,
-            m.categoryMap
-        );
-        console.log('[perf][apply-loaded-state] recalc complete', {
-            elapsedMs: perfElapsedMs(applyLoadedStateStartedAt),
-            finalProducts: finalProducts.length
-        });
-        setProducts(finalProducts);
-        setAdGroups(adGroupsToUse);
-        markSearchSessionsStale();
-
-        // Restore optimal pricing state if present in snapshot
-        if (m.cohortSnapshot) {
-            const s = m.cohortSnapshot;
-            setCohortSnapshot({
-                ...s,
-                categoryBuckets: new Map(Object.entries(s.categoryBuckets || {})),
-                cohortStats: new Map(Object.entries(s.cohortStats || {})),
-                skuAssignments: new Map(Object.entries(s.skuAssignments || {})),
-            });
-        }
-        if (m.optimalPriceResults) {
-            setOptimalPriceResults(new Map(Object.entries(m.optimalPriceResults)));
-        }
-        if (m.benchmarkUpdateNotices) {
-            setBenchmarkUpdateNotices(m.benchmarkUpdateNotices);
-        }
-        console.log('[perf][apply-loaded-state] complete', {
-            elapsedMs: perfElapsedMs(applyLoadedStateStartedAt),
-            products: finalProducts.length,
-            transactions: redistributedTransactions.length,
-            refunds: Array.isArray(refunds) ? refunds.length : 0
-        });
-        logPerfPostCommitTail('[perf][apply-loaded-state]', applyLoadedStateStartedAt, {
-            products: finalProducts.length,
-            transactions: redistributedTransactions.length,
-            refunds: Array.isArray(refunds) ? refunds.length : 0
-        });
-    }, [velocityLookback, thresholds, markSearchSessionsStale]);
-
-    const clearClientDataForImportantRefresh = useCallback(async (token: string) => {
-        await clearCache();
-        localStorage.removeItem(REFUND_CURSOR_KEY);
-        localStorage.removeItem(PROMO_CURSOR_KEY);
-        localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
-        localStorage.removeItem('sello_snapshot_updated_at');
-        localStorage.removeItem('sello_last_synced_at');
-        localStorage.setItem(FORCE_FULL_PULL_TOKEN_KEY, token);
-        console.log(`[sync] important refresh cache reset complete: ${token}`);
-    }, []);
-
-    const handleSync = useCallback(async () => {
-        const syncStartedAt = perfNowMs();
-        setSyncStatus('syncing');
-        setSyncStep('Connecting...');
-        setSyncProgress(0);
-        setSyncTotal(0);
-        try {
-            console.log('[perf][sync] start', {
-                currentProducts: Array.isArray(products) ? products.length : 0,
-                currentSalesHistory: Array.isArray(salesHistory) ? salesHistory.length : 0,
-                currentRefunds: Array.isArray(refundHistory) ? refundHistory.length : 0
-            });
-            let promotionsForCache: PromotionEvent[] = normalizePromotionStatuses(promotions || []);
-            const lastKnownSnapshotUpdatedAt = localStorage.getItem('sello_snapshot_updated_at') || undefined;
-            const masterRes = await pullSnapshotIfUpdated(lastKnownSnapshotUpdatedAt);
-            if (!masterRes.success) {
-                setSyncStatus('error');
-                setSyncStep('');
-                return;
-            }
-
-            const hasSnapshotUpdate = !masterRes.unchanged;
-            let incoming = hasSnapshotUpdate ? masterRes.snapshot : null;
-            if (hasSnapshotUpdate && !incoming) {
-                setSyncStatus('error');
-                setSyncStep('');
-                return;
-            }
-
-            if (hasSnapshotUpdate) {
-                setSyncStep('Loading settings...');
-                const incomingFamilies: SkuFamily[] =
-                    Array.isArray(incoming.skuFamilies)
-                        ? incoming.skuFamilies : [];
-                const localFamilies = skuFamilies || [];
-                const conflicts = localFamilies.filter((lf: SkuFamily) =>
-                    !incomingFamilies.some((ifam: SkuFamily) => ifam.id === lf.id)
-                );
-                if (conflicts.length > 0) {
-                    setPendingFamilyConflicts(conflicts);
-                    setSyncStatus('idle');
-                    setSyncStep('');
-                    return;
-                }
-            } else {
-                setSyncStep('Snapshot unchanged  -  checking transactions...');
-                // Even when metadata says unchanged, pull full snapshot to ensure
-                // history slices (price/cost/inventory changes) stay in sync locally.
-                const fullSnapshotRes = await pullSnapshot();
-                if (fullSnapshotRes.success && fullSnapshotRes.snapshot) {
-                    incoming = fullSnapshotRes.snapshot;
-                    console.log(
-                        `[sync] refreshed snapshot (unchanged path) - history counts: ` +
-                        `price=${Array.isArray(incoming.priceChangeHistory) ? incoming.priceChangeHistory.length : 0}, ` +
-                        `cost=${Array.isArray(incoming.costChangeHistory) ? incoming.costChangeHistory.length : 0}, ` +
-                        `inventory=${Array.isArray(incoming.inventoryChangeHistory) ? incoming.inventoryChangeHistory.length : 0}`
-                    );
-                } else {
-                    console.warn('[sync] full snapshot refresh failed on unchanged path:', fullSnapshotRes.error);
-                    const hasLocalInventory = Array.isArray(products) && products.length > 0;
-                    if (!hasLocalInventory) {
-                        setSyncStatus('error');
-                        setSyncStep('');
-                        setSyncProgress(0);
-                        setSyncTotal(0);
-                        return;
-                    }
-                }
-            }
-
-            const remoteForceToken = String((incoming as any)?.sync_control?.forceFullPullToken || '').trim();
-            const localForceToken = localStorage.getItem(FORCE_FULL_PULL_TOKEN_KEY) || '';
-            const forceImportantRefresh = Boolean(remoteForceToken && remoteForceToken !== localForceToken);
-            if (forceImportantRefresh) {
-                console.log(`[sync] important refresh token detected: ${remoteForceToken}`);
-                setSyncStep('Important refresh detected - running full data pull...');
-                await clearClientDataForImportantRefresh(remoteForceToken);
-            }
-
-            // Incremental pull  -  only fetch rows newer than what's already in local cache
-            setSyncStep('Checking for new transactions...');
-            const PAGE_SIZE = 2000;
-            let allTransactions: PriceLog[] = [];
-
-            // Find the newest date already cached locally
-            const cachedTransactions = salesHistory || [];
-            const localDates = cachedTransactions.map((t: PriceLog) => t.date).filter(Boolean).sort();
-            const localNewestDate = localDates.length > 0 ? localDates[localDates.length - 1] : null;
-            console.log(
-                `[sync] transactions mode: ${!forceImportantRefresh && localNewestDate && cachedTransactions.length > 0 ? 'incremental' : 'full'} ` +
-                `(cached=${cachedTransactions.length}, newest=${localNewestDate || 'none'})`
-            );
-
-            if (!forceImportantRefresh && localNewestDate && cachedTransactions.length > 0) {
-                // Incremental: only pull rows after the local newest date
-                setSyncStep(`Checking for new data after ${localNewestDate}...`);
-                const firstPage = await pullTransactionPageSince(localNewestDate, 0, PAGE_SIZE);
-                if (!firstPage.success) {
-                    setSyncStatus('error');
-                    setSyncStep('');
-                    return;
-                }
-                const newRows = firstPage.transactions || [];
-                const totalNew = firstPage.totalRows || 0;
-
-                if (totalNew === 0) {
-                    // Nothing new  -  reuse local cache
-                    setSyncStep('No new transactions  -  using cached data');
-                    allTransactions = cachedTransactions;
-                } else {
-                    // Pull remaining pages of new rows
-                    allTransactions = [...newRows];
-                    const totalPages = Math.ceil(totalNew / PAGE_SIZE);
-                    setSyncTotal(totalPages);
-                    setSyncProgress(1);
-                    setSyncStep(`Loading ${totalNew.toLocaleString()} new transactions...`);
-
-                    let page = 1;
-                    let nextCursor = firstPage.nextCursor || null;
-                    let hasMore = !!firstPage.hasMore;
-                    while (hasMore && page < totalPages) {
-                        const pageRes = await pullTransactionPageSince(localNewestDate, page, PAGE_SIZE, nextCursor);
-                        if (!pageRes.success) { setSyncStatus('error'); setSyncStep(''); return; }
-                        allTransactions = [...allTransactions, ...(pageRes.transactions || [])];
-                        hasMore = !!pageRes.hasMore;
-                        nextCursor = pageRes.nextCursor || null;
-                        setSyncProgress(page + 1);
-                        setSyncStep(`Loading new transactions... ${allTransactions.length.toLocaleString()} / ${totalNew.toLocaleString()}`);
-                        page++;
-                    }
-
-                    // Merge new rows onto the front of existing cache (DB returns newest first)
-                    // Deduplicate by id to avoid duplicates on the boundary date
-                    const existingIds = new Set(cachedTransactions.map((t: PriceLog) => t.id).filter(Boolean));
-                    const deduped = allTransactions.filter((t: PriceLog) => !t.id || !existingIds.has(t.id));
-                    allTransactions = [...deduped, ...cachedTransactions];
-                    setSyncStep(`Merged ${deduped.length.toLocaleString()} new rows with ${cachedTransactions.length.toLocaleString()} cached`);
-                }
-            } else {
-                // No local cache  -  full pull
-                setSyncStep('Loading transactions (first sync)...');
-                const firstPage = await pullTransactionPage(0, PAGE_SIZE);
-                if (!firstPage.success) { setSyncStatus('error'); setSyncStep(''); return; }
-                const totalRows = firstPage.totalRows || 0;
-                allTransactions = firstPage.transactions || [];
-                const totalPages = Math.ceil(totalRows / PAGE_SIZE);
-                setSyncTotal(totalPages);
-                setSyncProgress(1);
-                setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
-
-                let page = 1;
-                let nextCursor = firstPage.nextCursor || null;
-                let hasMore = !!firstPage.hasMore;
-                while (hasMore && page < totalPages) {
-                    const pageRes = await pullTransactionPage(page, PAGE_SIZE, nextCursor);
-                    if (!pageRes.success) { setSyncStatus('error'); setSyncStep(''); return; }
-                    allTransactions = [...allTransactions, ...(pageRes.transactions || [])];
-                    hasMore = !!pageRes.hasMore;
-                    nextCursor = pageRes.nextCursor || null;
-                    setSyncProgress(page + 1);
-                    setSyncStep(`Loading transactions... ${allTransactions.length.toLocaleString()} / ${totalRows.toLocaleString()}`);
-                    page++;
-                }
-            }
-
-            setSyncStep('Applying data...');
-            console.log('[perf][sync] transactions ready', {
-                elapsedMs: perfElapsedMs(syncStartedAt),
-                transactions: allTransactions.length,
-                snapshotUpdated: hasSnapshotUpdate
-            });
-
-            // Pull refunds (incremental when cursor exists)
-            const lastRefundUpdatedAt = forceImportantRefresh
-                ? undefined
-                : (localStorage.getItem(REFUND_CURSOR_KEY) || undefined);
-            const refundRes = await pullRefundsAndShipments(lastRefundUpdatedAt);
-            const keepLocalIfRemoteEmpty = <T,>(label: string, remote: any, local: T[]): T[] => {
-                const remoteSafe = Array.isArray(remote) ? remote as T[] : [];
-                const localSafe = Array.isArray(local) ? local : [];
-                if (remoteSafe.length === 0 && localSafe.length > 0) {
-                    console.warn(`[sync] ${label} pull returned empty; preserving local ${localSafe.length}`);
-                    return localSafe;
-                }
-                return remoteSafe;
-            };
-            const mergeById = <T extends { id?: string }>(base: T[], incoming: T[]): T[] => {
-                const out = [...base];
-                const idxById = new Map<string, number>();
-                out.forEach((row, idx) => {
-                    if (row?.id) idxById.set(String(row.id), idx);
-                });
-                for (const row of incoming) {
-                    const id = row?.id ? String(row.id) : '';
-                    if (id && idxById.has(id)) {
-                        out[idxById.get(id)!] = row;
-                    } else {
-                        out.push(row);
-                    }
-                }
-                return out;
-            };
-            let refunds = refundRes.success
-                ? (() => {
-                    const remoteRows = Array.isArray(refundRes.refunds) ? refundRes.refunds : [];
-                    const localRows = Array.isArray(refundHistory) ? refundHistory : [];
-                    if (lastRefundUpdatedAt && refundRes.incremental) {
-                        return remoteRows.length === 0 ? localRows : mergeById(localRows as any[], remoteRows as any[]);
-                    }
-                    return keepLocalIfRemoteEmpty('refunds', remoteRows, localRows);
-                })()
-                : (refundHistory || []);
-            if (!refundRes.success) {
-                console.warn('[sync] refunds pull failed (non-fatal):', refundRes.error);
-            } else if (refundRes.latestUpdatedAt) {
-                localStorage.setItem(REFUND_CURSOR_KEY, refundRes.latestUpdatedAt);
-            }
-
-            // Self-heal stale local refund cache:
-            // after any incremental pull, verify local merged count against server count.
-            // if they differ, force one full refunds pull and replace local state.
-            if (refundRes.success && lastRefundUpdatedAt && refundRes.incremental) {
-                try {
-                    const sigRes = await pullRefundSignatures();
-                    const serverCount = Number(sigRes.totalRows || 0);
-                    const localCount = Array.isArray(refunds) ? refunds.length : 0;
-                    if (sigRes.success && serverCount > 0 && localCount !== serverCount) {
-                        console.warn(
-                            `[sync] refunds count mismatch after incremental pull (local=${localCount}, server=${serverCount}); forcing full refunds pull`
-                        );
-                        const fullRefundRes = await pullRefundsAndShipments(undefined);
-                        if (fullRefundRes.success) {
-                            const fullRows = Array.isArray(fullRefundRes.refunds) ? fullRefundRes.refunds : [];
-                            refunds = fullRows;
-                            if (fullRefundRes.latestUpdatedAt) {
-                                localStorage.setItem(REFUND_CURSOR_KEY, fullRefundRes.latestUpdatedAt);
-                            }
-                            console.log(`[sync] refunds self-healed via full pull - ${fullRows.length} rows`);
-                        } else {
-                            console.warn('[sync] refunds full-pull fallback failed (non-fatal):', fullRefundRes.error);
-                        }
-                    }
-                } catch (e) {
-                    console.warn('[sync] refunds mismatch check failed (non-fatal):', e);
-                }
-            }
-
-            // Pull ad campaign data from separate table
-            const adRes = await pullAdData();
-            if (adRes.success) {
-                const nextSnapshots = keepLocalIfRemoteEmpty('ad snapshots', adRes.adSnapshots || [], adSnapshots || []);
-                if (Array.isArray(nextSnapshots)) {
-                    setAdSnapshots(nextSnapshots);
-                    try { localStorage.setItem('sello_ad_snapshots', JSON.stringify(nextSnapshots)); } catch { /* ignore localStorage write failures */ }
-                }
-                const nextRoster = keepLocalIfRemoteEmpty('ad roster changes', adRes.adRosterChanges || [], adRosterChanges || []);
-                if (Array.isArray(nextRoster)) {
-                    setAdRosterChanges(nextRoster);
-                    try { localStorage.setItem('sello_ad_roster_changes', JSON.stringify(nextRoster)); } catch { /* ignore localStorage write failures */ }
-                }
-                if (adRes.adBudgets && typeof adRes.adBudgets === 'object') {
-                    const remoteBudgetKeys = Object.keys(adRes.adBudgets).length;
-                    const localBudgetKeys = Object.keys(adBudgets || {}).length;
-                    const nextBudgets = remoteBudgetKeys === 0 && localBudgetKeys > 0
-                        ? adBudgets
-                        : adRes.adBudgets;
-                    if (remoteBudgetKeys === 0 && localBudgetKeys > 0) {
-                        console.warn(`[sync] ad budgets pull returned empty; preserving local ${localBudgetKeys}`);
-                    }
-                    setAdBudgets(nextBudgets);
-                    try { localStorage.setItem('sello_ad_budgets', JSON.stringify(nextBudgets)); } catch { /* ignore localStorage write failures */ }
-                }
-                console.log(`[sync] ad data loaded  -  ${(Array.isArray(adRes.adSnapshots) ? adRes.adSnapshots.length : 0)} snapshots`);
-            } else {
-                console.warn('[sync] ad data pull failed (non-fatal):', adRes.error);
-            }
-
-            // Pull promotions from separate table (incremental when cursor exists)
-            const promoBaselineComplete = !forceImportantRefresh
-                && localStorage.getItem(PROMO_BASELINE_COMPLETE_KEY) === '1';
-            const localPromotions = Array.isArray(promotions) ? promotions : [];
-            const canUsePromoIncremental = promoBaselineComplete && localPromotions.length > 0;
-            const lastPromoUpdatedAt = canUsePromoIncremental
-                ? (localStorage.getItem(PROMO_CURSOR_KEY) || undefined)
-                : undefined;
-            if (promoBaselineComplete && localPromotions.length === 0) {
-                console.warn('[sync] promotions local baseline empty; ignoring cursor and forcing full pull');
-            }
-            let promoRes = await pullPromotionsSince(lastPromoUpdatedAt);
-            if (promoRes.success && Array.isArray(promoRes.promotions)) {
-                const isIncrementalEmpty = Boolean(lastPromoUpdatedAt && promoRes.incremental && promoRes.promotions.length === 0);
-                if (isIncrementalEmpty && localPromotions.length === 0) {
-                    console.warn('[sync] promotions incremental returned empty with empty local state; retrying full pull');
-                    promoRes = await pullPromotionsSince(undefined);
-                }
-                const remotePromotions = Array.isArray(promoRes.promotions) ? promoRes.promotions : [];
-                const nextPromotionsRaw = (lastPromoUpdatedAt && promoRes.incremental)
-                    ? (remotePromotions.length === 0
-                        ? localPromotions
-                        : mergeById(localPromotions as any[], remotePromotions as any[]))
-                    : keepLocalIfRemoteEmpty('promotions', remotePromotions, localPromotions);
-                const nextPromotions = normalizePromotionStatuses(nextPromotionsRaw);
-                setPromotions(nextPromotions);
-                promotionsForCache = nextPromotions;
-                console.log(`[sync] promotions loaded  -  ${nextPromotions.length} campaigns`);
-                if (!promoBaselineComplete) {
-                    localStorage.setItem(PROMO_BASELINE_COMPLETE_KEY, '1');
-                }
-                if (promoRes.latestUpdatedAt) {
-                    localStorage.setItem(PROMO_CURSOR_KEY, promoRes.latestUpdatedAt);
-                }
-
-                if (lastPromoUpdatedAt && promoRes.incremental) {
-                    try {
-                        const promoSigRes = await pullPromotionSignatures();
-                        const serverCount = Number(promoSigRes.totalRows || 0);
-                        const localCount = Array.isArray(nextPromotions) ? nextPromotions.length : 0;
-                        if (promoSigRes.success && serverCount > 0 && localCount !== serverCount) {
-                            console.warn(
-                                `[sync] promotions count mismatch after incremental pull (local=${localCount}, server=${serverCount}); forcing full promotions pull`
-                            );
-                            const fullPromoRes = await pullPromotionsSince(undefined);
-                            if (fullPromoRes.success && Array.isArray(fullPromoRes.promotions)) {
-                                const fullPromotions = normalizePromotionStatuses(fullPromoRes.promotions);
-                                setPromotions(fullPromotions);
-                                promotionsForCache = fullPromotions;
-                                if (fullPromoRes.latestUpdatedAt) {
-                                    localStorage.setItem(PROMO_CURSOR_KEY, fullPromoRes.latestUpdatedAt);
-                                }
-                                localStorage.setItem(PROMO_BASELINE_COMPLETE_KEY, '1');
-                                console.log(`[sync] promotions self-healed via full pull - ${fullPromotions.length} campaigns`);
-                            } else {
-                                console.warn('[sync] promotions full-pull fallback failed (non-fatal):', fullPromoRes.error);
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('[sync] promotions mismatch check failed (non-fatal):', e);
-                    }
-                }
-            } else {
-                console.warn('[sync] promotions pull failed (non-fatal):', promoRes.error);
-                localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
-            }
-
-            const syncApplyStartedAt = perfNowMs();
-            if (incoming) {
-                setPostApplySource('sync');
-                applyLoadedState(incoming, allTransactions, refunds);
-            } else {
-                setPostApplySource('sync');
-                setRefundHistory(Array.isArray(refunds) ? refunds : []);
-                const redistributedTransactions = redistributeAdSpend(allTransactions, adGroups);
-                setSalesHistory(redistributedTransactions);
-                const finalProducts = recalculateProductMetrics(
-                    products,
-                    redistributedTransactions,
-                    velocityLookback,
-                    thresholds,
-                    pricingRules,
-                    brandMap,
-                    categoryMap
-                );
-                setProducts(finalProducts);
-                markSearchSessionsStale();
-            }
-            console.log('[perf][sync] apply complete', {
-                elapsedMs: perfElapsedMs(syncApplyStartedAt),
-                totalElapsedMs: perfElapsedMs(syncStartedAt),
-                transactions: allTransactions.length,
-                refunds: Array.isArray(refunds) ? refunds.length : 0,
-                usedIncomingSnapshot: Boolean(incoming)
-            });
-            logPerfPostCommitTail('[perf][sync]', syncApplyStartedAt, {
-                totalElapsedMs: perfElapsedMs(syncStartedAt),
-                transactions: allTransactions.length,
-                refunds: Array.isArray(refunds) ? refunds.length : 0,
-                usedIncomingSnapshot: Boolean(incoming)
-            });
-
-            const resolvedProducts = incoming
-                ? (Array.isArray(incoming.products) ? incoming.products : [])
-                : (Array.isArray(products) ? products : []);
-            const hasResolvedInventory = resolvedProducts.length > 0;
-            const hasResolvedHistory = allTransactions.length > 0 || (Array.isArray(refunds) && refunds.length > 0);
-            if (!hasResolvedInventory && hasResolvedHistory) {
-                console.warn(
-                    `[sync] inventory integrity check failed after sync ` +
-                    `(products=${resolvedProducts.length}, transactions=${allTransactions.length}, refunds=${Array.isArray(refunds) ? refunds.length : 0})`
-                );
-                setSyncStatus('error');
-                setSyncStep('');
-                setSyncProgress(0);
-                setSyncTotal(0);
-                return;
-            }
-
-            const time = masterRes.lastUpdatedAt || new Date().toISOString();
-            localStorage.setItem('sello_snapshot_updated_at', time);
-            setLastSyncedAt(time);
-            localStorage.setItem('sello_last_synced_at', time);
-
-            // Save to local cache with current version
-            const versionRes = await checkVersion();
-            const version = versionRes.lastPushAt || time;
-            const snapshotForCacheBase = hasSnapshotUpdate && incoming ? incoming : getSharedSnapshot();
-            const snapshotForCache = {
-                ...snapshotForCacheBase,
-                promotions: promotionsForCache
-            };
-            await saveToCache(snapshotForCache, allTransactions, refunds, [], version);
-
-            if (forceImportantRefresh && remoteForceToken) {
-                localStorage.setItem(FORCE_FULL_PULL_TOKEN_KEY, remoteForceToken);
-                console.log(`[sync] important refresh token consumed: ${remoteForceToken}`);
-            }
-            console.log(`[sync] complete  -  cached version: ${version}`);
-            console.log('[perf][sync] complete', {
-                elapsedMs: perfElapsedMs(syncStartedAt),
-                transactions: allTransactions.length,
-                refunds: Array.isArray(refunds) ? refunds.length : 0,
-                promotions: Array.isArray(promotionsForCache) ? promotionsForCache.length : 0
-            });
-            setSyncProgress(0);
-            setSyncTotal(0);
-            setSyncStep('');
-            setSyncStatus('idle');
-        } catch (e) {
-            console.error('[sync] error:', e);
-            setSyncStatus('error');
-            setSyncStep('');
-            setSyncProgress(0);
-            setSyncTotal(0);
-        }
-    }, [skuFamilies, velocityLookback, thresholds, applyLoadedState, adGroups, products, salesHistory, pricingRules, brandMap, categoryMap, getSharedSnapshot,
-        clearClientDataForImportantRefresh,
-        refundHistory, promotions, adSnapshots, adRosterChanges, adBudgets, markSearchSessionsStale]);
-
-    const resolveConflicts = useCallback(async (keepLocal: boolean) => {
-        const res = await pullSnapshot();
-        if (!res.success || !res.snapshot) return;
-        const snap = { ...res.snapshot };
-        if (keepLocal) {
-            snap.skuFamilies = [
-                ...(Array.isArray(snap.skuFamilies) ? snap.skuFamilies : []),
-                ...pendingFamilyConflicts
-            ];
-        }
-        setPendingFamilyConflicts([]);
-        await handleSync();
-    }, [pendingFamilyConflicts, handleSync]);
-
-    const initRanRef = useRef(false);
-    const handleStartSyncNow = useCallback(() => {
-        setStartupSyncMode('sync');
-        setStartupChoicePending(false);
-    }, []);
-
-    const handleStartLocalOnly = useCallback(() => {
-        setStartupSyncMode('local');
-        setStartupChoicePending(false);
-    }, []);
-
-    useEffect(() => {
-        if (startupChoicePending || !startupSyncMode || initRanRef.current) return;
-        initRanRef.current = true;
-
-        const loadCacheOnly = async () => {
-            console.log('[init] startup choice: local cache only');
-            setSyncStatus('syncing');
-            const cache = await loadFromCache();
-            if (cache) {
-                const cachedProducts = Array.isArray(cache.snapshot?.products) ? cache.snapshot.products : [];
-                const cachedTransactions = Array.isArray(cache.transactions) ? cache.transactions : [];
-                const cachedRefunds = Array.isArray(cache.refunds) ? cache.refunds : [];
-                const hasHistoryButNoInventory = cachedProducts.length === 0 && (cachedTransactions.length > 0 || cachedRefunds.length > 0);
-                if (hasHistoryButNoInventory) {
-                    console.warn(
-                        `[init] local-only cache rejected - products:${cachedProducts.length}, ` +
-                        `transactions:${cachedTransactions.length}, refunds:${cachedRefunds.length}`
-                    );
-                } else {
-                    setPostApplySource('local-cache-load');
-                    applyLoadedState(
-                        cache.snapshot,
-                        cache.transactions,
-                        cache.refunds || []
-                    );
-                    const time = localStorage.getItem('sello_last_synced_at')
-                        || cache.cachedAt;
-                    setLastSyncedAt(time);
-                    const cachedPromotions = normalizePromotionStatuses(
-                        Array.isArray(cache.snapshot?.promotions) ? cache.snapshot.promotions : []
-                    );
-                    if (cachedPromotions.length > 0) {
-                        setPromotions(cachedPromotions);
-                    }
-                    console.log('[init] loaded from local cache only');
-                }
-            } else {
-                console.warn('[init] local-only start requested but no cache found');
-            }
-            setSyncStatus('idle');
-        };
-
-        const initApp = async () => {
-            if (startupSyncMode === 'local') {
-                await loadCacheOnly();
-                return;
-            }
-            // Step 1: Check what version the DB has (fast, tiny request)
-            const versionRes = await checkVersion();
-            const dbVersion = versionRes.success ? versionRes.lastPushAt : null;
-            const localVersion = getCachedVersion();
-            const lastKnownSnapshotUpdatedAt = localStorage.getItem('sello_snapshot_updated_at') || undefined;
-            const masterRes = await pullSnapshotIfUpdated(lastKnownSnapshotUpdatedAt);
-            const remoteForceToken = String((masterRes as any)?.forceFullPullToken || '').trim();
-            const localForceToken = localStorage.getItem(FORCE_FULL_PULL_TOKEN_KEY) || '';
-            const forceImportantRefresh = Boolean(remoteForceToken && remoteForceToken !== localForceToken);
-            if (forceImportantRefresh) {
-                console.log(`[init] important refresh token detected: ${remoteForceToken}`);
-                await clearClientDataForImportantRefresh(remoteForceToken);
-            }
-
-            console.log(`[init] DB version: ${dbVersion}, local version: ${localVersion}`);
-
-            // Step 2: If versions match, load from local cache instantly
-            if (!forceImportantRefresh && dbVersion && localVersion && dbVersion === localVersion) {
-                console.log('[init] versions match  -  loading from cache');
-                setSyncStatus('syncing');
-                const cache = await loadFromCache();
-                if (cache) {
-                    const cachedProducts = Array.isArray(cache.snapshot?.products) ? cache.snapshot.products : [];
-                    const cachedTransactions = Array.isArray(cache.transactions) ? cache.transactions : [];
-                    const cachedRefunds = Array.isArray(cache.refunds) ? cache.refunds : [];
-                    const hasHistoryButNoInventory = cachedProducts.length === 0 && (cachedTransactions.length > 0 || cachedRefunds.length > 0);
-                    if (hasHistoryButNoInventory) {
-                        console.warn(
-                            `[init] cache rejected - products:${cachedProducts.length}, ` +
-                            `transactions:${cachedTransactions.length}, refunds:${cachedRefunds.length}`
-                        );
-                        setSyncStatus('idle');
-                    } else {
-                    setPostApplySource('cache-load');
-                    applyLoadedState(
-                        cache.snapshot,
-                        cache.transactions,
-                        cache.refunds || []
-                    );
-                    const time = localStorage.getItem('sello_last_synced_at')
-                        || cache.cachedAt;
-                    setLastSyncedAt(time);
-                    const cachedPromotions = normalizePromotionStatuses(
-                        Array.isArray(cache.snapshot?.promotions) ? cache.snapshot.promotions : []
-                    );
-                    if (cachedPromotions.length > 0) {
-                        setPromotions(cachedPromotions);
-                    }
-                    setSyncStatus('idle');
-                    console.log('[init] loaded from cache instantly');
-                    setTimeout(async () => {
-                        const promoRes = await pullPromotionsSince(undefined);
-                        if (promoRes.success && Array.isArray(promoRes.promotions)) {
-                            const remotePromotions = normalizePromotionStatuses(promoRes.promotions);
-                            const nextPromotions = (remotePromotions.length === 0 && cachedPromotions.length > 0)
-                                ? cachedPromotions
-                                : remotePromotions;
-                            if (remotePromotions.length === 0 && cachedPromotions.length > 0) {
-                                console.warn('[init] promotions pull returned empty; preserving cached ' + cachedPromotions.length);
-                            }
-                            setPromotions(nextPromotions);
-                            localStorage.setItem(PROMO_BASELINE_COMPLETE_KEY, '1');
-                            console.log('[init] promotions loaded from DB - ' + nextPromotions.length + ' campaigns');
-                        } else {
-                            console.warn('[init] promotions pull failed on cache init (non-fatal):', promoRes.error);
-                            localStorage.removeItem(PROMO_BASELINE_COMPLETE_KEY);
-                        }
-                    }, 0);
-                    return;
-                    }
-                }
-            }
-
-            // Step 3: Versions don't match or no cache  -  full sync
-            console.log('[init] syncing from database');
-            handleSync();
-        };
-
-        initApp();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [startupChoicePending, startupSyncMode, clearClientDataForImportantRefresh]);
-
-    // --- OPTIMAL PRICING: RECALCULATE BENCHMARKS ---
-    const handleCancelBenchmarkRecalculation = useCallback(() => {
-        benchmarkRunRef.current.cancelled = true;
-    }, []);
-
-    const handleDismissBenchmarkRecalcState = useCallback(() => {
-        if (benchmarkRunRef.current.running) return;
-        setBenchmarkRecalcState(BENCHMARK_IDLE_STATE);
-    }, []);
-
-    const handleRecalculateBenchmarks = useCallback(async (options?: RecalculateBenchmarkOptions): Promise<CohortShiftWarning[]> => {
-        if (benchmarkRunRef.current.running) return [];
-
-        const mode: BenchmarkRecalcMode = options?.mode ?? 'incremental';
-        const noticeCategories = (benchmarkUpdateNotices || []).map(n => n.category);
-        const categoryScopeRaw = mode === 'full'
-            ? (options?.categories || [])
-            : ((options?.categories && options.categories.length > 0) ? options.categories : noticeCategories);
-        const categoryScope = Array.from(new Set((categoryScopeRaw || []).filter(Boolean)));
-        const hasScopedCategories = mode === 'full' ? true : categoryScope.length > 0;
-
-        if (!hasScopedCategories) {
-            setBenchmarkRecalcState({
-                status: 'completed',
-                stage: 'FINALIZING',
-                mode,
-                processed: 0,
-                total: 0,
-                elapsedMs: 0,
-                startedAt: new Date().toISOString(),
-                completedAt: new Date().toISOString(),
-                summary: 'No categories require recalculation.',
-            });
-            return [];
-        }
-
-        const runId = benchmarkRunRef.current.id + 1;
-        benchmarkRunRef.current.id = runId;
-        benchmarkRunRef.current.cancelled = false;
-        benchmarkRunRef.current.running = true;
-        const startedAt = Date.now();
-        const todayKey = new Date().toISOString().split('T')[0];
-        const resolver = buildCanonicalResolver(learnedAliases);
-        const shouldStop = () => benchmarkRunRef.current.cancelled || benchmarkRunRef.current.id !== runId;
-        const tick = () => Date.now() - startedAt;
-        const yieldToUi = async () => new Promise<void>(resolve => setTimeout(resolve, 0));
-        let lastProcessed = 0;
-        let lastTotal = 0;
-
-        try {
-            setBenchmarkRecalcState({
-                status: 'running',
-                stage: 'PREPARING',
-                mode,
-                processed: 0,
-                total: 0,
-                elapsedMs: 0,
-                startedAt: new Date(startedAt).toISOString(),
-                completedAt: null,
-                summary: '',
-            });
-
-            const canonicalProductMap = new Map<string, Product>();
-            products.forEach(product => {
-                const canonicalSku = resolver(product.sku);
-                if (!canonicalProductMap.has(canonicalSku)) canonicalProductMap.set(canonicalSku, product);
-            });
-
-            const scopedCategorySet = new Set(categoryScope);
-            const scopedCanonicalSkus = Array.from(canonicalProductMap.entries())
-                .filter(([, product]) => mode === 'full' || scopedCategorySet.has(product.category ?? 'Uncategorised'))
-                .map(([canonicalSku]) => canonicalSku);
-
-            if (scopedCanonicalSkus.length === 0) {
-                setBenchmarkRecalcState({
-                    status: 'completed',
-                    stage: 'FINALIZING',
-                    mode,
-                    processed: 0,
-                    total: 0,
-                    elapsedMs: tick(),
-                    startedAt: new Date(startedAt).toISOString(),
-                    completedAt: new Date().toISOString(),
-                    summary: 'No SKUs found in selected scope.',
-                });
-                return [];
-            }
-
-            const txByCanonical = new Map<string, PriceLog[]>();
-            salesHistory.forEach(tx => {
-                const canonicalSku = resolver(tx.sku);
-                if (!txByCanonical.has(canonicalSku)) txByCanonical.set(canonicalSku, []);
-                txByCanonical.get(canonicalSku)!.push(tx);
-            });
-
-            const priceChangesByCanonical = new Map<string, PriceChangeRecord[]>();
-            priceChangeHistory.forEach(change => {
-                const canonicalSku = resolver(change.sku);
-                if (!priceChangesByCanonical.has(canonicalSku)) priceChangesByCanonical.set(canonicalSku, []);
-                priceChangesByCanonical.get(canonicalSku)!.push(change);
-            });
-
-            const allPricePoints = new Map<string, PricePoint[]>();
-            const pointsBatchSize = 40;
-            setBenchmarkRecalcState(prev => ({
-                ...prev,
-                stage: 'REBUILDING_COHORTS',
-                total: scopedCanonicalSkus.length,
-                processed: 0,
-                elapsedMs: tick(),
-            }));
-            lastProcessed = 0;
-            lastTotal = scopedCanonicalSkus.length;
-
-            for (let i = 0; i < scopedCanonicalSkus.length; i++) {
-                if (shouldStop()) throw new Error('BENCHMARK_CANCELLED');
-
-                const canonicalSku = scopedCanonicalSkus[i];
-                const product = canonicalProductMap.get(canonicalSku);
-                if (!product) continue;
-
-                const txs = txByCanonical.get(canonicalSku) || [];
-                const skuPriceChanges = priceChangesByCanonical.get(canonicalSku) || [];
-                const eras = buildPriceEras(
-                    canonicalSku,
-                    skuPriceChanges,
-                    txs,
-                    product.caPrice ?? product.currentPrice,
-                    todayKey,
-                    resolver
-                );
-                const tagged = txs
-                    .filter(tx => isEligibleTransaction(tx, pricingRules))
-                    .map(tx => ({
-                        ...tx,
-                        canonicalSku,
-                        rawSku: tx.sku,
-                        source: tagTransactionSource(tx, promotions, canonicalSku, resolver),
-                        effectivePrice: tx.price,
-                        eraId: assignTransactionToEra(tx, eras)?.eraId ?? '',
-                    }));
-                const costs =
-                    (product.costPrice ?? product.costDetail?.cogs ?? 0) +
-                    (product.postage ?? product.costDetail?.postage ?? 0) +
-                    (product.sellingFee ?? product.costDetail?.sellingFee ?? 0) +
-                    (product.adsFee ?? product.costDetail?.adsFee ?? 0);
-                allPricePoints.set(
-                    canonicalSku,
-                    buildPricePoints(canonicalSku, tagged, eras, promotions, costs, resolver)
-                );
-
-                if ((i + 1) % pointsBatchSize === 0 || i === scopedCanonicalSkus.length - 1) {
-                    lastProcessed = i + 1;
-                    lastTotal = scopedCanonicalSkus.length;
-                    setBenchmarkRecalcState(prev => ({
-                        ...prev,
-                        processed: i + 1,
-                        total: scopedCanonicalSkus.length,
-                        elapsedMs: tick(),
-                    }));
-                    await yieldToUi();
-                }
-            }
-
-            if (shouldStop()) throw new Error('BENCHMARK_CANCELLED');
-
-            const scopedProducts = Array.from(canonicalProductMap.entries())
-                .filter(([, product]) => mode === 'full' || scopedCategorySet.has(product.category ?? 'Uncategorised'))
-                .map(([, product]) => product);
-            const rebuiltSnapshot = computeAllCohortStats(scopedProducts, allPricePoints, 4, resolver);
-            const shifts = cohortSnapshot ? detectBenchmarkShifts(cohortSnapshot, rebuiltSnapshot) : [];
-
-            let merged: CohortSnapshot;
-            if (!cohortSnapshot || mode === 'full') {
-                merged = rebuiltSnapshot;
-            } else {
-                const scopedCategories = new Set(Array.from(rebuiltSnapshot.categoryBuckets.keys()));
-                const mergedCategoryBuckets = new Map(cohortSnapshot.categoryBuckets);
-                scopedCategories.forEach(category => mergedCategoryBuckets.delete(category));
-                rebuiltSnapshot.categoryBuckets.forEach((value, key) => mergedCategoryBuckets.set(key, value));
-
-                const mergedCohortStats = new Map(cohortSnapshot.cohortStats);
-                Array.from(mergedCohortStats.keys()).forEach(bucketKey => {
-                    const category = bucketKey.split('::')[0] || '';
-                    if (scopedCategories.has(category)) mergedCohortStats.delete(bucketKey);
-                });
-                rebuiltSnapshot.cohortStats.forEach((value, key) => mergedCohortStats.set(key, value));
-
-                const mergedAssignments = new Map(cohortSnapshot.skuAssignments);
-                Array.from(mergedAssignments.entries()).forEach(([sku, bucketKey]) => {
-                    const assignedCategory = bucketKey.split('::')[0] || '';
-                    if (scopedCategories.has(assignedCategory)) mergedAssignments.delete(sku);
-                });
-                rebuiltSnapshot.skuAssignments.forEach((value, key) => mergedAssignments.set(key, value));
-
-                merged = {
-                    ...cohortSnapshot,
-                    computedAt: rebuiltSnapshot.computedAt,
-                    version: (cohortSnapshot.version ?? 0) + 1,
-                    categoryBuckets: mergedCategoryBuckets,
-                    cohortStats: mergedCohortStats,
-                    skuAssignments: mergedAssignments,
-                };
-            }
-
-            setCohortSnapshot(merged);
-
-            const affectedSkus = Array.from(rebuiltSnapshot.skuAssignments.keys());
-            setBenchmarkRecalcState(prev => ({
-                ...prev,
-                stage: 'CALCULATING_OPTIMAL_PRICES',
-                processed: 0,
-                total: affectedSkus.length,
-                elapsedMs: tick(),
-            }));
-            lastProcessed = 0;
-            lastTotal = affectedSkus.length;
-
-            const nextResults = new Map(optimalPriceResults);
-            const calcBatchSize = 30;
-            for (let i = 0; i < affectedSkus.length; i++) {
-                if (shouldStop()) throw new Error('BENCHMARK_CANCELLED');
-                const canonicalSku = affectedSkus[i];
-                const product = canonicalProductMap.get(canonicalSku);
-                if (!product) continue;
-                const bucketKey = merged.skuAssignments.get(canonicalSku);
-                const cohort = bucketKey ? merged.cohortStats.get(bucketKey) : undefined;
-                if (!cohort) continue;
-                const result = calculateOptimalPrice({
-                    sku: product,
-                    priceHistory: salesHistory,
-                    priceChangeLog: priceChangeHistory,
-                    promotions,
-                    pricingRules,
-                    cohortSnapshot: merged,
-                    learnedAliases,
-                    today: todayKey,
-                });
-                nextResults.set(canonicalSku, result);
-
-                if ((i + 1) % calcBatchSize === 0 || i === affectedSkus.length - 1) {
-                    lastProcessed = i + 1;
-                    lastTotal = affectedSkus.length;
-                    setOptimalPriceResults(new Map(nextResults));
-                    setBenchmarkRecalcState(prev => ({
-                        ...prev,
-                        processed: i + 1,
-                        total: affectedSkus.length,
-                        elapsedMs: tick(),
-                    }));
-                    await yieldToUi();
-                }
-            }
-
-            if (shouldStop()) throw new Error('BENCHMARK_CANCELLED');
-
-            setBenchmarkUpdateNotices(prev => prev.filter(n => !rebuiltSnapshot.categoryBuckets.has(n.category)));
-            setBenchmarkRecalcState({
-                status: 'completed',
-                stage: 'FINALIZING',
-                mode,
-                processed: affectedSkus.length,
-                total: affectedSkus.length,
-                elapsedMs: tick(),
-                startedAt: new Date(startedAt).toISOString(),
-                completedAt: new Date().toISOString(),
-                summary: `Updated ${affectedSkus.length.toLocaleString()} SKU benchmarks.`,
-            });
-            return shifts;
-        } catch (error) {
-            if ((error as Error).message === 'BENCHMARK_CANCELLED') {
-                setBenchmarkRecalcState({
-                    status: 'cancelled',
-                    stage: 'FINALIZING',
-                    mode,
-                    processed: lastProcessed,
-                    total: lastTotal,
-                    elapsedMs: tick(),
-                    startedAt: new Date(startedAt).toISOString(),
-                    completedAt: new Date().toISOString(),
-                    summary: 'Benchmark recalculation was cancelled.',
-                });
-                return [];
-            }
-            console.error('[benchmark] recalculation failed', error);
-            setBenchmarkRecalcState({
-                status: 'error',
-                stage: 'FINALIZING',
-                mode,
-                processed: 0,
-                total: 0,
-                elapsedMs: tick(),
-                startedAt: new Date(startedAt).toISOString(),
-                completedAt: new Date().toISOString(),
-                summary: 'Benchmark recalculation failed.',
-            });
-            return [];
-        } finally {
-            benchmarkRunRef.current.running = false;
-        }
-    }, [benchmarkUpdateNotices, learnedAliases, products, salesHistory, priceChangeHistory, pricingRules, promotions, cohortSnapshot, optimalPriceResults]);
-
-    // â”€â”€ Dirty-tracking wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Dirty-tracking wrappers
     // These replace the raw setters exported to consumers so that any in-app
     // edit (new promotion, saved template, rule change, etc.) automatically
     // marks the app dirty and prompts a DB push  -  same as file uploads do.

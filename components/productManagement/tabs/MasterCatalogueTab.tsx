@@ -34,9 +34,9 @@ interface BenchmarkRecalcState {
     summary: string;
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Props
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface MasterCatalogueTabProps {
     products: Product[];
@@ -59,9 +59,9 @@ interface MasterCatalogueTabProps {
     onStampLandedAt?: (skus: string[], date: string) => void;
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Confidence Badge (inline, used in optimal price column)
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ConfidenceBadge: React.FC<{ confidence: number; source: string }> = ({ confidence, source }) => {
     if (source === 'COHORT' || confidence < 0.3) {
@@ -76,9 +76,9 @@ const ConfidenceBadge: React.FC<{ confidence: number; source: string }> = ({ con
     return <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-gray-100 text-gray-500">Low</span>;
 };
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Benchmark Shifts Review Modal
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface ShiftReviewModalProps {
     shifts: CohortShiftWarning[];
@@ -86,6 +86,18 @@ interface ShiftReviewModalProps {
     onAccept: () => void;
     onCancel: () => void;
 }
+
+const normalizeBucketLabel = (label: string): string => {
+    const raw = String(label || '');
+    if (!raw.includes('\u00C2') && !raw.includes('\u00E2')) return raw;
+
+    try {
+        const repaired = new TextDecoder('utf-8').decode(Uint8Array.from(raw, char => char.charCodeAt(0)));
+        return repaired || raw;
+    } catch {
+        return raw;
+    }
+};
 
 const ShiftReviewModal: React.FC<ShiftReviewModalProps> = ({ shifts, rebuiltCategories, onAccept, onCancel }) => (
     <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -114,9 +126,9 @@ const ShiftReviewModal: React.FC<ShiftReviewModalProps> = ({ shifts, rebuiltCate
                                     <span className="font-mono font-bold text-gray-800 min-w-[120px]">{s.sku}</span>
                                     <span className="text-gray-400">{s.category}</span>
                                     <span className="ml-auto flex items-center gap-1 text-gray-600">
-                                        <span className="text-gray-400">{s.oldBucket}</span>
-                                        <span className="text-gray-400">→</span>
-                                        <span className="font-bold text-theme">{s.newBucket}</span>
+                                        <span className="text-gray-400">{normalizeBucketLabel(s.oldBucket)}</span>
+                                        <span className="text-gray-400">{'\u2192'}</span>
+                                        <span className="font-bold text-theme">{normalizeBucketLabel(s.newBucket)}</span>
                                     </span>
                                 </div>
                             ))}
@@ -146,9 +158,9 @@ const ShiftReviewModal: React.FC<ShiftReviewModalProps> = ({ shifts, rebuiltCate
     </div>
 );
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Main component
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
     products,
@@ -175,7 +187,7 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
     } | null>(null);
     const [showShowcaseModal, setShowShowcaseModal] = useState(false);
 
-    // ── Setup benchmark handler (first-time button)
+    // â”€â”€ Setup benchmark handler (first-time button)
     const isBenchmarkRunning = benchmarkRecalcState?.status === 'running';
     const handleSetupBenchmarks = useCallback(async () => {
         if (!onRecalculateBenchmarks) return;
@@ -184,7 +196,7 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
         setShiftReview({ shifts, rebuiltCategories: cats.length > 0 ? cats : ['All categories'] });
     }, [onRecalculateBenchmarks]);
 
-    // ── Recalculate button handler
+    // â”€â”€ Recalculate button handler
     const handleRecalculate = useCallback(async () => {
         if (!onRecalculateBenchmarks) return;
         const categories = benchmarkUpdateNotices?.map(n => n.category) ?? [];
@@ -208,11 +220,11 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
     return (
         <div className="flex flex-col gap-4">
 
-            {/* ── First-time setup banner */}
+            {/* â”€â”€ First-time setup banner */}
             {!cohortSnapshot && (
                 <div className="p-4 bg-theme-10 border border-theme-20 rounded-xl flex items-center justify-between">
                     <div>
-                        <div className="text-sm font-bold text-indigo-900">⚙ Price Benchmarks not yet calculated</div>
+                        <div className="text-sm font-bold text-indigo-900">âš™ Price Benchmarks not yet calculated</div>
                         <div className="text-xs text-theme mt-0.5">
                             Build benchmarks to enable optimal pricing across all SKUs
                         </div>
@@ -229,7 +241,7 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                 </div>
             )}
 
-            {/* ── Toolbar: recalculate button + showcase button */}
+            {/* â”€â”€ Toolbar: recalculate button + showcase button */}
             {cohortSnapshot && onRecalculateBenchmarks && (
                 <div className="flex justify-end gap-2">
                     <button
@@ -279,7 +291,7 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                 </div>
             )}
 
-            {/* ── Product table */}
+            {/* â”€â”€ Product table */}
             <ProductList
                 products={products}
                 skuFamilies={skuFamilies}
@@ -294,7 +306,7 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                 optimalPriceResults={optimalPriceResults}
             />
 
-            {/* ── Showcase selection modal */}
+            {/* â”€â”€ Showcase selection modal */}
             {showShowcaseModal && (
                 <ShowcaseSelectionModal
                     products={products}
@@ -312,7 +324,7 @@ export const MasterCatalogueTab: React.FC<MasterCatalogueTabProps> = ({
                 />
             )}
 
-            {/* ── Shift review modal */}
+            {/* â”€â”€ Shift review modal */}
             {shiftReview && (
                 <ShiftReviewModal
                     shifts={shiftReview.shifts}

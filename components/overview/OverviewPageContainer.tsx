@@ -62,6 +62,7 @@ const getMedianVal = (vals: number[]) => {
 const perfNowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const OVERVIEW_IMPORT_SETTLE_MS = 900;
 const OVERVIEW_VISIBLE_SETTLE_CONFIRM_MS = 1200;
+const OVERVIEW_TAB_LOADING_MIN_MS = 420;
 const areStringArraysEqual = (left: string[], right: string[]) => {
     if (left.length !== right.length) return false;
     for (let index = 0; index < left.length; index += 1) {
@@ -77,6 +78,7 @@ const isSortStateEqual = (
     if (!left || !right) return false;
     return left.key === right.key && left.dir === right.dir;
 };
+const HEAVY_OVERVIEW_TABS: OverviewTab[] = ['financials', 'map', 'categories'];
 let overviewBusyToken = 0;
 const beginOverviewBusy = (reason: string) => {
     const token = ++overviewBusyToken;
@@ -127,6 +129,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     }, [products, priceHistoryMap, refundHistory]);
 
     const [activeTab, setActiveTab] = useState<OverviewTab>('actions');
+    const [loadingTabKey, setLoadingTabKey] = useState<OverviewTab | null>(null);
     const [isAuditVisible, setIsAuditVisible] = useState(false);
     const [range, setRange] = useState<DateRange>('30d');
     const [customStart, setCustomStart] = useState<string>(getTodayKeyMelbourne());
@@ -141,6 +144,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const [sort, setSort] = useState<SortState<SortKey> | null>(null);
     const [showWorkbenchPop, setShowWorkbenchPop] = useState(false);
     const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
+    const loadingTabStartedAtRef = React.useRef<number>(0);
     const visibleSettleSequenceRef = React.useRef(0);
     const orderDateMapCacheRef = React.useRef<{ historyMap: Map<string, PriceLog[]> | null; result: Map<string, string> | null }>({
         historyMap: null,
@@ -957,6 +961,27 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         financialStats
     ]);
 
+    useEffect(() => {
+        if (loadingTabKey !== activeTab) return;
+        if (!HEAVY_OVERVIEW_TABS.includes(activeTab)) return;
+        const elapsedMs = perfNowMs() - loadingTabStartedAtRef.current;
+        const remainingMs = Math.max(0, OVERVIEW_TAB_LOADING_MIN_MS - elapsedMs);
+        const timer = window.setTimeout(() => {
+            setLoadingTabKey(current => current === activeTab ? null : current);
+        }, remainingMs);
+        return () => window.clearTimeout(timer);
+    }, [
+        activeTab,
+        loadingTabKey,
+        categoryData.length,
+        financialStats.chartData.length,
+        range,
+        customStart,
+        customEnd,
+        platformScopeKey,
+        returnDateBasis
+    ]);
+
     return (
         <div className="space-y-6 pb-20 max-w-[1600px] mx-auto min-h-full flex flex-col">
             <TabSwitcher
@@ -967,7 +992,16 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                     { key: 'categories', label: 'Categories', icon: PieChart },
                 ]}
                 activeTab={activeTab}
-                onChange={(key) => { setActiveTab(key as OverviewTab); setIsAuditVisible(false); setIsAuditPanelVisible(false); }}
+                onChange={(key) => {
+                    const nextTab = key as OverviewTab;
+                    setActiveTab(nextTab);
+                    loadingTabStartedAtRef.current = perfNowMs();
+                    setLoadingTabKey(HEAVY_OVERVIEW_TABS.includes(nextTab) ? nextTab : null);
+                    setIsAuditVisible(false);
+                    setIsAuditPanelVisible(false);
+                }}
+                loadingTabKey={loadingTabKey}
+                loadingColor={themeColor}
             />
 
             <ContextBar

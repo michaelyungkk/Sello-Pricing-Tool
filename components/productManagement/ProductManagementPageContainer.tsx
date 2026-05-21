@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Product, PricingRules, PromotionEvent, PriceLog, RefundLog, OptimalPriceResult, CohortSnapshot, BenchmarkUpdateNotice, SkuFamily, InventoryChangeRecord } from '../../types';
 import type { CohortShiftWarning } from '../../services/cohortAnalysis';
 
@@ -17,7 +17,7 @@ import { TagsDrawer } from './parts/TagsDrawer';
 import { buildWindow } from '../../services/dateWindow';
 import { getTodayKeyMelbourne } from '../../services/dateUtils';
 import { ContextBar } from '../common/ContextBar';
-import { perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
+import { logPerf, perfNowMs, usePagePerfLogger } from '../../services/pagePerf';
 
 type BenchmarkRecalcMode = 'incremental' | 'full';
 type BenchmarkRecalcStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'error';
@@ -102,6 +102,7 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
     onStampLandedAt,
 }) => {
     const pagePerfStartedAt = perfNowMs();
+    const activeTabRenderStartedAt = perfNowMs();
     const [activeTab, setActiveTab] = useState<Tab>('performance');
     const [selectedProductForDrawer, setSelectedProductForDrawer] = useState<Product | null>(null);
     const [productForTags, setProductForTags] = useState<Product | null>(null);
@@ -192,6 +193,46 @@ const ProductManagementPageContainerInner: React.FC<ProductManagementPageContain
         pendingSuggestions: pendingFamilySuggestions.length,
         benchmarkNotices: benchmarkUpdateNotices?.length || 0
     }, true, pagePerfStartedAt);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const activeView = typeof (window as any).__selloActiveView === 'string'
+            ? (window as any).__selloActiveView as string
+            : '';
+        if (activeView !== 'products') return;
+
+        let cancelled = false;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (cancelled) return;
+                logPerf('[perf][products] activeTab commit', {
+                    elapsedMs: Number((perfNowMs() - activeTabRenderStartedAt).toFixed(1)),
+                    activeTab,
+                    timeWindow,
+                    products: products.length,
+                    refunds: refundHistory.length,
+                    promotions: promotions.length,
+                    families: skuFamilies.length,
+                    pendingSuggestions: pendingFamilySuggestions.length,
+                    shipmentSearchTags: shipmentSearchTags.length
+                });
+            });
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        activeTab,
+        activeTabRenderStartedAt,
+        timeWindow,
+        products.length,
+        refundHistory.length,
+        promotions.length,
+        skuFamilies.length,
+        pendingFamilySuggestions.length,
+        shipmentSearchTags.length
+    ]);
 
     const benchmarkProgressPct = useMemo(() => {
         const total = benchmarkRecalcState?.total || 0;
