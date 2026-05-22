@@ -145,6 +145,8 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
     const [showWorkbenchPop, setShowWorkbenchPop] = useState(false);
     const [returnDateBasis, setReturnDateBasis] = useState<ReturnDateBasis>('refundDate');
     const loadingTabStartedAtRef = React.useRef<number>(0);
+    const pendingTabActivateFrameRef = React.useRef<number | null>(null);
+    const pendingTabActivateConfirmFrameRef = React.useRef<number | null>(null);
     const visibleSettleSequenceRef = React.useRef(0);
     const orderDateMapCacheRef = React.useRef<{ historyMap: Map<string, PriceLog[]> | null; result: Map<string, string> | null }>({
         historyMap: null,
@@ -215,8 +217,29 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         localStorage.setItem('sello_deduct_refunds_overview', deductRefunds.toString());
     }, [deductRefunds]);
 
+    useEffect(() => {
+        return () => {
+            if (pendingTabActivateFrameRef.current !== null) {
+                window.cancelAnimationFrame(pendingTabActivateFrameRef.current);
+            }
+            if (pendingTabActivateConfirmFrameRef.current !== null) {
+                window.cancelAnimationFrame(pendingTabActivateConfirmFrameRef.current);
+            }
+        };
+    }, []);
+
     const thresholds = useMemo(() => propThresholds || getThresholdConfig(), [propThresholds]);
     const platformScopeKey = useMemo(() => platformScope.join('|'), [platformScope]);
+    const clearPendingTabActivation = React.useCallback(() => {
+        if (pendingTabActivateFrameRef.current !== null) {
+            window.cancelAnimationFrame(pendingTabActivateFrameRef.current);
+            pendingTabActivateFrameRef.current = null;
+        }
+        if (pendingTabActivateConfirmFrameRef.current !== null) {
+            window.cancelAnimationFrame(pendingTabActivateConfirmFrameRef.current);
+            pendingTabActivateConfirmFrameRef.current = null;
+        }
+    }, []);
 
     const orderDateMap = useMemo(() => {
         if (orderDateMapCacheRef.current.historyMap === debouncedPriceHistoryMap && orderDateMapCacheRef.current.result) {
@@ -266,6 +289,18 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         };
         return map;
     }, [debouncedRefundHistory]);
+
+    const lifetimeUnitsSoldBySku = useMemo(() => {
+        const map = new Map<string, number>();
+        debouncedPriceHistoryMap.forEach((logs, sku) => {
+            let lifetimeUnitsSold = 0;
+            logs.forEach(log => {
+                lifetimeUnitsSold += Number(log.velocity) || 0;
+            });
+            map.set(sku, lifetimeUnitsSold);
+        });
+        return map;
+    }, [debouncedPriceHistoryMap]);
 
     const activePromotionSkuSet = useMemo(() => {
         const todayStr = getTodayKeyMelbourne();
@@ -371,6 +406,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
 
         const data = debouncedProducts.map(p => {
             const logs = debouncedPriceHistoryMap.get(p.sku) || [];
+            const lifetimeUnitsSold = lifetimeUnitsSoldBySku.get(p.sku) || 0;
 
             // Scope Filter: Respect platform selection only. 
             // Exclusion shield ONLY affects strategy, not dashboard metrics.
@@ -577,6 +613,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 refundRateDelta,
                 refundImpact: currentLedger.totals.refundImpact,
                 refundUnits,
+                lifetimeUnitsSold,
                 prevRefundUnits,
                 refundUnitDelta,
                 refundCount,
@@ -634,7 +671,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
             result
         };
         return result;
-    }, [debouncedProducts, debouncedPriceHistoryMap, refundsBySku, range, customStart, customEnd, platformScope, thresholds, pricingRules, activePromotionSkuSet, priceChangeHistory, returnDateBasis, orderDateMap]);
+    }, [debouncedProducts, debouncedPriceHistoryMap, refundsBySku, lifetimeUnitsSoldBySku, range, customStart, customEnd, platformScope, thresholds, pricingRules, activePromotionSkuSet, priceChangeHistory, returnDateBasis, orderDateMap]);
 
     // Cheap: apply deductRefunds toggle without re-running the full product loop
     const processedDataWithToggle = useMemo(() => {
@@ -660,7 +697,15 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
         const nextAlerts = {
             margin: processedDataWithToggle.filter(p => p.periodUnits > 0 && p.periodMargin < 5),
             velocity: processedDataWithToggle.filter(p => p.isVolumeDropCandidate),
-            returns: processedDataWithToggle.filter(p => p.refundUnits > 0 && (p.periodUnits === 0 || (p.refundRateValue ?? 0) > thresholds.returnRatePct || (p.refundRateDelta ?? 0) > 0)),
+            returns: processedDataWithToggle.filter(
+                p =>
+                    p.refundUnits > 0 &&
+                    (p.lifetimeUnitsSold ?? 0) >= 5 &&
+                    (
+                        (p.refundRateValue ?? 0) > thresholds.returnRatePct ||
+                        (p.refundRateDelta ?? 0) >= 2
+                    )
+            ),
             // STOCK ALERTS: Updated logic - only alert if we HAVE an incoming shipment (Lead Time < 999) and runway is tight
             stock: processedDataWithToggle.filter(p => p.stockLevel > 2 && p.effectiveAlertLeadTime < 999 && p.periodRunway < (p.effectiveAlertLeadTime * 1.2)),
             // DEAD STOCK BUCKET: Updated logic per requirements
@@ -994,11 +1039,24 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                 activeTab={activeTab}
                 onChange={(key) => {
                     const nextTab = key as OverviewTab;
-                    setActiveTab(nextTab);
+                    if (nextTab === activeTab) return;
+                    clearPendingTabActivation();
                     loadingTabStartedAtRef.current = perfNowMs();
-                    setLoadingTabKey(HEAVY_OVERVIEW_TABS.includes(nextTab) ? nextTab : null);
                     setIsAuditVisible(false);
                     setIsAuditPanelVisible(false);
+                    if (!HEAVY_OVERVIEW_TABS.includes(nextTab)) {
+                        setLoadingTabKey(null);
+                        setActiveTab(nextTab);
+                        return;
+                    }
+                    setLoadingTabKey(nextTab);
+                    pendingTabActivateFrameRef.current = window.requestAnimationFrame(() => {
+                        pendingTabActivateFrameRef.current = null;
+                        pendingTabActivateConfirmFrameRef.current = window.requestAnimationFrame(() => {
+                            pendingTabActivateConfirmFrameRef.current = null;
+                            setActiveTab(nextTab);
+                        });
+                    });
                 }}
                 loadingTabKey={loadingTabKey}
                 loadingColor={themeColor}
@@ -1053,7 +1111,7 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <AlertCard title="Fix Margin" count={alerts.margin.length} icon={DollarSign} color="red" isActive={selectedAlert === 'margin'} onClick={() => setSelectedAlert(selectedAlert === 'margin' ? null : 'margin')} desc={`Net PM% < 5%`} />
                             <AlertCard title="Volume Drop" count={alerts.velocity.length} icon={TrendingDown} color="amber" isActive={selectedAlert === 'velocity'} onClick={() => setSelectedAlert(selectedAlert === 'velocity' ? null : 'velocity')} desc={`PoP drop ≥ ${Math.abs(thresholds.velocityDropPct)}% with reliable baseline`} />
-                            <AlertCard title="Return Spike" count={alerts.returns.length} icon={RotateCcw} color="green" isActive={selectedAlert === 'returns'} onClick={() => setSelectedAlert(selectedAlert === 'returns' ? null : 'returns')} desc={`Return rate > ${thresholds.returnRatePct}%`} />
+                            <AlertCard title="Return Spike" count={alerts.returns.length} icon={RotateCcw} color="green" isActive={selectedAlert === 'returns'} onClick={() => setSelectedAlert(selectedAlert === 'returns' ? null : 'returns')} desc={`Eligible after 5 lifetime sold units | > ${thresholds.returnRatePct}% or +2pp`} />
                             <AlertCard title="Prevent Stockout" count={alerts.stock.length} icon={Ship} color="purple" isActive={selectedAlert === 'stock'} onClick={() => setSelectedAlert(selectedAlert === 'stock' ? null : 'stock')} desc="Only Items with Arriving Stock" />
                             <AlertCard title="Clear Dead Stock" count={alerts.dead.length} icon={Package} color="gray" isActive={selectedAlert === 'dead'} onClick={() => setSelectedAlert(selectedAlert === 'dead' ? null : 'dead')} desc={`>£200 Value, 0 Sales`} />
                         </div>
@@ -1077,7 +1135,11 @@ const OverviewPageContainerInner: React.FC<OverviewPageContainerProps> = ({
                                             <><Activity className="w-4 h-4 text-theme" /> Executive Workbench</>
                                         )}
                                     </h3>
-                                    <span className="text-xs text-gray-500">{workbenchData.length} items requiring action</span>
+                                    <span className="text-xs text-gray-500">
+                                        {selectedAlert === 'returns'
+                                            ? `${workbenchData.length} items requiring action | eligible after 5 lifetime sold units | > ${thresholds.returnRatePct}% or +2pp`
+                                            : `${workbenchData.length} items requiring action`}
+                                    </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {selectedAlert === 'velocity' && (
