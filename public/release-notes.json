@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-22T04:00:42.438Z",
+  "generatedAt": "2026-05-22T05:33:12.491Z",
   "items": [
+    {
+      "id": "02301a57e385",
+      "date": "2026-05-22T14:00:10+10:00",
+      "summary": "Tighten return spike alert and add lifetime sales floor"
+    },
     {
       "id": "3f5277c82d9d",
       "date": "2026-05-22T09:34:31+10:00",
@@ -95,11 +100,6 @@
       "id": "f1c4e2f2b8e1",
       "date": "2026-05-04T15:38:06+10:00",
       "summary": "Align ledger refund date basis and refund impact waterfall labeling"
-    },
-    {
-      "id": "3afdbb7b7e62",
-      "date": "2026-05-04T13:49:45+10:00",
-      "summary": "Fix transaction sync to persist and pull waterfall cost fields"
     }
   ]
 }

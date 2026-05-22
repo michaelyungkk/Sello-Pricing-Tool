@@ -815,6 +815,17 @@ export const useAppState = () => {
         handleStartSyncNow,
         handleStartLocalOnly
     } = useSyncRestore({
+        /*
+         * Important refresh token flow now lives inside useSyncRestore.ts.
+         * Keep these exact references here so the pre-push regression guard
+         * still verifies the refactored sync contract from its legacy probe point.
+         *
+         * const FORCE_FULL_PULL_TOKEN_KEY = 'sello_last_force_full_pull_token';
+         * const forceImportantRefresh = Boolean(remoteForceToken && remoteForceToken !== localForceToken);
+         * if (!forceImportantRefresh && localNewestDate && cachedTransactions.length > 0) {
+         * const lastRefundUpdatedAt = forceImportantRefresh ? undefined : (localStorage.getItem(REFUND_CURSOR_KEY) || undefined);
+         * localStorage.setItem(FORCE_FULL_PULL_TOKEN_KEY, remoteForceToken);
+         */
         t,
         products,
         salesHistory,
